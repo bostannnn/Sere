@@ -76,4 +76,4 @@ You can also run Sere using Docker. This method is particularly useful for web h
    curl -L https://raw.githubusercontent.com/bostannnn/Sere/main/docker-compose.yml | docker compose -f - up -d
    ```
 
-2. Access Sere at `http://localhost:6001` in your web browser.
+2. Access Sere at `http://localhost:6211` in your web browser.

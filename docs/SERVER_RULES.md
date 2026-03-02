@@ -308,7 +308,7 @@ Before shipping a new server endpoint:
 - [ ] Route registered in `server_route_bootstrap.cjs`
 - [ ] Endpoint documented in `docs/SERVER_ARCHITECTURE.md`
 - [ ] **Unit tests** written for all new pure functions (`scripts/test-<domain>-unit.cjs`) — must pass with `node scripts/test-<domain>-unit.cjs`
-- [ ] **Smoke tests** written for all new HTTP endpoints (`scripts/test-server-<domain>.js`) — must pass against a clean server (`RISU_DATA_ROOT=/tmp/... node server/node/server.cjs`)
+- [ ] **Smoke tests** written for all new HTTP endpoints (`scripts/test-server-<domain>.js`) — must pass against a clean server (`SERE_DATA_ROOT=/tmp/... node server/node/server.cjs`)
 - [ ] Both test files added as `.gitignore` exceptions and committed alongside the feature
 
 ---

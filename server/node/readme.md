@@ -87,7 +87,7 @@ Always use an isolated temp data root — never point smoke tests at `data/users
 **Terminal 1 — start clean server:**
 
 ```bash
-RISU_DATA_ROOT=/tmp/risu-smoke-data node server/node/server.cjs
+SERE_DATA_ROOT=/tmp/risu-smoke-data node server/node/server.cjs
 # or: pnpm runserver:tmp
 ```
 

@@ -5,11 +5,11 @@ function createServerPaths(arg = {}) {
         : (() => process.cwd());
     const dataRootEnv = typeof arg.dataRootEnv === 'string'
         ? arg.dataRootEnv
-        : process.env.RISU_DATA_ROOT;
+        : process.env.SERE_DATA_ROOT;
 
     const projectRoot = cwd();
     const sslPath = path.join(projectRoot, 'server/node/ssl/certificate');
-    const dataRoot = dataRootEnv || path.join(projectRoot, 'data', 'users', 'default');
+    const dataRoot = dataRootEnv || path.join(projectRoot, 'data');
     const isCustomDataRoot = !!dataRootEnv;
 
     const dataDirs = {

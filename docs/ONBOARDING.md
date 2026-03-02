@@ -376,7 +376,7 @@ The auth smoke requires the server to have **no password set**. It will exit imm
 
 ```
 auth smoke needs clean data root (expected unset, got correct).
-Use RISU_DATA_ROOT=/tmp/... when starting server.
+Use SERE_DATA_ROOT=/tmp/... when starting server.
 ```
 
 Reset and restart before running it:

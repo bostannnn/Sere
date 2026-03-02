@@ -122,7 +122,7 @@ async function runContracts() {
         env: {
             ...process.env,
             PORT: String(port),
-            RISU_DATA_ROOT: dataRoot,
+            SERE_DATA_ROOT: dataRoot,
             RISU_PROXY_ALLOWED_HOSTS: `127.0.0.1:${upstreamPort},localhost:${upstreamPort}`,
             RISU_AUTH_MAX_FAILURES: '2',
             RISU_AUTH_WINDOW_MS: '60000',

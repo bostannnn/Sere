@@ -85,6 +85,17 @@ Acceptance criteria:
 - Memory summaries remain stored and retrievable for recall features.
 - Contract checks/tests fail on schema bleed regressions.
 
+## Docker Deploy Follow-up (Planned, Do Later)
+
+Goal:
+- Add explicit env-driven server password bootstrap flow for containerized unattended setup.
+
+Scope:
+1. Add startup env contract (for example `SERE_SERVER_PASSWORD` and/or hash variant) with one-time initialization semantics.
+2. Define idempotent behavior: set password only when missing, never overwrite existing configured password silently.
+3. Add server contract tests for bootstrap path + restart behavior.
+4. Document secure usage and secret handling in Docker/README docs.
+
 ---
 
 ## UI Redesign Program (2026-02-17)

@@ -57,7 +57,7 @@ async function main() {
   assert(
     initial.status === 'unset',
     `auth smoke needs clean data root (expected unset, got ${initial.status}). ` +
-      'Use RISU_DATA_ROOT=/tmp/... when starting server.'
+      'Use SERE_DATA_ROOT=/tmp/... when starting server.'
   );
 
   const token1 = await digestPassword(`smoke-pass-1-${runId}`);

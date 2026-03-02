@@ -262,7 +262,7 @@ node scripts/test-memory-unit.cjs
 
 ```bash
 # Throw-away temp data (recommended for CI and one-off runs)
-RISU_DATA_ROOT=/tmp/risu-smoke-$(date +%s) node server/node/server.cjs
+SERE_DATA_ROOT=/tmp/risu-smoke-$(date +%s) node server/node/server.cjs
 
 # Or use the dedicated npm shortcut (reuses /tmp/risu-smoke-data)
 pnpm runserver:tmp

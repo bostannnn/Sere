@@ -8,7 +8,7 @@ const port = Number(process.env.RISU_SMOKE_PORT || process.env.PORT || 6001);
 const baseUrl = process.env.RISU_DATA_TEST_URL || `http://127.0.0.1:${port}`;
 const useExistingServer = process.env.RISU_USE_EXISTING_SERVER === '1';
 const skipSettingsSmoke = process.env.RISU_SKIP_SETTINGS_SMOKE === '1';
-const dataRoot = process.env.RISU_DATA_ROOT || `/tmp/risu-full-smoke-${Date.now()}`;
+const dataRoot = process.env.SERE_DATA_ROOT || `/tmp/risu-full-smoke-${Date.now()}`;
 const serverStartTimeoutMs = Number(process.env.RISU_SERVER_START_TIMEOUT_MS || 30000);
 
 function runCheck(name, cmd, env = process.env) {
@@ -51,13 +51,13 @@ async function run() {
     }
 
     if (!useExistingServer) {
-      console.log(`[FullAppSmoke] Starting server on port ${port} with RISU_DATA_ROOT=${dataRoot}`);
+      console.log(`[FullAppSmoke] Starting server on port ${port} with SERE_DATA_ROOT=${dataRoot}`);
       serverProc = spawn('node', ['server/node/server.cjs'], {
         cwd: process.cwd(),
         env: {
           ...process.env,
           PORT: String(port),
-          RISU_DATA_ROOT: dataRoot,
+          SERE_DATA_ROOT: dataRoot,
         },
         stdio: 'inherit',
       });

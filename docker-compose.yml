@@ -6,11 +6,6 @@ services:
     image: ghcr.io/bostannnn/sere:latest
     restart: unless-stopped
     ports:
-      - 6001:6001
-    environment:
-      - RISU_DATA_ROOT=/app/data/users/default
+      - "6211:6001"
     volumes:
-      - sere-data:/app/data
-
-volumes:
-  sere-data:
+      - ./sere-data:/app/data
