@@ -10,6 +10,7 @@
         reverse?: boolean;
         className?: string;
         grayText?: boolean;
+        bare?: boolean;
         children?: import('svelte').Snippet;
     }
 
@@ -22,14 +23,15 @@
         reverse = false,
         className = "",
         grayText = false,
+        bare = false,
         children
     }: Props = $props();
 
     const ariaLabel = $derived(name?.trim() ? name : "Toggle");
 </script>
 
-<label 
-    class={`ds-ui-check control-field${className ? ` ${className}` : ""}${grayText ? " ds-ui-check--muted" : ""}`}
+<label
+    class={`ds-ui-check${bare ? "" : " control-field"}${className ? ` ${className}` : ""}${grayText ? " ds-ui-check--muted" : ""}`}
     class:ds-input-margin-inline-end={margin}
 >
     {#if reverse}

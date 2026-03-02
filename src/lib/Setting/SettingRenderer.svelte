@@ -98,8 +98,8 @@
                 <span class="ds-settings-renderer-header {item.classes ?? ''}">{getLabel(item)}</span>
             {/if}
         {:else if item.type === 'check'}
-            <div class="ds-settings-renderer-check-row control-field {item.classes ?? 'ds-settings-renderer-offset-sm'}">
-                <Check bind:check={(DBState.db as unknown as Record<string, boolean>)[item.bindKey]} name={getLabel(item)}>
+            <div class="ds-settings-renderer-check-row {item.classes ?? 'ds-settings-renderer-offset-sm'}">
+                <Check bare bind:check={(DBState.db as unknown as Record<string, boolean>)[item.bindKey]} name={getLabel(item)}>
                     {#if item.showExperimental}<Help key="experimental"/>{/if}
                     {#if item.helpKey}<Help key={item.helpKey as keyof typeof language.help} unrecommended={item.helpUnrecommended ?? false}/>{/if}
                 </Check>

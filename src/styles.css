@@ -251,7 +251,7 @@ body {
   --ds-settings-tab-padding-x: var(--ds-space-3);
   --ds-settings-section-gap: var(--ds-space-4);
   --ds-settings-panel-padding: var(--ds-space-4);
-  --ds-settings-label-gap: var(--ds-space-2);
+  --ds-settings-label-gap: var(--ds-space-1);
   --ds-settings-select-height: var(--ds-height-control-sm);
   --ds-settings-select-font-size: var(--ds-font-size-sm);
   --ds-settings-persona-tile-size: calc(var(--ds-space-4) * 5);
@@ -355,15 +355,15 @@ body {
   --color-green-900: var(--risu-theme-success-900);
 }
 
-.ds-settings-tabs {
+.ds-settings-tabs,
+.ds-settings-tabs.seg-tabs {
   display: flex;
   width: 100%;
   border: 1px solid var(--ds-border-subtle);
   border-radius: var(--ds-radius-md);
-  margin-bottom: var(--ds-space-4);
   overflow: auto hidden;
   min-height: var(--ds-settings-tab-height);
-  background: var(--ds-surface-2);
+  background: transparent;
 }
 
 .ds-input-margin-top {
@@ -1151,7 +1151,7 @@ body {
 }
 
 .ds-settings-section--advanced {
-  gap: var(--ds-settings-section-gap);
+  gap: var(--ds-space-1);
 }
 
 .ds-settings-page--advanced :where(input[type="text"], input[type="password"], input[type="number"]) {
@@ -1217,11 +1217,15 @@ body {
   padding-right: var(--ds-space-2);
 }
 
-/* Normalize legacy per-control margins inside settings sections.
-   Spacing should come from section gap tokens, not ad-hoc mt/mb classes. */
+/* Normalize legacy per-control margins inside settings sections. */
 .ds-settings-section > * {
-  margin-top: 0 !important;
-  margin-bottom: 0 !important;
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
+/* Label grouping: labels pull away from previous control to visually pair with their following input */
+.ds-settings-section > .ds-settings-label {
+  margin-top: var(--ds-space-3);
 }
 
 .ds-settings-section > :where(.flex.items-center) {
@@ -1458,7 +1462,6 @@ body {
 .ds-settings-card {
   border: 1px solid var(--ds-border-subtle);
   border-radius: var(--ds-radius-md);
-  background: var(--ds-surface-2);
   padding: var(--ds-space-2);
 }
 
@@ -1828,6 +1831,7 @@ body {
 
 .ds-settings-nav-shell-desktop-bg {
   background: var(--ds-surface-2);
+  border-right: 1px solid var(--ds-border-subtle);
 }
 
 .ds-settings-nav-shell-mobile-bg {
@@ -1911,7 +1915,7 @@ body {
 }
 
 .ds-settings-shell-bg {
-  background: linear-gradient(to right, var(--ds-surface-2) 50%, var(--ds-surface-1) 50%);
+  background: var(--ds-surface-1);
 }
 
 .ds-settings-nav-panel {
@@ -1923,7 +1927,7 @@ body {
 }
 
 .ds-settings-content-panel {
-  padding: var(--ds-space-5) var(--ds-space-4);
+  padding: var(--ds-space-4);
 }
 
 .ds-settings-panel-close {
@@ -2880,6 +2884,7 @@ body {
 
 .ds-settings-renderer-label {
   color: var(--ds-text-primary);
+  margin-top: var(--ds-space-3);
 }
 
 .ds-settings-renderer-check-row {
@@ -2895,11 +2900,11 @@ body {
 }
 
 .ds-settings-renderer-offset-sm {
-  margin-top: var(--ds-space-2);
+  margin-top: var(--ds-space-3);
 }
 
 .ds-settings-renderer-offset-md {
-  margin-top: var(--ds-space-4);
+  margin-top: var(--ds-space-5);
 }
 
 .ds-settings-renderer-no-margin-bottom {

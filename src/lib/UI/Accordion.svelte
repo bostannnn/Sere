@@ -130,7 +130,6 @@
         border-top: 0;
         border-radius: 0 0 var(--ds-radius-md) var(--ds-radius-md);
         padding: var(--ds-space-2);
-        background: var(--ds-surface-2);
     }
 
     .accordion-panel-plain{

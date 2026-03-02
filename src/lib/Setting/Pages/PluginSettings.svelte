@@ -24,7 +24,7 @@
 <div class="ds-settings-page">
 <span class="ds-settings-note-danger">{language.pluginWarn}</span>
 
-<div class="ds-settings-section ds-settings-card panel-shell">
+<div class="ds-settings-section ds-settings-card">
     {#if !DBState.db.plugins || DBState.db.plugins?.length === 0}
         <span class="ds-settings-label-muted">{language.noPlugins}</span>
     {/if}
