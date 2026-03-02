@@ -31,7 +31,7 @@ RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm build
 FROM base AS runtime
 WORKDIR /app
 
-RUN mkdir -p /app/data && chmod 0777 /app/data
+RUN mkdir -p /app/data
 
 COPY package.json .
 COPY --from=deps /app/node_modules /app/node_modules
@@ -39,8 +39,9 @@ COPY --from=builder /app/server ./server
 COPY --from=builder /app/dist ./dist
 
 ENV NODE_ENV=production
+ENV SERE_DATA_ROOT=/app/data
 EXPOSE 6001
 
-CMD ["pnpm", "runserver"]
+CMD ["/bin/sh", "-c", "groupmod -o -g ${PGID:-1000} node && usermod -o -u ${PUID:-1000} node && chown -R node:node /app/data && exec su -s /bin/sh -c 'cd /app && exec pnpm runserver' node"]
 
 # ------------------------------------------------------------------------------------------
