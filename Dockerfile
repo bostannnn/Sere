@@ -4,6 +4,8 @@ FROM node:20-slim AS base
 WORKDIR /app
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
+ENV ONNXRUNTIME_NODE_INSTALL_CUDA=skip
+ENV RISU_DATA_ROOT=/app/data/users/default
 # Copy dependency-related file
 COPY package.json .
 COPY pnpm-lock.yaml .

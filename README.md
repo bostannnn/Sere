@@ -69,11 +69,11 @@ You can get detailed information on https://github.com/kwaroran/Risuai/wiki (Wor
 
 ### Docker Installation
 
-You can also run Risuai using Docker. This method is particularly useful for web hosting.
+You can also run Sere using Docker. This method is particularly useful for web hosting.
 
 1. Run the Docker container:
    ```
-   curl -L https://raw.githubusercontent.com/kwaroran/Risuai/refs/heads/main/docker-compose.yml | docker compose -f - up -d
+   curl -L https://raw.githubusercontent.com/bostannnn/Sere/main/docker-compose.yml | docker compose -f - up -d
    ```
 
-2. Access Risuai at `http://localhost:6001` in your web browser.
+2. Access Sere at `http://localhost:6001` in your web browser.

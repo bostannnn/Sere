@@ -1,14 +1,16 @@
-name: risuai
+name: sere
 
 services:
-  risuai:
-    container_name: risuai
-    image: ghcr.io/kwaroran/risuai:latest
-    restart: always
+  sere:
+    container_name: sere
+    image: ghcr.io/bostannnn/sere:latest
+    restart: unless-stopped
     ports:
       - 6001:6001
+    environment:
+      - RISU_DATA_ROOT=/app/data/users/default
     volumes:
-      - risuai-save:/app/save
+      - sere-data:/app/data
 
 volumes:
-  risuai-save:
+  sere-data:

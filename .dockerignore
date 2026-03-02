@@ -1,1 +1,12 @@
 node_modules
+.git
+.github
+.serena
+.vscode
+.claude
+data
+.dev-test-data
+dist
+output
+screenshots
+prototypes
