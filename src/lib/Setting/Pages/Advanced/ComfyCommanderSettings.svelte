@@ -92,13 +92,13 @@
 <Accordion
     styled
     name="Comfy Commander"
-    className="ds-settings-section panel-shell list-shell"
+    className="ds-settings-section"
 >
     <div class="ds-settings-stack-col ds-comfy-commander-settings">
         <span class="ds-settings-label">Base URL</span>
         <TextInput size="sm" bind:value={DBState.db.comfyCommander.config.baseUrl} />
 
-        <div class="ds-settings-renderer-check-row control-field ds-settings-renderer-offset-sm">
+        <div class="ds-settings-renderer-check-row ds-settings-renderer-offset-sm">
             <Check bind:check={DBState.db.comfyCommander.config.debug} name="Debug" />
         </div>
 
@@ -187,7 +187,7 @@
                             {/each}
                         </SelectInput>
 
-                        <div class="ds-settings-renderer-check-row control-field ds-settings-renderer-offset-sm">
+                        <div class="ds-settings-renderer-check-row ds-settings-renderer-offset-sm">
                             <Check bind:check={template.showInChatMenu} name="Show in Chat Menu" />
                         </div>
 

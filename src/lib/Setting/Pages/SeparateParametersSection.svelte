@@ -14,11 +14,11 @@
     };
 </script>
 
-<Accordion name={language.seperateParameters} styled className="ds-settings-section panel-shell list-shell">
+<Accordion name={language.seperateParameters} styled className="ds-settings-section">
     <CheckInput bind:check={DBState.db.seperateParametersEnabled} name={language.seperateParametersEnabled} />
     {#if DBState.db.seperateParametersEnabled}
         {#each Object.keys(DBState.db.seperateParameters) as param (param)}
-            <Accordion name={language[paramLabels[param]] ?? param} styled className="ds-settings-section panel-shell list-shell">
+            <Accordion name={language[paramLabels[param]] ?? param} styled className="ds-settings-section">
                 <span class="ds-settings-label">{language.temperature} <Help key="tempature"/></span>
                 <SliderInput min={0} max={200} bind:value={DBState.db.seperateParameters[param].temperature} multiple={0.01} fixed={2} disableable/>
                 <span class="ds-settings-label">Top K</span>
