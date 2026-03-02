@@ -18,8 +18,7 @@ xplugin/
 src-others/
 /memo.txt
 # Editor directories and files
-.vscode/*
-!.vscode/extensions.json
+.vscode/
 .idea
 .DS_Store
 *.suo
@@ -64,3 +63,5 @@ screenshots/
 # Due to Cargo.lock makes the project build fail, we ignore it
 Cargo.lock
 .claude/
+.serena/
+prototypes/
