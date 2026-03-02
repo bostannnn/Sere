@@ -1,0 +1,10 @@
+{
+    "display_name": "Comfy Commander",
+    "loading_order": 1000,
+    "requires": [],
+    "optional": [],
+    "js": "index.js",
+    "css": "style.css",
+    "author": "Gemini",
+    "version": "1.0.0"
+}

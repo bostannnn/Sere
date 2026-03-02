@@ -1,0 +1,66 @@
+<div class="comfy_commander_settings">
+    <div class="inline-drawer">
+        <div class="inline-drawer-toggle inline-drawer-header">
+            <b>Comfy Templates</b>
+            <div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div>
+        </div>
+        <div class="inline-drawer-content">
+            <div class="flex-container flexFlowColumn" id="comfy_template_list">
+                <!-- Templates injected here -->
+            </div>
+            
+            <div class="flex-container flexGap10 marginTop5">
+                <div class="menu_button flexGrow1" id="comfy_template_add" title="Add new template">
+                    <i class="fa-solid fa-plus"></i> Add Template
+                </div>
+                <div class="menu_button flexGrow1" id="comfy_view_macros" title="Show list of available macros in chat">
+                    <i class="fa-solid fa-list"></i> View Macros
+                </div>
+            </div>
+            
+            <div class="settings-line">
+                <small>Use <code>/cw [Trigger] [Text]</code> to activate. The system prompt is used to generate the final image description from the LLM.</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<template id="comfy_template_item_template">
+    <div class="comfy_template_item flex-container flexFlowColumn flexGap5 marginBottom10" style="border: 1px solid var(--interactible-disabled-text-color); padding: 5px; border-radius: 5px;">
+        <!-- Header / Toggle -->
+        <div class="flex-container alignItemsCenter comfy_template_header" style="cursor: pointer; background: rgba(0,0,0,0.2); padding: 5px; border-radius: 3px; justify-content: space-between;">
+            <div class="flex-container alignItemsCenter flexGrow1">
+                <div class="fa-solid fa-caret-down comfy_template_toggle_icon"></div>
+                <b class="comfy_template_title marginLeft5">New Template</b>
+            </div>
+            <div class="menu_button redWarningBG comfy_template_delete" title="Delete Template" style="margin-left: 10px;">
+                <i class="fa-solid fa-trash"></i>
+            </div>
+        </div>
+
+        <!-- Content -->
+        <div class="comfy_template_content flex-container flexFlowColumn flexGap5">
+            <div class="flex-container flexGap5 alignItemsCenter">
+                <label class="flexShrink0" style="width: 80px;">Trigger:</label>
+                <input type="text" class="text_pole comfy_template_trigger flexGrow1" placeholder="e.g. action">
+            </div>
+            <div class="flex-container flexGap5 alignItemsCenter">
+                <label class="flexShrink0" style="width: 80px;">Workflow:</label>
+                <select class="text_pole comfy_template_workflow flexGrow1"></select>
+            </div>
+            <div class="flex-container flexGap5 alignItemsStart">
+                <label class="flexShrink0" style="width: 80px;">Template:</label>
+                <textarea class="text_pole comfy_template_prompt flexGrow1 textarea_compact" rows="3" placeholder="LLM Instruction..."></textarea>
+            </div>
+            <div class="flex-container flexGap5 alignItemsCenter">
+                <label class="flexShrink0" style="width: 80px;"></label>
+                <label class="checkbox_label flexGrow1" title="Click the ? icon for technical details and token warnings.">
+                    <input type="checkbox" class="comfy_template_use_context">
+                    Include chat history and world info
+                    <i class="fa-solid fa-circle-question comfy_commander_help_icon" 
+                       style="font-size: 0.8em; opacity: 0.7; margin-left: 2px; cursor: help;"></i>
+                </label>
+            </div>
+        </div>
+    </div>
+</template>

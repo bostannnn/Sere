@@ -1,0 +1,153 @@
+<script lang="ts">
+  import {
+    type SerializableHypaV3Data,
+    getCurrentHypaV3Preset,
+  } from "src/ts/process/memory/hypav3";
+  import { type Message } from "src/ts/storage/database.svelte";
+  import { DBState, selectedCharID } from "src/ts/stores.svelte";
+  import { language } from "src/lang";
+  import { getFirstMessage, processRegexScript } from "./utils";
+
+  interface Props {
+    hypaV3Data: SerializableHypaV3Data;
+  }
+
+  const { hypaV3Data }: Props = $props();
+
+  async function getNextSummarizationTarget(): Promise<Message | null> {
+    const char = DBState.db.characters[$selectedCharID];
+    const chat = char.chats[DBState.db.characters[$selectedCharID].chatPage];
+    const shouldProcess = getCurrentHypaV3Preset().settings.processRegexScript;
+
+    // Summaries exist
+    if (hypaV3Data.summaries.length > 0) {
+      const lastSummary = hypaV3Data.summaries.at(-1);
+      if (!lastSummary) {
+        return null;
+      }
+      const lastMessageIndex = chat.message.findIndex(
+        (m) => m.chatId === lastSummary.chatMemos.at(-1)
+      );
+
+      if (lastMessageIndex !== -1) {
+        const next = chat.message[lastMessageIndex + 1] ?? null;
+
+        return next && shouldProcess
+          ? await processRegexScript(next, lastMessageIndex + 1)
+          : next;
+      }
+    }
+
+    // When no summaries exist OR couldn't find last connected message,
+    // check if first message is available
+    const firstMessage = getFirstMessage();
+
+    if (!firstMessage) {
+      const next = chat.message[0] ?? null;
+
+      return next && shouldProcess ? await processRegexScript(next, 0) : next;
+    }
+
+    // Will summarize first message
+    const next: Message = { role: "char", chatId: "first", data: firstMessage };
+
+    return shouldProcess ? await processRegexScript(next) : next;
+  }
+</script>
+
+<!-- Next Summarization Target -->
+<div class="hypa-footer-section">
+  {#await getNextSummarizationTarget() then nextMessage}
+    {#if nextMessage}
+      {@const chatId =
+        nextMessage.chatId === "first"
+          ? language.hypaV3Modal.nextSummarizationFirstMessageLabel
+          : nextMessage.chatId == null
+            ? language.hypaV3Modal.nextSummarizationNoMessageIdLabel
+            : nextMessage.chatId}
+      <div class="hypa-footer-muted">
+        {language.hypaV3Modal.nextSummarizationLabel.replace("{0}", chatId)}
+      </div>
+
+      <textarea
+        class="hypa-footer-textarea control-field"
+        readonly
+        value={nextMessage.data}
+      ></textarea>
+    {:else}
+      <span class="hypa-footer-error"
+        >{language.hypaV3Modal.nextSummarizationNoMessagesFoundLabel}</span
+      >
+    {/if}
+  {:catch error}
+    <span class="hypa-footer-error"
+      >{language.hypaV3Modal.nextSummarizationLoadingError.replace(
+        "{0}",
+        error.message
+      )}</span
+    >
+  {/await}
+</div>
+
+<div class="hypa-footer-section">
+  <div class="hypa-footer-muted">
+    {language.hypaV3Modal.summarizationConditionLabel}
+  </div>
+
+  <!-- No First Message -->
+  {#if !getFirstMessage()}
+    <span class="hypa-footer-error"
+      >{language.hypaV3Modal.emptySelectedFirstMessageLabel}</span
+    >
+  {/if}
+</div>
+
+<style>
+  .hypa-footer-section {
+    margin-top: var(--ds-space-2);
+  }
+
+  .hypa-footer-muted {
+    margin-bottom: var(--ds-space-2);
+    color: var(--ds-text-secondary);
+    font-size: var(--ds-font-size-sm);
+  }
+
+  .hypa-footer-textarea.control-field {
+    width: 100%;
+    min-height: 10rem;
+    resize: none;
+    overflow-y: auto;
+    border: 1px solid var(--ds-border-subtle);
+    border-radius: var(--ds-radius-sm);
+    background: var(--ds-surface-1);
+    color: var(--ds-text-primary);
+    padding: var(--ds-space-2);
+    transition: border-color var(--ds-motion-fast) var(--ds-ease-standard);
+    outline: none;
+  }
+
+  .hypa-footer-textarea.control-field:focus {
+    border-color: var(--ds-border-strong);
+  }
+
+  .hypa-footer-error {
+    color: var(--ds-text-danger);
+    font-size: var(--ds-font-size-sm);
+  }
+
+  @media (min-width: 640px) {
+    .hypa-footer-section {
+      margin-top: var(--ds-space-4);
+    }
+
+    .hypa-footer-muted {
+      margin-bottom: var(--ds-space-4);
+    }
+
+    .hypa-footer-textarea.control-field {
+      min-height: 14rem;
+      padding: var(--ds-space-4);
+    }
+  }
+</style>

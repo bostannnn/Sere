@@ -1,0 +1,257 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { mount, tick, unmount } from "svelte";
+
+const hoisted = vi.hoisted(() => ({
+  dbState: {
+    db: {
+      characters: [
+        {
+          chatPage: 0,
+          chats: [
+            {
+              hypaV3Data: {
+                summaries: [
+                  { categoryId: "", chatMemos: [] },
+                  { categoryId: "cat-1", chatMemos: [] },
+                ],
+                categories: [
+                  { id: "", name: "Unclassified" },
+                  { id: "cat-1", name: "Important" },
+                ],
+                lastSelectedSummaries: [],
+              },
+            },
+          ],
+        },
+      ],
+    },
+  },
+}));
+
+vi.mock(import("src/lang"), () => ({
+  language: {
+    add: "Add",
+    apply: "Apply",
+    cancel: "Cancel",
+    select: "Select",
+    hypaV3Modal: {
+      unclassified: "Unclassified",
+      categoryManager: "Category Manager",
+      allCategories: "All Categories",
+      categoryName: "Category Name",
+      noCategoriesYet: "No categories yet",
+      addNewCategoryHint: "Add a new category to organize summaries",
+      reSummarize: "Resummarize",
+    },
+  },
+}));
+
+vi.mock(import("src/ts/stores.svelte"), async () => {
+  const { writable } = await import("svelte/store");
+  return {
+    selectedCharID: writable(0),
+    DBState: hoisted.dbState,
+  };
+});
+
+vi.mock(import("src/lib/Others/HypaV3Modal/utils"), () => ({
+  createCategoryId: () => "cat-new",
+}));
+
+import CategoryManagerModal from "src/lib/Others/HypaV3Modal/category-manager-modal.svelte";
+import BulkEditActions from "src/lib/Others/HypaV3Modal/bulk-edit-actions.svelte";
+import { DBState } from "src/ts/stores.svelte";
+
+let mountedApps: Array<Record<string, unknown>> = [];
+
+async function flushUi() {
+  await tick();
+  await Promise.resolve();
+}
+
+function mountApp(component: unknown, target: HTMLElement, props: Record<string, unknown>) {
+  const app = mount(component as never, { target, props });
+  mountedApps.push(app);
+  return app;
+}
+
+describe("hypa category/bulk runtime smoke", () => {
+  beforeEach(() => {
+    document.body.innerHTML = "";
+    DBState.db.characters[0].chats[0].hypaV3Data = {
+      summaries: [
+        { categoryId: "", chatMemos: [] },
+        { categoryId: "cat-1", chatMemos: [] },
+      ],
+      categories: [
+        { id: "", name: "Unclassified" },
+        { id: "cat-1", name: "Important" },
+      ],
+      lastSelectedSummaries: [],
+    };
+    mountedApps = [];
+  });
+
+  afterEach(async () => {
+    for (const app of mountedApps) {
+      await unmount(app);
+    }
+    mountedApps = [];
+  });
+
+  it("keeps category manager controls/list/empty states on shared primitives", async () => {
+    const categoryManagerState = {
+      isOpen: true,
+      editingCategory: { id: "cat-1", name: "Important" } as { id: string; name: string } | null,
+      selectedCategoryFilter: "all",
+    };
+    const searchState = {
+      ref: null,
+      query: "",
+      results: [],
+      currentResultIndex: -1,
+      requestedSearchFromIndex: -1,
+      isNavigating: false,
+    };
+    const onCategoryFilter = vi.fn();
+
+    const target = document.createElement("div");
+    document.body.appendChild(target);
+    mountApp(CategoryManagerModal, target, {
+      categoryManagerState,
+      searchState,
+      onCategoryFilter,
+    });
+    await flushUi();
+
+    expect(target.querySelector(".hypa-category-modal.panel-shell")).not.toBeNull();
+    expect(target.querySelector(".hypa-category-header-actions.action-rail")).not.toBeNull();
+    expect(target.querySelector(".hypa-category-list.list-shell")).not.toBeNull();
+
+    const headerButtons = [
+      ...target.querySelectorAll(".hypa-category-header-actions .hypa-category-icon-btn.icon-btn.icon-btn--sm"),
+    ] as HTMLButtonElement[];
+    expect(headerButtons).toHaveLength(2);
+
+    const editInput = target.querySelector(".hypa-category-edit-input.control-field") as HTMLInputElement | null;
+    expect(editInput).not.toBeNull();
+    const editRowButtons = [
+      ...target.querySelectorAll(
+        ".hypa-category-row .hypa-category-icon-btn.icon-btn.icon-btn--sm",
+      ),
+    ] as HTMLButtonElement[];
+    expect(editRowButtons.length).toBeGreaterThanOrEqual(2);
+
+    const allCategoriesButton = target.querySelector(
+      ".hypa-category-row-button",
+    ) as HTMLButtonElement | null;
+    expect(allCategoriesButton).not.toBeNull();
+    allCategoriesButton?.click();
+    await flushUi();
+
+    expect(onCategoryFilter).toHaveBeenCalledWith("all");
+    expect(categoryManagerState.isOpen).toBe(false);
+
+    DBState.db.characters[0].chats[0].hypaV3Data = {
+      summaries: [],
+      categories: [{ id: "", name: "Unclassified" }],
+      lastSelectedSummaries: [],
+    };
+    const emptyStateManager = {
+      isOpen: true,
+      editingCategory: null as { id: string; name: string } | null,
+      selectedCategoryFilter: "all",
+    };
+    const emptyTarget = document.createElement("div");
+    document.body.appendChild(emptyTarget);
+    mountApp(CategoryManagerModal, emptyTarget, {
+      categoryManagerState: emptyStateManager,
+      searchState,
+      onCategoryFilter,
+    });
+    await flushUi();
+
+    expect(emptyTarget.querySelector(".hypa-category-empty.empty-state")).not.toBeNull();
+  });
+
+  it("keeps bulk edit actions and field controls on shared primitives", async () => {
+    const onResummarize = vi.fn();
+    const onClearSelection = vi.fn();
+    const onUpdateSelectedCategory = vi.fn();
+    const onUpdateBulkSelectInput = vi.fn();
+    const onApplyCategory = vi.fn();
+    const onToggleImportant = vi.fn();
+    const onParseAndSelectSummaries = vi.fn();
+
+    const target = document.createElement("div");
+    document.body.appendChild(target);
+
+    mountApp(BulkEditActions, target, {
+      bulkEditState: {
+        isEnabled: true,
+        selectedSummaries: new Set([0, 1]),
+        selectedCategory: "",
+        bulkSelectInput: "",
+      },
+      categories: [
+        { id: "", name: "Unclassified" },
+        { id: "cat-1", name: "Important" },
+      ],
+      showImportantOnly: false,
+      selectedCategoryFilter: "all",
+      onResummarize,
+      onClearSelection,
+      onUpdateSelectedCategory,
+      onUpdateBulkSelectInput,
+      onApplyCategory,
+      onToggleImportant,
+      onParseAndSelectSummaries,
+    });
+    await flushUi();
+
+    expect(target.querySelector(".hypa-bulk-shell.panel-shell")).not.toBeNull();
+    expect(target.querySelector(".hypa-bulk-row.action-rail")).not.toBeNull();
+    expect(target.querySelector(".hypa-bulk-left.action-rail")).not.toBeNull();
+    expect(target.querySelector(".hypa-bulk-right.action-rail")).not.toBeNull();
+    expect(target.querySelector(".hypa-bulk-input-row.action-rail")).not.toBeNull();
+
+    const select = target.querySelector(".hypa-bulk-select.control-field") as HTMLSelectElement | null;
+    const input = target.querySelector(".hypa-bulk-input.control-field") as HTMLInputElement | null;
+    const starButton = target.querySelector(
+      ".hypa-bulk-btn-warning.icon-btn.icon-btn--sm",
+    ) as HTMLButtonElement | null;
+    expect(select).not.toBeNull();
+    expect(input).not.toBeNull();
+    expect(starButton).not.toBeNull();
+
+    select!.value = "cat-1";
+    select!.dispatchEvent(new Event("change", { bubbles: true }));
+    input!.value = "1,2";
+    input!.dispatchEvent(new Event("input", { bubbles: true }));
+    input!.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    await flushUi();
+
+    expect(onUpdateSelectedCategory).toHaveBeenCalledWith("cat-1");
+    expect(onUpdateBulkSelectInput).toHaveBeenCalledWith("1,2");
+    expect(onParseAndSelectSummaries).toHaveBeenCalledTimes(1);
+
+    const buttons = [...target.querySelectorAll(".hypa-bulk-btn")] as HTMLButtonElement[];
+    const resummarizeButton = buttons.find((button) => (button.textContent ?? "").includes("Resummarize"));
+    const applyButton = buttons.find((button) => (button.textContent ?? "").includes("Apply"));
+    const clearButton = buttons.find((button) => (button.textContent ?? "").includes("Cancel"));
+    expect(resummarizeButton).toBeDefined();
+    expect(applyButton).toBeDefined();
+    expect(clearButton).toBeDefined();
+
+    resummarizeButton?.click();
+    applyButton?.click();
+    starButton?.click();
+    clearButton?.click();
+    await flushUi();
+
+    expect(onResummarize).toHaveBeenCalledTimes(1);
+    expect(onApplyCategory).toHaveBeenCalledTimes(1);
+    expect(onToggleImportant).toHaveBeenCalledTimes(1);
+    expect(onClearSelection).toHaveBeenCalledTimes(1);
+  });
+});

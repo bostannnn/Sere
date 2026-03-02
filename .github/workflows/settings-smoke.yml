@@ -1,0 +1,32 @@
+name: Settings Smoke
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - production
+
+jobs:
+  settings-smoke:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: latest
+
+      - name: Install dependencies
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Settings smoke checks
+        run: pnpm check:settings-smoke

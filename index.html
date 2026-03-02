@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <script>
+      (() => {
+        const applyScheme = (scheme) => {
+          if (!scheme || typeof scheme !== "object") return;
+          const rootStyle = document.documentElement.style;
+          if (typeof scheme.bgcolor === "string") rootStyle.setProperty("--risu-theme-bgcolor", scheme.bgcolor);
+          if (typeof scheme.darkbg === "string") rootStyle.setProperty("--risu-theme-darkbg", scheme.darkbg);
+          if (typeof scheme.borderc === "string") rootStyle.setProperty("--risu-theme-borderc", scheme.borderc);
+          if (typeof scheme.selected === "string") rootStyle.setProperty("--risu-theme-selected", scheme.selected);
+          if (typeof scheme.draculared === "string") rootStyle.setProperty("--risu-theme-draculared", scheme.draculared);
+          if (typeof scheme.textcolor === "string") rootStyle.setProperty("--risu-theme-textcolor", scheme.textcolor);
+          if (typeof scheme.textcolor2 === "string") rootStyle.setProperty("--risu-theme-textcolor2", scheme.textcolor2);
+          if (typeof scheme.darkBorderc === "string") rootStyle.setProperty("--risu-theme-darkborderc", scheme.darkBorderc);
+          if (typeof scheme.darkbutton === "string") rootStyle.setProperty("--risu-theme-darkbutton", scheme.darkbutton);
+        };
+        try {
+          const raw = window.localStorage.getItem("risu:boot-color-scheme");
+          if (!raw) return;
+          applyScheme(JSON.parse(raw));
+        } catch {}
+      })();
+    </script>
+    <link rel="icon" type="image/png" sizes="16x16" href="/logo_16.png" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/logo_32.png" />
+    <link rel="icon" type="image/png" sizes="256x256" href="/logo_256.png" />
+    <link rel="manifest" href="/manifest.json" crossorigin="use-credentials" />
+    <link rel="stylesheet" href="/src/styles.css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.27/dist/katex.min.css" integrity="sha384-Pu5+C18nP5dwykLJOhd2U4Xen7rjScHN/qusop27hdd2drI+lL5KvX7YntvT8yew" crossorigin="anonymous">
+    <meta name="description" content="An AI frontend for both light and core users.">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link href="https://fonts.googleapis.com/css2?family=Tilt+Prism&family=Yellowtail&display=swap" rel="stylesheet">
+    <!-- <meta http-equiv="Content-Security-Policy" content="script-src 'self' 'wasm-unsafe-eval' 'unsafe-eval'; object-src 'none'; require-trusted-types-for 'script'; trusted-types plugin-policy;"> -->
+    <title>Risuai</title>
+    <style>
+      #preloading {
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        background: var(--risu-theme-bgcolor, #282a36);
+        color: var(--risu-theme-textcolor, #f8f8f2);
+        font-size: 1.25rem;
+      }
+
+      #preloading .ds-preloading-row {
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+      }
+
+      #preloading .ds-preloading-spinner {
+        width: 1.25rem;
+        height: 1.25rem;
+        margin-right: 0.5rem;
+        animation: ds-preloading-spin 1s linear infinite;
+      }
+
+      #preloading .ds-preloading-status {
+        margin-top: 0.5rem;
+        font-size: 0.875rem;
+        color: var(--risu-theme-textcolor2, #64748b);
+      }
+
+      @keyframes ds-preloading-spin {
+        from {
+          transform: rotate(0deg);
+        }
+        to {
+          transform: rotate(360deg);
+        }
+      }
+    </style>
+  </head>
+
+  <body>
+    <div id="app">
+      <noscript>
+        <div class="noscript">
+          <h1>JavaScript is disabled</h1>
+          <p>Please enable JavaScript to use this website.</p>
+        </div>
+      </noscript>
+    </div>
+    <!-- Loading screen, will be removed when /src/main.ts is loaded -->
+    <div id="preloading">
+      <div class="ds-preloading-row">
+          <svg class="ds-preloading-spinner" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+          </svg>
+          <span>Loading...</span>
+      </div>
+      <span class="ds-preloading-status">Loading Risuai...</span>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

@@ -1,0 +1,124 @@
+# Core App Changes Log
+
+Log format: date-stamped bullets with file path + brief reason.  
+Scope: core app code only (non-plugin changes).
+
+## 2026-02-04
+- `src/lib/SideBars/BarIcon.svelte`: sidebar icon background/hover colors now use theme variables to honor color schemes.
+- `src/lib/ChatScreens/Chat.svelte`: mobilechat message bubbles now use theme colors (bg-darkbg/bg-selected + text-textcolor) instead of fixed gray.
+- `src/ts/characterCards.ts`: local dev uses `window.location.origin` as `hubURL` for localhost/private IPs to avoid cloud proxy CORS.
+- `src/ts/observer.svelte.ts`: clipboard copy uses safe fallback when `navigator.clipboard` is unavailable in web context.
+- `src/lib/UI/PromptDataItem.svelte`: prompt list labels for plain prompts now reflect `type2` (Main/Global/Jailbreak).
+- `src/ts/process/index.svelte.ts`: preview prompt now includes `promptBlocks` with labeled sections for easier prompt inspection.
+- `src/ts/hotkey.ts`: preview hotkey now shows a friendly error and always clears “thinking” state on failure.
+- `src/ts/hotkey.ts`: added missing `alertError` import to avoid runtime crash.
+- `src/lib/SideBars/CharConfig.svelte`: moved personality/scenario/global note override to main character tab and relabeled chat note field.
+- `src/lib/Setting/Pages/BotSettings.svelte`: added separate OpenRouter model selector for auxiliary model.
+- `src/ts/process/request/openAI.ts`: OpenRouter requests now use auxiliary model selection for non-main model modes.
+- `src/ts/storage/database.svelte.ts`: added persisted `openrouterSubRequestModel` with migration default.
+- `src/ts/process/templates/templates.ts`: template defaults now include `openrouterSubRequestModel`.
+- `src/lib/Others/HypaV3Modal.svelte`: added chat selector to view stored memories per chat and scoped modal to selected chat.
+- `src/ts/process/memory/hypav3.ts`: added periodic summarization settings and per-chat last summarized index tracking.
+- `src/lib/Setting/Pages/OtherBotSettings.svelte`: added UI controls for periodic HypaV3 summarization.
+- `src/ts/process/index.svelte.ts`: convert inline `data:image` markdown to inlay tokens before tokenization to prevent token explosions.
+- `src/comfy_commander.js`: strip image-only content from `/cw` last-message selection and store generated images as inlay tokens when possible.
+- `src/ts/util/inlayTokens.ts`: fix inlay token regex used for summary sanitization.
+- `src/ts/process/memory/hypav3.ts`: avoid advancing periodic summary cursor when no summary was created.
+- `src/ts/storage/database.svelte.ts`: add message attachment metadata and dev log bridge settings.
+- `src/ts/dev/devBridge.ts`: add optional console→memory log bridge for debugging.
+- `src/ts/setting/advancedSettingsData.ts`: add dev log bridge settings in Advanced.
+- `src/ts/plugins/plugins.svelte.ts`: expose `saveInlayAsset` to plugins.
+- `src/ts/plugins/apiV3/risuai.d.ts`: add typings for `saveInlayAsset`.
+- `src/ts/plugins/apiV3/v3.svelte.ts`: expose `saveInlayAsset` in v3 API.
+- `src/lib/Others/AlertComp.svelte`: add Dev Logs modal with copy actions and error highlighting.
+- `src/lib/SideBars/Sidebar.svelte`: add Dev Logs entry to main hamburger menu (when dev log bridge is enabled).
+- Removed Dev Log Bridge + Dev Logs UI due to performance issues and UI freezes.
+- `src/ts/process/memory/hypav3.ts`: periodic summarization now tracks `chats.length` consistently and skips non-summarizable slices to avoid retry loops.
+- `src/ts/process/command.ts`: command handlers are wrapped in try/catch with friendly error reporting.
+- `src/ts/process/index.svelte.ts`: skip expensive inline image conversion on older messages; sanitize to `[Image]` for tokenization.
+- `src/lib/Others/HypaV3Modal.svelte`: add manual range summarization with a simple start/end picker.
+- `src/lib/Others/HypaV3Modal.svelte`: manual summary UI now uses theme colors and non-blocking alerts.
+- `src/lib/Others/HypaV3Modal.svelte`: manual summarize range uses toast notifications (no modal blocking).
+- `src/lib/Others/HypaV3Modal.svelte`: manual summaries now persist to chat storage and reset the “Summarizing…” state reliably.
+- `src/lib/Others/HypaV3Modal.svelte`: persist manual summaries by reassigning chat list to trigger DB save/re-render.
+- `src/lib/Others/HypaV3Modal.svelte`: manual summaries now use empty `chatMemos` to avoid cleanup removal on refresh.
+
+## 2026-02-05
+- `src/ts/process/memory/hypav3.ts`: orphan cleanup now uses full chat memos (room history) to avoid deleting valid periodic summaries.
+- `src/ts/process/memory/hypav3.ts`: periodic summarization respects `maxChatsPerSummary` and advances the cursor by chunk size (not the full backlog).
+- `src/ts/process/memory/hypav3.ts`: memory prompt strips summary headings/keywords before injection to reduce summary‑style leakage.
+- `server/node/server.cjs`: added `/data` server-first storage endpoints with ETag/If-Match handling (settings, characters, chats, assets, plugins, prompts/themes/color_schemes) and basic request logging.
+- `server/node/server.cjs`: root `/` now returns a friendly message when `dist/` is missing; `/data/assets` accepts optional `id`.
+- `src/ts/storage/serverStorage.ts`: added server asset adapter for `/data/assets`.
+- `src/ts/globalApi.svelte.ts`: use server asset adapter for `saveAsset`, `loadAsset`, and `getFileSrc` when running under node server.
+- `src/ts/storage/serverDb.ts`: added server storage database adapter (load + save with ETag).
+- `src/ts/bootstrap.ts`: load from server storage when running under node server.
+- `src/ts/globalApi.svelte.ts`: save to server storage when running under node server.
+- `src/ts/storage/autoStorage.ts`: avoid NodeStorage auth prompts on node server by using localforage for cache and skipping account sync.
+- `server/node/server.cjs`: disable caching for `/data` responses to avoid 304s.
+- `src/ts/storage/serverDb.ts`: avoid cached fetches and stop writing all characters when only chats change.
+- `server/node/server.cjs`: strengthen no-cache headers for `/data` to reduce 304s.
+- `src/ts/globalApi.svelte.ts`: split save tracking so chat changes no longer trigger character saves.
+- `server/node/server.cjs`: use manual JSON responses for `/data` to avoid Express freshness 304s.
+- `src/ts/globalApi.svelte.ts`: normalize server save targets to only the latest character/chat id per cycle.
+- `src/ts/storage/serverDb.ts`: write prompts/themes/color schemes to server endpoints; added `exportServerStorage()` helper.
+- `src/ts/storage/serverDb.ts`: skip prompt/theme/color-scheme writes when values are unchanged.
+- `src/ts/storage/serverDb.ts`: preload prompt/theme/color-scheme ETags on load to avoid initial 412s.
+- `src/ts/storage/serverDb.ts`: ensure ETag prefetch before writing prompts/themes/color schemes to avoid 412s when switching.
+- `src/ts/storage/serverDb.ts`: skip settings writes when unchanged to reduce repeated PUTs.
+- `src/ts/drive/drive.ts`: disable Drive backup/sync in node server mode to avoid local writes.
+- `src/ts/drive/backuplocal.ts`: disable local backup/restore in node server mode.
+- `src/lib/Setting/Settings.svelte`: hide Account & Files menu and page in node server mode.
+- `src/lib/Setting/Settings.svelte`: Account & Files menu removed in all modes (account system removal).
+- `src/ts/storage/autoStorage.ts`: account sync removed.
+- `src/ts/bootstrap.ts`: removed account sync/load path.
+- `vite.config.ts`: limit optimizeDeps scan to `src/main.ts` and exclude `JSZip` to avoid SillyTavern backup scan errors.
+- `src/lib/Setting/Pages/UserSettings.svelte`: deleted (Account & Files UI removed).
+- `src/lib/Setting/Pages/Advanced/SettingsExportButtons.svelte`: added Export To Server Storage button for node server.
+- `src/ts/globalApi.svelte.ts`: handle ETag conflicts by reloading from server; disable DB backups in node server mode.
+- `src/ts/globalApi.svelte.ts`: throttled server saves to reduce repeated PUTs.
+- `src/ts/storage/database.svelte.ts`: removed the `account` field from the Database type (account system removal).
+- `src/ts/storage/accountStorage.ts`, `src/ts/drive/accounter.ts`, `src/ts/kei/backup.ts`, `src/ts/process/coldstorage.svelte.ts`, `src/ts/sionyw.ts`: removed account sync, Kei autobackup, cold storage sync, and account auth helpers.
+- `src/lib/UI/Realm/RealmFrame.svelte`, `src/lib/UI/Realm/RealmUpload.svelte`, `src/lib/UI/Realm/RealmPopUp.svelte`, `src/ts/realm.ts`: Realm no longer uses account tokens; account‑gated delete action removed.
+- `src/ts/characterCards.ts`: removed account-based asset import path and account headers from Realm upload helper.
+- `src/lib/ChatScreens/DefaultChatScreen.svelte`: removed cold storage preload gating in chat render.
+- `src/ts/process/stableDiff.ts`: Kei image provider disabled (no account tokens).
+- `src/ts/drive/backuplocal.ts`: removed account-specific backup filtering.
+- `src/ts/setting/advancedSettingsData.ts`: removed Lightning Realm Import toggle.
+- `src/lib/Setting/Settings.svelte`, `src/lib/Setting/Pages/ThanksPage.svelte`: removed Supporter Thanks settings page and menu entry.
+- `src/lib/Setting/Pages/BotSettings.svelte`: removed Chat Bot → Others tab and its sections (bias/additional params/prompt template/custom flags/module integration/tools/icon/presets).
+- `src/lib/Setting/Pages/OtherBotSettings.svelte`: removed Image Generation tab and settings.
+- `src/ts/process/stableDiff.ts` and image-gen triggers/UI: removed Stable Diffusion/image generation pipeline, trigger effects, and playground entry.
+- `src/ts/storage/database.svelte.ts`: removed SD/NAI image generation fields and defaults; removed `sdData` from chat/character data.
+- `src/lib/SideBars/CharConfig.svelte`, `src/ts/util.ts`, `src/ts/characters.ts`: removed imggen viewScreen option and normalized old `imggen` values to `none`.
+
+## 2026-02-12
+- `server/node/server.cjs`, `server/node/llm/*`: added server execution endpoints for LLM migration (`POST /data/llm/preview`, `POST /data/llm/execute`) with provider gating, structured error envelopes, and execution logging.
+- `server/node/llm/audit.cjs`, `server/node/server.cjs`: added durable JSONL server LLM audit logging and query endpoint (`GET /data/llm/logs`) with sensitive-field redaction.
+- `src/ts/globalApi.svelte.ts`: added server durable log client helper (`getServerLLMLogs`) for node-server mode.
+- `src/lib/Others/AlertComp.svelte`: request log modal now separates client non-LLM logs and durable server LLM logs; added mode/provider/model/request-id metadata and copy actions for each log section/entry.
+- `server/node/server.cjs`, `server/node/llm/openrouter.cjs`, `src/ts/model/openrouter.ts`, `src/lib/Setting/Pages/BotSettings.svelte`: added server OpenRouter model-list endpoint (`GET /data/openrouter/models`) with memory+disk cache fallback, plus client model-loader status/refresh UX.
+- `src/ts/process/request/openAI.ts`: node-server OpenRouter requests now run through `/data/llm/execute` and return clearer contextual failures (mode/model context and explicit 429 no-retry handling).
+- `scripts/test-server-llm-phaseA.js`: updated from old scaffold-only assertions to deterministic B1 contract checks (preview contract, provider gate, non-stream validation, streaming-not-implemented contract).
+- `src/lib/Setting/Pages/BotSettings.svelte`, `src/lib/Setting/Pages/OpenrouterSettings.svelte`, `src/ts/process/request/openAI.ts`, `server/node/llm/openrouter.cjs`, `src/ts/storage/database.svelte.ts`: reverted per-model OpenRouter provider routing override experiment; global `openrouterProvider` remains authoritative.
+- `src/ts/process/rag/*`: added Phase 1 of Rulebook RAG (Retreival-Augmented Generation) supporting cross-book semantic search and prompt injection.
+- `src/ts/storage/database.svelte.ts`: added `ragSettings`, `RagSettings` interface, and `ragRulebooks` to support RAG configuration and metadata.
+- `src/ts/process/index.svelte.ts`: integrated RAG retrieval into `sendChat`, including semantic search query generation and citation-ready prompt injection.
+- `src/lib/SideBars/LoreBook/RulebookRagSetting.svelte`: updated to support global library selection; removed numeric configuration (Top K, Min Score, Budget); management (upload/delete) moved to Rulebook Manager.
+- `src/lib/Others/RulebookManager/RulebookLibrary.svelte`: added new global Rulebook Library manager for uploading and managing RAG rulebooks; includes global RAG configuration settings.
+- `src/ts/storage/database.svelte.ts`: added `globalRagSettings` to Database interface.
+- `src/lib/SideBars/Sidebar.svelte`: added Rulebook Library entry to the main hamburger menu.
+- `src/App.svelte`: integrated RulebookLibrary modal.
+- `src/ts/stores.svelte.ts`: added `openRulebookManager` store.
+- `src/lib/SideBars/LoreBook/LoreBookSetting.svelte`: added Rulebooks tab to the lorebook sidebar.
+- `src/ts/process/rag/pdf.ts`: added PDF text extraction utility with page number preservation and scanned PDF detection.
+- `src/ts/process/rag/rag.ts`: improved chunking to preserve page numbers in metadata and support structured page input.
+- `src/lib/SideBars/LoreBook/RulebookRagSetting.svelte`: updated to support PDF uploads, display chunk counts, and provide better ingestion feedback.
+- `src/ts/process/index.svelte.ts`: improved RAG search query by targeting the last user message specifically; added content-based deduplication and token budget enforcement for RAG chunks; added `ragLastResult` store population.
+- `src/ts/process/memory/hypamemoryv2.ts`: updated `progressCallback` to report `(current, total)` items for better accuracy; implemented item-level tracking for both local and API embedding paths.
+- `src/ts/process/memory/hypav3.ts`: updated memory processing to use the new `(current, total)` progress signature.
+- `src/ts/process/rag/rag.ts`: fixed progress reporting mismatch where items were confused with chunks; added `isLoaded` method to prevent redundant rulebook loading; improved `search` to handle multiple rulebook IDs simultaneously; added `getInstruction` for system-prompt citation enforcement.
+- `src/lib/Others/RulebookManager/RulebookLibrary.svelte`: refactored UI to use design system primitives (`Button`, `IconButton`) and normalized tokens (`--ds-*`); enhanced progress bar with shimmer animation and accurate percentage labels.
+- `src/lib/SideBars/LoreBook/RulebookRagSetting.svelte`: refactored UI to use design system primitives (`IconButton`) and semantic cards (`ds-settings-card`).
+- `src/ts/stores.svelte.ts`: added `ragLastResult` store for RAG debugging.
+- `src/lib/SideBars/LoreBook/RulebookRagSetting.svelte`: added "Last Retrieval" section to inspect RAG results in the UI.

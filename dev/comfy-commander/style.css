@@ -1,0 +1,6 @@
+.comfy_template_item {
+    background-color: rgba(0, 0, 0, 0.1);
+}
+.comfy_template_item:nth-child(even) {
+    background-color: rgba(0, 0, 0, 0.2);
+}

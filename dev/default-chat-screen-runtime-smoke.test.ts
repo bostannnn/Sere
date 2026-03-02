@@ -1,0 +1,423 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { mount, tick, unmount } from "svelte";
+
+const mocks = vi.hoisted(() => ({
+  floatingActionCallback: vi.fn(),
+  sendChat: vi.fn(async () => {}),
+}));
+
+vi.mock(import("src/lang"), () => ({
+  language: {
+    newMessage: "New message",
+    enterMessageForTranslateToEnglish: "Translate input",
+    loadMore: "Load more",
+    continueResponse: "Continue response",
+    autoTranslateInput: "Auto translate input",
+    autoSuggest: "Auto suggest",
+    screenshot: "Screenshot",
+    postFile: "Post file",
+    modules: "Modules",
+    reroll: "Reroll",
+    chatList: "Chat list",
+    autoMode: "Auto mode",
+    ttsStop: "Stop TTS",
+    hypaMemoryV3Modal: "Hypa memory",
+  },
+}));
+
+vi.mock(import("uuid"), () => ({
+  v4: () => "uuid-stub",
+}));
+
+vi.mock(import("src/ts/stores.svelte"), async () => {
+  const { writable } = await import("svelte/store");
+  return {
+    selectedCharID: writable(0),
+    PlaygroundStore: writable(0),
+    createSimpleCharacter: (character: unknown) => character,
+    hypaV3ModalOpen: writable(false),
+    ScrollToMessageStore: { value: -1 },
+    additionalChatMenu: [],
+    additionalFloatingActionButtons: [
+      {
+        name: "Plugin Action",
+        callback: mocks.floatingActionCallback,
+      },
+    ],
+    pluginProgressStore: writable({
+      active: false,
+      label: "",
+      color: "#64748b",
+    }),
+    comfyProgressStore: writable({
+      active: false,
+      label: "",
+      color: "#64748b",
+    }),
+    selIdState: { selId: 0 },
+    DBState: {
+      db: {
+        fixedChatTextarea: false,
+        useChatSticker: true,
+        useAutoTranslateInput: true,
+        useAutoSuggestions: false,
+        autoSuggestClean: false,
+        subModel: "",
+        newMessageButtonStyle: "floating-circle",
+        sideMenuRerollButton: false,
+        screenshotChat: false,
+        sideMenuTranslateInput: false,
+        sideMenuCreateImagePrompt: false,
+        sideMenuContinueButton: false,
+        sideMenuRisuCommand: false,
+        sideMenuAutoModeButton: false,
+        sideMenuGoogleSearchButton: false,
+        sideMenuDatabankButton: false,
+        sideMenuRagSearchButton: false,
+        sideMenuScreenshotButton: false,
+        sideMenuHypaMemoryButton: false,
+        translator: "enabled",
+        sendWithEnter: true,
+        playMessage: false,
+        username: "User",
+        selectedPersona: 0,
+        personas: [
+          {
+            id: "persona-1",
+            name: "User Persona",
+            icon: "",
+            largePortrait: false,
+          },
+        ],
+        characters: [
+          {
+            chaId: "char-1",
+            type: "character",
+            name: "Character One",
+            image: "",
+            firstMessage: "Hello",
+            alternateGreetings: [],
+            creatorNotes: [],
+            removedQuotes: false,
+            largePortrait: false,
+            chatPage: 0,
+            chats: [
+              {
+                id: "chat-1",
+                name: "Chat One",
+                fmIndex: -1,
+                message: [],
+                localLore: [],
+                modules: [],
+                note: "",
+                bindedPersona: "",
+              },
+            ],
+          },
+        ],
+      },
+    },
+  };
+});
+
+vi.mock(import("src/ts/storage/database.svelte"), async () => {
+  const { DBState } = await import("src/ts/stores.svelte");
+  return {
+    getDatabase: () => ({}),
+    getCurrentCharacter: () => DBState.db.characters[0],
+    getCurrentChat: () => DBState.db.characters[0].chats[0],
+    setCurrentChat: (chat: unknown) => {
+      DBState.db.characters[0].chats[0] = chat as (typeof DBState.db.characters)[number]["chats"][number];
+    },
+  };
+});
+
+vi.mock(import("src/ts/characters"), () => ({
+  getCharImage: async () => "",
+}));
+
+vi.mock(import("src/ts/process/index.svelte"), async () => {
+  const { writable } = await import("svelte/store");
+  return {
+    chatProcessStage: writable(0),
+    isDoingChat: writable(false),
+    sendChat: mocks.sendChat,
+  };
+});
+
+vi.mock(import("src/ts/util"), () => ({
+  sleep: async () => {},
+}));
+
+vi.mock(import("src/ts/translator/translator"), () => ({
+  isExpTranslator: () => false,
+  translate: async () => "",
+}));
+
+vi.mock(import("src/ts/alert"), () => ({
+  alertError: () => {},
+  alertNormal: () => {},
+  alertWait: () => {},
+}));
+
+vi.mock(import("src/ts/process/scripts"), () => ({
+  processScript: async (_character: unknown, message: string) => message,
+}));
+
+vi.mock(import("src/ts/process/tts"), () => ({
+  stopTTS: () => {},
+}));
+
+vi.mock(import("src/ts/globalApi.svelte"), () => ({
+  aiLawApplies: () => true,
+  chatFoldedState: { data: null },
+  chatFoldedStateMessageIndex: { index: -1 },
+  downloadFile: async () => {},
+}));
+
+vi.mock(import("src/ts/process/triggers"), () => ({
+  runTrigger: async () => null,
+}));
+
+vi.mock(import("src/ts/process/prereroll"), () => ({
+  PreUnreroll: () => null,
+  Prereroll: () => null,
+}));
+
+vi.mock(import("src/ts/process/command"), () => ({
+  processMultiCommand: async () => false,
+}));
+
+vi.mock(import("src/ts/process/files/multisend"), () => ({
+  postChatFile: async () => null,
+}));
+
+vi.mock(import("src/ts/process/files/inlays"), () => ({
+  getInlayAsset: async () => ({ type: "image", data: "" }),
+}));
+
+vi.mock(import("src/ts/sync/multiuser"), async () => {
+  const { writable } = await import("svelte/store");
+  return {
+    ConnectionOpenStore: writable(false),
+  };
+});
+
+vi.mock(import("src/ts/platform"), () => ({
+  isNodeServer: false,
+}));
+
+vi.mock(import("src/ts/storage/serverDb"), () => ({
+  saveServerDatabase: async () => {},
+}));
+
+vi.mock(import("src/ts/storage/serverAuth"), () => ({
+  resolveServerAuthToken: async () => "token",
+}));
+
+vi.mock(import("src/lib/ChatScreens/Suggestion.svelte"), async () => ({
+  default: (await import("./test-stubs/SimplePanelStub.svelte")).default,
+}));
+
+vi.mock(import("src/lib/ChatScreens/Chat.svelte"), async () => ({
+  default: (await import("./test-stubs/SimplePanelStub.svelte")).default,
+}));
+
+vi.mock(import("src/lib/ChatScreens/CreatorQuote.svelte"), async () => ({
+  default: (await import("./test-stubs/SimplePanelStub.svelte")).default,
+}));
+
+vi.mock(import("src/lib/UI/MainMenu.svelte"), async () => ({
+  default: (await import("./test-stubs/SimplePanelStub.svelte")).default,
+}));
+
+vi.mock(import("src/lib/ChatScreens/AssetInput.svelte"), async () => ({
+  default: (await import("./test-stubs/SimplePanelStub.svelte")).default,
+}));
+
+vi.mock(import("src/lib/ChatScreens/Chats.svelte"), async () => ({
+  default: (await import("./test-stubs/DefaultChatScreenChatsStub.svelte")).default,
+}));
+
+vi.mock(import("src/lib/Others/PluginDefinedIcon.svelte"), async () => ({
+  default: (await import("./test-stubs/SimplePanelStub.svelte")).default,
+}));
+
+vi.mock(import("src/lib/SideBars/GameStateHUD.svelte"), async () => ({
+  default: (await import("./test-stubs/SimplePanelStub.svelte")).default,
+}));
+
+import DefaultChatScreen from "src/lib/ChatScreens/DefaultChatScreen.svelte";
+import { DBState } from "src/ts/stores.svelte";
+
+let app: Record<string, unknown> | undefined;
+
+async function flushUi() {
+  await tick();
+  await Promise.resolve();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+describe("default chat screen runtime smoke", () => {
+  beforeEach(() => {
+    mocks.floatingActionCallback.mockClear();
+    mocks.sendChat.mockClear();
+    DBState.db.fixedChatTextarea = false;
+    DBState.db.newMessageButtonStyle = "floating-circle";
+    DBState.db.useAutoTranslateInput = true;
+    DBState.db.sendWithEnter = true;
+    document.body.innerHTML = "";
+  });
+
+  afterEach(async () => {
+    if (app) {
+      await unmount(app);
+      app = undefined;
+    }
+  });
+
+  it("keeps composer controls and floating actions on primitive classes", async () => {
+    const target = document.createElement("div");
+    document.body.appendChild(target);
+    app = mount(DefaultChatScreen, { target });
+    await flushUi();
+
+    const stickerToggle = document.querySelector(
+      ".ds-chat-composer-icon-toggle.icon-btn.icon-btn--md",
+    ) as HTMLButtonElement | null;
+    expect(stickerToggle).not.toBeNull();
+    expect(stickerToggle?.getAttribute("type")).toBe("button");
+    expect(stickerToggle?.getAttribute("aria-label")).toBe("Toggle stickers");
+
+    const composerInput = document.querySelector(
+      ".ds-chat-composer-input.control-field",
+    ) as HTMLTextAreaElement | null;
+    expect(composerInput).not.toBeNull();
+
+    const translateInput = document.querySelector(
+      ".ds-chat-translate-input.control-field",
+    ) as HTMLTextAreaElement | null;
+    expect(translateInput).not.toBeNull();
+
+    const composerButtons = Array.from(
+      document.querySelectorAll(".ds-chat-composer-action.icon-btn.icon-btn--sm"),
+    ) as HTMLButtonElement[];
+    expect(composerButtons.length).toBe(2);
+    const menuButton = document.querySelector(
+      ".ds-chat-composer-action.ds-chat-composer-action-end.icon-btn.icon-btn--sm",
+    ) as HTMLButtonElement | null;
+    expect(menuButton).not.toBeNull();
+    expect(menuButton?.getAttribute("type")).toBe("button");
+    expect(menuButton?.getAttribute("aria-label")).toBe("Open chat actions");
+    expect(menuButton?.getAttribute("aria-haspopup")).toBe("menu");
+    expect(menuButton?.getAttribute("aria-expanded")).toBe("false");
+    expect(menuButton?.getAttribute("aria-controls")).toBe("ds-chat-side-menu");
+    menuButton?.click();
+    await flushUi();
+    expect(menuButton?.getAttribute("aria-expanded")).toBe("true");
+
+    const menuRows = Array.from(
+      document.querySelectorAll(".ds-chat-side-menu-item.ds-ui-menu-item"),
+    ) as HTMLButtonElement[];
+    const sideMenuPanel = document.querySelector(
+      ".ds-chat-side-menu.panel-shell.ds-ui-menu",
+    ) as HTMLElement | null;
+    expect(sideMenuPanel).not.toBeNull();
+    expect(sideMenuPanel?.id).toBe("ds-chat-side-menu");
+    expect(sideMenuPanel?.getAttribute("role")).toBe("menu");
+    expect(menuRows.length).toBeGreaterThan(0);
+    expect(menuRows.every((row) => row.tagName === "BUTTON")).toBe(true);
+    expect(menuRows.every((row) => row.getAttribute("type") === "button")).toBe(true);
+
+    const continueButton = menuRows.find(
+      (row) => row.getAttribute("aria-label") === "Continue response",
+    ) as HTMLButtonElement | undefined;
+    expect(continueButton).toBeDefined();
+    expect(continueButton?.getAttribute("aria-disabled")).toBe("true");
+
+    const autoTranslateButton = menuRows.find(
+      (row) => row.getAttribute("aria-label") === "Auto translate input",
+    ) as HTMLButtonElement | undefined;
+    expect(autoTranslateButton).toBeDefined();
+    expect(autoTranslateButton?.getAttribute("aria-pressed")).toBe("true");
+
+    const floatingActionButton = document.querySelector(
+      ".ds-chat-floating-action-btn.icon-btn.icon-btn--sm",
+    ) as HTMLButtonElement | null;
+    expect(floatingActionButton).not.toBeNull();
+    const floatingActionsRail = document.querySelector(
+      ".ds-chat-floating-actions.action-rail",
+    ) as HTMLElement | null;
+    expect(floatingActionsRail).not.toBeNull();
+    expect(floatingActionButton?.getAttribute("type")).toBe("button");
+    expect(floatingActionButton?.getAttribute("aria-label")).toBe("Plugin Action");
+    floatingActionButton?.click();
+    await flushUi();
+    expect(mocks.floatingActionCallback).toHaveBeenCalledTimes(1);
+
+    const floatingJumpButton = document.querySelector(
+      ".ds-chat-jump-btn-circle.icon-btn.icon-btn--md",
+    ) as HTMLButtonElement | null;
+    expect(floatingJumpButton).not.toBeNull();
+    expect(floatingJumpButton?.getAttribute("type")).toBe("button");
+    expect(floatingJumpButton?.getAttribute("aria-label")).toBe("New message");
+  });
+
+  it("keeps fixed composer and top-bar jump stable with long input/send flow", async () => {
+    DBState.db.fixedChatTextarea = true;
+    DBState.db.newMessageButtonStyle = "top-bar";
+
+    const target = document.createElement("div");
+    document.body.appendChild(target);
+    app = mount(DefaultChatScreen, { target });
+    await flushUi();
+
+    const scrollShell = document.querySelector(".ds-chat-scroll-shell.default-chat-screen") as HTMLElement | null;
+    expect(scrollShell).not.toBeNull();
+
+    const fixedComposer = document.querySelector(
+      ".ds-chat-composer-shell.ds-chat-composer-shell-fixed",
+    ) as HTMLElement | null;
+    expect(fixedComposer).not.toBeNull();
+
+    const topBarJumpButton = document.querySelector(
+      ".ds-chat-jump-btn.ds-chat-jump-btn-top-bar",
+    ) as HTMLButtonElement | null;
+    expect(topBarJumpButton).not.toBeNull();
+    expect(topBarJumpButton?.getAttribute("type")).toBe("button");
+    expect(topBarJumpButton?.getAttribute("aria-label")).toBe("New message");
+    expect(topBarJumpButton?.getAttribute("title")).toBe("New message");
+
+    const composerInput = document.querySelector(
+      ".ds-chat-composer-input.control-field",
+    ) as HTMLTextAreaElement | null;
+    expect(composerInput).not.toBeNull();
+
+    const longInput = `${"Long runtime content ".repeat(60)}\n${"extra ".repeat(80)}`;
+    composerInput!.value = longInput;
+    composerInput!.dispatchEvent(new Event("input", { bubbles: true }));
+    await flushUi();
+    expect(composerInput!.value).toBe(longInput);
+
+    composerInput!.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    await flushUi();
+    expect(mocks.sendChat).toHaveBeenCalledTimes(1);
+    expect(composerInput!.value).toBe("");
+
+    const menuButton = document.querySelector(
+      ".ds-chat-composer-action.ds-chat-composer-action-end.icon-btn.icon-btn--sm",
+    ) as HTMLButtonElement | null;
+    expect(menuButton).not.toBeNull();
+    expect(menuButton?.getAttribute("aria-expanded")).toBe("false");
+    menuButton!.click();
+    await flushUi();
+    expect(menuButton?.getAttribute("aria-expanded")).toBe("true");
+    expect(document.querySelector(".ds-chat-side-menu")).not.toBeNull();
+
+    const root = document.querySelector(".ds-chat-root") as HTMLElement | null;
+    root?.click();
+    await flushUi();
+    expect(document.querySelector(".ds-chat-side-menu")).toBeNull();
+    expect(menuButton?.getAttribute("aria-expanded")).toBe("false");
+  });
+});

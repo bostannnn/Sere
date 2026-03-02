@@ -1,0 +1,285 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { mount, tick, unmount } from "svelte";
+import { get } from "svelte/store";
+
+const hoisted = vi.hoisted(() => ({
+  getFetchLogs: vi.fn(() => [
+    {
+      url: "https://example.test/data/llm/execute",
+      success: false,
+      status: 500,
+      date: "2026-02-27T13:00:00.000Z",
+      body: {
+        mode: "chat",
+        provider: "openrouter",
+        model: "openrouter/test-model",
+        chatId: "chat-abcdef1234",
+      },
+      header: {
+        "content-type": "application/json",
+      },
+      response: {
+        ok: false,
+      },
+    },
+  ]),
+  getServerLLMLogs: vi.fn(async () => []),
+}));
+
+vi.mock(import("src/ts/alert"), async () => {
+  const { writable } = await import("svelte/store");
+  return {
+    alertGenerationInfoStore: writable(""),
+  };
+});
+
+vi.mock(import("src/ts/stores.svelte"), async () => {
+  const { writable } = await import("svelte/store");
+  return {
+    DBState: {
+      db: {
+        sourcemapTranslate: false,
+      },
+    },
+    selectedCharID: writable(0),
+    alertStore: writable({
+      type: "requestlogs",
+      msg: "",
+    }),
+  };
+});
+
+vi.mock(import("src/lang"), () => {
+  const language = new Proxy(
+    {
+      ShowLog: "Request Logs",
+      collapseAll: "Collapse all",
+      expandAll: "Expand all",
+      noRequestLogs: "No request logs",
+    } as Record<string, string>,
+    {
+      get(target, property) {
+        if (typeof property === "string" && property in target) {
+          return target[property];
+        }
+        return String(property);
+      },
+    },
+  );
+  return { language };
+});
+
+vi.mock(import("src/ts/globalApi.svelte"), () => ({
+  aiLawApplies: vi.fn(() => true),
+  openURL: vi.fn(),
+  getFetchLogs: hoisted.getFetchLogs,
+  getServerLLMLogs: hoisted.getServerLLMLogs,
+  getFetchData: vi.fn(async () => ({})),
+}));
+
+vi.mock(import("src/ts/platform"), () => ({
+  isNodeServer: false,
+}));
+
+vi.mock(import("src/ts/characters"), () => ({
+  getCharImage: vi.fn(async () => null),
+}));
+
+vi.mock(import("src/ts/parser.svelte"), () => ({
+  ParseMarkdown: vi.fn(async () => ""),
+}));
+
+vi.mock(import("src/ts/characterCards"), () => ({
+  isCharacterHasAssets: vi.fn(() => false),
+}));
+
+vi.mock(import("src/ts/tokenizer"), () => ({
+  tokenize: vi.fn(async () => []),
+}));
+
+vi.mock(import("src/ts/gui/colorscheme"), async () => {
+  const { writable } = await import("svelte/store");
+  return {
+    ColorSchemeTypeStore: writable(false),
+  };
+});
+
+vi.mock(import("src/ts/gui/branches"), () => ({
+  getChatBranches: vi.fn(() => []),
+}));
+
+vi.mock(import("src/ts/storage/database.svelte"), () => ({
+  getCurrentCharacter: vi.fn(() => null),
+}));
+
+vi.mock(import("src/ts/sourcemap"), () => ({
+  translateStackTrace: vi.fn(async () => ""),
+}));
+
+vi.mock(import("src/lib/SideBars/BarIcon.svelte"), async () => ({
+  default: (await import("./test-stubs/SimplePanelStub.svelte")).default,
+}));
+
+vi.mock(import("src/lib/UI/GUI/TextInput.svelte"), async () => ({
+  default: (await import("./test-stubs/BindableFieldStub.svelte")).default,
+}));
+
+vi.mock(import("src/lib/UI/GUI/SelectInput.svelte"), async () => ({
+  default: (await import("./test-stubs/SimplePanelStub.svelte")).default,
+}));
+
+vi.mock(import("src/lib/UI/GUI/OptionInput.svelte"), async () => ({
+  default: (await import("./test-stubs/SimplePanelStub.svelte")).default,
+}));
+
+vi.mock(import("src/lib/UI/GUI/TextAreaInput.svelte"), async () => ({
+  default: (await import("./test-stubs/BindableFieldStub.svelte")).default,
+}));
+
+vi.mock(import("src/lib/Setting/Pages/Module/ModuleChatMenu.svelte"), async () => ({
+  default: (await import("./test-stubs/SimplePanelStub.svelte")).default,
+}));
+
+vi.mock(import("src/lib/Others/Help.svelte"), async () => ({
+  default: (await import("./test-stubs/SimplePanelStub.svelte")).default,
+}));
+
+import AlertComp from "src/lib/Others/AlertComp.svelte";
+import { alertStore } from "src/ts/stores.svelte";
+
+let app: Record<string, unknown> | undefined;
+
+async function flushUi() {
+  await tick();
+  await Promise.resolve();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+describe("alert request logs runtime smoke", () => {
+  beforeEach(() => {
+    hoisted.getFetchLogs.mockClear();
+    hoisted.getServerLLMLogs.mockClear();
+    alertStore.set({
+      type: "requestlogs",
+      msg: "",
+    });
+    document.body.innerHTML = "";
+  });
+
+  afterEach(async () => {
+    if (app) {
+      await unmount(app);
+      app = undefined;
+    }
+  });
+
+  it("keeps request-log status and meta badges on control-chip primitive", async () => {
+    const target = document.createElement("div");
+    document.body.appendChild(target);
+    app = mount(AlertComp, { target });
+    await flushUi();
+
+    const statusBadge = document.querySelector(
+      ".request-log-status-badge.control-chip.request-log-status-error",
+    ) as HTMLElement | null;
+    expect(statusBadge).not.toBeNull();
+    expect((statusBadge?.textContent ?? "").includes("500")).toBe(true);
+
+    const modalShell = document.querySelector(".alert-requestlog-modal.panel-shell") as HTMLElement | null;
+    expect(modalShell).not.toBeNull();
+    const headerActionRail = document.querySelector(".alert-requestlog-header-actions.action-rail") as HTMLElement | null;
+    expect(headerActionRail).not.toBeNull();
+    const listShell = document.querySelector(".alert-requestlog-list.list-shell") as HTMLElement | null;
+    expect(listShell).not.toBeNull();
+    const cardShell = document.querySelector(".alert-requestlog-card.panel-shell") as HTMLElement | null;
+    expect(cardShell).not.toBeNull();
+
+    const metaBadges = [...document.querySelectorAll(".request-log-meta-badge.control-chip")] as HTMLElement[];
+    expect(metaBadges.length).toBeGreaterThan(0);
+
+    const modelBadge = document.querySelector(
+      ".request-log-meta-badge.request-log-meta-badge-model.control-chip",
+    ) as HTMLElement | null;
+    expect(modelBadge).not.toBeNull();
+    expect((modelBadge?.textContent ?? "").includes("model: openrouter/test-model")).toBe(true);
+
+    const toggle = document.querySelector(".alert-requestlog-toggle") as HTMLButtonElement | null;
+    expect(toggle).not.toBeNull();
+    expect(toggle?.getAttribute("type")).toBe("button");
+    expect(toggle?.getAttribute("aria-expanded")).toBe("false");
+    toggle?.click();
+    await flushUi();
+    const expandedToggle = document.querySelector(".alert-requestlog-toggle") as HTMLButtonElement | null;
+    expect(expandedToggle?.getAttribute("aria-expanded")).toBe("true");
+
+    const copyButton = document.querySelector(
+      ".request-log-copy-btn.icon-btn.icon-btn--sm",
+    ) as HTMLButtonElement | null;
+    expect(copyButton).not.toBeNull();
+    expect(copyButton?.getAttribute("type")).toBe("button");
+    expect(copyButton?.getAttribute("aria-label")).toBe("Copy full client log entry");
+  });
+
+  it("closes request-log modal from close action", async () => {
+    const target = document.createElement("div");
+    document.body.appendChild(target);
+    app = mount(AlertComp, { target });
+    await flushUi();
+
+    const closeButton = document.querySelector(
+      ".alert-requestlog-close.icon-btn.icon-btn--sm",
+    ) as HTMLButtonElement | null;
+    expect(closeButton).not.toBeNull();
+    expect(closeButton?.getAttribute("type")).toBe("button");
+    expect(closeButton?.getAttribute("aria-label")).toBe("Close request logs");
+    closeButton?.click();
+    await flushUi();
+
+    expect(get(alertStore).type).toBe("none");
+  });
+
+  it("keeps empty-state primitive when request logs are empty", async () => {
+    hoisted.getFetchLogs.mockImplementation(() => []);
+    const target = document.createElement("div");
+    document.body.appendChild(target);
+    app = mount(AlertComp, { target });
+    await flushUi();
+
+    const emptyState = document.querySelector(".alert-requestlog-empty.empty-state") as HTMLElement | null;
+    expect(emptyState).not.toBeNull();
+    expect((emptyState?.textContent ?? "").includes("No request logs")).toBe(true);
+  });
+
+  it("renders error stack traces as inert text", async () => {
+    const payload =
+      '<img src="x" onerror="window.__alertStackXss=1">\\n<script>window.__alertStackXss=2</script>\\nError: boom';
+    const xssWindow = window as unknown as { __alertStackXss?: number };
+    delete xssWindow.__alertStackXss;
+
+    alertStore.set({
+      type: "error",
+      msg: "Boom",
+      stackTrace: payload,
+    } as never);
+
+    const target = document.createElement("div");
+    document.body.appendChild(target);
+    app = mount(AlertComp, { target });
+    await flushUi();
+
+    const showDetailsButton = document.querySelector(".alert-section-gap-top button") as HTMLButtonElement | null;
+    expect(showDetailsButton).not.toBeNull();
+    showDetailsButton?.click();
+    await flushUi();
+
+    const stackTrace = document.querySelector(".stack-trace") as HTMLElement | null;
+    expect(stackTrace).not.toBeNull();
+    expect(stackTrace?.querySelector("img")).toBeNull();
+    expect(stackTrace?.querySelector("script")).toBeNull();
+    expect((stackTrace?.textContent ?? "").includes("<img src=\"x\"")).toBe(true);
+    expect((stackTrace?.textContent ?? "").includes("<script>window.__alertStackXss=2</script>")).toBe(true);
+    expect((stackTrace?.innerHTML ?? "").includes("&lt;img")).toBe(true);
+    expect((stackTrace?.innerHTML ?? "").includes("&lt;script&gt;")).toBe(true);
+    expect(xssWindow.__alertStackXss).toBeUndefined();
+  });
+});

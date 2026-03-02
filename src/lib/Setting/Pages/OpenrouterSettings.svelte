@@ -1,0 +1,173 @@
+<script lang="ts">
+    import { language } from "src/lang";
+    import Accordion from "src/lib/UI/Accordion.svelte";
+    import Check from "src/lib/UI/GUI/CheckInput.svelte";
+    import Button from "src/lib/UI/GUI/Button.svelte";
+    
+    import { DBState } from 'src/ts/stores.svelte';
+    import ChatFormatSettings from "./ChatFormatSettings.svelte";
+    import OpenrouterProviderList from "src/lib/UI/OpenrouterProviderList.svelte";
+    import { PlusIcon, TrashIcon } from "@lucide/svelte";
+
+    const openrouterProviders = [
+        // An alphabetically separate set of very-dead providers is kept at the top of the list in the docs.
+        // These do not appear outside the docs: Anyscale, Cent-ML, HuggingFace ... SF Compute, Together 2, 01.AI
+        // As a visual check, AI21 is the topmost provider in the sidebar of https://openrouter.ai/models, thus we want to copy from this point and below.
+        "AI21",
+        "AionLabs",
+        "Alibaba",
+        "Amazon Bedrock",
+        "Anthropic",
+        "AtlasCloud",
+        "Atoma",
+        "Avian",
+        "Azure",
+        "BaseTen",
+        "Cerebras",
+        "Chutes",
+        "Cloudflare",
+        "Cohere",
+        "CrofAI",
+        "Crusoe",
+        "DeepInfra",
+        "DeepSeek",
+        "Enfer",
+        "Featherless",
+        "Fireworks",
+        "Friendli",
+        "GMICloud",
+        "Google",
+        "Google AI Studio",
+        "Groq",
+        "Hyperbolic",
+        "Inception",
+        "InferenceNet",
+        "Infermatic",
+        "Inflection",
+        "InoCloud",
+        "Kluster",
+        "Lambda",
+        "Liquid",
+        "Mancer 2",
+        "Meta",
+        "Minimax",
+        "Mistral",
+        "Moonshot AI",
+        "Morph",
+        "NCompass",
+        "Nebius",
+        "NextBit",
+        "Nineteen",
+        "Novita",
+        "Nvidia",
+        "OpenAI",
+        "OpenInference",
+        "Parasail",
+        "Perplexity",
+        "Phala",
+        "SambaNova",
+        "SiliconFlow",
+        "Stealth",
+        "Switchpoint",
+        "Targon",
+        "Together",
+        "Ubicloud",
+        "Venice",
+        "WandB",
+        "xAI",
+        "Z.AI",
+    ].sort((a, b) => a.localeCompare(b));
+</script>
+
+<Accordion name="Openrouter Settings" styled>
+    <div class="ds-settings-section">
+        <div class="ds-settings-row-center">
+            <Check bind:check={DBState.db.openrouterFallback} name={language.openrouterFallback}/>
+        </div>
+        <div class="ds-settings-row-center">
+            <Check bind:check={DBState.db.openrouterMiddleOut} name={language.openrouterMiddleOut}/>
+        </div>
+        <div class="ds-settings-row-center">
+            <Check bind:check={DBState.db.useInstructPrompt} name={language.useInstructPrompt}/>
+        </div>
+
+        <Accordion name={language.openrouterProviderOrder} help="openrouterProviderOrder" styled>
+            <div class="ds-settings-section">
+                {#each DBState.db.openrouterProvider.order as _model, i (`${i}-${_model}`)}
+                    <div class="ds-settings-section">
+                        <span class="ds-settings-label">
+                            {language.provider} {i + 1}
+                        </span>
+                        <OpenrouterProviderList bind:value={DBState.db.openrouterProvider.order[i]} options={openrouterProviders} />
+                    </div>
+                {/each}
+                <div class="ds-settings-inline-actions action-rail">
+                    <Button size="sm" className="ds-settings-icon-action ds-settings-icon-action-compact icon-btn icon-btn--sm" onclick={() => {
+                        const value = DBState.db.openrouterProvider.order ?? []
+                        value.push('')
+                        DBState.db.openrouterProvider.order = value
+                    }}><PlusIcon /></Button>
+                    <Button styled="danger" size="sm" className="ds-settings-icon-action ds-settings-icon-action-compact icon-btn icon-btn--sm" onclick={() => {
+                        const value = DBState.db.openrouterProvider.order ?? []
+                        value.pop()
+                        DBState.db.openrouterProvider.order = value
+                    }}><TrashIcon /></Button>
+                </div>
+            </div>
+        </Accordion>
+
+        <Accordion name={language.openrouterProviderOnly} help="openrouterProviderOnly" styled>
+            <div class="ds-settings-section">
+                {#each DBState.db.openrouterProvider.only as _model, i (`${i}-${_model}`)}
+                    <div class="ds-settings-section">
+                        <span class="ds-settings-label">
+                            {language.provider} {i + 1}
+                        </span>
+                        <OpenrouterProviderList bind:value={DBState.db.openrouterProvider.only[i]} options={openrouterProviders} />
+                    </div>
+                {/each}
+                <div class="ds-settings-inline-actions action-rail">
+                    <Button size="sm" className="ds-settings-icon-action ds-settings-icon-action-compact icon-btn icon-btn--sm" onclick={() => {
+                        const value = DBState.db.openrouterProvider.only ?? []
+                        value.push('')
+                        DBState.db.openrouterProvider.only = value
+                    }}><PlusIcon /></Button>
+                    <Button styled="danger" size="sm" className="ds-settings-icon-action ds-settings-icon-action-compact icon-btn icon-btn--sm" onclick={() => {
+                        const value = DBState.db.openrouterProvider.only ?? []
+                        value.pop()
+                        DBState.db.openrouterProvider.only = value
+                    }}><TrashIcon /></Button>
+                </div>
+            </div>
+        </Accordion>
+
+        <Accordion name={language.openrouterProviderIgnore} help="openrouterProviderIgnore" styled>
+            <div class="ds-settings-section">
+                {#each DBState.db.openrouterProvider.ignore as _model, i (`${i}-${_model}`)}
+                    <div class="ds-settings-section">
+                        <span class="ds-settings-label">
+                            {language.provider} {i + 1}
+                        </span>
+                        <OpenrouterProviderList bind:value={DBState.db.openrouterProvider.ignore[i]} options={openrouterProviders} />
+                    </div>
+                {/each}
+                <div class="ds-settings-inline-actions action-rail">
+                    <Button size="sm" className="ds-settings-icon-action ds-settings-icon-action-compact icon-btn icon-btn--sm" onclick={() => {
+                        const value = DBState.db.openrouterProvider.ignore ?? []
+                        value.push('')
+                        DBState.db.openrouterProvider.ignore = value
+                    }}><PlusIcon /></Button>
+                    <Button styled="danger" size="sm" className="ds-settings-icon-action ds-settings-icon-action-compact icon-btn icon-btn--sm" onclick={() => {
+                        const value = DBState.db.openrouterProvider.ignore ?? []
+                        value.pop()
+                        DBState.db.openrouterProvider.ignore = value
+                    }}><TrashIcon /></Button>
+                </div>
+            </div>
+        </Accordion>
+
+        {#if DBState.db.useInstructPrompt}
+            <ChatFormatSettings />
+        {/if}
+    </div>
+</Accordion>
