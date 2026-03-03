@@ -36,6 +36,31 @@
 
     const currentCharacter = $derived($selectedCharID >= 0 ? DBState.db.characters[$selectedCharID] : null)
     const configTabLabel = $derived(currentCharacter?.type === "group" ? language.group : language.character)
+    const resolvedReadingMode = $derived(DBState.db.chatReadingMode === "focus" ? "focus" : "normal")
+    const chatThemeToken = $derived.by(() => {
+        if (DBState.db.theme === "waifu") {
+            return "waifu"
+        }
+        if (DBState.db.theme === "cardboard") {
+            return "cardboard"
+        }
+        if (DBState.db.theme === "mobile" || DBState.db.theme === "waifuMobile") {
+            return "mobilechat"
+        }
+        return "classic"
+    })
+    const effectiveReadingMode = $derived.by(() => {
+        if (resolvedReadingMode !== "focus") {
+            return "normal"
+        }
+        if (viewportWidth < 1024) {
+            return "normal"
+        }
+        if (DBState.db.theme === "customHTML" || DBState.db.theme === "waifuMobile") {
+            return "normal"
+        }
+        return "focus"
+    })
     const showDesktopSidePanel = $derived(
         viewportWidth >= 1024 &&
         $selectedCharID >= 0 &&
@@ -166,7 +191,11 @@
     })
 </script>
 
-<div class="ds-chat-screen-shell">
+<div
+    class="ds-chat-screen-shell"
+    data-reading-mode={effectiveReadingMode}
+    data-chat-theme={chatThemeToken}
+>
     <div class="ds-chat-screen-main">
         {#if DBState.db.theme === 'waifu'}
             <div class="ds-chat-theme-waifu-shell" style="{bgImg.length < 4 ? wallPaper : bgImg}">

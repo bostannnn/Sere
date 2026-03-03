@@ -695,14 +695,16 @@
             {/await}
         {/if}
     {:else}
-        <div class="ds-chat-scroll-shell default-chat-screen" onscroll={(e) => {
+        <div class="ds-chat-main-shell">
+            <div class="ds-chat-scroll-shell default-chat-screen"
+                onscroll={(e) => {
             //@ts-expect-error scrollHeight/clientHeight/scrollTop don't exist on EventTarget, but target is HTMLElement here
             const scrolled = (e.target.scrollHeight - e.target.clientHeight + e.target.scrollTop)
             if(scrolled < 100 && DBState.db.characters[$selectedCharID].chats[DBState.db.characters[$selectedCharID].chatPage].message.length > loadPages){
                 loadPages += 15
             }
             const chatTarget = e.target as HTMLElement;
-            const chatsContainer = (DBState.db.fixedChatTextarea && chatTarget.children[1]) ? chatTarget.children[1] : chatTarget.children[0];
+            const chatsContainer = chatTarget.querySelector('.ds-chat-list-stack');
             const lastEl = chatsContainer?.firstElementChild;
             const isAtBottom = lastEl ? lastEl.getBoundingClientRect().top <= chatTarget.getBoundingClientRect().bottom + 100 : true;
             if(isAtBottom){
@@ -710,146 +712,6 @@
             }
         }}>
             <GameStateHud />
-            <div class="ds-chat-composer-shell"
-                class:ds-chat-composer-shell-fixed={DBState.db.fixedChatTextarea}
-                class:ds-chat-composer-shell-flow={!DBState.db.fixedChatTextarea}
-            >
-                {#if DBState.db.useChatSticker && currentCharacter.type !== 'group'}
-                    <button
-                        type="button"
-                        title="Toggle stickers"
-                        aria-label="Toggle stickers"
-                        onclick={()=>{toggleStickers = !toggleStickers}}
-                        class="ds-chat-composer-icon-toggle icon-btn icon-btn--md"
-                        class:is-active={toggleStickers}
-                    >
-                        <Laugh/>
-                    </button>
-                {/if}
-
-                <textarea class="ds-chat-composer-input control-field"
-                          bind:value={messageInput}
-                          bind:this={inputEle}
-                          onkeydown={(e) => {
-                        if(e.key.toLocaleLowerCase() === "enter" && !e.isComposing){
-                            if(DBState.db.sendWithEnter && (!e.shiftKey)){
-                                send()
-                                e.preventDefault()
-                            }else if(!DBState.db.sendWithEnter && e.shiftKey){
-                                send()
-                                e.preventDefault()
-                            }
-                        }
-                        if(e.key.toLocaleLowerCase() === "m" && (e.ctrlKey)){
-                            reroll()
-                            e.preventDefault()
-                        }
-                    }}
-                          onpaste={(e) => {
-                        const items = e.clipboardData?.items
-                        if(!items){
-                            return
-                        }
-                        let canceled = false
-
-                        for(const item of items){
-                            if(item.kind === 'file' && item.type.startsWith('image')){
-                                if(!canceled){
-                                    e.preventDefault()
-                                    canceled = true
-                                }
-                                const file = item.getAsFile()
-                                if(file){
-                                    const reader = new FileReader()
-                                    reader.onload = async (e) => {
-                                        const buf = e.target?.result as ArrayBuffer
-                                        const uint8 = new Uint8Array(buf)
-                                        const results = await postChatFile({
-                                            name: file.name,
-                                            data: uint8
-                                        })
-                                        if(!results) return
-                                        for(const res of results){
-                                            if(res?.type === 'asset'){
-                                                fileInput.push(res.data)
-                                            }
-                                            if(res?.type === 'text'){
-                                                messageInput += `{{file::${res.name}::${res.data}}}`
-                                            }
-                                        }
-                                        updateInputSizeAll()
-                                    }
-                                    reader.readAsArrayBuffer(file)
-                                }
-                            }
-                        }
-                    }}
-                          oninput={()=>{updateInputSizeAll();updateInputTransateMessage(false)}}
-                          style:height={inputHeight}
-                ></textarea>
-
-
-                {#if $isDoingChat || isDoingChatInputTranslate}
-                    <button
-                            type="button"
-                            title="Abort generation"
-                            aria-label="Abort generation"
-                            class="ds-chat-composer-action icon-btn icon-btn--sm" onclick={abortChat}
-                            style:height={inputHeight}
-                    >
-                        <div
-                            class="ds-chat-spinner"
-                            class:ds-chat-process-stage-1={$chatProcessStage === 1}
-                            class:ds-chat-process-stage-2={$chatProcessStage === 2}
-                            class:ds-chat-process-stage-3={$chatProcessStage === 3}
-                            class:ds-chat-process-stage-4={$chatProcessStage === 4}
-                            class:ds-chat-process-autoload={autoMode}
-                        ></div>
-                    </button>
-                {:else}
-                    <button
-                            type="button"
-                            title="Send message"
-                            aria-label="Send message"
-                            onclick={send}
-                            class="ds-chat-composer-action icon-btn icon-btn--sm"
-                            style:height={inputHeight}
-                    >
-                        <Send />
-                    </button>
-                {/if}
-                {#if $pluginProgressStore.active}
-                    <div class="ds-chat-plugin-spinner-inline">
-                        <div class="ds-chat-spinner ds-chat-spinner-plugin"
-                            style:--ds-chat-spinner-color={$pluginProgressStore.color}
-                        ></div>
-                    </div>
-                {/if}
-                {#if $comfyProgressStore.active}
-                    <div class="ds-chat-plugin-spinner-inline">
-                        <div class="ds-chat-spinner ds-chat-spinner-plugin"
-                            style:--ds-chat-spinner-color={$comfyProgressStore.color}
-                        ></div>
-                    </div>
-                {/if}
-                <button
-                        type="button"
-                        title="Open chat actions"
-                        aria-label="Open chat actions"
-                        aria-haspopup="menu"
-                        aria-expanded={openMenu}
-                        aria-controls="ds-chat-side-menu"
-                        onclick={(e) => {
-                        openMenu = !openMenu
-                        e.stopPropagation()
-                    }}
-                        class="ds-chat-composer-action ds-chat-composer-action-end icon-btn icon-btn--sm"
-                        class:is-active={openMenu}
-                        style:height={inputHeight}
-                >
-                    <MenuIcon />
-                </button>
-            </div>
             {#if $pluginProgressStore.active}
                 <div class="ds-chat-plugin-progress" style:--ds-chat-plugin-progress-color={$pluginProgressStore.color}>
                     <div class="ds-chat-plugin-progress-track">
@@ -1271,8 +1133,149 @@
                 </div>
 
             {/if}
-        </div>
+            </div>
 
+            <div class="ds-chat-composer-shell"
+                class:ds-chat-composer-shell-fixed={DBState.db.fixedChatTextarea}
+                class:ds-chat-composer-shell-flow={!DBState.db.fixedChatTextarea}
+            >
+                {#if DBState.db.useChatSticker && currentCharacter.type !== 'group'}
+                    <button
+                        type="button"
+                        title="Toggle stickers"
+                        aria-label="Toggle stickers"
+                        onclick={()=>{toggleStickers = !toggleStickers}}
+                        class="ds-chat-composer-icon-toggle icon-btn icon-btn--md"
+                        class:is-active={toggleStickers}
+                    >
+                        <Laugh/>
+                    </button>
+                {/if}
+
+                <textarea class="ds-chat-composer-input control-field"
+                          bind:value={messageInput}
+                          bind:this={inputEle}
+                          onkeydown={(e) => {
+                        if(e.key.toLocaleLowerCase() === "enter" && !e.isComposing){
+                            if(DBState.db.sendWithEnter && (!e.shiftKey)){
+                                send()
+                                e.preventDefault()
+                            }else if(!DBState.db.sendWithEnter && e.shiftKey){
+                                send()
+                                e.preventDefault()
+                            }
+                        }
+                        if(e.key.toLocaleLowerCase() === "m" && (e.ctrlKey)){
+                            reroll()
+                            e.preventDefault()
+                        }
+                    }}
+                          onpaste={(e) => {
+                        const items = e.clipboardData?.items
+                        if(!items){
+                            return
+                        }
+                        let canceled = false
+
+                        for(const item of items){
+                            if(item.kind === 'file' && item.type.startsWith('image')){
+                                if(!canceled){
+                                    e.preventDefault()
+                                    canceled = true
+                                }
+                                const file = item.getAsFile()
+                                if(file){
+                                    const reader = new FileReader()
+                                    reader.onload = async (e) => {
+                                        const buf = e.target?.result as ArrayBuffer
+                                        const uint8 = new Uint8Array(buf)
+                                        const results = await postChatFile({
+                                            name: file.name,
+                                            data: uint8
+                                        })
+                                        if(!results) return
+                                        for(const res of results){
+                                            if(res?.type === 'asset'){
+                                                fileInput.push(res.data)
+                                            }
+                                            if(res?.type === 'text'){
+                                                messageInput += `{{file::${res.name}::${res.data}}}`
+                                            }
+                                        }
+                                        updateInputSizeAll()
+                                    }
+                                    reader.readAsArrayBuffer(file)
+                                }
+                            }
+                        }
+                    }}
+                          oninput={()=>{updateInputSizeAll();updateInputTransateMessage(false)}}
+                          style:height={inputHeight}
+                ></textarea>
+
+
+                {#if $isDoingChat || isDoingChatInputTranslate}
+                    <button
+                            type="button"
+                            title="Abort generation"
+                            aria-label="Abort generation"
+                            class="ds-chat-composer-action icon-btn icon-btn--sm" onclick={abortChat}
+                            style:height={inputHeight}
+                    >
+                        <div
+                            class="ds-chat-spinner"
+                            class:ds-chat-process-stage-1={$chatProcessStage === 1}
+                            class:ds-chat-process-stage-2={$chatProcessStage === 2}
+                            class:ds-chat-process-stage-3={$chatProcessStage === 3}
+                            class:ds-chat-process-stage-4={$chatProcessStage === 4}
+                            class:ds-chat-process-autoload={autoMode}
+                        ></div>
+                    </button>
+                {:else}
+                    <button
+                            type="button"
+                            title="Send message"
+                            aria-label="Send message"
+                            onclick={send}
+                            class="ds-chat-composer-action icon-btn icon-btn--sm"
+                            style:height={inputHeight}
+                    >
+                        <Send />
+                    </button>
+                {/if}
+                {#if $pluginProgressStore.active}
+                    <div class="ds-chat-plugin-spinner-inline">
+                        <div class="ds-chat-spinner ds-chat-spinner-plugin"
+                            style:--ds-chat-spinner-color={$pluginProgressStore.color}
+                        ></div>
+                    </div>
+                {/if}
+                {#if $comfyProgressStore.active}
+                    <div class="ds-chat-plugin-spinner-inline">
+                        <div class="ds-chat-spinner ds-chat-spinner-plugin"
+                            style:--ds-chat-spinner-color={$comfyProgressStore.color}
+                        ></div>
+                    </div>
+                {/if}
+                <button
+                        type="button"
+                        title="Open chat actions"
+                        aria-label="Open chat actions"
+                        aria-haspopup="menu"
+                        aria-expanded={openMenu}
+                        aria-controls="ds-chat-side-menu"
+                        onclick={(e) => {
+                        openMenu = !openMenu
+                        e.stopPropagation()
+                    }}
+                        class="ds-chat-composer-action ds-chat-composer-action-end icon-btn icon-btn--sm"
+                        class:is-active={openMenu}
+                        style:height={inputHeight}
+                >
+                    <MenuIcon />
+                </button>
+            </div>
+        </div>
     {/if}
 </div>
 

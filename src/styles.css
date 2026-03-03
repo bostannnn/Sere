@@ -4202,79 +4202,93 @@ body {
 }
 
 .ds-chat-composer-icon-toggle {
-  margin-left: var(--ds-space-4);
+  flex: 0 0 auto;
+  margin-left: 0;
   width: calc(var(--ds-space-4) * 3);
   height: calc(var(--ds-space-4) * 3);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border: 0;
+  border: 1px solid var(--ds-border-subtle);
   border-radius: var(--ds-radius-md);
-  background: var(--ds-text-secondary);
-  color: var(--ds-text-primary);
+  background: var(--ds-surface-2);
+  color: var(--ds-text-secondary);
   transition: background-color var(--ds-motion-fast) var(--ds-ease-standard),
-    color var(--ds-motion-fast) var(--ds-ease-standard);
+    color var(--ds-motion-fast) var(--ds-ease-standard),
+    border-color var(--ds-motion-fast) var(--ds-ease-standard);
 }
 
 .ds-chat-composer-icon-toggle.is-active {
   background: var(--ds-surface-active);
   color: var(--ds-text-primary);
+  border-color: var(--ds-border-strong);
 }
 
 .ds-chat-composer-icon-toggle:hover {
   background: var(--ds-surface-active);
+  color: var(--ds-text-primary);
 }
 
 .ds-chat-composer-shell {
+  position: relative;
+  z-index: 29;
   display: flex;
   align-items: stretch;
   width: 100%;
+  gap: var(--ds-space-2);
+  padding: var(--ds-space-2) var(--ds-space-2)
+    calc(var(--ds-space-2) + env(safe-area-inset-bottom, 0px));
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--ds-surface-1) 0%, transparent) 0%,
+    color-mix(in srgb, var(--ds-surface-1) 92%, transparent) 36%,
+    var(--ds-surface-1) 100%
+  );
 }
 
 .ds-chat-composer-shell-flow {
-  margin-block: var(--ds-space-2);
+  margin-block: 0;
 }
 
 .ds-chat-composer-shell-fixed {
-  position: sticky;
-  right: 0;
-  bottom: 0;
-  z-index: 29;
-  padding-block: var(--ds-space-2);
-  background: var(--ds-surface-1);
+  margin-block: 0;
 }
 
 .ds-chat-composer-input.control-field {
   flex: 1 1 auto;
   min-width: 0;
   max-width: 100%;
-  margin-inline-start: var(--ds-space-4);
-  padding: var(--ds-space-2);
+  margin-inline-start: 0;
+  padding: var(--ds-space-2) var(--ds-space-3);
   border: 1px solid var(--ds-border-subtle);
   border-right: 0;
-  border-top-left-radius: var(--ds-radius-sm);
-  border-bottom-left-radius: var(--ds-radius-sm);
-  background: transparent;
+  border-top-left-radius: var(--ds-radius-md);
+  border-bottom-left-radius: var(--ds-radius-md);
+  background: var(--ds-surface-2);
   color: var(--ds-text-primary);
   font-size: var(--ds-font-size-lg);
   resize: none;
   overflow-y: hidden;
   overflow-x: hidden;
   outline: none;
-  transition: border-color var(--ds-motion-fast) var(--ds-ease-standard);
+  transition: border-color var(--ds-motion-fast) var(--ds-ease-standard),
+    background-color var(--ds-motion-fast) var(--ds-ease-standard);
 }
 
 .ds-chat-composer-input.control-field::placeholder {
   font-size: var(--ds-font-size-sm);
+  color: var(--ds-text-secondary);
 }
 
 .ds-chat-composer-input.control-field:focus,
 .ds-chat-composer-input.control-field:focus-visible {
-  border-color: var(--ds-text-primary);
+  border-color: var(--ds-border-strong);
+  background: var(--surface-raised);
+  box-shadow: none;
 }
 
 .ds-chat-composer-shell:focus-within .ds-chat-composer-action {
-  border-color: var(--ds-text-primary);
+  border-color: var(--ds-border-strong);
 }
 
 .ds-chat-composer-action {
@@ -4286,8 +4300,10 @@ body {
   min-height: 0;
   padding: var(--ds-space-3);
   border-radius: 0;
+  border-left: 1px solid var(--ds-border-subtle);
   border-top: 1px solid var(--ds-border-subtle);
   border-bottom: 1px solid var(--ds-border-subtle);
+  background: var(--ds-surface-2);
   color: var(--ds-text-primary);
   transition: background-color var(--ds-motion-fast) var(--ds-ease-standard),
     color var(--ds-motion-fast) var(--ds-ease-standard),
@@ -4304,7 +4320,7 @@ body {
 }
 
 .ds-chat-composer-action-end {
-  margin-right: var(--ds-space-2);
+  margin-right: 0;
   border-right: 1px solid var(--ds-border-subtle);
   border-top-right-radius: var(--ds-radius-md);
   border-bottom-right-radius: var(--ds-radius-md);
@@ -4320,6 +4336,15 @@ body {
   width: 100%;
   height: 100%;
   position: relative;
+}
+
+.ds-chat-main-shell {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
 }
 
 .ds-chat-jump-btn {
@@ -4411,8 +4436,10 @@ body {
 
 .ds-chat-scroll-shell {
   position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
   width: 100%;
-  height: 100%;
+  height: auto;
   display: flex;
   flex-direction: column-reverse;
   overflow-y: auto;
@@ -4973,6 +5000,11 @@ body {
     .ds-chat-creator-quote-shell,
     .ds-suggestion-row
   ) {
+  width: min(calc(100% - var(--ds-space-6)), var(--ds-chat-focus-column-max));
+  margin-inline: auto;
+}
+
+.ds-chat-screen-shell[data-reading-mode='focus'] .ds-chat-main-shell > .ds-chat-composer-shell {
   width: min(calc(100% - var(--ds-space-6)), var(--ds-chat-focus-column-max));
   margin-inline: auto;
 }

@@ -159,7 +159,7 @@ vi.mock(import("src/lib/SideBars/CharConfig.svelte"), async () => ({
 }));
 
 import ChatScreen from "src/lib/ChatScreens/ChatScreen.svelte";
-import { CharEmotion } from "src/ts/stores.svelte";
+import { CharEmotion, DBState } from "src/ts/stores.svelte";
 
 let app: Record<string, unknown> | undefined;
 let runtimeMessages: string[] = [];
@@ -243,5 +243,38 @@ describe("chat runtime smoke", () => {
       hasRuntimeStateError(runtimeMessages),
       `runtime state errors detected: ${runtimeMessages.join("\n")}`,
     ).toBe(false);
+  });
+
+  it("applies focus reading mode only on supported themes and viewport widths", async () => {
+    const mountChatScreen = async (theme: string, mode: "normal" | "focus", width: number) => {
+      if (app) {
+        await unmount(app);
+      }
+      DBState.db.theme = theme;
+      DBState.db.chatReadingMode = mode;
+      Object.defineProperty(window, "innerWidth", {
+        writable: true,
+        configurable: true,
+        value: width,
+      });
+      const target = document.createElement("div");
+      document.body.innerHTML = "";
+      document.body.appendChild(target);
+      app = mount(ChatScreen, { target });
+      window.dispatchEvent(new Event("resize"));
+      await flushUi();
+      return document.querySelector(".ds-chat-screen-shell") as HTMLElement | null;
+    };
+
+    const focusShell = await mountChatScreen("cardboard", "focus", 1366);
+    expect(focusShell?.dataset.readingMode).toBe("focus");
+    expect(focusShell?.dataset.chatTheme).toBe("cardboard");
+
+    const narrowShell = await mountChatScreen("cardboard", "focus", 900);
+    expect(narrowShell?.dataset.readingMode).toBe("normal");
+
+    const unsupportedThemeShell = await mountChatScreen("waifuMobile", "focus", 1366);
+    expect(unsupportedThemeShell?.dataset.readingMode).toBe("normal");
+    expect(unsupportedThemeShell?.dataset.chatTheme).toBe("mobilechat");
   });
 });

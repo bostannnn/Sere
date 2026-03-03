@@ -21,7 +21,6 @@
     let topbarOverflowOpen = $state(false);
     let uiShellRightSidebarTab = $state<"chat" | "character">("chat");
     const rightSidebarToggleKey = "risu:desktop-char-config-open";
-    const rightSidebarTabKey = "risu:desktop-right-panel-tab";
     const rightSidebarPanelId = "chat-right-sidebar-drawer";
 
     function readRightSidebarDefault() {
@@ -151,16 +150,6 @@
         }
     }
 
-    function openChatInspectorForHomeSelection() {
-        uiShellRightSidebarOpen = true;
-        uiShellRightSidebarVisible = true;
-        uiShellRightSidebarTab = "chat";
-        if (typeof window !== "undefined") {
-            window.localStorage.setItem(rightSidebarToggleKey, "1");
-            window.localStorage.setItem(rightSidebarTabKey, "chat");
-        }
-    }
-
     function showActiveCharacters() {
         characterDirectoryShowTrash = false;
     }
@@ -207,15 +196,10 @@
             return;
         }
 
-        const previousWorkspace = lastWorkspace;
         lastWorkspace = nextRoute.workspace;
 
         if (nextRoute.workspace !== "characters") {
             characterDirectoryShowTrash = false;
-        }
-
-        if (previousWorkspace === "characters" && nextRoute.workspace === "chats") {
-            openChatInspectorForHomeSelection();
         }
 
         clearTransientOverlays();

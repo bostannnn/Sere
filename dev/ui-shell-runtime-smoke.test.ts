@@ -375,7 +375,7 @@ describe("ui shell runtime smoke", () => {
     expect((document.querySelector('[data-testid="app-chat-screen-stub"]') as HTMLElement | null)?.dataset.rightSidebarOpen).toBe("1");
   });
 
-  it("forces chat inspector open when returning from home into chats", async () => {
+  it("preserves a closed right sidebar when returning from home into chats", async () => {
     settingsOpen.set(false);
     openRulebookManager.set(false);
     selectedCharID.set(0);
@@ -405,14 +405,12 @@ describe("ui shell runtime smoke", () => {
       workspace: "chats",
       selectedCharacterId: "char-2",
       selectedChatId: "chat-2-b",
-      inspector: "chat",
+      inspector: "none",
     });
-    expect((document.getElementById("workspaceSidebarBtn") as HTMLButtonElement | null)?.dataset.pressed).toBe("1");
-    expect((document.querySelector('[data-testid="app-chat-screen-stub"]') as HTMLElement | null)?.dataset.rightSidebarOpen).toBe("1");
-    expect((document.querySelector('[data-testid="app-chat-screen-stub"]') as HTMLElement | null)?.dataset.rightSidebarVisible).toBe("1");
-    expect((document.querySelector('[data-testid="app-chat-screen-stub"]') as HTMLElement | null)?.dataset.rightSidebarTab).toBe("chat");
-    expect(window.localStorage.getItem("risu:desktop-char-config-open")).toBe("1");
-    expect(window.localStorage.getItem("risu:desktop-right-panel-tab")).toBe("chat");
+    expect((document.getElementById("workspaceSidebarBtn") as HTMLButtonElement | null)?.dataset.pressed).toBe("0");
+    expect((document.querySelector('[data-testid="app-chat-screen-stub"]') as HTMLElement | null)?.dataset.rightSidebarOpen).toBe("0");
+    expect((document.querySelector('[data-testid="app-chat-screen-stub"]') as HTMLElement | null)?.dataset.rightSidebarTab).toBe("character");
+    expect(window.localStorage.getItem("risu:desktop-char-config-open")).toBe("0");
   });
 
   it("falls back to first chat when the remembered chat index is missing", async () => {
@@ -531,6 +529,15 @@ describe("ui shell runtime smoke", () => {
     expect(rightSidebarBtn?.dataset.pressed).toBe("1");
 
     rightSidebarBtn!.click();
+    await flushUi();
+    expect((document.getElementById("workspaceSidebarBtn") as HTMLButtonElement | null)?.dataset.pressed).toBe("0");
+    expect((document.querySelector('[data-testid="app-chat-screen-stub"]') as HTMLElement | null)?.dataset.rightSidebarOpen).toBe("0");
+
+    selectedCharID.set(-1);
+    await flushUi();
+    expect(document.getElementById("workspaceSidebarBtn")).toBeNull();
+
+    selectedCharID.set(0);
     await flushUi();
     expect((document.getElementById("workspaceSidebarBtn") as HTMLButtonElement | null)?.dataset.pressed).toBe("0");
     expect((document.querySelector('[data-testid="app-chat-screen-stub"]') as HTMLElement | null)?.dataset.rightSidebarOpen).toBe("0");
