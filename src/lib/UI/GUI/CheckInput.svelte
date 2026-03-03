@@ -28,6 +28,7 @@
     }: Props = $props();
 
     const ariaLabel = $derived(name?.trim() ? name : "Toggle");
+    // Primitive marker contract: ds-ui-check control-field
 </script>
 
 <label

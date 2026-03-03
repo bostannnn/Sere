@@ -6,9 +6,11 @@ These rules are mandatory for every next iteration in this concept.
 
 - `Home` view shows the Character Library only.
 - Shell topbar is the only title bar; do not add a second per-view title/header bar in content.
+- Top-level navigation lives in shell topbar icon controls (`Home`, `Rulebooks`, `Settings`) plus `More` overflow.
+- `Playground` is routed from `More` overflow and must not duplicate as a separate primary topbar icon.
 - Search for `Home` and `Library` lives in a shared shell topbar component, not inside per-view content.
 - `Chat` view shows message runtime only.
-- Left/global drawer may include `Recent Chats` as a cross-character quick-open list only.
+- Shell-level cross-workspace navigation is topbar-only (`Home`, `Rulebooks`, `Settings`, `More` overflow); no left global drawer.
 - Right workspace drawer is the single place for character-scoped chat list/actions and character settings.
 - No duplicate character-scoped chat selector in topbar or home cards.
 
@@ -19,7 +21,7 @@ These rules are mandatory for every next iteration in this concept.
 - Header/profile/tab chrome is fixed-height, non-scrolling UI.
 - Only content regions scroll.
 - Never allow horizontal scrolling on any chrome (topbar, tab bars, drawer headers, settings sub-tabs, and shell controls).
-- Shell chrome responsiveness must be component-scoped: topbar and global rail density changes use `@container` rules, not viewport-wide `@media` breakpoints.
+- Shell chrome responsiveness must be component-scoped: topbar and overflow/popover density changes use `@container` rules, not viewport-wide `@media` breakpoints.
 - Shell containers that drive responsive chrome must declare `container-type: inline-size` with a stable `container-name`.
 - All view sections must be exclusively toggled via `hidden` class through dedicated `enterXView()` functions.
 - No view may be shown/hidden outside `enterXView()` functions.
@@ -29,13 +31,13 @@ These rules are mandatory for every next iteration in this concept.
 - Shell layering order is tokenized and documented: `--z-view` < `--z-scrim` < `--z-topbar` < `--z-drawer` < `--z-overlay` < `--z-toast`.
 - `#scrim` remains in `.app-shell` and must visually sit above stage content but below topbar and drawers.
 
-## 3) Drawer architecture
+## 3) Overlay architecture
 
-- Global drawer and workspace drawer are independent components with separate row templates.
-- Opening one overlay drawer must close the other.
+- Topbar `More` overflow and workspace sidebar are independent surfaces with separate contracts.
+- Overflow open/close controls are idempotent: click once open, click again close.
+- `Escape` and outside-click close topbar overflow deterministically.
+- Right workspace sidebar toggle is idempotent: click once open, click again close.
 - Scrim state must reflect actual open overlays only.
-- Drawer toggle buttons are idempotent: click once open, click again close.
-- Drawer header asymmetry is intentional UX: global drawer uses `.drawer-head-left` + `.drawer-close-left`; context drawer uses `.drawer-head-right` + `.drawer-close-right`.
 
 ## 4) Tab system contract
 
@@ -64,7 +66,6 @@ Behavior rules:
 - Per-tab sub-panel state (for example `sidebarDisplayViewSubmenu`, `sidebarLorebookSubmenu`, `sidebarTriggerMode`, `sidebarVoiceMode`) must reset to defaults whenever `selectedCharacterId` changes.
 - `sidebarChatQuery` must be reset to `''` whenever `selectedCharacterId` changes, and is part of `resetSidebarCharacterSubpanels()`.
 - `selectedPlaygroundTool` persists across view transitions and is reset only by explicit user action (Back button). `enterPlaygroundView()` must not reset it.
-- Global drawer `Recent Chats` must be re-rendered whenever `openDrawer(globalDrawer)` is called, not only on view entry.
 - Context drawer open/closed preference is persisted in `sessionStorage` under `moescape.contextDrawerOpen`.
 - All drawer open/close operations must go through `openDrawer()` / `closeDrawer()`; never direct `classList` open/close mutations.
 - `closeAllDrawers()` must call `closeDrawer()` for each drawer and must not bypass preference/scrim logic.
@@ -179,6 +180,7 @@ Any layout-affecting change must include:
 ## 19) Shell alignment contract
 
 - Topbar is a single control lane: no second content header bars for Home or other views.
+- Topbar must keep fixed control geometry across workspace switches; avoid dynamic title blocks that shift navigation controls.
 - In the topbar lane, interactive controls align to a shared height token (`--chrome-btn-h`).
 - Topbar search (`.topbar-search`) must match chrome control height, be centered in the right topbar lane, and use constrained width (`clamp(...)`) so it stays smaller than full-lane width on desktop.
 - Topbar shared search visibility is view-driven: visible in `Home` (character filter) and `Library` (rulebook filter), hidden in `Chat`, `Playground`, and `Settings`.

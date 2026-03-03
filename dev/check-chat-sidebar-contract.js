@@ -44,17 +44,14 @@ ensureIncludes(chatScreenContent, chatScreenFile, "rightSidebarTab = $bindable(\
 ensureIncludes(chatScreenContent, chatScreenFile, "rightSidebarVisible = $bindable(false)", failures);
 ensureIncludes(chatScreenContent, chatScreenFile, "type RightPanelTab = \"chat\" | \"character\";", failures);
 ensureIncludes(chatScreenContent, chatScreenFile, "const rightPanelTabKey = \"risu:desktop-right-panel-tab\"", failures);
-ensureIncludes(chatScreenContent, chatScreenFile, "globalRailPanelId = \"global-navigation-rail\"", failures);
 ensureIncludes(chatScreenContent, chatScreenFile, "const rightSidebarPanelId = \"chat-right-sidebar-drawer\"", failures);
 ensureIncludes(chatScreenContent, chatScreenFile, "window.localStorage.getItem(rightPanelTabKey)", failures);
 ensureIncludes(chatScreenContent, chatScreenFile, "window.localStorage.setItem(rightPanelTabKey, nextTab)", failures);
-ensureIncludes(chatScreenContent, chatScreenFile, "railId={globalRailPanelId}", failures);
 ensureIncludes(chatScreenContent, chatScreenFile, "const configTabLabel = $derived(currentCharacter?.type === \"group\" ? language.group : language.character)", failures);
 ensureIncludes(chatScreenContent, chatScreenFile, "const setRightPanelTab = (nextTab: RightPanelTab) => {", failures);
 ensureIncludes(chatScreenContent, chatScreenFile, "const showDesktopSidePanel = $derived(", failures);
 ensureIncludes(chatScreenContent, chatScreenFile, "!openChatList &&", failures);
-ensureIncludes(chatScreenContent, chatScreenFile, "!openModuleList &&", failures);
-ensureIncludes(chatScreenContent, chatScreenFile, "!openCharacterCatalog", failures);
+ensureIncludes(chatScreenContent, chatScreenFile, "!openModuleList", failures);
 ensureIncludes(chatScreenContent, chatScreenFile, "if (viewportWidth < 1024) {", failures);
 ensureIncludes(chatScreenContent, chatScreenFile, "rightSidebarOpen = false", failures);
 ensureIncludes(chatScreenContent, chatScreenFile, "rightSidebarVisible = showDesktopSidePanel && rightSidebarOpen", failures);

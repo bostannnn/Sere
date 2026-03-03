@@ -4,7 +4,7 @@
 </script>
 
 <div class="ds-settings-page ds-settings-page--advanced">
-    <div class="ds-settings-section ds-settings-section--advanced">
+    <div class="ds-settings-section ds-settings-section--advanced panel-shell list-shell">
         <SettingRenderer items={advancedSettingsItems} />
     </div>
 </div>

@@ -37,7 +37,7 @@ Planned changes:
 ## PR3: Visual Unification of Shell (Completed)
 
 Objective:
-- Align topbar + global launcher treatment with home directory card quality.
+- Align topbar + shell overflow treatment with home directory card quality.
 
 Planned changes:
 - [x] Harmonize surface depth, borders, accents, and hover/active language.

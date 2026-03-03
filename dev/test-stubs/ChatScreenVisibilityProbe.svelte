@@ -2,12 +2,10 @@
   import ChatScreen from "src/lib/ChatScreens/ChatScreen.svelte";
 
   interface Props {
-    showGlobalLauncher?: boolean;
     rightSidebarOpen?: boolean;
   }
 
   let {
-    showGlobalLauncher = true,
     rightSidebarOpen = $bindable(true),
   }: Props = $props();
 
@@ -43,7 +41,6 @@
 </button>
 
 <ChatScreen
-  showGlobalLauncher={showGlobalLauncher}
   bind:rightSidebarOpen={rightSidebarOpen}
   bind:rightSidebarVisible={rightSidebarVisible}
 />

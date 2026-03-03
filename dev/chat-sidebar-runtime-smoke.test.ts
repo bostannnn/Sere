@@ -82,9 +82,6 @@ vi.mock(import("src/ts/sync/multiuser"), async () => {
   };
 });
 
-vi.mock(import("src/lib/UI/GlobalLauncher.svelte"), async () => ({
-  default: (await import("./test-stubs/GlobalLauncherStub.svelte")).default,
-}));
 vi.mock(import("src/lib/ChatScreens/DefaultChatScreen.svelte"), async () => ({
   default: (await import("./test-stubs/DefaultChatScreenStub.svelte")).default,
 }));
@@ -92,9 +89,6 @@ vi.mock(import("src/lib/Others/ChatList.svelte"), async () => ({
   default: (await import("./test-stubs/OverlayCloseStub.svelte")).default,
 }));
 vi.mock(import("src/lib/Setting/Pages/Module/ModuleChatMenu.svelte"), async () => ({
-  default: (await import("./test-stubs/OverlayCloseStub.svelte")).default,
-}));
-vi.mock(import("src/lib/Others/GridCatalog.svelte"), async () => ({
   default: (await import("./test-stubs/OverlayCloseStub.svelte")).default,
 }));
 vi.mock(import("src/lib/ChatScreens/ResizeBox.svelte"), async () => ({
@@ -164,7 +158,7 @@ describe("chat sidebar runtime smoke", () => {
     document.body.innerHTML = "";
     const target = document.createElement("div");
     document.body.appendChild(target);
-    app = mount(ChatScreen, { target, props: { showGlobalLauncher: true, rightSidebarOpen: true } });
+    app = mount(ChatScreen, { target, props: { rightSidebarOpen: true } });
     window.dispatchEvent(new Event("resize"));
   });
 
@@ -182,8 +176,6 @@ describe("chat sidebar runtime smoke", () => {
     await flushUi();
 
     expect(document.querySelector('[data-testid="chat-sidebar-host"]')).not.toBeNull();
-    const globalRail = document.getElementById("global-navigation-rail") as HTMLElement | null;
-    expect(globalRail).not.toBeNull();
     const rightDrawer = document.querySelector(".ds-chat-right-drawer") as HTMLElement | null;
     expect(rightDrawer).not.toBeNull();
     expect(rightDrawer?.id).toBe("chat-right-sidebar-drawer");
@@ -298,7 +290,7 @@ describe("chat sidebar runtime smoke", () => {
     await flushUi();
     expect(document.querySelector('[data-testid="chat-sidebar-host"]')).not.toBeNull();
 
-    const openChat = document.querySelector('[data-testid="launcher-open-chat"]') as HTMLButtonElement | null;
+    const openChat = document.querySelector('[data-testid="default-open-chat"]') as HTMLButtonElement | null;
     expect(openChat).not.toBeNull();
     openChat!.click();
     await flushUi();
@@ -322,7 +314,7 @@ describe("chat sidebar runtime smoke", () => {
 
     const target = document.createElement("div");
     document.body.appendChild(target);
-    app = mount(ChatScreen, { target, props: { showGlobalLauncher: true, rightSidebarOpen: false } });
+    app = mount(ChatScreen, { target, props: { rightSidebarOpen: false } });
     window.dispatchEvent(new Event("resize"));
     await flushUi();
 
@@ -356,7 +348,7 @@ describe("chat sidebar runtime smoke", () => {
 
     const target = document.createElement("div");
     document.body.appendChild(target);
-    app = mount(ChatScreen, { target, props: { showGlobalLauncher: true, rightSidebarOpen: true } });
+    app = mount(ChatScreen, { target, props: { rightSidebarOpen: true } });
     window.dispatchEvent(new Event("resize"));
     await flushUi();
 
@@ -397,7 +389,7 @@ describe("chat sidebar runtime smoke", () => {
 
     const target = document.createElement("div");
     document.body.appendChild(target);
-    app = mount(ChatScreenVisibilityProbe, { target, props: { showGlobalLauncher: true, rightSidebarOpen: true } });
+    app = mount(ChatScreenVisibilityProbe, { target, props: { rightSidebarOpen: true } });
     window.dispatchEvent(new Event("resize"));
     await flushUi();
 
@@ -405,7 +397,7 @@ describe("chat sidebar runtime smoke", () => {
     expect(visibleProbe).not.toBeNull();
     expect(visibleProbe?.dataset.visible).toBe("1");
 
-    const openChat = document.querySelector('[data-testid="launcher-open-chat"]') as HTMLButtonElement | null;
+    const openChat = document.querySelector('[data-testid="default-open-chat"]') as HTMLButtonElement | null;
     expect(openChat).not.toBeNull();
     openChat!.click();
     await flushUi();
@@ -426,18 +418,6 @@ describe("chat sidebar runtime smoke", () => {
     const closeModuleOverlay = document.querySelector('[data-testid="overlay-close"]') as HTMLButtonElement | null;
     expect(closeModuleOverlay).not.toBeNull();
     closeModuleOverlay!.click();
-    await flushUi();
-    expect((document.querySelector('[data-testid="chat-sidebar-visible-probe"]') as HTMLElement | null)?.dataset.visible).toBe("1");
-
-    const openCharacters = document.querySelector('[data-testid="launcher-open-characters"]') as HTMLButtonElement | null;
-    expect(openCharacters).not.toBeNull();
-    openCharacters!.click();
-    await flushUi();
-    expect((document.querySelector('[data-testid="chat-sidebar-visible-probe"]') as HTMLElement | null)?.dataset.visible).toBe("0");
-
-    const closeCharacterOverlay = document.querySelector('[data-testid="overlay-close"]') as HTMLButtonElement | null;
-    expect(closeCharacterOverlay).not.toBeNull();
-    closeCharacterOverlay!.click();
     await flushUi();
     expect((document.querySelector('[data-testid="chat-sidebar-visible-probe"]') as HTMLElement | null)?.dataset.visible).toBe("1");
 
@@ -482,7 +462,7 @@ describe("chat sidebar runtime smoke", () => {
 
     const target = document.createElement("div");
     document.body.appendChild(target);
-    app = mount(ChatScreenVisibilityProbe, { target, props: { showGlobalLauncher: true, rightSidebarOpen: true } });
+    app = mount(ChatScreenVisibilityProbe, { target, props: { rightSidebarOpen: true } });
     window.dispatchEvent(new Event("resize"));
     await flushUi();
 

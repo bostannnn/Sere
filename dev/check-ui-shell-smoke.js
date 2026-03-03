@@ -15,10 +15,6 @@ const checks = [
     cmd: ["pnpm", "exec", "vitest", "run", "dev/ui-shell-runtime-smoke.test.ts"],
   },
   {
-    name: "global-launcher-runtime",
-    cmd: ["pnpm", "exec", "vitest", "run", "dev/global-launcher-runtime-smoke.test.ts"],
-  },
-  {
     name: "home-directory-runtime",
     cmd: ["pnpm", "exec", "vitest", "run", "dev/home-character-directory-runtime-smoke.test.ts"],
   },

@@ -4,7 +4,7 @@
 </script>
 
 <div class="ds-settings-page">
-    <div class="ds-settings-section">
+    <div class="ds-settings-section panel-shell list-shell">
         <SettingRenderer items={chatFormatSettingsItems} />
     </div>
 </div>

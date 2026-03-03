@@ -21,6 +21,7 @@ vi.mock(import("src/ts/stores.svelte"), async () => {
   const PlaygroundStore = writable(0);
   const uiShellV2Enabled = writable(true);
   const openRulebookManager = writable(false);
+  const additionalHamburgerMenu: Array<{ name: string; icon: string; iconType: "html" | "img" | "none"; callback: () => void; id: string }> = [];
   const hypaV3ModalOpen = writable(false);
   const hypaV3ProgressStore = writable({
     open: false,
@@ -75,6 +76,7 @@ vi.mock(import("src/ts/stores.svelte"), async () => {
     uiShellV2Enabled,
     appRouteStore,
     openRulebookManager,
+    additionalHamburgerMenu,
     hypaV3ModalOpen,
     hypaV3ProgressStore,
   };
@@ -127,9 +129,6 @@ vi.mock(import("src/lib/UI/PopupList.svelte"), async () => ({
 }));
 vi.mock(import("src/lib/Others/SavePopupIcon.svelte"), async () => ({
   default: (await import("./test-stubs/SimplePanelStub.svelte")).default,
-}));
-vi.mock(import("src/lib/UI/GlobalLauncher.svelte"), async () => ({
-  default: (await import("./test-stubs/GlobalLauncherStub.svelte")).default,
 }));
 vi.mock(import("src/lib/UI/HomeCharacterDirectory.svelte"), async () => ({
   default: (await import("./test-stubs/AppHomeGridStub.svelte")).default,
@@ -266,8 +265,8 @@ describe("ui shell runtime smoke", () => {
     expect(railToggle?.getAttribute("type")).toBe("button");
     expect(railToggle?.disabled).toBe(false);
     expect(railToggle?.getAttribute("aria-pressed")).toBe("true");
-    expect(railToggle?.getAttribute("aria-expanded")).toBe("true");
-    expect(railToggle?.getAttribute("aria-controls")).toBe("global-navigation-rail");
+    expect(railToggle?.getAttribute("aria-expanded")).toBeNull();
+    expect(railToggle?.getAttribute("aria-controls")).toBeNull();
 
     settingsOpen.set(true);
     selectedCharID.set(-1);
@@ -277,7 +276,7 @@ describe("ui shell runtime smoke", () => {
     expect(document.querySelector(".ds-app-v2-topbar")).not.toBeNull();
     expect(document.querySelector('[data-testid="app-settings-stub"]')).not.toBeNull();
     expect((document.getElementById("globalMenuBtn") as HTMLButtonElement | null)?.disabled).toBe(false);
-    expect(document.querySelector('[data-testid="global-launcher-stub"]')).not.toBeNull();
+    expect((document.querySelector('[data-testid="topbar-nav-settings"]') as HTMLButtonElement | null)?.dataset.pressed).toBe("1");
 
     settingsOpen.set(false);
     openRulebookManager.set(true);
@@ -286,7 +285,7 @@ describe("ui shell runtime smoke", () => {
     expect(document.querySelector(".ds-app-v2-topbar")).not.toBeNull();
     expect(document.querySelector('[data-testid="app-rulebook-stub"]')).not.toBeNull();
     expect((document.getElementById("globalMenuBtn") as HTMLButtonElement | null)?.disabled).toBe(false);
-    expect(document.querySelector('[data-testid="global-launcher-stub"]')).not.toBeNull();
+    expect((document.querySelector('[data-testid="topbar-nav-rulebooks"]') as HTMLButtonElement | null)?.dataset.pressed).toBe("1");
   });
 
   it("renders home grid in characters workspace and syncs topbar search binding", async () => {
@@ -548,55 +547,46 @@ describe("ui shell runtime smoke", () => {
     expect((document.querySelector('[data-testid="app-chat-screen-stub"]') as HTMLElement | null)?.dataset.rightSidebarOpen).toBe("0");
   });
 
-  it("toggles sidebar open and closed in settings and library workspaces", async () => {
-    const goToWorkspace = async (workspace: "settings" | "library") => {
-      if (workspace === "settings") {
-        settingsOpen.set(true);
-        openRulebookManager.set(false);
-      } else {
-        settingsOpen.set(false);
-        openRulebookManager.set(true);
-      }
-      selectedCharID.set(-1);
-      await flushUi();
-    };
-
-    await goToWorkspace("settings");
-
-    let railToggle = document.getElementById("globalMenuBtn") as HTMLButtonElement | null;
-    expect(railToggle).not.toBeNull();
-    expect(railToggle?.disabled).toBe(false);
-    expect(document.querySelector('[data-testid="global-launcher-stub"]')).not.toBeNull();
-
-    railToggle!.click();
+  it("routes workspaces from topbar navigation buttons", async () => {
+    settingsOpen.set(false);
+    openRulebookManager.set(false);
+    selectedCharID.set(0);
     await flushUi();
-    expect((document.getElementById("globalMenuBtn") as HTMLButtonElement | null)?.dataset.pressed).toBe("0");
-    expect((document.getElementById("globalMenuBtn") as HTMLButtonElement | null)?.getAttribute("aria-expanded")).toBe("false");
-    expect(document.querySelector('[data-testid="global-launcher-stub"]')).toBeNull();
 
-    railToggle = document.getElementById("globalMenuBtn") as HTMLButtonElement | null;
-    railToggle!.click();
+    const homeBtn = document.querySelector('[data-testid="topbar-nav-home"]') as HTMLButtonElement | null;
+    const rulebooksBtn = document.querySelector('[data-testid="topbar-nav-rulebooks"]') as HTMLButtonElement | null;
+    const settingsBtn = document.querySelector('[data-testid="topbar-nav-settings"]') as HTMLButtonElement | null;
+    const moreBtn = document.querySelector('[data-testid="topbar-nav-more"]') as HTMLButtonElement | null;
+
+    expect(homeBtn).not.toBeNull();
+    expect(rulebooksBtn).not.toBeNull();
+    expect(settingsBtn).not.toBeNull();
+    expect(moreBtn).not.toBeNull();
+
+    moreBtn!.click();
     await flushUi();
+    const playgroundOverflowBtn = document.querySelector('[data-testid="topbar-nav-overflow-playground"]') as HTMLButtonElement | null;
+    expect(playgroundOverflowBtn).not.toBeNull();
+    playgroundOverflowBtn!.click();
+    await flushUi();
+    expect(get(appRouteStore).workspace).toBe("playground");
+    expect((document.querySelector('[data-testid="topbar-nav-more"]') as HTMLButtonElement | null)?.dataset.pressed).toBe("1");
+    expect((document.querySelector('[data-testid="topbar-nav-more-menu"]') as HTMLElement | null)).toBeNull();
+
+    settingsBtn!.click();
+    await flushUi();
+    expect(get(appRouteStore).workspace).toBe("settings");
+    expect((document.querySelector('[data-testid="topbar-nav-settings"]') as HTMLButtonElement | null)?.dataset.pressed).toBe("1");
+
+    rulebooksBtn!.click();
+    await flushUi();
+    expect(get(appRouteStore).workspace).toBe("library");
+    expect((document.querySelector('[data-testid="topbar-nav-rulebooks"]') as HTMLButtonElement | null)?.dataset.pressed).toBe("1");
+
+    homeBtn!.click();
+    await flushUi();
+    expect(get(appRouteStore).workspace).toBe("characters");
     expect((document.getElementById("globalMenuBtn") as HTMLButtonElement | null)?.dataset.pressed).toBe("1");
-    expect((document.getElementById("globalMenuBtn") as HTMLButtonElement | null)?.getAttribute("aria-expanded")).toBe("true");
-    expect(document.querySelector('[data-testid="global-launcher-stub"]')).not.toBeNull();
-
-    await goToWorkspace("library");
-    expect(document.querySelector('[data-testid="global-launcher-stub"]')).not.toBeNull();
-
-    railToggle = document.getElementById("globalMenuBtn") as HTMLButtonElement | null;
-    railToggle!.click();
-    await flushUi();
-    expect((document.getElementById("globalMenuBtn") as HTMLButtonElement | null)?.dataset.pressed).toBe("0");
-    expect((document.getElementById("globalMenuBtn") as HTMLButtonElement | null)?.getAttribute("aria-expanded")).toBe("false");
-    expect(document.querySelector('[data-testid="global-launcher-stub"]')).toBeNull();
-
-    railToggle = document.getElementById("globalMenuBtn") as HTMLButtonElement | null;
-    railToggle!.click();
-    await flushUi();
-    expect((document.getElementById("globalMenuBtn") as HTMLButtonElement | null)?.dataset.pressed).toBe("1");
-    expect((document.getElementById("globalMenuBtn") as HTMLButtonElement | null)?.getAttribute("aria-expanded")).toBe("true");
-    expect(document.querySelector('[data-testid="global-launcher-stub"]')).not.toBeNull();
   });
 
   it("syncs appRoute and clears transient overlays on workspace change", async () => {
@@ -658,7 +648,7 @@ describe("ui shell runtime smoke", () => {
     expect(libraryStub?.dataset.shellSearch).toBe("vampire");
   });
 
-  it("closes active overlays and nav rail on Escape", async () => {
+  it("closes active overlays and topbar overflow on Escape", async () => {
     await flushUi();
 
     openPresetList.set(true);
@@ -685,25 +675,28 @@ describe("ui shell runtime smoke", () => {
     await flushUi();
     expect(get(hypaV3ModalOpen)).toBe(false);
 
-    const railToggle = document.getElementById("globalMenuBtn") as HTMLButtonElement | null;
-    expect(railToggle).not.toBeNull();
-    expect(railToggle?.disabled).toBe(false);
-    expect(railToggle?.dataset.pressed).toBe("1");
-    expect(railToggle?.getAttribute("aria-expanded")).toBe("true");
+    const moreBtn = document.querySelector('[data-testid="topbar-nav-more"]') as HTMLButtonElement | null;
+    expect(moreBtn).not.toBeNull();
+    moreBtn!.click();
+    await flushUi();
+    expect((document.querySelector('[data-testid="topbar-nav-more-menu"]') as HTMLElement | null)).not.toBeNull();
+    expect((document.querySelector('[data-testid="topbar-nav-more"]') as HTMLButtonElement | null)?.dataset.pressed).toBe("1");
 
     window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
     await flushUi();
-    expect((document.getElementById("globalMenuBtn") as HTMLButtonElement | null)?.dataset.pressed).toBe("0");
-    expect((document.getElementById("globalMenuBtn") as HTMLButtonElement | null)?.getAttribute("aria-expanded")).toBe("false");
+    expect((document.querySelector('[data-testid="topbar-nav-more-menu"]') as HTMLElement | null)).toBeNull();
+    expect((document.querySelector('[data-testid="topbar-nav-more"]') as HTMLButtonElement | null)?.dataset.pressed).toBe("0");
   });
 
   it("handles Escape even when another listener preventDefault's the event", async () => {
     await flushUi();
 
-    const railToggle = document.getElementById("globalMenuBtn") as HTMLButtonElement | null;
-    expect(railToggle).not.toBeNull();
-    expect(railToggle?.dataset.pressed).toBe("1");
-    expect(railToggle?.getAttribute("aria-expanded")).toBe("true");
+    const moreBtn = document.querySelector('[data-testid="topbar-nav-more"]') as HTMLButtonElement | null;
+    expect(moreBtn).not.toBeNull();
+    moreBtn!.click();
+    await flushUi();
+    expect((document.querySelector('[data-testid="topbar-nav-more"]') as HTMLButtonElement | null)?.dataset.pressed).toBe("1");
+    expect((document.querySelector('[data-testid="topbar-nav-more-menu"]') as HTMLElement | null)).not.toBeNull();
 
     const blocker = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
@@ -715,31 +708,37 @@ describe("ui shell runtime smoke", () => {
     try {
       document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
       await flushUi();
-      expect((document.getElementById("globalMenuBtn") as HTMLButtonElement | null)?.dataset.pressed).toBe("0");
-      expect((document.getElementById("globalMenuBtn") as HTMLButtonElement | null)?.getAttribute("aria-expanded")).toBe("false");
+      expect((document.querySelector('[data-testid="topbar-nav-more"]') as HTMLButtonElement | null)?.dataset.pressed).toBe("0");
+      expect((document.querySelector('[data-testid="topbar-nav-more-menu"]') as HTMLElement | null)).toBeNull();
     } finally {
       document.removeEventListener("keydown", blocker);
     }
   });
 
-  it("closes right sidebar on Escape before closing the global rail", async () => {
+  it("closes right sidebar on Escape before closing topbar overflow", async () => {
     settingsOpen.set(false);
     openRulebookManager.set(false);
     selectedCharID.set(0);
     await flushUi();
 
-    const railToggle = document.getElementById("globalMenuBtn") as HTMLButtonElement | null;
+    const moreBtn = document.querySelector('[data-testid="topbar-nav-more"]') as HTMLButtonElement | null;
     const rightSidebarBtn = document.getElementById("workspaceSidebarBtn") as HTMLButtonElement | null;
-    expect(railToggle?.dataset.pressed).toBe("1");
+    expect(moreBtn).not.toBeNull();
     expect(rightSidebarBtn?.dataset.pressed).toBe("1");
+    moreBtn!.click();
+    await flushUi();
+    expect((document.querySelector('[data-testid="topbar-nav-more"]') as HTMLButtonElement | null)?.dataset.pressed).toBe("1");
+    expect((document.querySelector('[data-testid="topbar-nav-more-menu"]') as HTMLElement | null)).not.toBeNull();
 
     window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
     await flushUi();
     expect((document.getElementById("workspaceSidebarBtn") as HTMLButtonElement | null)?.dataset.pressed).toBe("0");
-    expect((document.getElementById("globalMenuBtn") as HTMLButtonElement | null)?.dataset.pressed).toBe("1");
+    expect((document.querySelector('[data-testid="topbar-nav-more"]') as HTMLButtonElement | null)?.dataset.pressed).toBe("1");
+    expect((document.querySelector('[data-testid="topbar-nav-more-menu"]') as HTMLElement | null)).not.toBeNull();
 
     window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
     await flushUi();
-    expect((document.getElementById("globalMenuBtn") as HTMLButtonElement | null)?.dataset.pressed).toBe("0");
+    expect((document.querySelector('[data-testid="topbar-nav-more"]') as HTMLButtonElement | null)?.dataset.pressed).toBe("0");
+    expect((document.querySelector('[data-testid="topbar-nav-more-menu"]') as HTMLElement | null)).toBeNull();
   });
 });

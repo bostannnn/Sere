@@ -1,6 +1,7 @@
 <script lang="ts">
     import { onMount } from "svelte";
     import {
+        additionalHamburgerMenu,
         settingsOpen,
         openPresetList,
         openPersonaList,
@@ -17,9 +18,8 @@
     import AppShellTopbar from "./AppShellTopbar.svelte";
     import AppShellStage from "./AppShellStage.svelte";
 
-    let uiShellDesktopSidebarOpen = $state(true);
+    let topbarOverflowOpen = $state(false);
     let uiShellRightSidebarTab = $state<"chat" | "character">("chat");
-    const globalRailPanelId = "global-navigation-rail";
     const rightSidebarToggleKey = "risu:desktop-char-config-open";
     const rightSidebarTabKey = "risu:desktop-right-panel-tab";
     const rightSidebarPanelId = "chat-right-sidebar-drawer";
@@ -104,52 +104,44 @@
         };
     });
 
-    const workspaceTitle = $derived.by(() => {
-        switch (resolvedAppRoute.workspace) {
-            case "library":
-                return "Library";
-            case "playground":
-                return "Playground";
-            case "settings":
-                return "Settings";
-            case "chats":
-                return "Chats";
-            case "characters":
-            default:
-                return "Characters";
-        }
-    });
-
     const showShellSearch = $derived.by(() => {
         return resolvedAppRoute.workspace === "characters" || resolvedAppRoute.workspace === "library";
     });
 
-    function findFirstCharacterIndex() {
-        return DBState.db.characters.findIndex((character) => !character.trashTime);
-    }
-
-    function enterCharactersView() {
+    function openHomeFromTopbar() {
+        clearTransientOverlays();
         $settingsOpen = false;
         $openRulebookManager = false;
         PlaygroundStore.set(0);
         selectedCharID.set(-1);
+        topbarOverflowOpen = false;
     }
 
-    function enterChatsView() {
+    function openPlaygroundFromTopbar() {
+        clearTransientOverlays();
         $settingsOpen = false;
-        $openRulebookManager = false;
-        PlaygroundStore.set(0);
-        if ($selectedCharID >= 0) {
-            return;
-        }
-        const first = findFirstCharacterIndex();
-        if (first >= 0) {
-            selectedCharID.set(first);
-        }
+        openRulebookManager.set(false);
+        selectedCharID.set(-1);
+        PlaygroundStore.set(1);
+        topbarOverflowOpen = false;
     }
 
-    function toggleGlobalRail() {
-        uiShellDesktopSidebarOpen = !uiShellDesktopSidebarOpen;
+    function openRulebooksFromTopbar() {
+        clearTransientOverlays();
+        settingsOpen.set(false);
+        selectedCharID.set(-1);
+        PlaygroundStore.set(0);
+        openRulebookManager.set(true);
+        topbarOverflowOpen = false;
+    }
+
+    function openSettingsFromTopbar() {
+        clearTransientOverlays();
+        openRulebookManager.set(false);
+        selectedCharID.set(-1);
+        PlaygroundStore.set(0);
+        settingsOpen.set(true);
+        topbarOverflowOpen = false;
     }
 
     function toggleRightSidebar() {
@@ -194,23 +186,6 @@
         $bookmarkListOpen = false;
         $hypaV3ModalOpen = false;
     }
-
-    const showGlobalRailToggle = $derived.by(() => {
-        return resolvedAppRoute.workspace === "characters"
-            || resolvedAppRoute.workspace === "chats"
-            || resolvedAppRoute.workspace === "playground"
-            || resolvedAppRoute.workspace === "library"
-            || resolvedAppRoute.workspace === "settings";
-    });
-
-    const showShellHostedGlobalRail = $derived.by(() => {
-        return uiShellDesktopSidebarOpen
-            && (
-                resolvedAppRoute.workspace === "characters"
-                || resolvedAppRoute.workspace === "library"
-                || resolvedAppRoute.workspace === "settings"
-            );
-    });
 
     const showRightSidebarToggle = $derived.by(() => {
         return resolvedAppRoute.workspace === "chats";
@@ -285,8 +260,8 @@
             return;
         }
 
-        if (uiShellDesktopSidebarOpen && showGlobalRailToggle) {
-            uiShellDesktopSidebarOpen = false;
+        if (topbarOverflowOpen) {
+            topbarOverflowOpen = false;
             event.preventDefault();
         }
     }
@@ -302,11 +277,12 @@
 <div class="ds-app-v2-shell">
     <AppShellTopbar
         workspace={resolvedAppRoute.workspace}
-        workspaceTitle={workspaceTitle}
-        showGlobalRailToggle={showGlobalRailToggle}
-        globalRailOpen={uiShellDesktopSidebarOpen}
-        globalRailPanelId={globalRailPanelId}
-        onToggleGlobalRail={toggleGlobalRail}
+        onOpenHome={openHomeFromTopbar}
+        onOpenPlayground={openPlaygroundFromTopbar}
+        onOpenRulebooks={openRulebooksFromTopbar}
+        onOpenSettings={openSettingsFromTopbar}
+        overflowItems={additionalHamburgerMenu}
+        bind:overflowOpen={topbarOverflowOpen}
         showShellSearch={showShellSearch}
         bind:shellSearchQuery={shellSearch}
         showRightSidebarToggle={showRightSidebarToggle}
@@ -323,17 +299,11 @@
     />
     <AppShellStage
         workspace={resolvedAppRoute.workspace}
-        showShellHostedGlobalRail={showShellHostedGlobalRail}
         bind:shellSearchQuery={shellSearch}
         characterDirectoryShowTrash={characterDirectoryShowTrash}
-        showGlobalLauncher={uiShellDesktopSidebarOpen}
-        globalRailPanelId={globalRailPanelId}
         bind:rightSidebarOpen={uiShellRightSidebarOpen}
         bind:rightSidebarTab={uiShellRightSidebarTab}
         bind:rightSidebarVisible={uiShellRightSidebarVisible}
-        onOpenChatList={enterChatsView}
-        onOpenCharacterCatalog={enterCharactersView}
-        onResetOverlays={clearTransientOverlays}
     />
 </div>
 

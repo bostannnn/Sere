@@ -8,13 +8,14 @@ Run `pnpm run check:prototype` first — it automates ~70 of these checks. Only 
 
 ## A) Shell and navigation — verify against DESIGN_RULES sections 1, 2, 3, 11
 
-- Home → Chat → Library → Settings → Playground navigation all work from global drawer.
+- Home/Rulebooks/Settings navigation works from topbar primary icon controls.
+- Playground navigation works from topbar `More` overflow.
 - Character card click enters chat. Title click returns to home.
-- Global drawer and workspace drawer each toggle open and closed independently.
-- Opening one drawer closes the other.
+- `More` overflow opens/closes deterministically and closes on outside click or `Escape`.
+- Right workspace sidebar toggle in Chat opens/closes deterministically and persists state.
 - Topbar search is visible in Home and Library, hidden in Chat/Playground/Settings.
 - Narrow shell widths trigger topbar compact mode (search stays usable, controls remain reachable, no overflow clipping).
-- At narrow topbar widths, workspace title remains visible (truncated) when search is hidden; title collapse is allowed only when shell search is present.
+- Topbar nav row must keep a stable x-position when switching workspaces (no jumping due to dynamic title text).
 
 ## B) Workspace tabs — verify against DESIGN_RULES sections 4, 14
 

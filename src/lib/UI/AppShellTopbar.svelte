@@ -1,15 +1,27 @@
 <script lang="ts">
-    import { MenuIcon, PanelRightIcon, PlusIcon } from "@lucide/svelte";
+    import {
+        BookIcon,
+        EllipsisIcon,
+        HomeIcon,
+        PanelRightIcon,
+        PlusIcon,
+        SettingsIcon,
+        ShellIcon,
+    } from "@lucide/svelte";
+    import { onDestroy, onMount } from "svelte";
+    import type { MenuDef } from "src/ts/stores.svelte";
+    import PluginDefinedIcon from "../Others/PluginDefinedIcon.svelte";
 
     type Workspace = "home" | "characters" | "chats" | "library" | "playground" | "settings";
 
     interface Props {
         workspace: Workspace;
-        workspaceTitle: string;
-        showGlobalRailToggle?: boolean;
-        globalRailOpen?: boolean;
-        globalRailPanelId?: string;
-        onToggleGlobalRail?: () => void;
+        onOpenHome?: () => void;
+        onOpenPlayground?: () => void;
+        onOpenRulebooks?: () => void;
+        onOpenSettings?: () => void;
+        overflowItems?: MenuDef[];
+        overflowOpen?: boolean;
         showShellSearch?: boolean;
         shellSearchQuery?: string;
         showRightSidebarToggle?: boolean;
@@ -25,11 +37,12 @@
 
     let {
         workspace,
-        workspaceTitle,
-        showGlobalRailToggle = false,
-        globalRailOpen = false,
-        globalRailPanelId = "global-navigation-rail",
-        onToggleGlobalRail = () => {},
+        onOpenHome = () => {},
+        onOpenPlayground = () => {},
+        onOpenRulebooks = () => {},
+        onOpenSettings = () => {},
+        overflowItems = [],
+        overflowOpen = $bindable(false),
         showShellSearch = false,
         shellSearchQuery = $bindable(""),
         showRightSidebarToggle = false,
@@ -42,25 +55,154 @@
         onShowTrashCharacters = () => {},
         onAddCharacter = () => {},
     }: Props = $props();
+
+    let overflowWrapEl = $state<HTMLElement | null>(null);
+
+    const homeActive = $derived(workspace === "characters");
+    const playgroundActive = $derived(workspace === "playground");
+    const rulebooksActive = $derived(workspace === "library");
+    const settingsActive = $derived(workspace === "settings");
+
+    const openHome = () => {
+        overflowOpen = false;
+        onOpenHome();
+    };
+
+    const openPlayground = () => {
+        overflowOpen = false;
+        onOpenPlayground();
+    };
+
+    const openRulebooks = () => {
+        overflowOpen = false;
+        onOpenRulebooks();
+    };
+
+    const openSettings = () => {
+        overflowOpen = false;
+        onOpenSettings();
+    };
+
+    const toggleOverflow = () => {
+        overflowOpen = !overflowOpen;
+    };
+
+    const runOverflowAction = (item: MenuDef) => {
+        item.callback();
+        overflowOpen = false;
+    };
+
+    const onDocumentPointerDown = (event: PointerEvent) => {
+        if (!overflowOpen) {
+            return;
+        }
+        const target = event.target;
+        if (!(target instanceof Node)) {
+            return;
+        }
+        if (overflowWrapEl?.contains(target)) {
+            return;
+        }
+        overflowOpen = false;
+    };
+
+    onMount(() => {
+        document.addEventListener("pointerdown", onDocumentPointerDown);
+    });
+
+    onDestroy(() => {
+        document.removeEventListener("pointerdown", onDocumentPointerDown);
+    });
 </script>
 
 <header class="ds-app-v2-topbar" class:ds-app-v2-topbar-has-search={showShellSearch}>
     <div class="ds-app-v2-topbar-left">
-        <button
-            type="button"
-            id="globalMenuBtn"
-            class="ds-app-v2-topbar-btn ds-app-v2-topbar-icon-btn icon-btn icon-btn--md icon-btn--bordered"
-            aria-label={showGlobalRailToggle ? "Toggle navigation rail" : "Navigation rail unavailable in this workspace"}
-            title={showGlobalRailToggle ? "Toggle navigation rail" : "Navigation rail unavailable in this workspace"}
-            aria-pressed={globalRailOpen}
-            aria-expanded={showGlobalRailToggle ? globalRailOpen : undefined}
-            aria-controls={showGlobalRailToggle ? globalRailPanelId : undefined}
-            onclick={onToggleGlobalRail}
-            data-pressed={globalRailOpen ? '1' : '0'}
-            disabled={!showGlobalRailToggle}
-        ><MenuIcon size={18} /></button>
-        <span class="ds-app-v2-topbar-title">{workspaceTitle}</span>
+        <nav class="ds-app-v2-topbar-nav action-rail" aria-label="Primary navigation">
+            <button
+                type="button"
+                id="globalMenuBtn"
+                class="ds-app-v2-topbar-btn ds-app-v2-topbar-icon-btn ds-app-v2-topbar-nav-btn icon-btn icon-btn--md icon-btn--bordered"
+                aria-label="Go to Home"
+                title="Home"
+                aria-pressed={homeActive}
+                data-pressed={homeActive ? "1" : "0"}
+                onclick={openHome}
+                data-testid="topbar-nav-home"
+            ><HomeIcon size={18} /></button>
+
+            <button
+                type="button"
+                class="ds-app-v2-topbar-btn ds-app-v2-topbar-icon-btn ds-app-v2-topbar-nav-btn icon-btn icon-btn--md icon-btn--bordered"
+                aria-label="Go to Rulebooks"
+                title="Rulebooks"
+                aria-pressed={rulebooksActive}
+                data-pressed={rulebooksActive ? "1" : "0"}
+                onclick={openRulebooks}
+                data-testid="topbar-nav-rulebooks"
+            ><BookIcon size={18} /></button>
+
+            <button
+                type="button"
+                class="ds-app-v2-topbar-btn ds-app-v2-topbar-icon-btn ds-app-v2-topbar-nav-btn icon-btn icon-btn--md icon-btn--bordered"
+                aria-label="Go to Settings"
+                title="Settings"
+                aria-pressed={settingsActive}
+                data-pressed={settingsActive ? "1" : "0"}
+                onclick={openSettings}
+                data-testid="topbar-nav-settings"
+            ><SettingsIcon size={18} /></button>
+
+            <div class="ds-app-v2-topbar-overflow-wrap" bind:this={overflowWrapEl}>
+                <button
+                    type="button"
+                    class="ds-app-v2-topbar-btn ds-app-v2-topbar-icon-btn ds-app-v2-topbar-nav-btn icon-btn icon-btn--md icon-btn--bordered"
+                    aria-label="More navigation actions"
+                    title="More"
+                    aria-pressed={overflowOpen}
+                    aria-expanded={overflowOpen}
+                    aria-controls="topbar-overflow-menu"
+                    data-pressed={overflowOpen || playgroundActive ? "1" : "0"}
+                    onclick={toggleOverflow}
+                    data-testid="topbar-nav-more"
+                ><EllipsisIcon size={18} /></button>
+
+                {#if overflowOpen}
+                    <div
+                        id="topbar-overflow-menu"
+                        class="ds-app-v2-topbar-overflow panel-shell ds-ui-menu"
+                        aria-label="More navigation actions"
+                        data-testid="topbar-nav-more-menu"
+                    >
+                        <button
+                            type="button"
+                            class="ds-app-v2-topbar-overflow-item ds-ui-menu-item"
+                            data-active={playgroundActive ? "1" : "0"}
+                            onclick={openPlayground}
+                            data-testid="topbar-nav-overflow-playground"
+                        >
+                            <ShellIcon size={16} />
+                            <span>Playground</span>
+                        </button>
+
+                        {#if overflowItems.length > 0}
+                            <div class="ds-app-v2-topbar-overflow-separator"></div>
+                            {#each overflowItems as item (`${item.id}-${item.name}`)}
+                                <button
+                                    type="button"
+                                    class="ds-app-v2-topbar-overflow-item ds-ui-menu-item"
+                                    onclick={() => runOverflowAction(item)}
+                                >
+                                    <PluginDefinedIcon ico={item} />
+                                    <span>{item.name}</span>
+                                </button>
+                            {/each}
+                        {/if}
+                    </div>
+                {/if}
+            </div>
+        </nav>
     </div>
+
     <div class="ds-app-v2-topbar-center">
         {#if showShellSearch}
             <input
@@ -73,6 +215,7 @@
             />
         {/if}
     </div>
+
     <div class="ds-app-v2-topbar-right">
         {#if showRightSidebarToggle}
             <button
@@ -85,7 +228,7 @@
                 aria-expanded={showRightSidebarToggle ? rightSidebarOpen : undefined}
                 aria-controls={showRightSidebarToggle ? rightSidebarPanelId : undefined}
                 onclick={onToggleRightSidebar}
-                data-pressed={rightSidebarOpen ? '1' : '0'}
+                data-pressed={rightSidebarOpen ? "1" : "0"}
             ><PanelRightIcon size={18} /></button>
         {:else if showCharacterDirectoryControls}
             <div class="ds-app-v2-topbar-segment seg-tabs" role="tablist" aria-label="Character filter">
@@ -172,15 +315,53 @@
         min-width: 0;
     }
 
-    .ds-app-v2-topbar-title {
-        font-family: var(--risu-font-family-display);
-        font-size: 1.125rem;
-        font-weight: var(--ds-font-weight-bold);
-        letter-spacing: -0.012em;
+    .ds-app-v2-topbar-nav {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.375rem;
+    }
+
+    .ds-app-v2-topbar-overflow-wrap {
+        position: relative;
+    }
+
+    .ds-app-v2-topbar-overflow {
+        position: absolute;
+        top: calc(100% + 0.5rem);
+        left: 0;
+        min-width: 13rem;
+        max-width: min(20rem, 80vw);
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+        padding: 0.375rem;
+        z-index: var(--z-drawer, 50);
+    }
+
+    .ds-app-v2-topbar-overflow-item {
+        width: 100%;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        border: 1px solid transparent;
+        border-radius: var(--ds-radius-md);
+        background: transparent;
+        color: var(--ds-text-secondary);
+        min-height: var(--ds-height-control-md);
+        padding: 0 0.625rem;
+        text-align: left;
+    }
+
+    .ds-app-v2-topbar-overflow-separator {
+        height: 1px;
+        background: color-mix(in srgb, var(--ds-border-subtle) 70%, transparent);
+        margin: 0.125rem 0.125rem 0.25rem;
+    }
+
+    .ds-app-v2-topbar-overflow-item:hover {
+        background: var(--ds-surface-active);
         color: var(--ds-text-primary);
-        line-height: 1.1;
-        white-space: nowrap;
-        text-shadow: 0 1px 2px rgb(0 0 0 / 0.2);
+        border-color: var(--ds-border-strong);
     }
 
     .ds-app-v2-topbar-center {
@@ -222,7 +403,7 @@
         display: flex;
         align-items: center;
         gap: 0.625rem;
-        overflow: hidden;
+        overflow: visible;
         min-width: 0;
     }
 
@@ -338,7 +519,7 @@
         color: var(--ds-text-secondary);
     }
 
-    @container ds-app-shell-topbar (max-width: 70rem) {
+    @container ds-app-shell-topbar (max-width: 74rem) {
         .ds-app-v2-topbar {
             gap: 0.5rem;
             padding-inline: 0.875rem;
@@ -354,14 +535,7 @@
         }
     }
 
-    @container ds-app-shell-topbar (max-width: 56rem) {
-        .ds-app-v2-topbar-title {
-            max-width: 9rem;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            font-size: 1rem;
-        }
-
+    @container ds-app-shell-topbar (max-width: 58rem) {
         .ds-app-v2-topbar-search {
             width: clamp(12rem, 38%, 22rem);
         }
@@ -387,17 +561,9 @@
         }
     }
 
-    @container ds-app-shell-topbar (max-width: 46rem) {
+    @container ds-app-shell-topbar (max-width: 48rem) {
         .ds-app-v2-topbar {
             padding-inline: 0.5rem;
-        }
-
-        .ds-app-v2-topbar-title {
-            max-width: 7.5rem;
-        }
-
-        .ds-app-v2-topbar-has-search .ds-app-v2-topbar-title {
-            display: none;
         }
 
         .ds-app-v2-topbar-center {
@@ -424,6 +590,7 @@
 
     .ds-app-v2-topbar-btn:focus-visible,
     .ds-app-v2-topbar-segment-btn:focus-visible,
+    .ds-app-v2-topbar-overflow-item:focus-visible,
     .ds-app-v2-topbar-search:focus-visible {
         outline: none;
         border-color: var(--ds-border-strong);

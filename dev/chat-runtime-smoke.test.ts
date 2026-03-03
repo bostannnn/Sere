@@ -139,9 +139,6 @@ vi.mock(import("sortablejs/modular/sortable.core.esm.js"), () => {
   return { default: fakeSortable };
 });
 
-vi.mock(import("src/lib/UI/GlobalLauncher.svelte"), async () => ({
-  default: (await import("./test-stubs/GlobalLauncherStub.svelte")).default,
-}));
 vi.mock(import("src/lib/ChatScreens/DefaultChatScreen.svelte"), async () => ({
   default: (await import("./test-stubs/DefaultChatScreenStub.svelte")).default,
 }));
@@ -149,9 +146,6 @@ vi.mock(import("src/lib/Others/ChatList.svelte"), async () => ({
   default: (await import("./test-stubs/OverlayCloseStub.svelte")).default,
 }));
 vi.mock(import("src/lib/Setting/Pages/Module/ModuleChatMenu.svelte"), async () => ({
-  default: (await import("./test-stubs/OverlayCloseStub.svelte")).default,
-}));
-vi.mock(import("src/lib/Others/GridCatalog.svelte"), async () => ({
   default: (await import("./test-stubs/OverlayCloseStub.svelte")).default,
 }));
 vi.mock(import("src/lib/ChatScreens/ResizeBox.svelte"), async () => ({
@@ -206,7 +200,7 @@ describe("chat runtime smoke", () => {
     document.body.innerHTML = "";
     const target = document.createElement("div");
     document.body.appendChild(target);
-    app = mount(ChatScreen, { target, props: { showGlobalLauncher: true } });
+    app = mount(ChatScreen, { target });
   });
 
   afterEach(async () => {
@@ -229,21 +223,12 @@ describe("chat runtime smoke", () => {
       await flushUi();
     }
 
-    const openChat = document.querySelector('[data-testid="launcher-open-chat"]') as HTMLButtonElement | null;
+    const openChat = document.querySelector('[data-testid="default-open-chat"]') as HTMLButtonElement | null;
     openChat?.click();
     await flushUi();
 
     const closeOverlay = document.querySelector('[data-testid="overlay-close"]') as HTMLButtonElement | null;
     closeOverlay?.click();
-    await flushUi();
-
-    const openCharacters = document.querySelector('[data-testid="launcher-open-characters"]') as HTMLButtonElement | null;
-    openCharacters?.click();
-    await flushUi();
-    expect(document.querySelector(".ds-chat-overlay-panel.panel-shell")).not.toBeNull();
-
-    const closeOverlay2 = document.querySelector('[data-testid="overlay-close"]') as HTMLButtonElement | null;
-    closeOverlay2?.click();
     await flushUi();
 
     const openModule = document.querySelector('[data-testid="default-open-module"]') as HTMLButtonElement | null;

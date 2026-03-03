@@ -20,8 +20,8 @@
 </script>
 <h2 class="ds-settings-page-title">{language.language}</h2>
 
-<div class="ds-settings-page">
-    <div class="ds-settings-section">
+<div class="ds-settings-page list-shell">
+    <div class="ds-settings-section panel-shell list-shell">
         <span class="ds-settings-label">{language.UiLanguage}</span>
         <SelectInput bind:value={DBState.db.language} onchange={async () => {
             if(DBState.db.language === 'translang'){
@@ -90,7 +90,7 @@
     </div>
 
     {#if DBState.db.translator}
-        <div class="ds-settings-section">
+        <div class="ds-settings-section panel-shell list-shell">
             <span class="ds-settings-label">{language.translatorType}</span>
             <SelectInput bind:value={DBState.db.translatorType}>
                 <OptionInput value="google" >Google</OptionInput>

@@ -37,7 +37,6 @@ const appShellFile = "/Users/andrewbostan/Documents/RisuAII/src/lib/UI/AppShellV
 const topbarFile = "/Users/andrewbostan/Documents/RisuAII/src/lib/UI/AppShellTopbar.svelte";
 const stageFile = "/Users/andrewbostan/Documents/RisuAII/src/lib/UI/AppShellStage.svelte";
 const stylesFile = "/Users/andrewbostan/Documents/RisuAII/src/styles.css";
-const launcherFile = "/Users/andrewbostan/Documents/RisuAII/src/lib/UI/GlobalLauncher.svelte";
 const homeDirectoryFile = "/Users/andrewbostan/Documents/RisuAII/src/lib/UI/HomeCharacterDirectory.svelte";
 const popupListFile = "/Users/andrewbostan/Documents/RisuAII/src/lib/UI/PopupList.svelte";
 const modelListFile = "/Users/andrewbostan/Documents/RisuAII/src/lib/UI/ModelList.svelte";
@@ -96,7 +95,6 @@ const appShellContent = readFile(appShellFile);
 const topbarContent = readFile(topbarFile);
 const stageContent = readFile(stageFile);
 const stylesContent = readFile(stylesFile);
-const launcherContent = readFile(launcherFile);
 const homeDirectoryContent = readFile(homeDirectoryFile);
 const popupListContent = readFile(popupListFile);
 const modelListContent = readFile(modelListFile);
@@ -172,7 +170,6 @@ ensureIncludes(appShellContent, appShellFile, "clearTransientOverlays()", failur
 ensureIncludes(appShellContent, appShellFile, "let lastWorkspace = $state<AppRoute[\"workspace\"]>(resolveWorkspace())", failures);
 
 ensureIncludes(appShellContent, appShellFile, "const rightSidebarToggleKey = \"risu:desktop-char-config-open\"", failures);
-ensureIncludes(appShellContent, appShellFile, "const globalRailPanelId = \"global-navigation-rail\";", failures);
 ensureIncludes(appShellContent, appShellFile, "let uiShellRightSidebarTab = $state<\"chat\" | \"character\">(\"chat\")", failures);
 ensureIncludes(appShellContent, appShellFile, "let uiShellRightSidebarVisible = $state(readRightSidebarDefault())", failures);
 ensureIncludes(appShellContent, appShellFile, "const rightSidebarPanelId = \"chat-right-sidebar-drawer\";", failures);
@@ -189,24 +186,13 @@ ensureIncludes(appShellContent, appShellFile, "selectedCharacter.chatPage = safe
 ensureIncludes(appShellContent, appShellFile, "function toggleRightSidebar() {", failures);
 ensureIncludes(appShellContent, appShellFile, "const showRightSidebarToggle = $derived.by(() => {", failures);
 ensureIncludes(appShellContent, appShellFile, "window.addEventListener(\"keydown\", handleShellKeydown, true)", failures);
-ensureIncludes(
-  appShellContent,
-  appShellFile,
-  "resolvedAppRoute.workspace === \"characters\"",
-  failures,
-);
-ensureIncludes(
-  appShellContent,
-  appShellFile,
-  "|| resolvedAppRoute.workspace === \"library\"",
-  failures,
-);
-ensureIncludes(
-  appShellContent,
-  appShellFile,
-  "|| resolvedAppRoute.workspace === \"settings\"",
-  failures,
-);
+ensureIncludes(appShellContent, appShellFile, "let topbarOverflowOpen = $state(false);", failures);
+ensureIncludes(appShellContent, appShellFile, "function openHomeFromTopbar() {", failures);
+ensureIncludes(appShellContent, appShellFile, "function openPlaygroundFromTopbar() {", failures);
+ensureIncludes(appShellContent, appShellFile, "function openRulebooksFromTopbar() {", failures);
+ensureIncludes(appShellContent, appShellFile, "function openSettingsFromTopbar() {", failures);
+ensureIncludes(appShellContent, appShellFile, "overflowItems={additionalHamburgerMenu}", failures);
+ensureIncludes(appShellContent, appShellFile, "bind:overflowOpen={topbarOverflowOpen}", failures);
 ensureIncludes(appContent, appFile, "import AppShellV2 from './lib/UI/AppShellV2.svelte';", failures);
 ensureIncludes(appContent, appFile, "<AppShellV2 />", failures);
 ensureNotIncludes(appContent, appFile, "import AppShellTopbar from './lib/UI/AppShellTopbar.svelte';", failures);
@@ -223,7 +209,6 @@ ensureIncludes(appShellContent, appShellFile, "let characterDirectoryShowTrash =
 ensureIncludes(appShellContent, appShellFile, "const showCharacterDirectoryControls = $derived.by(() => {", failures);
 ensureIncludes(appShellContent, appShellFile, "showCharacterDirectoryControls={showCharacterDirectoryControls}", failures);
 ensureIncludes(appShellContent, appShellFile, "characterDirectoryShowTrash={characterDirectoryShowTrash}", failures);
-ensureIncludes(appShellContent, appShellFile, "globalRailPanelId={globalRailPanelId}", failures);
 ensureIncludes(appShellContent, appShellFile, "rightSidebarPanelId={rightSidebarPanelId}", failures);
 ensureIncludes(appShellContent, appShellFile, "onShowActiveCharacters={showActiveCharacters}", failures);
 ensureIncludes(appShellContent, appShellFile, "onShowTrashCharacters={showTrashCharacters}", failures);
@@ -234,15 +219,23 @@ ensureNotIncludes(appContent, appFile, "<div class=\"ds-app-v2-stage\">", failur
 
 ensureIncludes(topbarContent, topbarFile, "id=\"globalMenuBtn\"", failures);
 ensureIncludes(topbarContent, topbarFile, "id=\"workspaceSidebarBtn\"", failures);
-ensureIncludes(topbarContent, topbarFile, "aria-pressed={globalRailOpen}", failures);
+ensureIncludes(topbarContent, topbarFile, "data-testid=\"topbar-nav-home\"", failures);
+ensureIncludes(topbarContent, topbarFile, "data-testid=\"topbar-nav-rulebooks\"", failures);
+ensureIncludes(topbarContent, topbarFile, "data-testid=\"topbar-nav-settings\"", failures);
+ensureIncludes(topbarContent, topbarFile, "data-testid=\"topbar-nav-more\"", failures);
+ensureIncludes(topbarContent, topbarFile, "data-testid=\"topbar-nav-more-menu\"", failures);
+ensureIncludes(topbarContent, topbarFile, "data-testid=\"topbar-nav-overflow-playground\"", failures);
+ensureIncludes(topbarContent, topbarFile, "class=\"ds-app-v2-topbar-nav action-rail\"", failures);
+ensureIncludes(topbarContent, topbarFile, "onOpenHome = () => {}", failures);
+ensureIncludes(topbarContent, topbarFile, "onOpenPlayground = () => {}", failures);
+ensureIncludes(topbarContent, topbarFile, "onOpenRulebooks = () => {}", failures);
+ensureIncludes(topbarContent, topbarFile, "onOpenSettings = () => {}", failures);
+ensureIncludes(topbarContent, topbarFile, "overflowOpen = $bindable(false)", failures);
+ensureIncludes(topbarContent, topbarFile, "aria-pressed={overflowOpen}", failures);
 ensureIncludes(topbarContent, topbarFile, "aria-pressed={rightSidebarOpen}", failures);
-ensureIncludes(topbarContent, topbarFile, "globalRailPanelId = \"global-navigation-rail\"", failures);
 ensureIncludes(topbarContent, topbarFile, "rightSidebarPanelId = \"chat-right-sidebar-drawer\"", failures);
-ensureIncludes(topbarContent, topbarFile, "aria-expanded={showGlobalRailToggle ? globalRailOpen : undefined}", failures);
-ensureIncludes(topbarContent, topbarFile, "aria-controls={showGlobalRailToggle ? globalRailPanelId : undefined}", failures);
 ensureIncludes(topbarContent, topbarFile, "aria-expanded={showRightSidebarToggle ? rightSidebarOpen : undefined}", failures);
 ensureIncludes(topbarContent, topbarFile, "aria-controls={showRightSidebarToggle ? rightSidebarPanelId : undefined}", failures);
-ensureIncludes(topbarContent, topbarFile, "disabled={!showGlobalRailToggle}", failures);
 ensureIncludes(topbarContent, topbarFile, "bind:value={shellSearchQuery}", failures);
 ensureIncludes(topbarContent, topbarFile, "workspace === \"library\" ? \"Search library...\" : \"Search characters...\"", failures);
 ensureIncludes(topbarContent, topbarFile, "z-index: var(--z-topbar, 30);", failures);
@@ -275,56 +268,12 @@ ensureIncludes(stageContent, stageFile, "<Settings />", failures);
 ensureIncludes(stageContent, stageFile, "workspace === \"library\"", failures);
 ensureIncludes(stageContent, stageFile, "<RulebookLibrary bind:shellSearchQuery={shellSearchQuery} />", failures);
 ensureIncludes(stageContent, stageFile, "{#key workspace}", failures);
-ensureIncludes(stageContent, stageFile, "<GlobalLauncher", failures);
-ensureIncludes(stageContent, stageFile, "globalRailPanelId = \"global-navigation-rail\"", failures);
-ensureIncludes(stageContent, stageFile, "railId={globalRailPanelId}", failures);
-ensureIncludes(stageContent, stageFile, "globalRailPanelId={globalRailPanelId}", failures);
-ensureIncludes(stageContent, stageFile, "onOpenChatList={onOpenChatList}", failures);
-ensureIncludes(stageContent, stageFile, "onOpenCharacterCatalog={onOpenCharacterCatalog}", failures);
+ensureNotIncludes(stageContent, stageFile, "<GlobalLauncher", failures);
 ensureIncludes(stageContent, stageFile, ".ds-app-v2-stage-view :global(.rag-dashboard) {", failures);
 ensureIncludes(stageContent, stageFile, "bind:rightSidebarOpen={rightSidebarOpen}", failures);
 ensureIncludes(stageContent, stageFile, "bind:rightSidebarTab={rightSidebarTab}", failures);
 ensureIncludes(stageContent, stageFile, "rightSidebarVisible = $bindable(false)", failures);
 ensureIncludes(stageContent, stageFile, "bind:rightSidebarVisible={rightSidebarVisible}", failures);
-
-ensureIncludes(
-  launcherContent,
-  launcherFile,
-  "const recentChats = $derived.by((): RecentChatItem[] => {",
-  failures,
-);
-ensureIncludes(launcherContent, launcherFile, "const homeActive = $derived(", failures);
-ensureIncludes(launcherContent, launcherFile, "const libraryActive = $derived(inLibraryWorkspace);", failures);
-ensureIncludes(launcherContent, launcherFile, "const settingsActive = $derived(inSettingsWorkspace);", failures);
-ensureIncludes(launcherContent, launcherFile, "class:ds-global-nav-item-active={libraryActive}", failures);
-ensureIncludes(launcherContent, launcherFile, "class:ds-global-nav-item-active={settingsActive}", failures);
-ensureIncludes(launcherContent, launcherFile, "aria-pressed={homeActive}", failures);
-ensureIncludes(launcherContent, launcherFile, "aria-pressed={charactersActive}", failures);
-ensureIncludes(launcherContent, launcherFile, "aria-pressed={chatsActive}", failures);
-ensureIncludes(launcherContent, launcherFile, "aria-pressed={playgroundActive}", failures);
-ensureIncludes(launcherContent, launcherFile, "aria-pressed={libraryActive}", failures);
-ensureIncludes(launcherContent, launcherFile, "aria-pressed={settingsActive}", failures);
-ensureIncludes(launcherContent, launcherFile, "data-testid=\"global-launcher-nav-settings\"", failures);
-ensureIncludes(launcherContent, launcherFile, "data-testid=\"global-launcher-nav-library\"", failures);
-ensureIncludes(launcherContent, launcherFile, "function openRecentChat(item: RecentChatItem) {", failures);
-ensureIncludes(launcherContent, launcherFile, "const resolvedCharacterIndex = characters.findIndex((character) => character?.chaId === item.charId);", failures);
-ensureIncludes(launcherContent, launcherFile, "const resolvedChatIndex = chats.findIndex((chat) => chat?.id === item.chatId);", failures);
-ensureIncludes(launcherContent, launcherFile, "data-testid=\"global-launcher-recent-item\"", failures);
-ensureIncludes(launcherContent, launcherFile, "data-char-id={item.charId}", failures);
-ensureIncludes(launcherContent, launcherFile, "data-chat-id={item.chatId ?? \"\"}", failures);
-ensureIncludes(launcherContent, launcherFile, "type=\"button\"", failures);
-ensureIncludes(launcherContent, launcherFile, "railId = \"global-navigation-rail\"", failures);
-ensureIncludes(launcherContent, launcherFile, "id={railId}", failures);
-ensureIncludes(launcherContent, launcherFile, "data-testid=\"global-navigation-rail\"", failures);
-ensureIncludes(launcherContent, launcherFile, "aria-label={`${item.charName} ${item.chatName}`}", failures);
-ensureIncludes(launcherContent, launcherFile, "drawer-elevation--left ds-global-nav-drawer", failures);
-ensureIncludes(launcherContent, launcherFile, "class=\"ds-global-nav-recent list-shell\"", failures);
-ensureIncludes(launcherContent, launcherFile, "class=\"ds-global-nav-empty empty-state\"", failures);
-ensureIncludes(launcherContent, launcherFile, "class=\"ds-global-nav-footer-pill control-chip\"", failures);
-ensureIncludes(launcherContent, launcherFile, ".ds-global-nav-item:focus-visible,", failures);
-ensureIncludes(launcherContent, launcherFile, ".ds-global-nav-recent-item:focus-visible {", failures);
-ensureNotIncludes(launcherContent, launcherFile, "class=\"ds-global-nav-brand\"", failures);
-ensureNotIncludes(launcherContent, launcherFile, "class=\"ds-global-nav-collapse\"", failures);
 
 ensureIncludes(homeDirectoryContent, homeDirectoryFile, "import { changeChar, getCharImage, removeChar } from \"src/ts/characters\";", failures);
 ensureIncludes(homeDirectoryContent, homeDirectoryFile, "import { checkCharOrder } from \"src/ts/globalApi.svelte\";", failures);
@@ -393,11 +342,7 @@ ensureIncludes(suggestionContent, suggestionFile, "aria-pressed={toggleTranslate
 ensureIncludes(suggestionContent, suggestionFile, "type=\"button\"", failures);
 ensureIncludes(chatContent, chatFile, "class=\"ds-ui-grow action-rail ds-ui-action-rail ds-ui-action-rail-end ds-chat-message-action-rail\"", failures);
 ensureIncludes(chatContent, chatFile, "class=\"action-rail ds-ui-action-rail ds-ui-action-rail-offset ds-chat-message-action-inner\"", failures);
-ensureIncludes(chatScreenContent, chatScreenFile, "class=\"ds-chat-overlay-panel panel-shell\"", failures);
-ensureIncludes(chatScreenContent, chatScreenFile, ".ds-chat-overlay-panel.panel-shell {", failures);
 ensureIncludes(chatScreenContent, chatScreenFile, "class=\"ds-chat-right-drawer drawer-elevation--right\"", failures);
-ensureIncludes(chatScreenContent, chatScreenFile, "globalRailPanelId = \"global-navigation-rail\"", failures);
-ensureIncludes(chatScreenContent, chatScreenFile, "railId={globalRailPanelId}", failures);
 ensureIncludes(chatScreenContent, chatScreenFile, "const rightSidebarPanelId = \"chat-right-sidebar-drawer\"", failures);
 ensureIncludes(chatScreenContent, chatScreenFile, "id={rightSidebarPanelId}", failures);
 ensureIncludes(chatScreenContent, chatScreenFile, "data-testid=\"chat-right-sidebar-drawer\"", failures);

@@ -38,7 +38,7 @@
 </script>
 
 {#if isNodeServer}
-    <div class="ds-settings-section ds-settings-renderer-offset-md action-rail">
+    <div class="ds-settings-section ds-settings-renderer-offset-md panel-shell action-rail">
         <span class="ds-settings-renderer-label">
             Server password status:
             {status === 'unset' ? 'Not set' : status === 'correct' ? 'Configured' : status === 'incorrect' ? 'Password required' : 'Unknown'}

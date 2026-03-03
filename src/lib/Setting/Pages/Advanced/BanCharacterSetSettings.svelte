@@ -17,7 +17,7 @@
     };
 </script>
 
-<Accordion styled name={language.banCharacterset} className="ds-settings-section">
+<Accordion styled name={language.banCharacterset} className="ds-settings-section panel-shell list-shell">
     {#each characterSets as set (set)}
         <Button
             size="sm"

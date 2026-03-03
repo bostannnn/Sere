@@ -330,6 +330,17 @@ const PHASE4_UNCOVERED_MATRIX = [
     ],
   },
   {
+    file: "src/lib/Setting/Pages/Advanced/ComfyCommanderSettings.svelte",
+    classification: "migrate",
+    owner: "settings-contract",
+    rationale: "Comfy Commander settings now use panel-shell and action-rail primitive markers in entity cards and headers.",
+    requiredPatterns: [
+      "class=\"ds-comfy-entity panel-shell\"",
+      "class=\"ds-settings-inline-actions action-rail ds-comfy-entity-header\"",
+      "className=\"action-rail\"",
+    ],
+  },
+  {
     file: "src/lib/Setting/Pages/Advanced/SettingsExportButtons.svelte",
     classification: "migrate",
     owner: "settings-contract",

@@ -204,7 +204,7 @@ node dev/check-ui-shell-contract.js
 node dev/check-chat-sidebar-contract.js
 node dev/check-charconfig-rulebook-contract.js
 pnpm exec vitest run dev/ui-shell-runtime-smoke.test.ts
-pnpm exec vitest run dev/global-launcher-runtime-smoke.test.ts
+pnpm exec vitest run dev/home-character-directory-runtime-smoke.test.ts
 pnpm exec vitest run dev/chat-runtime-smoke.test.ts
 pnpm exec vitest run dev/chat-sidebar-runtime-smoke.test.ts
 pnpm exec vitest run dev/chat-sidebar-integration-runtime-smoke.test.ts
@@ -217,7 +217,7 @@ What it gates:
 - Static chat sidebar host invariants in `src/lib/ChatScreens/ChatScreen.svelte` (toggle, tab host, pane composition).
 - Static lorebook/rulebook sidebar wiring invariants in `src/lib/SideBars/CharConfig.svelte` + `src/lib/SideBars/LoreBook/LoreBookSetting.svelte`.
 - Runtime workspace transitions in `App.svelte` (characters/chats/settings/library shell behavior).
-- Runtime global drawer quick-open behavior.
+- Runtime topbar navigation and workspace transition behavior.
 - Runtime chat shell stability regression (`state_unsafe_mutation` / render-loop guard).
 - Runtime chat sidebar host behavior (open/close controls, tab switching, overlay interaction).
 - Runtime right-sidebar host integration with real `SideChatList` and `CharConfig` composition (non-stub host-level parity gate).

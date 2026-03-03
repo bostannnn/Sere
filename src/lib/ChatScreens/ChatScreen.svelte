@@ -9,24 +9,18 @@
     import DefaultChatScreen from "./DefaultChatScreen.svelte";
     import defaultWallpaper from '../../etc/bg.jpg'
     import ChatList from "../Others/ChatList.svelte";
-    import GridCatalog from "../Others/GridCatalog.svelte";
     import TransitionImage from "./TransitionImage.svelte";
     import BackgroundDom from "./BackgroundDom.svelte";
     import ChatRightSidebarHost from "./ChatRightSidebarHost.svelte";
     import ModuleChatMenu from "../Setting/Pages/Module/ModuleChatMenu.svelte";
-    import GlobalLauncher from "../UI/GlobalLauncher.svelte";
     import { language } from "../../lang";
     interface Props {
-        showGlobalLauncher?: boolean;
-        globalRailPanelId?: string;
         rightSidebarOpen?: boolean;
         rightSidebarTab?: "chat" | "character";
         rightSidebarVisible?: boolean;
     }
 
     let {
-        showGlobalLauncher = true,
-        globalRailPanelId = "global-navigation-rail",
         rightSidebarOpen = $bindable(true),
         rightSidebarTab = $bindable("chat"),
         rightSidebarVisible = $bindable(false),
@@ -34,7 +28,6 @@
 
     let openChatList = $state(false)
     let openModuleList = $state(false)
-    let openCharacterCatalog = $state(false)
     let viewportWidth = $state(typeof window !== "undefined" ? window.innerWidth : 1440)
     type RightPanelTab = "chat" | "character";
     const rightPanelTabKey = "risu:desktop-right-panel-tab"
@@ -50,8 +43,7 @@
         !$MobileGUI &&
         !$ConnectionOpenStore &&
         !openChatList &&
-        !openModuleList &&
-        !openCharacterCatalog
+        !openModuleList
     )
 
     const updateViewport = () => {
@@ -83,26 +75,12 @@
 
     const openGlobalChatList = () => {
         openModuleList = false
-        openCharacterCatalog = false
         openChatList = true
-    }
-
-    const openGlobalCharacterCatalog = () => {
-        openModuleList = false
-        openChatList = false
-        openCharacterCatalog = true
     }
 
     const openGlobalModuleList = () => {
         openChatList = false
-        openCharacterCatalog = false
         openModuleList = true
-    }
-
-    const resetGlobalOverlays = () => {
-        openChatList = false
-        openModuleList = false
-        openCharacterCatalog = false
     }
 
     const setRightPanelTab = (nextTab: RightPanelTab) => {
@@ -120,20 +98,6 @@
         openModuleList = false
     }
 
-    const closeCharacterCatalog = () => {
-        openCharacterCatalog = false
-    }
-
-    const handleCharacterCatalogKeydown = (event: KeyboardEvent) => {
-        if (event.key === "Enter" || event.key === " " || event.key === "Escape") {
-            openCharacterCatalog = false
-            event.preventDefault()
-        }
-    }
-
-    const stopPointerPropagation = (event: PointerEvent) => {
-        event.stopPropagation()
-    }
     const isSafeCssColorValue = (value: unknown) => {
         if (typeof value !== 'string') return false
         const trimmed = value.trim()
@@ -203,15 +167,6 @@
 </script>
 
 <div class="ds-chat-screen-shell">
-    <GlobalLauncher
-        railId={globalRailPanelId}
-        visible={!$MobileGUI && showGlobalLauncher}
-        activeOverlay={openCharacterCatalog ? "characters" : openChatList ? "chats" : "none"}
-        onOpenChatList={openGlobalChatList}
-        onOpenCharacterCatalog={openGlobalCharacterCatalog}
-        onResetOverlays={resetGlobalOverlays}
-    />
-
     <div class="ds-chat-screen-main">
         {#if DBState.db.theme === 'waifu'}
             <div class="ds-chat-theme-waifu-shell" style="{bgImg.length < 4 ? wallPaper : bgImg}">
@@ -291,20 +246,6 @@
     <ChatList close={closeChatList}/>
 {:else if openModuleList}
     <ModuleChatMenu close={closeModuleList}/>
-{:else if openCharacterCatalog}
-    <!-- Render character catalog as an overlay layer so it never affects app shell layout -->
-    <div
-        class="ds-chat-overlay-backdrop"
-        role="button"
-        tabindex="0"
-        aria-label="Close character catalog"
-        onclick={closeCharacterCatalog}
-        onkeydown={handleCharacterCatalogKeydown}
-    >
-        <div class="ds-chat-overlay-panel panel-shell" role="presentation" onpointerdown={stopPointerPropagation}>
-            <GridCatalog endGrid={closeCharacterCatalog} />
-        </div>
-    </div>
 {/if}
 
 <style>
@@ -327,20 +268,4 @@
         }
     }
 
-    .ds-chat-overlay-backdrop {
-        position: fixed;
-        inset: 0;
-        z-index: 80;
-        background: color-mix(in srgb, var(--ds-surface-1) 45%, transparent);
-        display: flex;
-        justify-content: flex-end;
-    }
-
-    .ds-chat-overlay-panel.panel-shell {
-        width: min(42rem, 100vw);
-        height: 100vh;
-        max-width: 100vw;
-        border-left: 1px solid var(--ds-border-subtle);
-        background: var(--ds-surface-2);
-    }
 </style>
