@@ -12,6 +12,9 @@ These rules are mandatory for every next iteration in this concept.
 - `Chat` view shows message runtime only.
 - Shell-level cross-workspace navigation is topbar-only (`Home`, `Rulebooks`, `Settings`, `More` overflow); no left global drawer.
 - Right workspace drawer is the single place for character-scoped chat list/actions and character settings.
+- Library workspace follows the same shell-parity model: no internal content header/title/search bars, and no duplicated in-content toolbar row.
+- Library workspace controls (`grid/list`, `Add Documents`, sidebar toggle) live in the shared topbar right lane.
+- Library filters/settings live in the right workspace drawer with two tabs: `Library` and `Settings`.
 - No duplicate character-scoped chat selector in topbar or home cards.
 
 ## 2) Layout invariants

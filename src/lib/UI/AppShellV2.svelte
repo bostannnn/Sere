@@ -20,8 +20,12 @@
 
     let topbarOverflowOpen = $state(false);
     let uiShellRightSidebarTab = $state<"chat" | "character">("chat");
+    let librarySidebarTab = $state<"library" | "settings">("library");
     const rightSidebarToggleKey = "risu:desktop-char-config-open";
-    const rightSidebarPanelId = "chat-right-sidebar-drawer";
+    const librarySidebarToggleKey = "risu:desktop-library-sidebar-open";
+    const librarySidebarTabKey = "risu:desktop-library-sidebar-tab";
+    const chatRightSidebarPanelId = "chat-right-sidebar-drawer";
+    const libraryRightSidebarPanelId = "rulebook-right-sidebar-drawer";
 
     function readRightSidebarDefault() {
         if (typeof window === "undefined") {
@@ -37,8 +41,34 @@
         return window.innerWidth >= 1280;
     }
 
+    function readLibrarySidebarDefault() {
+        if (typeof window === "undefined") {
+            return true;
+        }
+        const saved = window.localStorage.getItem(librarySidebarToggleKey);
+        if (saved === "1") {
+            return true;
+        }
+        if (saved === "0") {
+            return false;
+        }
+        return window.innerWidth >= 1280;
+    }
+
+    function readLibrarySidebarTabDefault() {
+        if (typeof window === "undefined") {
+            return "library" as const;
+        }
+        const saved = window.localStorage.getItem(librarySidebarTabKey);
+        return saved === "settings" ? "settings" : "library";
+    }
+
     let uiShellRightSidebarOpen = $state(readRightSidebarDefault());
     let uiShellRightSidebarVisible = $state(readRightSidebarDefault());
+    let librarySidebarOpen = $state(readLibrarySidebarDefault());
+    librarySidebarTab = readLibrarySidebarTabDefault();
+    let libraryViewMode = $state<"grid" | "list">("grid");
+    let libraryShellActions = $state<{ selectFiles: () => Promise<void> } | null>(null);
     let shellSearch = $state("");
     let characterDirectoryShowTrash = $state(false);
 
@@ -92,9 +122,12 @@
 
     const resolvedAppRoute = $derived.by((): AppRoute => {
         const workspace = resolveWorkspace();
-        const inspector = workspace === "chats" && uiShellRightSidebarOpen && uiShellRightSidebarVisible
-            ? (uiShellRightSidebarTab === "character" ? "character" : "chat")
-            : "none";
+        let inspector: AppRoute["inspector"] = "none";
+        if (workspace === "chats" && uiShellRightSidebarOpen && uiShellRightSidebarVisible) {
+            inspector = uiShellRightSidebarTab === "character" ? "character" : "chat";
+        } else if (workspace === "library" && librarySidebarOpen) {
+            inspector = "details";
+        }
         return {
             workspace,
             selectedCharacterId: resolveSelectedCharacterId(),
@@ -144,6 +177,13 @@
     }
 
     function toggleRightSidebar() {
+        if (resolvedAppRoute.workspace === "library") {
+            librarySidebarOpen = !librarySidebarOpen;
+            if (typeof window !== "undefined") {
+                window.localStorage.setItem(librarySidebarToggleKey, librarySidebarOpen ? "1" : "0");
+            }
+            return;
+        }
         uiShellRightSidebarOpen = !uiShellRightSidebarOpen;
         if (typeof window !== "undefined") {
             window.localStorage.setItem(rightSidebarToggleKey, uiShellRightSidebarOpen ? "1" : "0");
@@ -177,11 +217,29 @@
     }
 
     const showRightSidebarToggle = $derived.by(() => {
-        return resolvedAppRoute.workspace === "chats";
+        return resolvedAppRoute.workspace === "chats" || resolvedAppRoute.workspace === "library";
     });
 
     const showCharacterDirectoryControls = $derived.by(() => {
         return resolvedAppRoute.workspace === "characters";
+    });
+
+    const showLibraryControls = $derived.by(() => {
+        return resolvedAppRoute.workspace === "library";
+    });
+
+    const rightSidebarOpenForWorkspace = $derived.by(() => {
+        if (resolvedAppRoute.workspace === "library") {
+            return librarySidebarOpen;
+        }
+        return uiShellRightSidebarOpen;
+    });
+
+    const rightSidebarPanelId = $derived.by(() => {
+        if (resolvedAppRoute.workspace === "library") {
+            return libraryRightSidebarPanelId;
+        }
+        return chatRightSidebarPanelId;
     });
 
     let lastWorkspace = $state<AppRoute["workspace"]>(resolveWorkspace());
@@ -235,10 +293,17 @@
             return;
         }
 
-        if (showRightSidebarToggle && uiShellRightSidebarOpen) {
-            uiShellRightSidebarOpen = false;
-            if (typeof window !== "undefined") {
-                window.localStorage.setItem(rightSidebarToggleKey, "0");
+        if (showRightSidebarToggle && rightSidebarOpenForWorkspace) {
+            if (resolvedAppRoute.workspace === "library") {
+                librarySidebarOpen = false;
+                if (typeof window !== "undefined") {
+                    window.localStorage.setItem(librarySidebarToggleKey, "0");
+                }
+            } else {
+                uiShellRightSidebarOpen = false;
+                if (typeof window !== "undefined") {
+                    window.localStorage.setItem(rightSidebarToggleKey, "0");
+                }
             }
             event.preventDefault();
             return;
@@ -270,10 +335,21 @@
         showShellSearch={showShellSearch}
         bind:shellSearchQuery={shellSearch}
         showRightSidebarToggle={showRightSidebarToggle}
-        rightSidebarOpen={uiShellRightSidebarOpen}
+        rightSidebarOpen={rightSidebarOpenForWorkspace}
         rightSidebarPanelId={rightSidebarPanelId}
         onToggleRightSidebar={toggleRightSidebar}
         showCharacterDirectoryControls={showCharacterDirectoryControls}
+        showLibraryControls={showLibraryControls}
+        libraryViewMode={libraryViewMode}
+        onSetLibraryViewModeGrid={() => {
+            libraryViewMode = "grid";
+        }}
+        onSetLibraryViewModeList={() => {
+            libraryViewMode = "list";
+        }}
+        onAddLibraryDocuments={() => {
+            void libraryShellActions?.selectFiles();
+        }}
         characterDirectoryShowTrash={characterDirectoryShowTrash}
         onShowActiveCharacters={showActiveCharacters}
         onShowTrashCharacters={showTrashCharacters}
@@ -288,6 +364,18 @@
         bind:rightSidebarOpen={uiShellRightSidebarOpen}
         bind:rightSidebarTab={uiShellRightSidebarTab}
         bind:rightSidebarVisible={uiShellRightSidebarVisible}
+        bind:librarySidebarOpen={librarySidebarOpen}
+        bind:librarySidebarTab={librarySidebarTab}
+        bind:libraryViewMode={libraryViewMode}
+        onLibrarySidebarTabChange={(nextTab) => {
+            librarySidebarTab = nextTab;
+            if (typeof window !== "undefined") {
+                window.localStorage.setItem(librarySidebarTabKey, nextTab);
+            }
+        }}
+        onRegisterLibraryShellActions={(actions) => {
+            libraryShellActions = actions;
+        }}
         onOpenHome={openHomeFromTopbar}
     />
 </div>

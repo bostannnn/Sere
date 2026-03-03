@@ -13,6 +13,11 @@
         rightSidebarOpen?: boolean;
         rightSidebarTab?: "chat" | "character";
         rightSidebarVisible?: boolean;
+        librarySidebarOpen?: boolean;
+        librarySidebarTab?: "library" | "settings";
+        libraryViewMode?: "grid" | "list";
+        onLibrarySidebarTabChange?: (tab: "library" | "settings") => void;
+        onRegisterLibraryShellActions?: (actions: { selectFiles: () => Promise<void> } | null) => void;
         onOpenHome?: () => void;
     }
 
@@ -23,8 +28,24 @@
         rightSidebarOpen = $bindable(true),
         rightSidebarTab = $bindable("chat"),
         rightSidebarVisible = $bindable(false),
+        librarySidebarOpen = $bindable(true),
+        librarySidebarTab = $bindable("library"),
+        libraryViewMode = $bindable("grid"),
+        onLibrarySidebarTabChange = () => {},
+        onRegisterLibraryShellActions = () => {},
         onOpenHome = () => {},
     }: Props = $props();
+
+    let hasMountedLibraryWorkspace = $state(false);
+    const shouldRenderLibraryWorkspace = $derived.by(() => {
+        return workspace === "library" || hasMountedLibraryWorkspace;
+    });
+
+    $effect(() => {
+        if (workspace === "library") {
+            hasMountedLibraryWorkspace = true;
+        }
+    });
 </script>
 
 <div class="ds-app-v2-stage">
@@ -36,11 +57,7 @@
         <div class="ds-app-v2-stage-view ds-app-v2-stage-view-content">
             <Settings />
         </div>
-    {:else if workspace === "library"}
-        <div class="ds-app-v2-stage-view ds-app-v2-stage-view-content">
-            <RulebookLibrary bind:shellSearchQuery={shellSearchQuery} onClose={onOpenHome} />
-        </div>
-    {:else}
+    {:else if workspace !== "library"}
         <div class="ds-app-v2-stage-view">
             {#key workspace}
                 <ChatScreen
@@ -49,6 +66,24 @@
                     bind:rightSidebarVisible={rightSidebarVisible}
                 />
             {/key}
+        </div>
+    {/if}
+
+    {#if shouldRenderLibraryWorkspace}
+        <div
+            class="ds-app-v2-stage-view ds-app-v2-stage-view-content"
+            class:ds-app-v2-stage-view-hidden={workspace !== "library"}
+        >
+            <RulebookLibrary
+                bind:shellSearchQuery={shellSearchQuery}
+                bind:rightSidebarOpen={librarySidebarOpen}
+                bind:rightSidebarTab={librarySidebarTab}
+                bind:viewMode={libraryViewMode}
+                useShellChrome={true}
+                registerShellActions={onRegisterLibraryShellActions}
+                onRightSidebarTabChange={onLibrarySidebarTabChange}
+                onClose={onOpenHome}
+            />
         </div>
     {/if}
 </div>
@@ -75,6 +110,10 @@
         min-width: 0;
         min-height: 0;
         overflow: hidden;
+    }
+
+    .ds-app-v2-stage-view-hidden {
+        display: none;
     }
 
     .ds-app-v2-stage-view :global(.rag-dashboard) {

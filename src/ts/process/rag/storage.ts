@@ -23,7 +23,12 @@ export class RulebookStorage {
         return res.data;
     }
     ragStorageLog("[RAG] Failed to list rulebooks from server:", res.data);
-    return [];
+    const message = typeof res.data === "string"
+      ? res.data
+      : (res.data && typeof res.data === "object" && "message" in res.data && typeof (res.data as { message?: unknown }).message === "string")
+        ? (res.data as { message: string }).message
+        : "Failed to fetch rulebooks.";
+    throw new Error(message);
   }
 
   public async updateRulebookMetadata(id: string, name?: string, metadata?: import("./types").RagIndexMetadata, priority?: number): Promise<{ id: string; name: string; chunkCount?: number; thumbnail?: string; metadata?: import("./types").RagIndexMetadata; priority?: number } | null> {

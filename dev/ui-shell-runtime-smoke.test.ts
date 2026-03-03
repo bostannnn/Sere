@@ -236,6 +236,8 @@ describe("ui shell runtime smoke", () => {
       },
     ];
     window.localStorage.setItem("risu:desktop-char-config-open", "1");
+    window.localStorage.setItem("risu:desktop-library-sidebar-open", "1");
+    window.localStorage.setItem("risu:desktop-library-sidebar-tab", "library");
     window.localStorage.removeItem("risu:desktop-right-panel-tab");
 
     document.body.innerHTML = "";
@@ -515,7 +517,7 @@ describe("ui shell runtime smoke", () => {
     expect(get(appRouteStore).inspector).toBe("chat");
   });
 
-  it("shows right-sidebar toggle only in chats and preserves state across workspace switches", async () => {
+  it("shows workspace sidebar toggle in chats and library and preserves workspace-specific state", async () => {
     settingsOpen.set(false);
     openRulebookManager.set(false);
     selectedCharID.set(-1);
@@ -534,6 +536,22 @@ describe("ui shell runtime smoke", () => {
     expect((document.querySelector('[data-testid="app-chat-screen-stub"]') as HTMLElement | null)?.dataset.rightSidebarOpen).toBe("0");
 
     selectedCharID.set(-1);
+    openRulebookManager.set(true);
+    await flushUi();
+    const librarySidebarBtn = document.getElementById("workspaceSidebarBtn") as HTMLButtonElement | null;
+    expect(librarySidebarBtn).not.toBeNull();
+    expect(librarySidebarBtn?.dataset.pressed).toBe("1");
+    expect(librarySidebarBtn?.getAttribute("aria-controls")).toBe("rulebook-right-sidebar-drawer");
+    expect((document.querySelector('[data-testid="app-rulebook-stub"]') as HTMLElement | null)?.dataset.rightSidebarOpen).toBe("1");
+
+    librarySidebarBtn!.click();
+    await flushUi();
+    expect((document.getElementById("workspaceSidebarBtn") as HTMLButtonElement | null)?.dataset.pressed).toBe("0");
+    expect((document.querySelector('[data-testid="app-rulebook-stub"]') as HTMLElement | null)?.dataset.rightSidebarOpen).toBe("0");
+    expect(window.localStorage.getItem("risu:desktop-library-sidebar-open")).toBe("0");
+
+    selectedCharID.set(-1);
+    openRulebookManager.set(false);
     await flushUi();
     expect(document.getElementById("workspaceSidebarBtn")).toBeNull();
 
@@ -548,10 +566,17 @@ describe("ui shell runtime smoke", () => {
     expect(document.getElementById("workspaceSidebarBtn")).toBeNull();
 
     settingsOpen.set(false);
-    selectedCharID.set(0);
+    openRulebookManager.set(true);
+    selectedCharID.set(-1);
     await flushUi();
     expect((document.getElementById("workspaceSidebarBtn") as HTMLButtonElement | null)?.dataset.pressed).toBe("0");
-    expect((document.querySelector('[data-testid="app-chat-screen-stub"]') as HTMLElement | null)?.dataset.rightSidebarOpen).toBe("0");
+    expect((document.querySelector('[data-testid="app-rulebook-stub"]') as HTMLElement | null)?.dataset.rightSidebarOpen).toBe("0");
+
+    settingsOpen.set(true);
+    openRulebookManager.set(false);
+    selectedCharID.set(0);
+    await flushUi();
+    expect(document.getElementById("workspaceSidebarBtn")).toBeNull();
   });
 
   it("routes workspaces from topbar navigation buttons", async () => {
@@ -653,6 +678,47 @@ describe("ui shell runtime smoke", () => {
     const libraryStub = document.querySelector('[data-testid="app-rulebook-stub"]') as HTMLElement | null;
     expect(libraryStub).not.toBeNull();
     expect(libraryStub?.dataset.shellSearch).toBe("vampire");
+  });
+
+  it("renders library topbar controls and wires them to shell state/actions", async () => {
+    settingsOpen.set(false);
+    selectedCharID.set(-1);
+    openRulebookManager.set(true);
+    await flushUi();
+
+    const gridBtn = document.querySelector('[data-testid="topbar-library-view-grid"]') as HTMLButtonElement | null;
+    const listBtn = document.querySelector('[data-testid="topbar-library-view-list"]') as HTMLButtonElement | null;
+    const addDocsBtn = document.querySelector('[data-testid="topbar-library-add-documents"]') as HTMLButtonElement | null;
+    const sidebarBtn = document.getElementById("workspaceSidebarBtn") as HTMLButtonElement | null;
+    const libraryStub = document.querySelector('[data-testid="app-rulebook-stub"]') as HTMLElement | null;
+
+    expect(gridBtn).not.toBeNull();
+    expect(listBtn).not.toBeNull();
+    expect(addDocsBtn).not.toBeNull();
+    expect(sidebarBtn).not.toBeNull();
+    expect(sidebarBtn?.getAttribute("aria-controls")).toBe("rulebook-right-sidebar-drawer");
+    expect(libraryStub).not.toBeNull();
+    expect(libraryStub?.dataset.viewMode).toBe("grid");
+    expect(libraryStub?.dataset.rightSidebarOpen).toBe("1");
+    expect(get(appRouteStore).inspector).toBe("details");
+
+    listBtn!.click();
+    await flushUi();
+    expect((document.querySelector('[data-testid="app-rulebook-stub"]') as HTMLElement | null)?.dataset.viewMode).toBe("list");
+
+    gridBtn!.click();
+    await flushUi();
+    expect((document.querySelector('[data-testid="app-rulebook-stub"]') as HTMLElement | null)?.dataset.viewMode).toBe("grid");
+
+    addDocsBtn!.click();
+    await flushUi();
+    expect((document.querySelector('[data-testid="app-rulebook-stub"]') as HTMLElement | null)?.dataset.selectFilesCalls).toBe("1");
+
+    sidebarBtn!.click();
+    await flushUi();
+    expect((document.getElementById("workspaceSidebarBtn") as HTMLButtonElement | null)?.dataset.pressed).toBe("0");
+    expect((document.querySelector('[data-testid="app-rulebook-stub"]') as HTMLElement | null)?.dataset.rightSidebarOpen).toBe("0");
+    expect(get(appRouteStore).inspector).toBe("none");
   });
 
   it("closes active overlays and topbar overflow on Escape", async () => {
