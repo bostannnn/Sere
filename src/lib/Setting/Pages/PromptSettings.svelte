@@ -28,6 +28,7 @@
     let extokens = $state(0)
     let draggedIndex = $state(-1)
     let dragOverIndex = $state(-1)
+    // eslint-disable-next-line svelte/no-unnecessary-state-wrap
     let openedItemIndices = $state(new SvelteSet<number>())
     executeTokenize(DBState.db.promptTemplate)
   interface Props {

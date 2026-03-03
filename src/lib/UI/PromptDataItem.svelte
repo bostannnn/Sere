@@ -193,24 +193,20 @@
             dragOverIndex = -1
         }}
         onclick={() => {
-            const newIndices = new SvelteSet(openedItemIndices)
             if (isOpened) {
-                newIndices.delete(currentIndex)
+                openedItemIndices.delete(currentIndex)
             } else {
-                newIndices.add(currentIndex)
+                openedItemIndices.add(currentIndex)
             }
-            openedItemIndices = newIndices
         }}
         onkeydown={(e) => {
             if (e.key === 'Enter' || e.key === ' ') {
                 e.preventDefault()
-                const newIndices = new SvelteSet(openedItemIndices)
                 if (isOpened) {
-                    newIndices.delete(currentIndex)
+                    openedItemIndices.delete(currentIndex)
                 } else {
-                    newIndices.add(currentIndex)
+                    openedItemIndices.add(currentIndex)
                 }
-                openedItemIndices = newIndices
             }
         }}
         aria-expanded={isOpened}
