@@ -3,6 +3,8 @@
         BookIcon,
         EllipsisIcon,
         HomeIcon,
+        LayoutGridIcon,
+        ListIcon,
         PanelRightIcon,
         PlusIcon,
         SettingsIcon,
@@ -29,6 +31,11 @@
         rightSidebarPanelId?: string;
         onToggleRightSidebar?: () => void;
         showCharacterDirectoryControls?: boolean;
+        showLibraryControls?: boolean;
+        libraryViewMode?: "grid" | "list";
+        onSetLibraryViewModeGrid?: () => void;
+        onSetLibraryViewModeList?: () => void;
+        onAddLibraryDocuments?: () => void;
         characterDirectoryShowTrash?: boolean;
         onShowActiveCharacters?: () => void;
         onShowTrashCharacters?: () => void;
@@ -50,6 +57,11 @@
         rightSidebarPanelId = "chat-right-sidebar-drawer",
         onToggleRightSidebar = () => {},
         showCharacterDirectoryControls = false,
+        showLibraryControls = false,
+        libraryViewMode = "grid",
+        onSetLibraryViewModeGrid = () => {},
+        onSetLibraryViewModeList = () => {},
+        onAddLibraryDocuments = () => {},
         characterDirectoryShowTrash = false,
         onShowActiveCharacters = () => {},
         onShowTrashCharacters = () => {},
@@ -217,7 +229,65 @@
     </div>
 
     <div class="ds-app-v2-topbar-right">
-        {#if showRightSidebarToggle}
+        {#if showLibraryControls}
+            <div class="ds-app-v2-topbar-segment ds-app-v2-topbar-library-segment seg-tabs" role="tablist" aria-label="Rulebook view mode">
+                <button
+                    type="button"
+                    class="ds-app-v2-topbar-segment-btn seg-tab"
+                    class:ds-app-v2-topbar-segment-btn-active={libraryViewMode === "grid"}
+                    class:active={libraryViewMode === "grid"}
+                    role="tab"
+                    aria-selected={libraryViewMode === "grid"}
+                    aria-label="Grid view"
+                    title="Grid view"
+                    tabindex={libraryViewMode === "grid" ? 0 : -1}
+                    onclick={onSetLibraryViewModeGrid}
+                    data-testid="topbar-library-view-grid"
+                >
+                    <LayoutGridIcon size={14} />
+                </button>
+                <button
+                    type="button"
+                    class="ds-app-v2-topbar-segment-btn seg-tab"
+                    class:ds-app-v2-topbar-segment-btn-active={libraryViewMode === "list"}
+                    class:active={libraryViewMode === "list"}
+                    role="tab"
+                    aria-selected={libraryViewMode === "list"}
+                    aria-label="List view"
+                    title="List view"
+                    tabindex={libraryViewMode === "list" ? 0 : -1}
+                    onclick={onSetLibraryViewModeList}
+                    data-testid="topbar-library-view-list"
+                >
+                    <ListIcon size={14} />
+                </button>
+            </div>
+            <button
+                type="button"
+                class="ds-app-v2-topbar-btn ds-app-v2-topbar-add-btn"
+                onclick={onAddLibraryDocuments}
+                data-testid="topbar-library-add-documents"
+                title="Add documents"
+                aria-label="Add documents"
+            >
+                <PlusIcon size={14} />
+                <span>Add</span>
+            </button>
+            {#if showRightSidebarToggle}
+                <button
+                    type="button"
+                    id="workspaceSidebarBtn"
+                    class="ds-app-v2-topbar-btn ds-app-v2-topbar-icon-btn icon-btn icon-btn--md icon-btn--bordered"
+                    aria-label={rightSidebarOpen ? "Hide workspace sidebar" : "Show workspace sidebar"}
+                    title={rightSidebarOpen ? "Hide workspace sidebar" : "Show workspace sidebar"}
+                    aria-pressed={rightSidebarOpen}
+                    aria-expanded={showRightSidebarToggle ? rightSidebarOpen : undefined}
+                    aria-controls={showRightSidebarToggle ? rightSidebarPanelId : undefined}
+                    onclick={onToggleRightSidebar}
+                    data-pressed={rightSidebarOpen ? "1" : "0"}
+                ><PanelRightIcon size={18} /></button>
+            {/if}
+        {:else if showRightSidebarToggle}
             <button
                 type="button"
                 id="workspaceSidebarBtn"
@@ -433,6 +503,14 @@
         color: var(--ds-text-secondary);
         font-size: var(--ds-font-size-sm);
         padding-inline: 0.625rem;
+    }
+
+    .ds-app-v2-topbar-library-segment .ds-app-v2-topbar-segment-btn {
+        min-width: 2.25rem;
+        padding-inline: 0.5rem;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
     }
 
     .ds-app-v2-topbar-segment-btn-active {

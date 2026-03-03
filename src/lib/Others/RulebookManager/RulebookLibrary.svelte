@@ -1,19 +1,17 @@
 <script lang="ts">
     import { DBState, openRulebookManager, ragProgressStore } from 'src/ts/stores.svelte';
-    import { Trash2Icon, UploadIcon, BookIcon, XIcon, SearchIcon, PlayIcon, InfoIcon, LayoutGridIcon, ListIcon, ChevronRightIcon, PencilIcon, StarIcon, MoreVerticalIcon } from "@lucide/svelte";
+    import { Trash2Icon, UploadIcon, BookIcon, XIcon, SearchIcon, PlayIcon, InfoIcon, LayoutGridIcon, ListIcon, PencilIcon, StarIcon, MoreVerticalIcon } from "@lucide/svelte";
     import { rulebookRag } from "../../../ts/process/rag/rag";
     import { rulebookStorage } from "../../../ts/process/rag/storage";
     import { selectMultipleFile } from "src/ts/util";
     import { alertStore } from "src/ts/alert";
     import { fade, slide } from "svelte/transition";
     import { SvelteMap, SvelteSet } from "svelte/reactivity";
-    import NumberInput from "../../UI/GUI/NumberInput.svelte";
     import TextInput from "../../UI/GUI/TextInput.svelte";
-    import EmbeddingModelSelect from '../../UI/GUI/EmbeddingModelSelect.svelte';
     import Button from '../../UI/GUI/Button.svelte';
     import IconButton from '../../UI/GUI/IconButton.svelte';
     import { createCardTiltController } from "../../UI/cardTilt";
-    import type { HypaModel } from 'src/ts/process/memory/hypamemory';
+    import RulebookLibrarySidebar from "./RulebookLibrarySidebar.svelte";
     const rulebookLibraryLog = (..._args: unknown[]) => {};
 
     interface PendingFile {
@@ -34,12 +32,28 @@
     interface Props {
         shellSearchQuery?: string;
         onClose?: () => void;
+        useShellChrome?: boolean;
+        rightSidebarOpen?: boolean;
+        rightSidebarTab?: "library" | "settings";
+        viewMode?: "grid" | "list";
+        onRightSidebarTabChange?: (tab: "library" | "settings") => void;
+        registerShellActions?: (actions: { selectFiles: () => Promise<void> } | null) => void;
     }
 
-    let { shellSearchQuery = $bindable(""), onClose = () => openRulebookManager.set(false) }: Props = $props();
+    let {
+        shellSearchQuery = $bindable(""),
+        onClose = () => openRulebookManager.set(false),
+        useShellChrome = false,
+        rightSidebarOpen = $bindable(true),
+        rightSidebarTab = $bindable("library"),
+        viewMode = $bindable("grid"),
+        onRightSidebarTabChange = () => {},
+        registerShellActions = () => {},
+    }: Props = $props();
 
     let pendingFiles = $state<PendingFile[]>([]);
-    let viewMode = $state<'grid' | 'list'>('grid');
+    let hasLoadedLibrary = $state(false);
+    let loadErrorMessage = $state("");
     let selectedSystemFilter = $state('All');
     let selectedEditionFilter = $state('All');
     let expandedSystems = $state<Set<string>>(new Set());
@@ -48,13 +62,18 @@
     let rulebooks = $state<LibraryRulebook[]>([]);
 
     async function refreshLibrary() {
+        loadErrorMessage = "";
         try {
             const res = await rulebookStorage.listRulebooks();
             rulebookLibraryLog("[RAG] Library Refresh Result:", res);
             rulebooks = res;
         } catch (e) {
             rulebookLibraryLog("Failed to fetch rulebooks:", e);
-            alertStore.set({ type: 'error', msg: `Failed to fetch rulebooks: ${e.message}` });
+            const message = e instanceof Error ? e.message : String(e);
+            loadErrorMessage = message;
+            alertStore.set({ type: 'error', msg: `Failed to fetch rulebooks: ${message}` });
+        } finally {
+            hasLoadedLibrary = true;
         }
     }
 
@@ -67,9 +86,14 @@
     );
 
     onMount(() => {
+        if (useShellChrome) {
+            registerShellActions({ selectFiles });
+        }
         void refreshLibrary();
         if (typeof window === "undefined") {
-            return;
+            return () => {
+                registerShellActions(null);
+            };
         }
         document.addEventListener("pointerdown", handleDocumentPointerDown);
         document.addEventListener("keydown", handleDocumentKeydown);
@@ -79,6 +103,7 @@
         };
         motionMq.addEventListener("change", handleMotionChange);
         return () => {
+            registerShellActions(null);
             document.removeEventListener("pointerdown", handleDocumentPointerDown);
             document.removeEventListener("keydown", handleDocumentKeydown);
             motionMq.removeEventListener("change", handleMotionChange);
@@ -307,149 +332,94 @@
     function close() {
         onClose();
     }
+
+    function selectSidebarTab(tab: "library" | "settings") {
+        rightSidebarTab = tab;
+        onRightSidebarTabChange(tab);
+    }
 </script>
 
-<div class="rag-dashboard">
-    <!-- Dashboard Header -->
-    <header class="rag-dashboard-header">
-        <div class="rag-header-left">
-            <BookIcon size={24} />
-            <h1>Rulebook Library</h1>
-        </div>
-        <div class="rag-header-center">
-            <div class="rag-search-wrapper">
-                <SearchIcon size={18} class="rag-search-icon" />
-                <input class="control-field" type="text" bind:value={shellSearchQuery} placeholder="Search by name, system, or edition..." />
+<div class="rag-dashboard" class:rag-dashboard-shell={useShellChrome}>
+    {#if !useShellChrome}
+        <!-- Dashboard Header -->
+        <header class="rag-dashboard-header">
+            <div class="rag-header-left">
+                <BookIcon size={24} />
+                <h1>Rulebook Library</h1>
             </div>
-        </div>
-        <div class="rag-header-right">
-            <IconButton onclick={close} title="Close rulebook library" ariaLabel="Close rulebook library" id="rulebook-library-close">
-                <XIcon size={24} />
-            </IconButton>
-        </div>
-    </header>
+            <div class="rag-header-center">
+                <div class="rag-search-wrapper">
+                    <SearchIcon size={18} class="rag-search-icon" />
+                    <input class="control-field" type="text" bind:value={shellSearchQuery} placeholder="Search by name, system, or edition..." />
+                </div>
+            </div>
+            <div class="rag-header-right">
+                <IconButton onclick={close} title="Close rulebook library" ariaLabel="Close rulebook library" id="rulebook-library-close">
+                    <XIcon size={24} />
+                </IconButton>
+            </div>
+        </header>
+    {/if}
 
-    <div class="rag-dashboard-body">
-        <!-- Sidebar -->
-        <aside class="rag-sidebar panel-shell panel-shell--raised">
-            <section class="rag-sidebar-section">
-                <h3 class="rag-sidebar-title">Library</h3>
-                <div class="rag-system-list list-shell" data-testid="rulebook-library-system-list">
-                    <button 
-                        class="rag-system-item" 
-                        class:is-active={selectedSystemFilter === 'All'}
-                        onclick={clearFilters}
-                    >
-                        <LayoutGridIcon size={14} />
-                        <span>All Documents</span>
-                    </button>
+    <div class="rag-dashboard-body" class:rag-dashboard-body-shell={useShellChrome}>
+        {#if !useShellChrome}
+            <aside class="rag-sidebar panel-shell panel-shell--raised">
+                <RulebookLibrarySidebar
+                    section="library"
+                    mode="legacy"
+                    systemTree={systemTree()}
+                    expandedSystems={expandedSystems}
+                    selectedSystemFilter={selectedSystemFilter}
+                    selectedEditionFilter={selectedEditionFilter}
+                    rulebookCount={rulebooks.length}
+                    onToggleSystem={toggleSystem}
+                    onSelectSystem={selectSystem}
+                    onSelectEdition={selectEdition}
+                    onClearFilters={clearFilters}
+                />
 
-                    <div class="rag-sidebar-separator"></div>
-                    
-                    {#each systemTree() as [system, editions] (system)}
-                        <div class="rag-tree-node">
-                            <div class="rag-system-row" class:is-active={selectedSystemFilter === system && selectedEditionFilter === 'All'}>
-                                <button
-                                    class="rag-tree-toggle icon-btn icon-btn--sm"
-                                    onclick={() => toggleSystem(system)}
-                                    title={expandedSystems.has(system) ? `Collapse ${system}` : `Expand ${system}`}
-                                    aria-label={expandedSystems.has(system) ? `Collapse ${system} editions` : `Expand ${system} editions`}
-                                    aria-expanded={expandedSystems.has(system)}
-                                    type="button"
-                                >
-                                    <span class="rag-tree-icon-wrap" style:transform={expandedSystems.has(system) ? 'rotate(90deg)' : ''}>
-                                        <ChevronRightIcon size={14} />
-                                    </span>
-                                </button>
-                                <button class="rag-system-name" onclick={() => selectSystem(system)}>
-                                    <span>{system}</span>
-                                </button>
-                            </div>
+                <div class="ds-settings-divider"></div>
 
-                            {#if expandedSystems.has(system)}
-                                <div class="rag-edition-list" transition:slide={{ duration: 150 }}>
-                                    {#each Array.from(editions).sort() as edition (edition)}
-                                        <button 
-                                            class="rag-edition-item" 
-                                            class:is-active={selectedSystemFilter === system && selectedEditionFilter === edition}
-                                            onclick={() => selectEdition(system, edition)}
-                                        >
-                                            <span>{edition}</span>
-                                        </button>
-                                    {/each}
-                                </div>
-                            {/if}
+                <RulebookLibrarySidebar section="settings" mode="legacy" />
+            </aside>
+        {/if}
+
+        <main class="rag-main-content panel-shell" class:rag-main-content-shell={useShellChrome}>
+            {#if !useShellChrome}
+                <div class="rag-toolbar">
+                    <div class="rag-toolbar-left">
+                        <span class="rag-toolbar-info">Showing {filteredRulebooks.length} rulebooks</span>
+                    </div>
+                    <div class="rag-toolbar-right action-rail" data-testid="rulebook-library-toolbar-actions">
+                        <div class="rag-view-toggle seg-tabs" data-testid="rulebook-library-view-toggle">
+                            <IconButton
+                                onclick={() => viewMode = 'grid'}
+                                className={`rag-view-toggle-btn seg-tab ${viewMode === 'grid' ? 'active' : ''}`}
+                                title="Grid view"
+                                ariaLabel="Grid view"
+                                ariaPressed={viewMode === 'grid'}
+                            >
+                                <LayoutGridIcon size={18} />
+                            </IconButton>
+                            <IconButton
+                                onclick={() => viewMode = 'list'}
+                                className={`rag-view-toggle-btn seg-tab ${viewMode === 'list' ? 'active' : ''}`}
+                                title="List view"
+                                ariaLabel="List view"
+                                ariaPressed={viewMode === 'list'}
+                            >
+                                <ListIcon size={18} />
+                            </IconButton>
                         </div>
-                    {/each}
-                </div>
-            </section>
-
-            <div class="ds-settings-divider"></div>
-
-            <section class="rag-sidebar-section">
-                <h3 class="rag-sidebar-title">RAG Defaults</h3>
-                <div class="rag-sidebar-config">
-                    <div class="rag-setting-field">
-                        <span class="rag-label">Embedding Model</span>
-                        <EmbeddingModelSelect bind:value={DBState.db.globalRagSettings.model as HypaModel} />
-                    </div>
-                    <div class="rag-setting-field">
-                        <span class="rag-label">Top K Chunks</span>
-                        <NumberInput size="sm" min={1} max={10} bind:value={DBState.db.globalRagSettings.topK as number} />
-                    </div>
-                    <div class="rag-setting-field">
-                        <span class="rag-label">Min Similarity</span>
-                        <NumberInput size="sm" min={0} max={1} bind:value={DBState.db.globalRagSettings.minScore as number} />
-                    </div>
-                    <div class="rag-setting-field">
-                        <span class="rag-label">Token Budget</span>
-                        <NumberInput size="sm" min={0} max={4096} bind:value={DBState.db.globalRagSettings.budget as number} />
+                        <Button onclick={selectFiles} styled="primary">
+                            <UploadIcon size={18} />
+                            <span>Add Documents</span>
+                        </Button>
                     </div>
                 </div>
-            </section>
+            {/if}
 
-            <div class="rag-sidebar-footer">
-                <div class="rag-stats">
-                    <span>{rulebooks.length} Books</span>
-                </div>
-            </div>
-        </aside>
-
-        <!-- Main Content -->
-        <main class="rag-main-content panel-shell">
-            <div class="rag-toolbar">
-                <div class="rag-toolbar-left">
-                    <span class="rag-toolbar-info">Showing {filteredRulebooks.length} rulebooks</span>
-                </div>
-                <div class="rag-toolbar-right action-rail" data-testid="rulebook-library-toolbar-actions">
-                    <div class="rag-view-toggle seg-tabs" data-testid="rulebook-library-view-toggle">
-                        <IconButton
-                            onclick={() => viewMode = 'grid'}
-                            className={`rag-view-toggle-btn seg-tab ${viewMode === 'grid' ? 'active' : ''}`}
-                            title="Grid view"
-                            ariaLabel="Grid view"
-                            ariaPressed={viewMode === 'grid'}
-                        >
-                            <LayoutGridIcon size={18} />
-                        </IconButton>
-                        <IconButton
-                            onclick={() => viewMode = 'list'}
-                            className={`rag-view-toggle-btn seg-tab ${viewMode === 'list' ? 'active' : ''}`}
-                            title="List view"
-                            ariaLabel="List view"
-                            ariaPressed={viewMode === 'list'}
-                        >
-                            <ListIcon size={18} />
-                        </IconButton>
-                    </div>
-                    <Button onclick={selectFiles} styled="primary">
-                        <UploadIcon size={18} />
-                        <span>Add Documents</span>
-                    </Button>
-                </div>
-            </div>
-
-            <div class="rag-content-area list-shell" class:is-grid={viewMode === 'grid'} class:is-list={viewMode === 'list'}>
+            <div class="rag-content-area list-shell" class:rag-content-area-shell={useShellChrome} class:is-grid={viewMode === 'grid'} class:is-list={viewMode === 'list'}>
                 {#each filteredRulebooks as book (book.id)}
                     <div
                         class="ds-settings-card panel-shell rag-book-card"
@@ -582,7 +552,19 @@
                     </div>
                 {/each}
 
-                {#if filteredRulebooks.length === 0}
+                {#if !hasLoadedLibrary}
+                    <div class="rag-empty-state panel-shell empty-state" data-testid="rulebook-library-loading-state">
+                        <div class="ds-chat-spinner-sm"></div>
+                        <p>Loading library...</p>
+                    </div>
+                {:else if loadErrorMessage && rulebooks.length === 0}
+                    <div class="rag-empty-state panel-shell empty-state" data-testid="rulebook-library-error-state">
+                        <InfoIcon size={42} />
+                        <p>Could not load your library.</p>
+                        <p class="rag-empty-state-detail">{loadErrorMessage}</p>
+                        <Button onclick={() => void refreshLibrary()}>Retry</Button>
+                    </div>
+                {:else if filteredRulebooks.length === 0}
                     <div class="rag-empty-state panel-shell empty-state" data-testid="rulebook-library-empty-state">
                         <BookIcon size={64} />
                         <p>{shellSearchQuery ? 'No rulebooks match your search.' : 'Your library is empty.'}</p>
@@ -594,6 +576,87 @@
             </div>
         </main>
     </div>
+
+    {#if useShellChrome && rightSidebarOpen}
+        <div
+            id="rulebook-right-sidebar-drawer"
+            class="rag-right-drawer drawer-elevation--right"
+            data-testid="rulebook-right-sidebar-drawer"
+        >
+            <aside class="ds-chat-right-pane" data-testid="rulebook-sidebar-host">
+                <div class="ds-chat-right-panel-tabs seg-tabs" role="tablist" aria-label="Rulebook sidebar sections">
+                    <button
+                        type="button"
+                        class="ds-chat-right-panel-tab seg-tab"
+                        role="tab"
+                        id="rulebook-sidebar-tab-library"
+                        aria-selected={rightSidebarTab === "library"}
+                        aria-controls="rulebook-sidebar-panel-library"
+                        tabindex={rightSidebarTab === "library" ? 0 : -1}
+                        class:ds-chat-right-panel-tab-active={rightSidebarTab === "library"}
+                        class:active={rightSidebarTab === "library"}
+                        class:is-active={rightSidebarTab === "library"}
+                        onclick={() => selectSidebarTab("library")}
+                        data-testid="rulebook-sidebar-tab-library"
+                    >
+                        Library
+                    </button>
+                    <button
+                        type="button"
+                        class="ds-chat-right-panel-tab seg-tab"
+                        role="tab"
+                        id="rulebook-sidebar-tab-settings"
+                        aria-selected={rightSidebarTab === "settings"}
+                        aria-controls="rulebook-sidebar-panel-settings"
+                        tabindex={rightSidebarTab === "settings" ? 0 : -1}
+                        class:ds-chat-right-panel-tab-active={rightSidebarTab === "settings"}
+                        class:active={rightSidebarTab === "settings"}
+                        class:is-active={rightSidebarTab === "settings"}
+                        onclick={() => selectSidebarTab("settings")}
+                        data-testid="rulebook-sidebar-tab-settings"
+                    >
+                        Settings
+                    </button>
+                </div>
+
+                <div class="ds-chat-right-panel-content">
+                    {#if rightSidebarTab === "library"}
+                        <div
+                            class="ds-chat-right-panel-pane ds-chat-right-panel-pane-character"
+                            role="tabpanel"
+                            id="rulebook-sidebar-panel-library"
+                            aria-labelledby="rulebook-sidebar-tab-library"
+                            data-testid="rulebook-sidebar-pane-library"
+                        >
+                            <RulebookLibrarySidebar
+                                section="library"
+                                mode="drawer"
+                                systemTree={systemTree()}
+                                expandedSystems={expandedSystems}
+                                selectedSystemFilter={selectedSystemFilter}
+                                selectedEditionFilter={selectedEditionFilter}
+                                rulebookCount={rulebooks.length}
+                                onToggleSystem={toggleSystem}
+                                onSelectSystem={selectSystem}
+                                onSelectEdition={selectEdition}
+                                onClearFilters={clearFilters}
+                            />
+                        </div>
+                    {:else}
+                        <div
+                            class="ds-chat-right-panel-pane ds-chat-right-panel-pane-character"
+                            role="tabpanel"
+                            id="rulebook-sidebar-panel-settings"
+                            aria-labelledby="rulebook-sidebar-tab-settings"
+                            data-testid="rulebook-sidebar-pane-settings"
+                        >
+                            <RulebookLibrarySidebar section="settings" mode="drawer" />
+                        </div>
+                    {/if}
+                </div>
+            </aside>
+        </div>
+    {/if}
 
     <!-- Staging Area Drawer -->
     {#if pendingFiles.length > 0}
@@ -692,6 +755,14 @@
         color: var(--ds-text-primary);
     }
 
+    .rag-dashboard-shell {
+        position: relative;
+        inset: auto;
+        z-index: auto;
+        height: 100%;
+        min-height: 0;
+    }
+
     .rag-dashboard-header {
         height: 64px;
         display: flex;
@@ -765,6 +836,11 @@
         overflow: hidden;
     }
 
+    .rag-dashboard-body-shell {
+        height: 100%;
+        min-height: 0;
+    }
+
     .rag-sidebar {
         width: 220px;
         background: var(--ds-surface-2);
@@ -774,191 +850,6 @@
         padding: var(--ds-space-4);
         gap: var(--ds-space-6);
         flex-shrink: 0;
-    }
-
-    .rag-sidebar-section {
-        display: flex;
-        flex-direction: column;
-        gap: var(--ds-space-2);
-    }
-
-    .rag-sidebar-title {
-        font-size: 10px;
-        font-weight: var(--ds-font-weight-bold);
-        text-transform: uppercase;
-        color: var(--ds-text-secondary);
-        letter-spacing: 1px;
-        margin-bottom: var(--ds-space-1);
-    }
-
-    .rag-system-list {
-        display: flex;
-        flex-direction: column;
-        gap: 2px;
-    }
-
-    .rag-system-list.list-shell {
-        padding: 0;
-        border: none;
-        background: transparent;
-        box-shadow: none;
-    }
-
-    .rag-system-item {
-        display: flex;
-        align-items: center;
-        gap: var(--ds-space-2);
-        padding: var(--ds-space-2) var(--ds-space-3);
-        border-radius: var(--ds-radius-sm);
-        background: transparent;
-        border: none;
-        color: var(--ds-text-secondary);
-        cursor: pointer;
-        text-align: left;
-        font-size: var(--ds-font-size-sm);
-        transition: all var(--ds-motion-fast) var(--ds-ease-standard);
-        width: 100%;
-    }
-
-    .rag-system-item:hover {
-        background: var(--ds-surface-active);
-        color: var(--ds-text-primary);
-    }
-
-    .rag-system-item.is-active {
-        background: var(--ds-surface-active);
-        color: var(--ds-text-primary);
-        font-weight: var(--ds-font-weight-medium);
-    }
-
-    .rag-system-item:focus-visible,
-    .rag-tree-toggle:focus-visible,
-    .rag-system-name:focus-visible,
-    .rag-edition-item:focus-visible {
-        outline: 2px solid var(--accent-strong);
-        outline-offset: 1px;
-    }
-
-    .rag-sidebar-separator {
-        height: 1px;
-        background: var(--ds-border-subtle);
-        margin: var(--ds-space-1) 0;
-    }
-
-    .rag-tree-node {
-        display: flex;
-        flex-direction: column;
-    }
-
-    .rag-system-row {
-        display: flex;
-        align-items: center;
-        border-radius: var(--ds-radius-sm);
-        transition: all var(--ds-motion-fast) var(--ds-ease-standard);
-    }
-
-    .rag-system-row:hover {
-        background: var(--ds-surface-active);
-    }
-
-    .rag-system-row.is-active {
-        background: var(--ds-surface-active);
-        color: var(--ds-text-primary);
-        font-weight: var(--ds-font-weight-medium);
-    }
-
-    .rag-tree-toggle {
-        padding: var(--ds-space-2) 0 var(--ds-space-2) var(--ds-space-2);
-        background: transparent;
-        border: none;
-        color: var(--ds-text-secondary);
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-    }
-
-    .rag-tree-toggle.icon-btn.icon-btn--sm {
-        width: 1.5rem;
-        height: 1.5rem;
-        min-width: 1.5rem;
-        min-height: 1.5rem;
-        padding: 0;
-        border: none;
-        border-color: transparent;
-        background: transparent;
-        box-shadow: none;
-    }
-
-    .rag-tree-icon-wrap {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        transition: transform var(--ds-motion-fast) var(--ds-ease-standard);
-    }
-
-    .rag-system-name {
-        flex: 1;
-        padding: var(--ds-space-2) var(--ds-space-3) var(--ds-space-2) var(--ds-space-1);
-        background: transparent;
-        border: none;
-        color: var(--ds-text-secondary);
-        cursor: pointer;
-        text-align: left;
-        font-size: var(--ds-font-size-sm);
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-    }
-
-    .rag-system-row:hover .rag-system-name,
-    .rag-system-row.is-active .rag-system-name {
-        color: var(--ds-text-primary);
-    }
-
-    .rag-edition-list {
-        display: flex;
-        flex-direction: column;
-        padding-left: 24px;
-        margin-top: 2px;
-        gap: 2px;
-        border-left: 1px solid var(--ds-border-subtle);
-        margin-left: 12px;
-    }
-
-    .rag-edition-item {
-        padding: var(--ds-space-1) var(--ds-space-3);
-        background: transparent;
-        border: none;
-        color: var(--ds-text-secondary);
-        cursor: pointer;
-        text-align: left;
-        font-size: 11px;
-        border-radius: var(--ds-radius-sm);
-        transition: all var(--ds-motion-fast) var(--ds-ease-standard);
-    }
-
-    .rag-edition-item:hover {
-        background: var(--ds-surface-3);
-        color: var(--ds-text-primary);
-    }
-
-    .rag-edition-item.is-active {
-        color: var(--ds-text-primary);
-        background: var(--ds-surface-3);
-        font-weight: var(--ds-font-weight-bold);
-    }
-
-    .rag-sidebar-config {
-        display: flex;
-        flex-direction: column;
-        gap: var(--ds-space-4);
-    }
-
-    .rag-setting-field {
-        display: flex;
-        flex-direction: column;
-        gap: 4px;
     }
 
     .rag-label {
@@ -973,6 +864,15 @@
         flex-direction: column;
         overflow: hidden;
         background: var(--ds-surface-1);
+    }
+
+    .rag-main-content-shell {
+        border: none;
+        border-radius: 0;
+        box-shadow: none;
+        backdrop-filter: none;
+        -webkit-backdrop-filter: none;
+        background: transparent;
     }
 
     .rag-toolbar {
@@ -1034,6 +934,10 @@
         flex: 1;
         overflow-y: auto;
         padding: var(--ds-space-6);
+    }
+
+    .rag-content-area-shell {
+        padding: var(--ds-space-4);
     }
 
     .rag-content-area.list-shell {
@@ -1437,6 +1341,14 @@
         box-shadow: var(--ds-shadow-sm);
     }
 
+    .rag-empty-state-detail {
+        max-width: 30rem;
+        font-size: var(--ds-font-size-sm);
+        color: var(--ds-text-secondary);
+        margin: 0;
+        word-break: break-word;
+    }
+
     /* Staging Drawer */
     .rag-staging-drawer {
         position: absolute;
@@ -1659,6 +1571,18 @@
         color: var(--ds-text-primary);
     }
 
+    .rag-right-drawer {
+        position: fixed;
+        top: var(--topbar-h);
+        right: 0;
+        bottom: 0;
+        width: clamp(280px, 24vw, 360px);
+        max-width: min(360px, 100vw);
+        z-index: var(--z-drawer);
+        display: flex;
+        animation: ds-drawer-slide-in-right var(--ds-motion-base) var(--ds-ease-standard);
+    }
+
     @media (max-width: 980px) {
         .rag-dashboard-header {
             height: auto;
@@ -1730,6 +1654,13 @@
             right: var(--ds-space-3);
             bottom: var(--ds-space-3);
             width: auto;
+        }
+    }
+
+    @media (max-width: 1279px) {
+        .rag-right-drawer {
+            width: clamp(280px, 28vw, 360px);
+            max-width: min(360px, 100vw);
         }
     }
 </style>

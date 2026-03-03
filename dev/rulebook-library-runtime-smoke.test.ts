@@ -15,6 +15,7 @@ type MockRulebook = {
 
 const mocks = vi.hoisted(() => ({
   rulebooks: [] as MockRulebook[],
+  selectMultipleFile: vi.fn(async () => [] as Array<{ name: string; data: Uint8Array }>),
   updateRulebookMetadata: vi.fn(async () => null as MockRulebook | null),
   deleteRulebook: vi.fn(async () => {}),
   batchIngest: vi.fn(async () => {}),
@@ -98,7 +99,7 @@ vi.mock(import("src/ts/process/rag/storage"), () => ({
 }));
 
 vi.mock(import("src/ts/util"), () => ({
-  selectMultipleFile: async () => [],
+  selectMultipleFile: mocks.selectMultipleFile,
 }));
 
 vi.mock(import("src/ts/alert"), async () => {
@@ -133,6 +134,7 @@ describe("rulebook library runtime smoke", () => {
       });
     }
     mocks.rulebooks = [];
+    mocks.selectMultipleFile.mockClear();
     mocks.updateRulebookMetadata.mockClear();
     mocks.deleteRulebook.mockClear();
     mocks.batchIngest.mockClear();
@@ -147,7 +149,7 @@ describe("rulebook library runtime smoke", () => {
     }
   });
 
-  it("keeps library shell controls on shared list/tab/action/panel primitives", async () => {
+  it("keeps legacy library controls and list/tab/action primitives stable", async () => {
     mocks.rulebooks = [
       {
         id: "rb-1",
@@ -214,6 +216,73 @@ describe("rulebook library runtime smoke", () => {
     priorityButton?.click();
     await flushUi();
     expect(mocks.updateRulebookMetadata).toHaveBeenCalled();
+  });
+
+  it("uses shell mode with no internal header/toolbar and drawer tabs", async () => {
+    mocks.rulebooks = [
+      {
+        id: "rb-1",
+        name: "Vampire Core",
+        chunkCount: 12,
+        metadata: { system: "VtM", edition: "5e" },
+      },
+    ];
+
+    let shellActions: { selectFiles: () => Promise<void> } | null = null;
+    const target = document.createElement("div");
+    document.body.appendChild(target);
+    app = mount(RulebookLibrary, {
+      target,
+      props: {
+        useShellChrome: true,
+        rightSidebarOpen: true,
+        rightSidebarTab: "library",
+        registerShellActions: (actions: { selectFiles: () => Promise<void> } | null) => {
+          shellActions = actions;
+        },
+      },
+    });
+    await flushUi();
+
+    expect(target.querySelector(".rag-dashboard-header")).toBeNull();
+    expect(target.querySelector('[data-testid="rulebook-library-toolbar-actions"]')).toBeNull();
+    expect(target.querySelector("#rulebook-library-close")).toBeNull();
+
+    const drawer = target.querySelector('[data-testid="rulebook-right-sidebar-drawer"]') as HTMLElement | null;
+    expect(drawer).not.toBeNull();
+    expect(drawer?.classList.contains("drawer-elevation--right")).toBe(true);
+
+    const tabs = target.querySelector(".ds-chat-right-panel-tabs.seg-tabs") as HTMLElement | null;
+    expect(tabs).not.toBeNull();
+    const libraryTab = target.querySelector('[data-testid="rulebook-sidebar-tab-library"]') as HTMLButtonElement | null;
+    const settingsTab = target.querySelector('[data-testid="rulebook-sidebar-tab-settings"]') as HTMLButtonElement | null;
+    expect(libraryTab).not.toBeNull();
+    expect(settingsTab).not.toBeNull();
+    expect(libraryTab?.getAttribute("aria-selected")).toBe("true");
+
+    const libraryPane = target.querySelector('[data-testid="rulebook-sidebar-pane-library"]') as HTMLElement | null;
+    expect(libraryPane).not.toBeNull();
+    expect(libraryPane?.querySelector('[data-testid="rulebook-library-system-list"]')).not.toBeNull();
+
+    settingsTab!.click();
+    await flushUi();
+    const settingsPane = target.querySelector('[data-testid="rulebook-sidebar-pane-settings"]') as HTMLElement | null;
+    expect(settingsPane).not.toBeNull();
+
+    expect(shellActions).not.toBeNull();
+    await shellActions!.selectFiles();
+    expect(mocks.selectMultipleFile).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows loading state on initial render and avoids empty-state flash", async () => {
+    const target = document.createElement("div");
+    document.body.appendChild(target);
+    app = mount(RulebookLibrary, { target });
+
+    const loading = target.querySelector('[data-testid="rulebook-library-loading-state"]') as HTMLElement | null;
+    const empty = target.querySelector('[data-testid="rulebook-library-empty-state"]') as HTMLElement | null;
+    expect(loading).not.toBeNull();
+    expect(empty).toBeNull();
   });
 
   it("keeps empty-state primitive and close behavior stable", async () => {
