@@ -101,7 +101,7 @@
     </SelectInput>
 
     {#if DBState.db.colorSchemeName === "custom"}
-    <div class="ds-settings-card panel-shell">
+    <div class="ds-settings-card">
         <SelectInput value={DBState.db.colorScheme.type} onchange={(e) => {
             changeColorSchemeType((e.target as HTMLInputElement).value as 'light'|'dark')
         }}>

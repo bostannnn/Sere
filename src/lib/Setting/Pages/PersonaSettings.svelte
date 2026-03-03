@@ -83,7 +83,7 @@
 
 <div class="ds-settings-page">
 {#key sorted}
-<div class="ds-settings-section ds-settings-card panel-shell ds-settings-wrap-row" bind:this={ele}>
+<div class="ds-settings-section ds-settings-card ds-settings-wrap-row" bind:this={ele}>
     {#each DBState.db.personas as persona, i (persona.id ?? i)}
         <Button
             size="sm"
@@ -128,7 +128,7 @@
 </div>
 {/key}
 
-<div class="ds-settings-section ds-settings-card panel-shell ds-settings-persona-profile">
+<div class="ds-settings-section ds-settings-card ds-settings-persona-profile">
     <div class="ds-settings-section">
         <Button size="sm" styled="outlined" className="ds-settings-icon-action ds-settings-persona-user-tile icon-btn" onclick={() => {selectUserImg()}}>
             {#if DBState.db.userIcon === ''}

@@ -171,10 +171,11 @@ describe("settings action-rail runtime smoke", () => {
       ".ds-settings-inline-actions.ds-settings-inline-actions-fluid.action-rail",
     ) as HTMLElement | null;
     expect(rowRail).not.toBeNull();
-    const panelShellCard = document.querySelector(
-      ".ds-settings-section.ds-settings-card.panel-shell",
+    const flatCard = document.querySelector(
+      ".ds-settings-section.ds-settings-card",
     ) as HTMLElement | null;
-    expect(panelShellCard).not.toBeNull();
+    expect(flatCard).not.toBeNull();
+    expect(flatCard?.classList.contains("panel-shell")).toBe(false);
 
     const addButton = addRail?.querySelector(
       "button.ds-settings-icon-action",

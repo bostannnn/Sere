@@ -4,7 +4,7 @@
 </script>
 
 <div class="ds-settings-page">
-    <div class="ds-settings-section panel-shell list-shell">
+    <div class="ds-settings-section">
         <SettingRenderer items={accessibilitySettingsItems} />
     </div>
 </div>

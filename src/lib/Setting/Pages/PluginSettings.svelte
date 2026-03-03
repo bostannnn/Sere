@@ -160,7 +160,7 @@
             </span>
             <!--List up args-->
         {:else if Object.keys(plugin.arguments).filter((i) => !i.startsWith("hidden_")).length > 0 && showParams.includes(i)}
-            <div class="ds-settings-section ds-settings-card panel-shell">
+            <div class="ds-settings-section ds-settings-card">
                 {#each Object.keys(plugin.arguments) as arg (arg)}
                     {#if !arg.startsWith("hidden_")}
                         {#if typeof(plugin?.argMeta?.[arg]?.divider) === 'string'}

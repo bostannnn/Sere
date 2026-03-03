@@ -243,7 +243,7 @@
             }} />
         </div>
         {#if DBState.db.localStopStrings}
-            <div class="ds-settings-section ds-settings-card panel-shell">
+            <div class="ds-settings-section ds-settings-card">
                 <div class="ds-settings-inline-actions action-rail">
                     <Button size="sm" className="ds-settings-icon-action ds-settings-icon-action-compact icon-btn icon-btn--sm" onclick={() => {
                         const localStopStrings = DBState.db.localStopStrings ?? []

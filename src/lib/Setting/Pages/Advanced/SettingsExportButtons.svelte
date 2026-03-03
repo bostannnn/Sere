@@ -32,7 +32,7 @@
     }
 </script>
 
-<div class="ds-settings-section panel-shell">
+<div class="ds-settings-section">
     <div class="action-rail ds-settings-export-actions">
         <Button
             size="sm"

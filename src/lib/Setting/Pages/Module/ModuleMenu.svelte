@@ -244,7 +244,7 @@
 
 {#if submenu === 5 && (Array.isArray(currentModule.assets))}
     <div class="ds-settings-section">
-    <div class="ds-settings-card panel-shell ds-settings-table-container">
+    <div class="ds-settings-card ds-settings-table-container">
         <table class="ds-settings-table">
             <tbody>
             <tr>

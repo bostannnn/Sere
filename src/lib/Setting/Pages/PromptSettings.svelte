@@ -158,7 +158,7 @@
     </div>
 {/if}
 {#if warns.length > 0 && subMenu === 0}
-    <div class="ds-settings-section ds-settings-card panel-shell ds-settings-warning-card ds-settings-card-stack-start">
+    <div class="ds-settings-section ds-settings-card ds-settings-warning-card ds-settings-card-stack-start">
             <h2 class="ds-settings-warning-title">Warning</h2>
             <div class="ds-settings-warning-divider"></div>
             {#each warns as warn (warn)}
@@ -169,7 +169,7 @@
 
 {#if subMenu === 0}
     <div class="ds-settings-section">
-        <div class="ds-settings-card panel-shell ds-settings-list-shell list-shell">
+        <div class="ds-settings-card ds-settings-list-shell">
             {#if DBState.db.promptTemplate.length === 0}
                     <div class="ds-settings-label-muted">No Format</div>
             {/if}

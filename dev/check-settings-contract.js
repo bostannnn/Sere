@@ -36,8 +36,8 @@ const checks = [
       "class=\"ds-settings-page-title ds-settings-inline-actions action-rail\"",
       "class=\"ds-settings-inline-actions action-rail\"",
       "class=\"ds-settings-inline-actions ds-settings-inline-actions-fluid action-rail\"",
-      "class=\"ds-settings-section ds-settings-card panel-shell\"",
-      "class=\"ds-settings-card ds-settings-card-stack panel-shell\"",
+      "class=\"ds-settings-section ds-settings-card\"",
+      "class=\"ds-settings-card ds-settings-card-stack\"",
     ],
   },
   {
@@ -51,7 +51,7 @@ const checks = [
       "{#if submenu === 1}",
       "{#if submenu === 2}",
       "class=\"ds-settings-inline-actions action-rail\"",
-      "class=\"ds-settings-card panel-shell ds-settings-density-compact\"",
+      "class=\"ds-settings-card ds-settings-density-compact\"",
     ],
   },
   {
@@ -65,7 +65,7 @@ const checks = [
       "{#if submenu === 1}",
       "{#if submenu === 2}",
       "class=\"ds-settings-grow-min ds-settings-inline-actions ds-settings-inline-actions-end action-rail\"",
-      "class=\"ds-settings-card panel-shell\"",
+      "class=\"ds-settings-card\"",
     ],
   },
   {
@@ -73,7 +73,7 @@ const checks = [
     patterns: [
       "class=\"ds-settings-inline-actions ds-settings-inline-actions-nowrap ds-settings-shrink-0 action-rail\"",
       "class=\"ds-settings-label-muted ds-settings-inline-actions ds-settings-inline-actions-nowrap action-rail\"",
-      "class=\"ds-settings-section ds-settings-card panel-shell\"",
+      "class=\"ds-settings-section ds-settings-card\"",
       "class=\"ds-settings-status-badge control-chip ds-settings-status-badge--warning\"",
       "className=\"ds-settings-icon-action ds-settings-icon-action-compact icon-btn icon-btn--sm ds-settings-icon-state-warning\"",
       "class=\"ds-settings-icon-action ds-settings-icon-action-compact icon-btn icon-btn--sm ds-settings-icon-state-muted-hover-primary\"",
@@ -84,8 +84,8 @@ const checks = [
   {
     file: path.join(ROOT, "src/lib/Setting/Pages/PromptSettings.svelte"),
     patterns: [
-      "class=\"ds-settings-card panel-shell ds-settings-list-shell list-shell\"",
-      "class=\"ds-settings-section ds-settings-card panel-shell ds-settings-warning-card ds-settings-card-stack-start\"",
+      "class=\"ds-settings-card ds-settings-list-shell\"",
+      "class=\"ds-settings-section ds-settings-card ds-settings-warning-card ds-settings-card-stack-start\"",
       "className=\"ds-settings-icon-action ds-settings-icon-action-compact icon-btn icon-btn--sm\"",
       "class=\"ds-settings-inline-actions ds-settings-inline-actions-nowrap action-rail\"",
       "class=\"ds-settings-inline-actions action-rail\"",
@@ -96,7 +96,7 @@ const checks = [
     patterns: [
       "class=\"ds-settings-inline-actions action-rail\"",
       "class=\"ds-settings-inline-actions ds-settings-inline-actions-fluid action-rail\"",
-      "class=\"ds-settings-section ds-settings-card panel-shell\"",
+      "class=\"ds-settings-section ds-settings-card\"",
     ],
   },
   {
@@ -121,7 +121,7 @@ const checks = [
       "className=\"ds-settings-icon-action ds-settings-icon-action-compact icon-btn icon-btn--sm\"",
       "class=\"ds-settings-grow-min ds-settings-inline-actions ds-settings-inline-actions-end action-rail\"",
       "class=\"ds-settings-inline-actions action-rail\"",
-      "class=\"ds-settings-list-container ds-settings-list-shell ds-settings-list-shell-scroll list-shell\"",
+      "class=\"ds-settings-list-container ds-settings-list-shell ds-settings-list-shell-scroll\"",
       "class=\"ds-settings-empty-state empty-state\"",
     ],
   },
@@ -132,7 +132,7 @@ const checks = [
       "className=\"ds-settings-icon-action ds-settings-icon-action-compact icon-btn icon-btn--sm",
       "class=\"ds-settings-grow-min ds-settings-inline-actions ds-settings-inline-actions-end action-rail\"",
       "class=\"ds-settings-inline-actions action-rail\"",
-      "class=\"ds-settings-list-container ds-settings-list-shell list-shell\"",
+      "class=\"ds-settings-list-container ds-settings-list-shell\"",
       "class=\"ds-settings-empty-state empty-state\"",
     ],
   },
@@ -142,7 +142,7 @@ const checks = [
       "class=\"ds-settings-empty-state empty-state\"",
       "class=\"ds-settings-inline-actions action-rail\"",
       "className=\"ds-settings-icon-action ds-settings-icon-action-compact icon-btn icon-btn--sm\"",
-      "class=\"ds-settings-card panel-shell ds-settings-table-container\"",
+      "class=\"ds-settings-card ds-settings-table-container\"",
     ],
   },
   {
@@ -185,8 +185,8 @@ const checks = [
     patterns: [
       "class=\"ds-settings-inline-actions action-rail\"",
       "class=\"ds-settings-inline-actions ds-settings-inline-actions-fluid action-rail\"",
-      "class=\"ds-settings-section ds-settings-card panel-shell ds-settings-wrap-row\"",
-      "class=\"ds-settings-section ds-settings-card panel-shell ds-settings-persona-profile\"",
+      "class=\"ds-settings-section ds-settings-card ds-settings-wrap-row\"",
+      "class=\"ds-settings-section ds-settings-card ds-settings-persona-profile\"",
       "className={\"ds-settings-icon-action ds-settings-persona-tile icon-btn \" + (i === DBState.db.selectedPersona ? \"ds-settings-persona-tile-selected\" : \"\")}",
       "className=\"ds-settings-icon-action ds-settings-persona-user-tile icon-btn\"",
     ],

@@ -138,10 +138,13 @@ describe("persona settings runtime smoke", () => {
       document.querySelectorAll(".ds-settings-inline-actions.action-rail"),
     ) as HTMLElement[];
     expect(actionRails.length).toBeGreaterThanOrEqual(2);
-    const shellCards = Array.from(
-      document.querySelectorAll(".ds-settings-card.panel-shell"),
+    const cards = Array.from(
+      document.querySelectorAll(".ds-settings-card"),
     ) as HTMLElement[];
-    expect(shellCards.length).toBeGreaterThanOrEqual(2);
+    expect(cards.length).toBeGreaterThanOrEqual(2);
+    for (const card of cards) {
+      expect(card.classList.contains("panel-shell")).toBe(false);
+    }
 
     const personaTile = document.querySelector(
       'button[data-risu-idx="0"]',

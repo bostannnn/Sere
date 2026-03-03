@@ -14,7 +14,7 @@
     };
 </script>
 
-<Accordion name={language.seperateParameters} styled className="ds-settings-section panel-shell list-shell">
+<Accordion name={language.seperateParameters} styled className="ds-settings-section">
     <CheckInput bind:check={DBState.db.seperateParametersEnabled} name={language.seperateParametersEnabled} />
     {#if DBState.db.seperateParametersEnabled}
         {#each Object.keys(DBState.db.seperateParameters) as param (param)}

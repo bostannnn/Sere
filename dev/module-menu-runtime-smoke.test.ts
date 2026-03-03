@@ -217,7 +217,7 @@ describe("module menu runtime smoke", () => {
     ) as HTMLButtonElement | null;
     expect(addAssetButton).not.toBeNull();
     const assetsTableShell = document.querySelector(
-      ".ds-settings-card.panel-shell.ds-settings-table-container",
+      ".ds-settings-card.ds-settings-table-container",
     ) as HTMLElement | null;
     expect(assetsTableShell).not.toBeNull();
 

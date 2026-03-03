@@ -503,7 +503,7 @@ const tokens = $state({
             }
         }} />
         {#if DBState.db.localStopStrings}
-            <div class="ds-settings-section ds-settings-card panel-shell">
+            <div class="ds-settings-section ds-settings-card">
                 <div class="ds-settings-inline-actions action-rail">
                     <Button size="sm" className="ds-settings-icon-action ds-settings-icon-action-compact icon-btn icon-btn--sm" onclick={() => {
                         const localStopStrings = DBState.db.localStopStrings ?? []
@@ -527,13 +527,13 @@ const tokens = $state({
                 {/each}
             </div>
         {/if}
-        <div class="ds-settings-card ds-settings-card-stack panel-shell">
+        <div class="ds-settings-card ds-settings-card-stack">
             <ChatFormatSettings />
         </div>
         <Check bind:check={DBState.db.ooba.formating.useName} name={language.useNamePrefix}/>
     
     {:else if modelInfo.format === LLMFormat.NovelAI}
-        <div class="ds-settings-card ds-settings-card-stack panel-shell">
+        <div class="ds-settings-card ds-settings-card-stack">
             <span class="ds-settings-label">Starter</span>
             <TextInput bind:value={DBState.db.NAIsettings.starter} placeholder="⁂" />
             <span class="ds-settings-label">Seperator</span>

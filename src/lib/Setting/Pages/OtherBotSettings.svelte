@@ -234,7 +234,7 @@
 
     <span class="ds-settings-label">Emotion List</span>
     {#if (getEmotionListCharacter()?.emotionImages?.length ?? 0) > 0}
-        <div class="ds-settings-card panel-shell ds-settings-density-compact">
+        <div class="ds-settings-card ds-settings-density-compact">
             <div class="flex flex-wrap gap-2">
                 {#each getEmotionListCharacter()?.emotionImages ?? [] as emo (emo[0])}
                     <span class="px-2 py-1 rounded-md border border-darkborderc text-sm text-textcolor break-all">{emo[0]}</span>

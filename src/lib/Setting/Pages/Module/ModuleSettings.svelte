@@ -42,7 +42,7 @@
 
     <TextInput size="sm" placeholder={language.search} bind:value={moduleSearch} className="control-field" />
 
-    <div class="ds-settings-list-container ds-settings-list-shell ds-settings-list-shell-scroll list-shell">
+    <div class="ds-settings-list-container ds-settings-list-shell ds-settings-list-shell-scroll">
         {#if DBState.db.modules.length === 0}
             <div class="ds-settings-empty-state empty-state">{language.noModules}</div>
         {:else}

@@ -111,7 +111,7 @@
         <Accordion styled name="Workflows" help="comfyWorkflow" className="ds-settings-section">
             <div class="ds-settings-stack-col">
                 {#each DBState.db.comfyCommander.workflows as workflow, index (workflow.id)}
-                    <div class="ds-comfy-entity panel-shell">
+                    <div class="ds-comfy-entity">
                         <div class="ds-settings-inline-actions action-rail ds-comfy-entity-header">
                             <span class="ds-settings-label">Workflow {index + 1}</span>
                             <Button
@@ -147,7 +147,7 @@
         <Accordion styled name="Templates" className="ds-settings-section">
             <div class="ds-settings-stack-col">
                 {#each DBState.db.comfyCommander.templates as template, index (template.id)}
-                    <div class="ds-comfy-entity panel-shell">
+                    <div class="ds-comfy-entity">
                         <div class="ds-settings-inline-actions action-rail ds-comfy-entity-header">
                             <span class="ds-settings-label">Template {index + 1}</span>
                             <Button

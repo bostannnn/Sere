@@ -223,7 +223,7 @@
 <!-- svelte-ignore a11y_role_has_required_aria_props -->
 <!-- svelte-ignore a11y_click_events_have_key_events -->
 <div class="ds-settings-builder-root">
-    <div class="ds-settings-builder-main ds-settings-builder-canvas-wrap panel-shell">
+    <div class="ds-settings-builder-main ds-settings-builder-canvas-wrap">
         <div class="ds-settings-builder-canvas-host ds-settings-builder-canvas"
             class:is-selected={selectedContatiner === 'root'}
             role="option"
@@ -242,7 +242,7 @@
     </div>
 
     {#if menuOpen}
-        <div class="ds-settings-label ds-settings-builder-sidepanel-shell ds-settings-builder-sidepanel panel-shell list-shell">
+        <div class="ds-settings-label ds-settings-builder-sidepanel-shell ds-settings-builder-sidepanel">
             <SettingsSubTabs
                 items={[
                     { id: 0, label: 'Component' },
