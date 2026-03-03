@@ -133,10 +133,11 @@ describe("plugin settings runtime smoke", () => {
       ".ds-settings-inline-actions.ds-settings-inline-actions-nowrap.ds-settings-shrink-0.action-rail",
     ) as HTMLElement | null;
     expect(rowActionRail).not.toBeNull();
-    const cardShell = document.querySelector(
-      ".ds-settings-section.ds-settings-card.panel-shell",
+    const pluginCard = document.querySelector(
+      ".ds-settings-page > .ds-settings-section.ds-settings-card",
     ) as HTMLElement | null;
-    expect(cardShell).not.toBeNull();
+    expect(pluginCard).not.toBeNull();
+    expect(pluginCard?.classList.contains("panel-shell")).toBe(false);
     const hotChip = document.querySelector(
       ".ds-settings-status-badge.control-chip.ds-settings-status-badge--warning",
     ) as HTMLElement | null;

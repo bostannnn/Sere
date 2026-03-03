@@ -1284,7 +1284,6 @@ export const languageChinese = {
     "claude1HourCaching": "Claude 1 小时缓存",
     "folderNameInput": "请输入新文件夹名称",
     "folderRemoveLengthError": "要删除文件夹，它必须不包含任何条目。",
-    "personaNote": "用户备注",
     "mcpAccessPrompt": "{{tool}} 正在尝试 \"{{action}}\"。您要允许吗？",
     "rememberToolUsage": "记住工具使用情况",
     "simplifiedToolUse": "简化工具使用",

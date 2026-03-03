@@ -79,7 +79,6 @@ vi.mock(import("src/ts/stores.svelte"), () => ({
       ],
       userIcon: "",
       username: "User",
-      personaNote: false,
       userNote: "",
       personaPrompt: "",
     },

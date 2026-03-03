@@ -1287,7 +1287,6 @@ export const languageKorean = {
     "claude1HourCaching": "Claude 1시간 캐싱",
     "folderNameInput": "새 폴더 이름을 입력해주세요",
     "folderRemoveLengthError": "폴더를 제거하려면 폴더가 비어 있어야 합니다.",
-    "personaNote": "페르소나 노트",
     "mcpAccessPrompt": "{{tool}}이(가) \"{{action}}\"을(를) 시도하고 있습니다. 허용하시겠습니까?",
     "rememberToolUsage": "도구 사용 기억하기",
     "simplifiedToolUse": "단순화된 도구 사용",

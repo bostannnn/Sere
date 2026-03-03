@@ -1043,7 +1043,6 @@ export interface Database{
         id?:string
         note?:string
     }[]
-    personaNote:boolean
     assetWidth:number
     animationSpeed:number
     botSettingAtStart:false
@@ -1309,7 +1308,6 @@ export interface Database{
     autoScrollToNewMessage?: boolean
     alwaysScrollToNewMessage?: boolean
     newMessageButtonStyle?: string
-    pluginDevelopMode?: boolean
     echoMessage?:string
     echoDelay?:number
     createFolderOnBranch?:boolean

@@ -145,10 +145,6 @@
     <div class="ds-settings-section ds-settings-persona-editor">
         <span class="ds-settings-label-muted-sm">{language.name}</span>
         <TextInput size="sm" placeholder="User" bind:value={DBState.db.username}/>
-        <span class="ds-settings-label-muted-sm">{language.note}</span>
-        {#if DBState.db.personaNote}
-            <TextInput size="sm" bind:value={DBState.db.userNote} placeholder="Put a unique identifier for this persona here.\nExample: [Alternate Hunters persona]" />
-        {/if}
         <span class="ds-settings-label-muted-sm">{language.description}</span>
         <TextAreaInput autocomplete="off" bind:value={DBState.db.personaPrompt} placeholder="Put the description of this persona here.\nExample: [<user> is a 20 year old girl.]" />
         <div class="ds-settings-inline-actions ds-settings-inline-actions-fluid action-rail">

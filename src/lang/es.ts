@@ -1284,7 +1284,6 @@ export const languageSpanish = {
     "claude1HourCaching": "Caché de Claude de 1 Hora",
     "folderNameInput": "Por favor ingrese el nuevo nombre de la carpeta",
     "folderRemoveLengthError": "Para eliminar una carpeta, no debe contener ninguna entrada.",
-    "personaNote": "Nota de Persona",
     "mcpAccessPrompt": "{{tool}} está intentando \"{{action}}\". ¿deseas permitir esto?",
     "rememberToolUsage": "Recordar uso de herramienta",
     "simplifiedToolUse": "Uso simplificado de herramientas",
