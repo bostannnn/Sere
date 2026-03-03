@@ -4,7 +4,7 @@
     import { saveImage as saveAsset, type character, type groupChat } from "../../ts/storage/database.svelte";
     import { DBState } from 'src/ts/stores.svelte';
     import { tick, untrack } from 'svelte';
-    import { CharConfigSubMenu, MobileGUI, selectedCharID, hypaV3ModalOpen } from "../../ts/stores.svelte";
+    import { CharConfigSubMenu, MobileGUI, selectedCharID } from "../../ts/stores.svelte";
     import { PlusIcon, SmileIcon, TrashIcon, UserIcon, ActivityIcon, BookIcon, BookOpenCheckIcon, User, Braces, Volume2Icon, DownloadIcon, HardDriveUploadIcon, Share2Icon, ImageIcon, ImageOffIcon, ArrowUp, ArrowDown } from '@lucide/svelte'
     import Check from "../UI/GUI/CheckInput.svelte";
     import { addCharEmotion, addingEmotion, getCharImage, rmCharEmotion, selectCharImg, makeGroupImage, removeChar, changeCharImage } from "../../ts/characters";
@@ -55,6 +55,10 @@
         depth_prompt: {
             depth: number
             prompt: string
+        }
+        hypaV3PromptOverride: {
+            summarizationPrompt: string
+            reSummarizationPrompt: string
         }
         newGenData: {
             emotionInstructions: string
@@ -261,6 +265,16 @@
         }
         char.depth_prompt.depth = typeof char.depth_prompt.depth === 'number' ? char.depth_prompt.depth : 0
         char.depth_prompt.prompt = typeof char.depth_prompt.prompt === 'string' ? char.depth_prompt.prompt : ''
+        char.hypaV3PromptOverride ??= {
+            summarizationPrompt: '',
+            reSummarizationPrompt: '',
+        }
+        char.hypaV3PromptOverride.summarizationPrompt = typeof char.hypaV3PromptOverride.summarizationPrompt === 'string'
+            ? char.hypaV3PromptOverride.summarizationPrompt
+            : ''
+        char.hypaV3PromptOverride.reSummarizationPrompt = typeof char.hypaV3PromptOverride.reSummarizationPrompt === 'string'
+            ? char.hypaV3PromptOverride.reSummarizationPrompt
+            : ''
         char.newGenData ??= {
             prompt: '',
             negative: '',
@@ -1541,6 +1555,24 @@
         <span class="char-config-label">{language.systemPrompt} <Help key="systemPrompt"/></span>
         <TextAreaInput highlight margin="both" autocomplete="off" bind:value={DBState.db.characters[$selectedCharID]!.systemPrompt}></TextAreaInput>
 
+        {#if DBState.db.hypaV3}
+            <span class="char-config-label">Hypa V3 Summarization Prompt Override</span>
+            <TextAreaInput
+                margin="both"
+                autocomplete="off"
+                placeholder="Leave empty to use global Hypa preset summarization prompt."
+                bind:value={editorCharacter!.hypaV3PromptOverride.summarizationPrompt}
+            ></TextAreaInput>
+
+            <span class="char-config-label">Hypa V3 Re-summarization Prompt Override</span>
+            <TextAreaInput
+                margin="both"
+                autocomplete="off"
+                placeholder="Leave empty to use global Hypa preset re-summarization prompt."
+                bind:value={editorCharacter!.hypaV3PromptOverride.reSummarizationPrompt}
+            ></TextAreaInput>
+        {/if}
+
         <span class="char-config-label">{language.additionalText} <Help key="additionalText" /></span>
         <TextAreaInput highlight margin="both" autocomplete="off" bind:value={DBState.db.characters[$selectedCharID]!.additionalText}></TextAreaInput>
 
@@ -1636,17 +1668,6 @@
         <div class="char-config-check-row">
             <Check bind:check={DBState.db.characters[$selectedCharID]!.escapeOutput} name={language.escapeOutput}/>
         </div>
-
-        {#if DBState.db.hypaV3}
-            <Button
-                onclick={() => {
-                    $hypaV3ModalOpen = true
-                }}
-                className="char-config-control"
-            >
-                {language.hypaMemoryV3Modal}
-            </Button>
-        {/if}
 
         <Button
             onclick={applyModule}

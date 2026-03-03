@@ -35,8 +35,7 @@
     const appLog = (..._args: unknown[]) => {};
     
     appLog('App Startup', { isNodeServer, isTauri, origin: window.location.origin, hostname: window.location.hostname });
-    import { hypaV3ModalOpen, hypaV3ProgressStore, openRulebookManager } from "./ts/stores.svelte";
-    import HypaV3Modal from './lib/Others/HypaV3Modal.svelte';
+    import { hypaV3ProgressStore, openRulebookManager } from "./ts/stores.svelte";
     import RulebookLibrary from './lib/Others/RulebookManager/RulebookLibrary.svelte';
     import HypaV3Progress from './lib/Others/HypaV3Progress.svelte';
     import PluginAlertModal from './lib/Others/PluginAlertModal.svelte';
@@ -206,9 +205,6 @@
     {/if}
     {#if $bookmarkListOpen}
         <BookmarkList />
-    {/if}
-    {#if $hypaV3ModalOpen}
-        <HypaV3Modal />
     {/if}
     <SavePopupIconComp />
     {#if $hypaV3ProgressStore.open}

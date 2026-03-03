@@ -118,6 +118,38 @@ async function suiteResolveSettings() {
         hypaV3Presets: [{ settings: { periodicSummarizationInterval: 'not-a-number' } }],
     });
     assert(badType.periodicSummarizationInterval === 10, 'wrong type in preset → default used');
+
+    // Character-level prompt overrides should win when non-empty.
+    const characterOverride = resolveHypaV3Settings(
+        withPreset({
+            summarizationPrompt: 'preset-summary',
+            reSummarizationPrompt: 'preset-resummary',
+        }),
+        {
+            hypaV3PromptOverride: {
+                summarizationPrompt: 'character-summary',
+                reSummarizationPrompt: 'character-resummary',
+            },
+        }
+    );
+    assert(characterOverride.summarizationPrompt === 'character-summary', 'character override: summarizationPrompt');
+    assert(characterOverride.reSummarizationPrompt === 'character-resummary', 'character override: reSummarizationPrompt');
+
+    // Empty/whitespace character overrides should not replace preset values.
+    const blankCharacterOverride = resolveHypaV3Settings(
+        withPreset({
+            summarizationPrompt: 'preset-summary',
+            reSummarizationPrompt: 'preset-resummary',
+        }),
+        {
+            hypaV3PromptOverride: {
+                summarizationPrompt: '',
+                reSummarizationPrompt: '   ',
+            },
+        }
+    );
+    assert(blankCharacterOverride.summarizationPrompt === 'preset-summary', 'blank override: keep preset summarizationPrompt');
+    assert(blankCharacterOverride.reSummarizationPrompt === 'preset-resummary', 'blank override: keep preset reSummarizationPrompt');
 }
 
 // ---------------------------------------------------------------------------

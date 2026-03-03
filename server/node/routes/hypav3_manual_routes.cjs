@@ -70,6 +70,8 @@ app.post('/data/memory/hypav3/manual-summarize', async (req, res) => {
         const settings = (settingsRaw && typeof settingsRaw === 'object' && settingsRaw.data && typeof settingsRaw.data === 'object')
             ? settingsRaw.data
             : settingsRaw;
+        const charRaw = JSON.parse(await fs.readFile(charPath, 'utf-8'));
+        const character = charRaw.character || charRaw.data || charRaw || {};
         const chatRaw = JSON.parse(await fs.readFile(chatPath, 'utf-8'));
         const chat = chatRaw.chat || chatRaw.data || chatRaw || {};
         const sourceMessages = Array.isArray(chat?.message) ? chat.message.filter((m) => m && m.disabled !== true) : [];
@@ -79,7 +81,7 @@ app.post('/data/memory/hypav3/manual-summarize', async (req, res) => {
         const startIndex = Math.max(1, Math.min(start, maxCount));
         const endIndex = Math.max(startIndex, Math.min(end, maxCount));
         const slice = sourceMessages.slice(startIndex - 1, endIndex);
-        const hypaSettings = resolveHypaV3Settings(settings);
+        const hypaSettings = resolveHypaV3Settings(settings, character);
         const summarizable = [];
         const chatMemos = [];
         for (let i = 0; i < slice.length; i++) {
@@ -102,6 +104,7 @@ app.post('/data/memory/hypav3/manual-summarize', async (req, res) => {
 
         const summaryText = await executeHypaSummaryFromMessages({
             settings,
+            character,
             characterId,
             chatId,
             promptMessages,

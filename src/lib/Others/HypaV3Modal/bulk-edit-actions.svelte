@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { StarIcon } from "@lucide/svelte";
   import type { BulkEditState, Category } from "./types";
   import { language } from "src/lang";
 
@@ -13,7 +12,6 @@
     onUpdateSelectedCategory: (categoryId: string) => void;
     onUpdateBulkSelectInput: (input: string) => void;
     onApplyCategory: () => void;
-    onToggleImportant: () => void;
     onParseAndSelectSummaries: () => void;
   }
 
@@ -27,16 +25,11 @@
     onUpdateSelectedCategory,
     onUpdateBulkSelectInput,
     onApplyCategory,
-    onToggleImportant,
     onParseAndSelectSummaries,
   }: Props = $props();
 
   function applyCategoryToSelected() {
     onApplyCategory();
-  }
-
-  function bulkToggleImportant() {
-    onToggleImportant();
   }
 
   function parseAndSelectSummaries() {
@@ -102,16 +95,6 @@
           disabled={bulkEditState.selectedSummaries.size === 0}
         >
           {language.apply}
-        </button>
-
-        <!-- Bulk Toggle Important Button -->
-        <button
-          class="hypa-bulk-btn hypa-bulk-btn-warning hypa-bulk-btn-compact icon-btn icon-btn--sm"
-          class:is-disabled={bulkEditState.selectedSummaries.size === 0}
-          onclick={bulkToggleImportant}
-          disabled={bulkEditState.selectedSummaries.size === 0}
-        >
-          <StarIcon size={16} />
         </button>
 
         <!-- Bulk Select by Numbers -->
@@ -202,12 +185,6 @@
     color: var(--ds-text-primary);
     border-color: var(--ds-border-strong);
     background: color-mix(in srgb, var(--ds-surface-active) 70%, var(--ds-surface-2) 30%);
-  }
-
-  .hypa-bulk-btn-warning {
-    border-color: color-mix(in srgb, var(--color-yellow-500) 55%, var(--ds-border-subtle));
-    color: color-mix(in srgb, var(--color-yellow-300) 88%, var(--ds-text-primary));
-    background: color-mix(in srgb, var(--color-yellow-500) 14%, transparent);
   }
 
   .hypa-bulk-btn-danger {

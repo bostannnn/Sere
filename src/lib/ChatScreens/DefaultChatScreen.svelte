@@ -2,8 +2,8 @@
      
 
     import Suggestion from './Suggestion.svelte';
-    import { CameraIcon, DatabaseIcon, DicesIcon, GlobeIcon, ImagePlusIcon, LanguagesIcon, Laugh, MenuIcon, MicOffIcon, PackageIcon, RefreshCcwIcon, ReplyIcon, Send, StepForwardIcon, XIcon, BrainIcon, ArrowDown } from "@lucide/svelte";
-    import { selectedCharID, PlaygroundStore, createSimpleCharacter, hypaV3ModalOpen, ScrollToMessageStore, additionalChatMenu, additionalFloatingActionButtons, pluginProgressStore, comfyProgressStore } from "../../ts/stores.svelte";
+    import { CameraIcon, DatabaseIcon, DicesIcon, GlobeIcon, ImagePlusIcon, LanguagesIcon, Laugh, MenuIcon, MicOffIcon, PackageIcon, RefreshCcwIcon, ReplyIcon, Send, StepForwardIcon, XIcon, ArrowDown } from "@lucide/svelte";
+    import { selectedCharID, PlaygroundStore, createSimpleCharacter, ScrollToMessageStore, additionalChatMenu, additionalFloatingActionButtons, pluginProgressStore, comfyProgressStore } from "../../ts/stores.svelte";
     import { tick } from 'svelte';
     import Chat from "./Chat.svelte";
     import { getDatabase, type Message } from "../../ts/storage/database.svelte";
@@ -1018,24 +1018,6 @@
                         </button>
                     {/each}
 
-                    {#if DBState.db.showMenuHypaMemoryModal && DBState.db.hypaV3}
-                        <button
-                            type="button"
-                            class="ds-chat-side-menu-item ds-ui-menu-item"
-                            title={language.hypaMemoryV3Modal}
-                            aria-label={language.hypaMemoryV3Modal}
-                            onclick={() => {
-                            $hypaV3ModalOpen = true
-                            openMenu = false
-                        }}>
-                            <BrainIcon />
-                            <span class="ds-chat-side-menu-label">
-                                {language.hypaMemoryV3Modal}
-                            </span>
-                        </button>
-                    {/if}
-
-                    
                     {#if DBState.db.translator !== ''}
                         <button
                             type="button"

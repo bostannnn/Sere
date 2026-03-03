@@ -66,6 +66,7 @@ vi.mock(import("src/lang"), () => ({
   language: {
     Chat: "Chat",
     character: "Character",
+    memoryTab: "Memory",
     group: "Group",
   },
 }));
@@ -105,6 +106,9 @@ vi.mock(import("src/lib/SideBars/SideChatList.svelte"), async () => ({
 }));
 vi.mock(import("src/lib/SideBars/CharConfig.svelte"), async () => ({
   default: (await import("./test-stubs/CharConfigStub.svelte")).default,
+}));
+vi.mock(import("src/lib/Others/HypaV3Modal.svelte"), async () => ({
+  default: (await import("./test-stubs/SimplePanelStub.svelte")).default,
 }));
 
 import ChatScreen from "src/lib/ChatScreens/ChatScreen.svelte";
@@ -216,16 +220,22 @@ describe("chat sidebar runtime smoke", () => {
 
     const chatTab = document.querySelector('[data-testid="chat-sidebar-tab-chat"]') as HTMLButtonElement | null;
     const characterTab = document.querySelector('[data-testid="chat-sidebar-tab-character"]') as HTMLButtonElement | null;
+    const memoryTab = document.querySelector('[data-testid="chat-sidebar-tab-memory"]') as HTMLButtonElement | null;
     expect(chatTab).not.toBeNull();
     expect(characterTab).not.toBeNull();
+    expect(memoryTab).not.toBeNull();
     expect(chatTab?.getAttribute("role")).toBe("tab");
     expect(characterTab?.getAttribute("role")).toBe("tab");
+    expect(memoryTab?.getAttribute("role")).toBe("tab");
     expect(chatTab?.id).toBe("chat-sidebar-tab-chat");
     expect(characterTab?.id).toBe("chat-sidebar-tab-character");
+    expect(memoryTab?.id).toBe("chat-sidebar-tab-memory");
     expect(chatTab?.getAttribute("aria-controls")).toBe("chat-sidebar-panel-chat");
     expect(characterTab?.getAttribute("aria-controls")).toBe("chat-sidebar-panel-character");
+    expect(memoryTab?.getAttribute("aria-controls")).toBe("chat-sidebar-panel-memory");
     expect(chatTab?.tabIndex).toBe(0);
     expect(characterTab?.tabIndex).toBe(-1);
+    expect(memoryTab?.tabIndex).toBe(-1);
 
     chatTab?.focus();
     expect(document.activeElement).toBe(chatTab);
@@ -253,6 +263,16 @@ describe("chat sidebar runtime smoke", () => {
     expect(window.localStorage.getItem("risu:desktop-right-panel-tab")).toBe("chat");
 
     chatTab!.dispatchEvent(new KeyboardEvent("keydown", { key: "End", bubbles: true }));
+    await flushUi();
+    const memoryPane = document.querySelector('[data-testid="chat-sidebar-pane-memory"]') as HTMLElement | null;
+    expect(memoryPane).not.toBeNull();
+    expect(memoryPane?.getAttribute("role")).toBe("tabpanel");
+    expect(memoryPane?.id).toBe("chat-sidebar-panel-memory");
+    expect(memoryPane?.getAttribute("aria-labelledby")).toBe("chat-sidebar-tab-memory");
+    expect(document.activeElement).toBe(memoryTab);
+    expect(window.localStorage.getItem("risu:desktop-right-panel-tab")).toBe("chat");
+
+    memoryTab!.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true }));
     await flushUi();
     expect(document.querySelector('[data-testid="chat-sidebar-pane-character"]')).not.toBeNull();
     expect(document.activeElement).toBe(characterTab);
@@ -354,6 +374,38 @@ describe("chat sidebar runtime smoke", () => {
 
     expect(document.querySelector('[data-testid="chat-sidebar-pane-character"]')).not.toBeNull();
     expect(document.querySelector('[data-testid="chat-sidebar-pane-chat"]')).toBeNull();
+  });
+
+  it("does not persist memory tab across remount", async () => {
+    await flushUi();
+
+    const characterTab = document.querySelector('[data-testid="chat-sidebar-tab-character"]') as HTMLButtonElement | null;
+    const memoryTab = document.querySelector('[data-testid="chat-sidebar-tab-memory"]') as HTMLButtonElement | null;
+    expect(characterTab).not.toBeNull();
+    expect(memoryTab).not.toBeNull();
+
+    characterTab!.click();
+    await flushUi();
+    expect(window.localStorage.getItem("risu:desktop-right-panel-tab")).toBe("character");
+
+    memoryTab!.click();
+    await flushUi();
+    expect(window.localStorage.getItem("risu:desktop-right-panel-tab")).toBe("character");
+    expect(document.querySelector('[data-testid="chat-sidebar-pane-memory"]')).not.toBeNull();
+
+    if (app) {
+      await unmount(app);
+      app = undefined;
+    }
+
+    const target = document.createElement("div");
+    document.body.appendChild(target);
+    app = mount(ChatScreen, { target, props: { rightSidebarOpen: true } });
+    window.dispatchEvent(new Event("resize"));
+    await flushUi();
+
+    expect(document.querySelector('[data-testid="chat-sidebar-pane-character"]')).not.toBeNull();
+    expect(document.querySelector('[data-testid="chat-sidebar-pane-memory"]')).toBeNull();
   });
 
   it("handles rapid sidebar tab switching without runtime state errors", async () => {

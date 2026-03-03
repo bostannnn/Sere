@@ -22,8 +22,8 @@ function createHypaHelpers(arg = {}) {
     const HYPAV3_DEFAULT_SUMMARIZATION_PROMPT = "[Summarize the ongoing role story, It must also remove redundancy and unnecessary text and content from the output.]";
     const HYPAV3_DEFAULT_RESUMMARIZATION_PROMPT = 'Re-summarize this summaries.';
 
-    function resolveHypaSummaryProviderModel(settings) {
-        const hypaSettings = resolveHypaV3Settings(settings);
+    function resolveHypaSummaryProviderModel(settings, character = null) {
+        const hypaSettings = resolveHypaV3Settings(settings, character);
         const selectedModel = toStringOrEmpty(hypaSettings.summarizationModel) || 'subModel';
         if (selectedModel === 'subModel') {
             const selected = resolveGenerateModelSelection({ mode: 'memory' }, settings);
@@ -144,7 +144,7 @@ function createHypaHelpers(arg = {}) {
         const promptMessages = Array.isArray(payload.promptMessages) ? payload.promptMessages : [];
 
         if (promptMessages.length === 0) return '';
-        const hypaSettings = resolveHypaV3Settings(settings);
+        const hypaSettings = resolveHypaV3Settings(settings, payload.character || null);
         const selectedModel = toStringOrEmpty(hypaSettings.summarizationModel) || 'subModel';
 
         let provider = '';

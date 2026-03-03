@@ -180,7 +180,6 @@ ensureIncludes(
 ensureIncludes(appShellContent, appShellFile, "$openPresetList = false", failures);
 ensureIncludes(appShellContent, appShellFile, "$openPersonaList = false", failures);
 ensureIncludes(appShellContent, appShellFile, "$bookmarkListOpen = false", failures);
-ensureIncludes(appShellContent, appShellFile, "$hypaV3ModalOpen = false", failures);
 
 ensureIncludes(appShellContent, appShellFile, "appRouteStore.set(nextRoute)", failures);
 ensureIncludes(
@@ -193,13 +192,15 @@ ensureIncludes(appShellContent, appShellFile, "clearTransientOverlays()", failur
 ensureIncludes(appShellContent, appShellFile, "let lastWorkspace = $state<AppRoute[\"workspace\"]>(resolveWorkspace())", failures);
 
 ensureIncludes(appShellContent, appShellFile, "const rightSidebarToggleKey = \"risu:desktop-char-config-open\"", failures);
-ensureIncludes(appShellContent, appShellFile, "let uiShellRightSidebarTab = $state<\"chat\" | \"character\">(\"chat\")", failures);
+ensureIncludes(appShellContent, appShellFile, "let uiShellRightSidebarTab = $state<\"chat\" | \"character\" | \"memory\">(\"chat\")", failures);
 ensureIncludes(appShellContent, appShellFile, "let uiShellRightSidebarVisible = $state(readRightSidebarDefault())", failures);
 ensureIncludes(appShellContent, appShellFile, "const chatRightSidebarPanelId = \"chat-right-sidebar-drawer\";", failures);
 ensureIncludes(appShellContent, appShellFile, "const libraryRightSidebarPanelId = \"rulebook-right-sidebar-drawer\";", failures);
 ensureIncludes(appShellContent, appShellFile, "const rightSidebarPanelId = $derived.by(() => {", failures);
 ensureIncludes(appShellContent, appShellFile, "workspace === \"chats\" && uiShellRightSidebarOpen && uiShellRightSidebarVisible", failures);
-ensureIncludes(appShellContent, appShellFile, "uiShellRightSidebarTab === \"character\" ? \"character\" : \"chat\"", failures);
+ensureIncludes(appShellContent, appShellFile, "if (uiShellRightSidebarTab === \"character\") {", failures);
+ensureIncludes(appShellContent, appShellFile, "} else if (uiShellRightSidebarTab === \"memory\") {", failures);
+ensureIncludes(appShellContent, appShellFile, "inspector = \"memory\";", failures);
 ensureIncludes(appShellContent, appShellFile, "const chats = selectedCharacter.chats ?? [];", failures);
 ensureIncludes(
   appShellContent,
@@ -586,11 +587,10 @@ ensureIncludes(mobileHeaderContent, mobileHeaderFile, "placeholder={language.sea
 ensureIncludes(mobileBodyContent, mobileBodyFile, "class=\"ds-mobile-topbar seg-tabs\"", failures);
 ensureIncludes(mobileBodyContent, mobileBodyFile, "type=\"button\" class=\"ds-mobile-topbar-btn ds-mobile-topbar-btn-divider seg-tab\"", failures);
 ensureIncludes(mobileBodyContent, mobileBodyFile, "class=\"ds-mobile-topbar-btn ds-mobile-topbar-btn-divider seg-tab\"", failures);
-ensureIncludes(mobileBodyContent, mobileBodyFile, "class=\"ds-mobile-topbar-btn ds-mobile-topbar-btn-icon seg-tab icon-btn icon-btn--md\"", failures);
 ensureIncludes(mobileBodyContent, mobileBodyFile, "class:is-active={$MobileSideBar === 3}", failures);
 ensureIncludes(mobileBodyContent, mobileBodyFile, "title={language.Chat} aria-label={language.Chat} aria-pressed={$MobileSideBar === 1}", failures);
 ensureIncludes(mobileBodyContent, mobileBodyFile, "title={language.character} aria-label={language.character} aria-pressed={$MobileSideBar === 2}", failures);
-ensureIncludes(mobileBodyContent, mobileBodyFile, "title=\"Developer tools\" aria-label=\"Developer tools\" aria-pressed={$MobileSideBar === 3}", failures);
+ensureIncludes(mobileBodyContent, mobileBodyFile, "title={language.memoryTab} aria-label={language.memoryTab} aria-pressed={$MobileSideBar === 3}", failures);
 ensureIncludes(mobileFooterContent, mobileFooterFile, "class=\"ds-mobile-nav-track ds-mobile-nav-track-root action-rail\"", failures);
 ensureIncludes(mobileFooterContent, mobileFooterFile, "class=\"ds-mobile-nav-btn ds-mobile-nav-btn-root icon-btn icon-btn--md\"", failures);
 ensureIncludes(mobileFooterContent, mobileFooterFile, "title=\"Home\"", failures);
@@ -695,7 +695,7 @@ ensureIncludes(hypaModalContent, hypaModalFile, "class=\"ds-hypa-modal-empty-not
 ensureIncludes(hypaModalContent, hypaModalFile, "class=\"ds-hypa-modal-search-input control-field\"", failures);
 ensureIncludes(hypaModalContent, hypaModalFile, "class=\"ds-hypa-modal-search-nav-button icon-btn icon-btn--sm\"", failures);
 ensureIncludes(hypaModalContent, hypaModalFile, "class=\"ds-hypa-modal-manual-input control-field\"", failures);
-ensureIncludes(hypaModalContent, hypaModalFile, "class=\"ds-hypa-modal-manual-submit control-chip\"", failures);
+ensureIncludes(hypaModalContent, hypaModalFile, "class=\"ds-hypa-modal-manual-submit ds-ui-button ds-ui-button-size-md ds-ui-button--primary\"", failures);
 ensureIncludes(hypaModalContent, hypaModalFile, "class=\"ds-hypa-modal-debug-textarea control-field\"", failures);
 ensureIncludes(hypaModalHeaderContent, hypaModalHeaderFile, "<div class=\"hypa-modal-actions action-rail\">", failures);
 ensureIncludes(hypaModalHeaderContent, hypaModalHeaderFile, "class=\"hypa-modal-icon-btn icon-btn icon-btn--md\"", failures);
@@ -734,7 +734,6 @@ ensureIncludes(hypaBulkEditActionsContent, hypaBulkEditActionsFile, "class=\"hyp
 ensureIncludes(hypaBulkEditActionsContent, hypaBulkEditActionsFile, "class=\"hypa-bulk-input-row action-rail\"", failures);
 ensureIncludes(hypaBulkEditActionsContent, hypaBulkEditActionsFile, "class=\"hypa-bulk-select control-field\"", failures);
 ensureIncludes(hypaBulkEditActionsContent, hypaBulkEditActionsFile, "class=\"hypa-bulk-input control-field\"", failures);
-ensureIncludes(hypaBulkEditActionsContent, hypaBulkEditActionsFile, "class=\"hypa-bulk-btn hypa-bulk-btn-warning hypa-bulk-btn-compact icon-btn icon-btn--sm\"", failures);
 ensureIncludes(hypaBulkEditActionsContent, hypaBulkEditActionsFile, ".hypa-bulk-shell.panel-shell {", failures);
 ensureIncludes(hypaBulkEditActionsContent, hypaBulkEditActionsFile, ".hypa-bulk-row.action-rail {", failures);
 ensureIncludes(hypaBulkEditActionsContent, hypaBulkEditActionsFile, ".hypa-bulk-left.action-rail,", failures);
@@ -754,9 +753,6 @@ ensureIncludes(hypaTagManagerContent, hypaTagManagerFile, "class=\"ds-hypa-tag-i
 ensureIncludes(hypaTagManagerContent, hypaTagManagerFile, "class=\"ds-hypa-tag-icon-btn ds-hypa-tag-icon-btn-delete icon-btn icon-btn--sm\"", failures);
 ensureIncludes(hypaTagManagerContent, hypaTagManagerFile, "class=\"ds-hypa-tag-empty empty-state\"", failures);
 ensureIncludes(hypaSummaryItemContent, hypaSummaryItemFile, "class=\"hypa-summary-root panel-shell\"", failures);
-ensureIncludes(hypaSummaryItemContent, hypaSummaryItemFile, "class=\"hypa-summary-chip control-chip\"", failures);
-ensureIncludes(hypaSummaryItemContent, hypaSummaryItemFile, "class=\"hypa-summary-tag-button control-chip\"", failures);
-ensureIncludes(hypaSummaryItemContent, hypaSummaryItemFile, "class=\"hypa-summary-chip-button control-chip\"", failures);
 ensureIncludes(hypaSummaryItemContent, hypaSummaryItemFile, "class=\"hypa-summary-metric-chip control-chip\"", failures);
 ensureIncludes(hypaSummaryItemContent, hypaSummaryItemFile, "class=\"hypa-summary-row-inline action-rail\"", failures);
 ensureIncludes(hypaSummaryItemContent, hypaSummaryItemFile, "class=\"hypa-summary-icon-button icon-btn icon-btn--sm\"", failures);
@@ -767,9 +763,6 @@ ensureIncludes(hypaSummaryItemContent, hypaSummaryItemFile, "class=\"hypa-summar
 ensureIncludes(hypaSummaryItemContent, hypaSummaryItemFile, "class=\"hypa-summary-textarea control-field\"", failures);
 ensureIncludes(hypaSummaryItemContent, hypaSummaryItemFile, "class=\"hypa-summary-chatmemo-button control-chip\"", failures);
 ensureIncludes(hypaSummaryItemContent, hypaSummaryItemFile, ".hypa-summary-root.panel-shell {", failures);
-ensureIncludes(hypaSummaryItemContent, hypaSummaryItemFile, ".hypa-summary-chip.control-chip {", failures);
-ensureIncludes(hypaSummaryItemContent, hypaSummaryItemFile, ".hypa-summary-tag-button.control-chip {", failures);
-ensureIncludes(hypaSummaryItemContent, hypaSummaryItemFile, ".hypa-summary-chip-button.control-chip {", failures);
 ensureIncludes(hypaSummaryItemContent, hypaSummaryItemFile, ".hypa-summary-metric-chip.control-chip {", failures);
 ensureIncludes(hypaSummaryItemContent, hypaSummaryItemFile, ".hypa-summary-icon-button.icon-btn.icon-btn--sm {", failures);
 ensureIncludes(hypaSummaryItemContent, hypaSummaryItemFile, ".hypa-summary-toggle-button.control-chip {", failures);
@@ -789,7 +782,7 @@ ensureIncludes(stylesContent, stylesFile, ".ds-hypa-modal-empty-note.empty-state
 ensureIncludes(stylesContent, stylesFile, ".ds-hypa-modal-search-input.control-field {", failures);
 ensureIncludes(stylesContent, stylesFile, ".ds-hypa-modal-search-nav-button.icon-btn.icon-btn--sm {", failures);
 ensureIncludes(stylesContent, stylesFile, ".ds-hypa-modal-manual-input.control-field {", failures);
-ensureIncludes(stylesContent, stylesFile, ".ds-hypa-modal-manual-submit.control-chip {", failures);
+ensureIncludes(stylesContent, stylesFile, ".ds-hypa-modal-manual-submit.ds-ui-button {", failures);
 ensureIncludes(stylesContent, stylesFile, ".ds-hypa-modal-debug-textarea.control-field {", failures);
 
 ensureNotIncludes(

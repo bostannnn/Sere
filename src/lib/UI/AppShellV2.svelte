@@ -11,7 +11,6 @@
         DBState,
         appRouteStore,
         openRulebookManager,
-        hypaV3ModalOpen,
         type AppRoute,
     } from "src/ts/stores.svelte";
     import { addCharacter } from "src/ts/characters";
@@ -19,7 +18,7 @@
     import AppShellStage from "./AppShellStage.svelte";
 
     let topbarOverflowOpen = $state(false);
-    let uiShellRightSidebarTab = $state<"chat" | "character">("chat");
+    let uiShellRightSidebarTab = $state<"chat" | "character" | "memory">("chat");
     let librarySidebarTab = $state<"library" | "settings">("library");
     const rightSidebarToggleKey = "risu:desktop-char-config-open";
     const librarySidebarToggleKey = "risu:desktop-library-sidebar-open";
@@ -124,7 +123,13 @@
         const workspace = resolveWorkspace();
         let inspector: AppRoute["inspector"] = "none";
         if (workspace === "chats" && uiShellRightSidebarOpen && uiShellRightSidebarVisible) {
-            inspector = uiShellRightSidebarTab === "character" ? "character" : "chat";
+            if (uiShellRightSidebarTab === "character") {
+                inspector = "character";
+            } else if (uiShellRightSidebarTab === "memory") {
+                inspector = "memory";
+            } else {
+                inspector = "chat";
+            }
         } else if (workspace === "library" && librarySidebarOpen) {
             inspector = "details";
         }
@@ -213,7 +218,6 @@
         $openPresetList = false;
         $openPersonaList = false;
         $bookmarkListOpen = false;
-        $hypaV3ModalOpen = false;
     }
 
     const showRightSidebarToggle = $derived.by(() => {
@@ -274,10 +278,6 @@
         }
         if ($bookmarkListOpen) {
             $bookmarkListOpen = false;
-            return true;
-        }
-        if ($hypaV3ModalOpen) {
-            $hypaV3ModalOpen = false;
             return true;
         }
         return false;

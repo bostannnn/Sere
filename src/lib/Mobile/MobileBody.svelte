@@ -4,10 +4,9 @@
     import MobileCharacters from "./MobileCharacters.svelte";
     import ChatScreen from "../ChatScreens/ChatScreen.svelte";
     import CharConfig from "../SideBars/CharConfig.svelte";
-    import { WrenchIcon } from "@lucide/svelte";
     import { language } from "src/lang";
     import SideChatList from "../SideBars/SideChatList.svelte";
-    import DevTool from "../SideBars/DevTool.svelte";
+    import HypaV3Modal from "../Others/HypaV3Modal.svelte";
     import { isLite } from "src/ts/lite";
     import RulebookLibrary from "../Others/RulebookManager/RulebookLibrary.svelte";
     
@@ -34,10 +33,10 @@
     }}>
         {language.character}
     </button>
-    <button type="button" class="ds-mobile-topbar-btn ds-mobile-topbar-btn-icon seg-tab icon-btn icon-btn--md" class:is-active={$MobileSideBar === 3} title="Developer tools" aria-label="Developer tools" aria-pressed={$MobileSideBar === 3} onclick={() => {
+    <button type="button" class="ds-mobile-topbar-btn ds-mobile-topbar-btn-divider seg-tab" class:is-active={$MobileSideBar === 3} title={language.memoryTab} aria-label={language.memoryTab} aria-pressed={$MobileSideBar === 3} onclick={() => {
         $MobileSideBar = 3
     }}>
-        <WrenchIcon size={18} />
+        {language.memoryTab}
     </button>
 </div>
 {/if}
@@ -49,7 +48,7 @@
             {:else if $MobileSideBar === 2}
                 <CharConfig />
             {:else if $MobileSideBar === 3}
-                <DevTool />
+                <HypaV3Modal embedded />
             {/if}
         </div>
     {:else if $selectedCharID !== -1}

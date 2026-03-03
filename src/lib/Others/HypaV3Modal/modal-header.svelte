@@ -3,52 +3,43 @@
   import { tick } from "svelte";
   import {
     SearchIcon,
-    StarIcon,
     SettingsIcon,
     MoreVerticalIcon,
     BarChartIcon,
     Trash2Icon,
     XIcon,
     SquarePenIcon,
-    TagIcon,
   } from "@lucide/svelte";
-  import { language } from "src/lang";
   import type { SerializableHypaV3Data } from "src/ts/process/memory/hypav3";
   import {
     hypaV3ModalOpen,
     settingsOpen,
     SettingsMenuIndex,
   } from "src/ts/stores.svelte";
-  import type { SearchState, BulkEditState, CategoryManagerState, FilterState, UIState } from "./types";
+  import type { SearchState, BulkEditState, UIState } from "./types";
 
   interface Props {
+    embedded?: boolean;
     searchState: SearchState | null;
-    filterImportant: boolean;
     dropdownOpen: boolean;
     filterSelected: boolean;
     bulkEditState?: BulkEditState;
-    categoryManagerState?: CategoryManagerState;
-    filterState?: FilterState;
     uiState?: UIState;
     hypaV3Data: SerializableHypaV3Data;
     onResetData?: () => Promise<void>;
     onToggleBulkEditMode?: () => void;
-    onOpenCategoryManager?: () => void;
   }
 
   let {
+    embedded = false,
     searchState = $bindable(),
-    filterImportant = $bindable(),
     dropdownOpen = $bindable(),
     filterSelected = $bindable(),
     bulkEditState,
-    categoryManagerState,
-    filterState,
     uiState: _uiState,
     hypaV3Data: _hypaV3Data,
     onResetData,
     onToggleBulkEditMode,
-    onOpenCategoryManager,
   }: Props = $props();
 
 
@@ -74,19 +65,17 @@
     }
   }
 
-  function toggleFilterImportant() {
-    filterImportant = !filterImportant;
-  }
-
   function openGlobalSettings() {
-    $hypaV3ModalOpen = false;
+    if (!embedded) {
+      $hypaV3ModalOpen = false;
+    }
     $settingsOpen = true;
     $SettingsMenuIndex = 2; // Other bot settings
   }
 
   function openDropdown(e: MouseEvent) {
     e.stopPropagation();
-    dropdownOpen = true;
+    dropdownOpen = !dropdownOpen;
   }
 
   function toggleFilterSelected() {
@@ -109,38 +98,38 @@
     }
   }
 
-  function openCategoryManager() {
-    if (onOpenCategoryManager) {
-      onOpenCategoryManager();
-    }
+  function closeDropdown() {
+    dropdownOpen = false;
+  }
+
+  function handleToggleFilterSelected() {
+    toggleFilterSelected();
+    closeDropdown();
+  }
+
+  function handleOpenGlobalSettings() {
+    openGlobalSettings();
+    closeDropdown();
+  }
+
+  async function handleResetData() {
+    await resetData();
+    closeDropdown();
   }
 </script>
 
 <div class="hypa-modal-header">
-  <!-- Modal Title -->
-  <h1 class="hypa-modal-title">
-    {language.hypaV3Modal.titleLabel}
-  </h1>
-
   <!-- Buttons Container -->
   <div class="hypa-modal-actions action-rail">
     <!-- Open Search Button -->
     <button
       class="hypa-modal-icon-btn icon-btn icon-btn--md"
+      title="Search summaries"
+      aria-label="Search summaries"
       tabindex="-1"
       onclick={async () => await toggleSearch()}
     >
       <SearchIcon size={24} />
-    </button>
-
-    <!-- Filter Important Summary Button -->
-    <button
-      class="hypa-modal-icon-btn hypa-modal-icon-btn-accent icon-btn icon-btn--md"
-      class:is-active={filterState?.showImportantOnly}
-      tabindex="-1"
-      onclick={toggleFilterImportant}
-    >
-      <StarIcon size={24} />
     </button>
 
     <!-- Bulk Edit Mode Button -->
@@ -148,6 +137,8 @@
       <button
         class="hypa-modal-icon-btn hypa-modal-icon-btn-accent icon-btn icon-btn--md"
         class:is-active={bulkEditState.isEnabled}
+        title="Toggle bulk edit"
+        aria-label="Toggle bulk edit"
         tabindex="-1"
         onclick={toggleBulkEditMode}
       >
@@ -155,30 +146,25 @@
       </button>
     {/if}
 
-    <!-- Category Manager Button -->
-    {#if categoryManagerState}
+    {#if !embedded}
+      <!-- Open Global Settings Button -->
       <button
         class="hypa-modal-icon-btn icon-btn icon-btn--md"
+        title="Open memory settings"
+        aria-label="Open memory settings"
         tabindex="-1"
-        onclick={openCategoryManager}
+        onclick={openGlobalSettings}
       >
-        <TagIcon size={24} />
+        <SettingsIcon size={24} />
       </button>
     {/if}
-
-    <!-- Open Global Settings Button -->
-    <button
-      class="hypa-modal-icon-btn icon-btn icon-btn--md"
-      tabindex="-1"
-      onclick={openGlobalSettings}
-    >
-      <SettingsIcon size={24} />
-    </button>
 
     <!-- Open Dropdown Button -->
     <div class="hypa-modal-dropdown-root">
       <button
         class="hypa-modal-icon-btn icon-btn icon-btn--md"
+        title="More actions"
+        aria-label="More actions"
         tabindex="-1"
         onclick={openDropdown}
       >
@@ -189,37 +175,39 @@
         <div class="hypa-modal-dropdown-panel panel-shell">
           <!-- Buttons Container -->
           <div class="hypa-modal-dropdown-actions action-rail">
-            <!-- Filter Selected Summary Button -->
-            <button
-              class="hypa-modal-icon-btn hypa-modal-icon-btn-accent icon-btn icon-btn--md"
-              class:is-active={filterSelected}
-              tabindex="-1"
-              onclick={toggleFilterSelected}
-            >
-              <BarChartIcon size={24} />
+            <button class="hypa-modal-dropdown-item" type="button" onclick={handleToggleFilterSelected}>
+              <BarChartIcon size={16} />
+              <span>{filterSelected ? "Show all summaries" : "Show selected only"}</span>
             </button>
 
-            <!-- Reset Data Button -->
-            <button
-              class="hypa-modal-icon-btn hypa-modal-icon-btn-danger icon-btn icon-btn--md"
-              tabindex="-1"
-              onclick={async () => await resetData()}
-            >
-              <Trash2Icon size={24} />
+            {#if embedded}
+              <button class="hypa-modal-dropdown-item" type="button" onclick={handleOpenGlobalSettings}>
+                <SettingsIcon size={16} />
+                <span>Memory settings</span>
+              </button>
+            {/if}
+
+            <button class="hypa-modal-dropdown-item hypa-modal-dropdown-item-danger" type="button" onclick={async () => await handleResetData()}>
+              <Trash2Icon size={16} />
+              <span>Reset memory data</span>
             </button>
           </div>
         </div>
       {/if}
     </div>
 
-    <!-- Close Modal Button -->
-    <button
-      class="hypa-modal-icon-btn icon-btn icon-btn--md"
-      tabindex="-1"
-      onclick={closeModal}
-    >
-      <XIcon size={24} />
-    </button>
+    {#if !embedded}
+      <!-- Close Modal Button -->
+      <button
+        class="hypa-modal-icon-btn icon-btn icon-btn--md"
+        title="Close modal"
+        aria-label="Close modal"
+        tabindex="-1"
+        onclick={closeModal}
+      >
+        <XIcon size={24} />
+      </button>
+    {/if}
   </div>
 </div>
 
@@ -228,17 +216,13 @@
     margin-bottom: var(--ds-space-3);
     display: flex;
     align-items: center;
-    justify-content: space-between;
-  }
-
-  .hypa-modal-title {
-    margin: 0;
-    color: var(--ds-text-primary);
-    font-size: var(--ds-font-size-lg);
-    font-weight: var(--ds-font-weight-semibold);
+    justify-content: flex-end;
+    gap: var(--ds-space-2);
   }
 
   .hypa-modal-actions.action-rail {
+    flex-wrap: wrap;
+    justify-content: flex-end;
     display: flex;
     align-items: center;
     gap: var(--ds-space-2);
@@ -264,10 +248,6 @@
     color: var(--ds-border-strong);
   }
 
-  .hypa-modal-icon-btn-danger.icon-btn.icon-btn--md:hover {
-    color: var(--ds-text-danger);
-  }
-
   .hypa-modal-dropdown-root {
     position: relative;
   }
@@ -275,7 +255,7 @@
   .hypa-modal-dropdown-panel.panel-shell {
     position: absolute;
     right: 0;
-    z-index: 10;
+    z-index: 70;
     margin-top: var(--ds-space-1);
     border: 1px solid var(--ds-border-subtle);
     border-radius: var(--ds-radius-sm);
@@ -286,17 +266,55 @@
 
   .hypa-modal-dropdown-actions.action-rail {
     display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    min-width: 12rem;
+    max-width: min(17rem, 70vw);
+    gap: var(--ds-space-1);
+  }
+
+  .hypa-modal-dropdown-item {
+    display: flex;
     align-items: center;
     gap: var(--ds-space-2);
+    width: 100%;
+    border: 1px solid transparent;
+    border-radius: var(--ds-radius-sm);
+    background: transparent;
+    color: var(--ds-text-primary);
+    font-size: var(--ds-font-size-sm);
+    text-align: left;
+    padding: var(--ds-space-2);
+    transition: background-color var(--ds-motion-fast) var(--ds-ease-standard),
+      border-color var(--ds-motion-fast) var(--ds-ease-standard);
+  }
+
+  .hypa-modal-dropdown-item:hover {
+    background: color-mix(in srgb, var(--ds-surface-active) 45%, transparent);
+    border-color: var(--ds-border-subtle);
+  }
+
+  .hypa-modal-dropdown-item-danger {
+    color: var(--ds-text-danger);
+  }
+
+  .hypa-modal-dropdown-item-danger:hover {
+    background: color-mix(in srgb, var(--ds-text-danger) 14%, transparent);
+  }
+
+  @media (max-width: 960px) {
+    .hypa-modal-header {
+      flex-wrap: wrap;
+    }
+
+    .hypa-modal-actions.action-rail {
+      width: 100%;
+    }
   }
 
   @media (min-width: 640px) {
     .hypa-modal-header {
       margin-bottom: var(--ds-space-4);
-    }
-
-    .hypa-modal-title {
-      font-size: var(--ds-font-size-xl);
     }
   }
 </style>

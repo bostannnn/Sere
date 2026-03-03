@@ -9,14 +9,11 @@
   import { alertNormalWait, alertToast } from "src/ts/alert";
   import { DBState, selectedCharID, hypaV3ModalOpen } from "src/ts/stores.svelte";
   import { language } from "src/lang";
-  import { translateHTML } from "src/ts/translator/translator";
   import { globalFetch } from "src/ts/globalApi.svelte";
   import { alertConfirmTwice } from "./HypaV3Modal/utils";
   import ModalHeader from "./HypaV3Modal/modal-header.svelte";
   import ModalSummaryItem from "./HypaV3Modal/modal-summary-item.svelte";
   import ModalFooter from "./HypaV3Modal/modal-footer.svelte";
-  import CategoryManagerModal from "./HypaV3Modal/category-manager-modal.svelte";
-  import TagManagerModal from "./HypaV3Modal/tag-manager-modal.svelte";
   import BulkEditActions from "./HypaV3Modal/bulk-edit-actions.svelte";
   import BulkResummaryResult from "./HypaV3Modal/bulk-resummary-result.svelte";
   
@@ -26,10 +23,7 @@
     SearchState,
     SearchResult,
     BulkResummaryState,
-    CategoryManagerState,
-    TagManagerState,
     BulkEditState,
-    FilterState,
     UIState,
   } from "./HypaV3Modal/types";
   
@@ -40,12 +34,25 @@
   } from "./HypaV3Modal/utils";
   import SelectInput from "src/lib/UI/GUI/SelectInput.svelte";
   import OptionInput from "src/lib/UI/GUI/OptionInput.svelte";
+  import TextAreaInput from "src/lib/UI/GUI/TextAreaInput.svelte";
   const hypaV3ModalLog = (..._args: unknown[]) => {};
+
+  interface Props {
+    embedded?: boolean;
+  }
+
+  const {
+    embedded = false,
+  }: Props = $props();
 
   let modalChatIndex = $state(0);
   let wasOpen = $state(false);
   const currentChar = $derived(DBState.db.characters?.[$selectedCharID] ?? null);
+  const promptOverrideCharacter = $derived.by(() =>
+    currentChar && currentChar.type === "character" ? currentChar : null
+  );
   const chatList = $derived(currentChar?.chats ?? []);
+  const isOpen = $derived(embedded || $hypaV3ModalOpen);
 
   const emptyHypaV3Data: SerializableHypaV3Data = {
     summaries: [],
@@ -74,30 +81,11 @@
   let filterSelected = $state(false);
   let bulkResummaryState = $state<BulkResummaryState | null>(null);
 
-  let categoryManagerState = $state<CategoryManagerState>({
-    isOpen: false,
-    editingCategory: null,
-    selectedCategoryFilter: "all",
-  });
-
-  let tagManagerState = $state<TagManagerState>({
-    isOpen: false,
-    currentSummaryIndex: -1,
-    editingTag: "",
-    editingTagIndex: -1,
-  });
-
   const bulkEditState = $state<BulkEditState>({
     isEnabled: false,
     selectedSummaries: new Set(),
     selectedCategory: "",
     bulkSelectInput: "",
-  });
-
-  const filterState = $state<FilterState>({
-    showImportantOnly: false,
-    selectedCategoryFilter: "all",
-    isManualImportantToggle: false,
   });
 
   const uiState = $state<UIState>({
@@ -178,33 +166,31 @@
   }
 
   $effect(() => {
-    if ($hypaV3ModalOpen && !wasOpen) {
+    const char = promptOverrideCharacter;
+    if (char) {
+      char.hypaV3PromptOverride ??= {
+        summarizationPrompt: "",
+        reSummarizationPrompt: "",
+      };
+      char.hypaV3PromptOverride.summarizationPrompt = typeof char.hypaV3PromptOverride.summarizationPrompt === "string"
+        ? char.hypaV3PromptOverride.summarizationPrompt
+        : "";
+      char.hypaV3PromptOverride.reSummarizationPrompt = typeof char.hypaV3PromptOverride.reSummarizationPrompt === "string"
+        ? char.hypaV3PromptOverride.reSummarizationPrompt
+        : "";
+    }
+
+    if (isOpen && !wasOpen) {
       modalChatIndex = currentChar?.chatPage ?? 0;
     }
-    wasOpen = $hypaV3ModalOpen;
+    wasOpen = isOpen;
 
-    if (!$hypaV3ModalOpen) {
+    if (!isOpen && !embedded) {
       modalChatIndex = currentChar?.chatPage ?? 0;
     }
 
     if (chatList.length > 0 && modalChatIndex >= chatList.length) {
       modalChatIndex = chatList.length - 1;
-    }
-
-    if ($hypaV3ModalOpen) {
-      const currentImportantCount = untrack(() => hypaV3Data.summaries.filter(s => s.isImportant).length);
-
-      if (currentImportantCount > 0) {
-        categoryManagerState.selectedCategoryFilter = "all";
-        filterState.selectedCategoryFilter = "all";
-        filterState.showImportantOnly = true;
-      } else {
-        categoryManagerState.selectedCategoryFilter = "";
-        filterState.selectedCategoryFilter = "";
-        filterState.showImportantOnly = false;
-      }
-
-      filterState.isManualImportantToggle = false;
     }
   });
 
@@ -216,11 +202,6 @@
       newSelection.add(summaryIndex);
     }
     bulkEditState.selectedSummaries = newSelection;
-  }
-
-  function handleOpenTagManager(summaryIndex: number) {
-    tagManagerState.currentSummaryIndex = summaryIndex;
-    tagManagerState.isOpen = true;
   }
 
   async function callHypaV3Server(path: string, body: Record<string, unknown>) {
@@ -361,8 +342,6 @@
         result: null,
         selectedIndices: sortedIndices,
         mergedChatMemos: [],
-        isTranslating: false,
-        translation: null
       };
 
       const preview = await callHypaV3Server('/data/memory/hypav3/resummarize-preview', {
@@ -376,8 +355,6 @@
         result: String(preview?.summary || ''),
         selectedIndices: Array.isArray(preview?.selectedIndices) ? preview.selectedIndices : sortedIndices,
         mergedChatMemos: Array.isArray(preview?.mergedChatMemos) ? preview.mergedChatMemos : [],
-        isTranslating: false,
-        translation: null
       };
 
     } catch (error) {
@@ -426,8 +403,6 @@
         ...bulkResummaryState,
         isProcessing: true,
         result: null,
-        isTranslating: false,
-        translation: null
       };
 
       const preview = await callHypaV3Server('/data/memory/hypav3/resummarize-preview', {
@@ -442,8 +417,6 @@
         result: String(preview?.summary || ''),
         selectedIndices: Array.isArray(preview?.selectedIndices) ? preview.selectedIndices : sortedIndices,
         mergedChatMemos: Array.isArray(preview?.mergedChatMemos) ? preview.mergedChatMemos : bulkResummaryState.mergedChatMemos,
-        isTranslating: false,
-        translation: null
       };
       
     } catch (error) {
@@ -456,30 +429,6 @@
   function cancelBulkResummary() {
     bulkResummaryState = null;
     bulkEditState.selectedSummaries = new Set();
-  }
-
-  async function toggleBulkResummaryTranslation(regenerate: boolean = false) {
-    if (!bulkResummaryState || !bulkResummaryState.result) return;
-    
-    if (bulkResummaryState.isTranslating) return;
-
-    if (bulkResummaryState.translation) {
-      bulkResummaryState.translation = null;
-      return;
-    }
-
-    bulkResummaryState.isTranslating = true;
-    bulkResummaryState.translation = "Loading...";
-
-    try {
-      const result = await translateHTML(bulkResummaryState.result, false, "", -1, regenerate);
-      
-      bulkResummaryState.translation = result;
-    } catch (error) {
-      bulkResummaryState.translation = `Translation failed: ${error}`;
-    } finally {
-      bulkResummaryState.isTranslating = false;
-    }
   }
 
   async function handleResetData() {
@@ -528,22 +477,6 @@
     handleBulkEditClearSelection();
   }
 
-  function handleBulkEditToggleImportant() {
-    if (bulkEditState.selectedSummaries.size === 0) return;
-    const selectedIndices = Array.from(bulkEditState.selectedSummaries);
-    const hasNonImportant = selectedIndices.some(index => !hypaV3Data.summaries[index].isImportant);
-
-    selectedIndices.forEach(index => {
-      const summary = hypaV3Data.summaries[index];
-      if (hasNonImportant) {
-        summary.isImportant = true;
-      } else {
-        summary.isImportant = false;
-      }
-    });
-    handleBulkEditClearSelection();
-  }
-
   function handleBulkEditParseAndSelectSummaries() {
     if (!bulkEditState.bulkSelectInput.trim()) return;
     
@@ -551,17 +484,13 @@
     const filteredSelection = new SvelteSet<number>();
     
     for (const index of newSelection) {
-      if (shouldShowSummary(hypaV3Data.summaries[index], index, filterState.showImportantOnly, filterState.selectedCategoryFilter)) {
+      if (shouldShowSummary(hypaV3Data.summaries[index], index, false, "all")) {
         filteredSelection.add(index);
       }
     }
 
     bulkEditState.selectedSummaries = filteredSelection;
     bulkEditState.bulkSelectInput = "";
-  }
-
-  function handleOpenCategoryManager() {
-    categoryManagerState.isOpen = true;
   }
 
   function handleDeleteSummary(summaryIndex: number) {
@@ -576,10 +505,6 @@
     }
     uiState.collapsedSummaries = new Set(hypaV3Data.summaries.map((_, index) => index));
     persistHypaV3Data();
-  }
-
-  function handleCategoryFilter(categoryId: string) {
-    filterState.selectedCategoryFilter = categoryId;
   }
 
   function handleToggleCollapse(summaryIndex: number) {
@@ -731,8 +656,8 @@
     return shouldShowSummary(
       summary, 
       index, 
-      filterState.showImportantOnly, 
-      filterState.selectedCategoryFilter
+      false,
+      "all"
     ) && (
       !filterSelected ||
       !hypaV3Data.metrics ||
@@ -839,14 +764,15 @@
 </script>
 
 <!-- Modal Backdrop -->
-<div class="ds-hypa-modal-overlay">
+<div class={embedded ? "ds-hypa-sidebar-root" : "ds-hypa-modal-overlay"}>
   <!-- Modal Wrapper -->
-  <div class="ds-hypa-modal-wrap">
+  <div class={embedded ? "ds-hypa-sidebar-wrap" : "ds-hypa-modal-wrap"}>
     <!-- Modal Window -->
     <!-- svelte-ignore a11y_click_events_have_key_events -->
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div
       class="ds-hypa-modal-window"
+      class:ds-hypa-sidebar-window={embedded}
       class:ds-hypa-modal-window-empty={hypaV3Data.summaries.length === 0}
       onclick={(e) => {
         e.stopPropagation();
@@ -855,21 +781,18 @@
     >
       <!-- Header -->
       <ModalHeader
+        {embedded}
         bind:searchState
-        bind:filterImportant={filterState.showImportantOnly}
         bind:dropdownOpen={uiState.dropdownOpen}
         bind:filterSelected
         {bulkEditState}
-        {categoryManagerState}
-        {filterState}
         {uiState}
         {hypaV3Data}
         onResetData={handleResetData}
         onToggleBulkEditMode={handleToggleBulkEditMode}
-        onOpenCategoryManager={handleOpenCategoryManager}
       />
 
-      {#if chatList.length > 1}
+      {#if !embedded && chatList.length > 1}
         <div class="ds-hypa-modal-chat-row">
           <span class="ds-hypa-modal-chat-label">Chat</span>
           <SelectInput
@@ -1003,42 +926,138 @@
         {/if}
 
         <!-- Manual Summarize -->
-        <div class="ds-hypa-modal-manual-sticky">
-          <div class="ds-hypa-modal-manual-row">
-            <div class="ds-hypa-modal-manual-col">
-              <label class="ds-hypa-modal-manual-label" for={manualRangeStartInputId}>Manual summarize range</label>
-              <div class="ds-hypa-modal-manual-input-row">
-                <input
-                  id={manualRangeStartInputId}
-                  class="ds-hypa-modal-manual-input control-field"
-                  type="number"
-                  min="1"
-                  max={chatList[modalChatIndex]?.message?.length ?? 1}
-                  placeholder="Start"
-                  bind:value={manualStart}
-                />
-                <span class="ds-hypa-modal-manual-to">to</span>
-                <input
-                  id={manualRangeEndInputId}
-                  class="ds-hypa-modal-manual-input control-field"
-                  type="number"
-                  min="1"
-                  max={chatList[modalChatIndex]?.message?.length ?? 1}
-                  placeholder="End"
-                  bind:value={manualEnd}
-                />
+        {#if embedded}
+          <details class="ds-hypa-modal-tools panel-shell">
+            <summary class="ds-hypa-modal-tools-summary">
+              {language.tools ?? "Tools"}
+            </summary>
+            <div class="ds-hypa-modal-tools-body">
+              {#if chatList.length > 1}
+                <div class="ds-hypa-modal-chat-row ds-hypa-modal-chat-row-embedded">
+                  <span class="ds-hypa-modal-chat-label">Chat</span>
+                  <SelectInput
+                    className="ds-hypa-modal-chat-select"
+                    value={modalChatIndex}
+                    onchange={(e) => {
+                      const nextIndex = parseInt(e.currentTarget.value);
+                      if (!Number.isNaN(nextIndex)) {
+                        modalChatIndex = nextIndex;
+                      }
+                    }}
+                  >
+                    {#each chatList as chat, i (chat.id ?? i)}
+                      <OptionInput value={i}>
+                        {chat.name && chat.name.trim().length > 0 ? chat.name : `Chat ${i + 1}`}
+                      </OptionInput>
+                    {/each}
+                  </SelectInput>
+                </div>
+              {/if}
+
+              <div class="ds-hypa-modal-manual-sticky ds-hypa-modal-manual-embedded">
+                <div class="ds-hypa-modal-manual-row">
+                  <div class="ds-hypa-modal-manual-col">
+                    <label class="ds-hypa-modal-manual-label" for={manualRangeStartInputId}>Manual summarize range</label>
+                    <div class="ds-hypa-modal-manual-input-row">
+                      <input
+                        id={manualRangeStartInputId}
+                        class="ds-hypa-modal-manual-input control-field"
+                        type="number"
+                        min="1"
+                        max={chatList[modalChatIndex]?.message?.length ?? 1}
+                        placeholder="Start"
+                        bind:value={manualStart}
+                      />
+                      <span class="ds-hypa-modal-manual-to">to</span>
+                      <input
+                        id={manualRangeEndInputId}
+                        class="ds-hypa-modal-manual-input control-field"
+                        type="number"
+                        min="1"
+                        max={chatList[modalChatIndex]?.message?.length ?? 1}
+                        placeholder="End"
+                        bind:value={manualEnd}
+                      />
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    class="ds-hypa-modal-manual-submit ds-ui-button ds-ui-button-size-md ds-ui-button--primary"
+                    class:is-disabled={manualProcessing}
+                    disabled={manualProcessing}
+                    onclick={manualSummarizeRange}
+                  >
+                    {manualProcessing ? 'Summarizing...' : 'Summarize'}
+                  </button>
+                </div>
               </div>
+
+              {#if promptOverrideCharacter}
+                <div class="ds-hypa-modal-prompt-override panel-shell">
+                  <div class="ds-hypa-modal-prompt-override-title">Per-character memory prompt override</div>
+                  <div class="ds-hypa-modal-prompt-override-grid">
+                    <label class="ds-hypa-modal-prompt-override-label">
+                      Summarization Prompt
+                      <TextAreaInput
+                        className="ds-hypa-modal-prompt-override-input"
+                        bind:value={promptOverrideCharacter.hypaV3PromptOverride.summarizationPrompt}
+                        autocomplete="off"
+                        margin="none"
+                      />
+                    </label>
+                    <label class="ds-hypa-modal-prompt-override-label">
+                      Re-summarization Prompt
+                      <TextAreaInput
+                        className="ds-hypa-modal-prompt-override-input"
+                        bind:value={promptOverrideCharacter.hypaV3PromptOverride.reSummarizationPrompt}
+                        autocomplete="off"
+                        margin="none"
+                      />
+                    </label>
+                  </div>
+                </div>
+              {/if}
             </div>
-            <button
-              type="button"
-              class="ds-hypa-modal-manual-submit control-chip"
-              disabled={manualProcessing}
-              onclick={manualSummarizeRange}
-            >
-              {manualProcessing ? 'Summarizing...' : 'Summarize Range'}
-            </button>
+          </details>
+        {:else}
+          <div class="ds-hypa-modal-manual-sticky">
+            <div class="ds-hypa-modal-manual-row">
+              <div class="ds-hypa-modal-manual-col">
+                <label class="ds-hypa-modal-manual-label" for={manualRangeStartInputId}>Manual summarize range</label>
+                <div class="ds-hypa-modal-manual-input-row">
+                  <input
+                    id={manualRangeStartInputId}
+                    class="ds-hypa-modal-manual-input control-field"
+                    type="number"
+                    min="1"
+                    max={chatList[modalChatIndex]?.message?.length ?? 1}
+                    placeholder="Start"
+                    bind:value={manualStart}
+                  />
+                  <span class="ds-hypa-modal-manual-to">to</span>
+                  <input
+                    id={manualRangeEndInputId}
+                    class="ds-hypa-modal-manual-input control-field"
+                    type="number"
+                    min="1"
+                    max={chatList[modalChatIndex]?.message?.length ?? 1}
+                    placeholder="End"
+                    bind:value={manualEnd}
+                  />
+                </div>
+              </div>
+              <button
+                type="button"
+                class="ds-hypa-modal-manual-submit ds-ui-button ds-ui-button-size-md ds-ui-button--primary"
+                class:is-disabled={manualProcessing}
+                disabled={manualProcessing}
+                onclick={manualSummarizeRange}
+              >
+                {manualProcessing ? 'Summarizing...' : 'Summarize'}
+              </button>
+            </div>
           </div>
-        </div>
+        {/if}
 
         {#if hypaV3Debug}
           <details class="ds-hypa-modal-debug">
@@ -1126,11 +1145,9 @@
               bind:expandedMessageState
               bind:searchState
               {filterSelected}
-              {categories}
               {bulkEditState}
               {uiState}
               onToggleSummarySelection={handleToggleSummarySelection}
-              onOpenTagManager={handleOpenTagManager}
               onToggleCollapse={handleToggleCollapse}
               onDeleteSummary={handleDeleteSummary}
               onDeleteAfter={handleDeleteAfter}
@@ -1145,7 +1162,6 @@
       <!-- Bulk Resummary Result -->
       <BulkResummaryResult
         {bulkResummaryState}
-        onToggleTranslation={toggleBulkResummaryTranslation}
         onReroll={rerollBulkResummary}
         onApply={applyBulkResummary}
         onCancel={cancelBulkResummary}
@@ -1155,28 +1171,15 @@
       <BulkEditActions
         {bulkEditState}
         {categories}
-        showImportantOnly={filterState.showImportantOnly}
-        selectedCategoryFilter={filterState.selectedCategoryFilter}
+        showImportantOnly={false}
+        selectedCategoryFilter="all"
         onResummarize={resummarizeBulkSelected}
         onClearSelection={handleBulkEditClearSelection}
         onUpdateSelectedCategory={handleBulkEditUpdateSelectedCategory}
         onUpdateBulkSelectInput={handleBulkEditUpdateBulkSelectInput}
         onApplyCategory={handleBulkEditApplyCategory}
-        onToggleImportant={handleBulkEditToggleImportant}
         onParseAndSelectSummaries={handleBulkEditParseAndSelectSummaries}
       />
     </div>
   </div>
 </div>
-
-<!-- Component Modals -->
-<CategoryManagerModal
-  bind:categoryManagerState
-  bind:searchState
-  {filterState}
-  onCategoryFilter={handleCategoryFilter}
-/>
-
-<TagManagerModal
-  bind:tagManagerState
-/>

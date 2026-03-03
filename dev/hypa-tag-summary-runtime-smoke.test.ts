@@ -208,7 +208,6 @@ describe("hypa tag/summary runtime smoke", () => {
 
     const summaryItemStateMap = new WeakMap<object, object>();
     const onToggleSummarySelection = vi.fn();
-    const onOpenTagManager = vi.fn();
     const onToggleCollapse = vi.fn();
     const onDeleteSummary = vi.fn();
     const onDeleteAfter = vi.fn();
@@ -221,7 +220,6 @@ describe("hypa tag/summary runtime smoke", () => {
       expandedMessageState: null,
       searchState: null,
       filterSelected: true,
-      categories: [{ id: "", name: "Unclassified" }],
       bulkEditState: {
         isEnabled: true,
         selectedSummaries: new Set<number>([0]),
@@ -233,7 +231,6 @@ describe("hypa tag/summary runtime smoke", () => {
         dropdownOpen: false,
       },
       onToggleSummarySelection,
-      onOpenTagManager,
       onToggleCollapse,
       onDeleteSummary,
       onDeleteAfter,
@@ -241,9 +238,6 @@ describe("hypa tag/summary runtime smoke", () => {
     await flushUi();
 
     expect(target.querySelector(".hypa-summary-root.panel-shell")).not.toBeNull();
-    expect(target.querySelector(".hypa-summary-chip.control-chip")).not.toBeNull();
-    expect(target.querySelector(".hypa-summary-tag-button.control-chip")).toBeNull();
-    expect(target.querySelector(".hypa-summary-chip-button.control-chip")).not.toBeNull();
     expect(target.querySelectorAll(".hypa-summary-metric-chip.control-chip").length).toBeGreaterThan(0);
     expect(target.querySelector(".hypa-summary-row-inline.action-rail")).not.toBeNull();
     const collapseToggle = target.querySelector(
@@ -251,7 +245,7 @@ describe("hypa tag/summary runtime smoke", () => {
     ) as HTMLButtonElement | null;
     expect(collapseToggle).not.toBeNull();
     expect(collapseToggle?.getAttribute("type")).toBe("button");
-    expect(target.querySelectorAll(".hypa-summary-icon-button.icon-btn.icon-btn--sm").length).toBeGreaterThanOrEqual(5);
+    expect(target.querySelectorAll(".hypa-summary-icon-button.icon-btn.icon-btn--sm").length).toBeGreaterThanOrEqual(3);
     expect(target.querySelectorAll(".hypa-summary-textarea.control-field").length).toBeGreaterThan(0);
     expect(target.querySelectorAll(".hypa-summary-chatmemo-button.control-chip").length).toBe(2);
 
@@ -259,12 +253,7 @@ describe("hypa tag/summary runtime smoke", () => {
     expect(checkbox).not.toBeNull();
     checkbox?.dispatchEvent(new Event("change", { bubbles: true }));
 
-    const addTagButton = target.querySelector(".hypa-summary-chip-button.control-chip") as HTMLButtonElement | null;
-    addTagButton?.click();
-    await flushUi();
-
     expect(onToggleSummarySelection).toHaveBeenCalledTimes(1);
-    expect(onOpenTagManager).toHaveBeenCalledWith(0);
     expect(onToggleCollapse).toHaveBeenCalledTimes(0);
     expect(onDeleteSummary).toHaveBeenCalledTimes(0);
     expect(onDeleteAfter).toHaveBeenCalledTimes(0);

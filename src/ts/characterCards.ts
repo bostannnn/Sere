@@ -580,7 +580,11 @@ function convertOffSpecCards(charaData:OldTavernChar|CharacterCardV2Risu, imgp:s
         additionalText: '',
         loreExt: loreExt,
         loreSettings: loresettings,
-        chatFolders: []
+        chatFolders: [],
+        hypaV3PromptOverride: {
+            summarizationPrompt: '',
+            reSummarizationPrompt: '',
+        },
         
     }
 }
@@ -907,6 +911,14 @@ async function importCharacterCardSpec(card:CharacterCardV2Risu|CharacterCardV3,
         lowLevelAccess: risuext?.lowLevelAccess ?? false,
         defaultVariables: data?.extensions?.risuai?.defaultVariables ?? '',
         chatFolders: [],
+        hypaV3PromptOverride: {
+            summarizationPrompt: typeof data?.extensions?.risuai?.hypaV3PromptOverride?.summarizationPrompt === 'string'
+                ? data.extensions.risuai.hypaV3PromptOverride.summarizationPrompt
+                : '',
+            reSummarizationPrompt: typeof data?.extensions?.risuai?.hypaV3PromptOverride?.reSummarizationPrompt === 'string'
+                ? data.extensions.risuai.hypaV3PromptOverride.reSummarizationPrompt
+                : '',
+        },
         prebuiltAssetCommand: data?.extensions?.risuai?.prebuiltAssetCommand ?? '',
         prebuiltAssetExclude: data?.extensions?.risuai?.prebuiltAssetExclude ?? [],
         prebuiltAssetStyle: data?.extensions?.risuai?.prebuiltAssetStyle ?? '',
@@ -1113,6 +1125,14 @@ function createBaseV2(char:character) {
                     license: char.license,
                     triggerscript: char.triggerscript,
                     additionalText: char.additionalText,
+                    hypaV3PromptOverride: {
+                        summarizationPrompt: typeof char.hypaV3PromptOverride?.summarizationPrompt === 'string'
+                            ? char.hypaV3PromptOverride.summarizationPrompt
+                            : '',
+                        reSummarizationPrompt: typeof char.hypaV3PromptOverride?.reSummarizationPrompt === 'string'
+                            ? char.hypaV3PromptOverride.reSummarizationPrompt
+                            : '',
+                    },
                     virtualscript: '', //removed dude to security issue
                     largePortrait: char.largePortrait,
                     lorePlus: char.lorePlus,
@@ -1534,6 +1554,14 @@ export function createBaseV3(char:character){
                     license: char.license,
                     triggerscript: char.triggerscript,
                     additionalText: char.additionalText,
+                    hypaV3PromptOverride: {
+                        summarizationPrompt: typeof char.hypaV3PromptOverride?.summarizationPrompt === 'string'
+                            ? char.hypaV3PromptOverride.summarizationPrompt
+                            : '',
+                        reSummarizationPrompt: typeof char.hypaV3PromptOverride?.reSummarizationPrompt === 'string'
+                            ? char.hypaV3PromptOverride.reSummarizationPrompt
+                            : '',
+                    },
                     virtualscript: '', //removed dude to security issue
                     largePortrait: char.largePortrait,
                     lorePlus: char.lorePlus,
@@ -1629,6 +1657,10 @@ type CharacterCardV2Risu = {
                 triggerscript?:triggerscript[]
                 private?:boolean
                 additionalText?:string
+                hypaV3PromptOverride?:{
+                    summarizationPrompt?: string
+                    reSummarizationPrompt?: string
+                }
                 virtualscript?:string
                 largePortrait?:boolean
                 lorePlus?:boolean

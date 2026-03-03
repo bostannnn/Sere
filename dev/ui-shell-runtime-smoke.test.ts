@@ -482,6 +482,13 @@ describe("ui shell runtime smoke", () => {
     expect(get(appRouteStore).inspector).toBe("character");
     expect((document.querySelector('[data-testid="app-chat-screen-stub"]') as HTMLElement | null)?.dataset.rightSidebarTab).toBe("character");
 
+    const memoryTab = document.querySelector('[data-testid="app-chat-sidebar-tab-memory"]') as HTMLButtonElement | null;
+    expect(memoryTab).not.toBeNull();
+    memoryTab!.click();
+    await flushUi();
+    expect(get(appRouteStore).inspector).toBe("memory");
+    expect((document.querySelector('[data-testid="app-chat-screen-stub"]') as HTMLElement | null)?.dataset.rightSidebarTab).toBe("memory");
+
     const chatTab = document.querySelector('[data-testid="app-chat-sidebar-tab-chat"]') as HTMLButtonElement | null;
     expect(chatTab).not.toBeNull();
     chatTab!.click();
@@ -648,7 +655,7 @@ describe("ui shell runtime smoke", () => {
     expect(get(openPresetList)).toBe(false);
     expect(get(openPersonaList)).toBe(false);
     expect(get(bookmarkListOpen)).toBe(false);
-    expect(get(hypaV3ModalOpen)).toBe(false);
+    expect(get(hypaV3ModalOpen)).toBe(true);
 
     settingsOpen.set(false);
     openRulebookManager.set(true);
@@ -746,7 +753,7 @@ describe("ui shell runtime smoke", () => {
     await flushUi();
     window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
     await flushUi();
-    expect(get(hypaV3ModalOpen)).toBe(false);
+    expect(get(hypaV3ModalOpen)).toBe(true);
 
     const moreBtn = document.querySelector('[data-testid="topbar-nav-more"]') as HTMLButtonElement | null;
     expect(moreBtn).not.toBeNull();

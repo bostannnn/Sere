@@ -57,7 +57,6 @@ describe("hypa modal runtime smoke", () => {
 
     mountApp(ModalHeader, target, {
       searchState: null,
-      filterImportant: false,
       dropdownOpen: false,
       filterSelected: false,
       hypaV3Data: { summaries: [] },
@@ -71,9 +70,11 @@ describe("hypa modal runtime smoke", () => {
     const actionButtons = [
       ...target.querySelectorAll(".hypa-modal-actions .hypa-modal-icon-btn.icon-btn.icon-btn--md"),
     ] as HTMLButtonElement[];
-    expect(actionButtons.length).toBeGreaterThanOrEqual(5);
+    expect(actionButtons.length).toBeGreaterThanOrEqual(4);
 
-    actionButtons[2]?.click();
+    const settingsButton = actionButtons.find((button) => button.getAttribute("title") === "Open memory settings");
+    expect(settingsButton).toBeDefined();
+    settingsButton?.click();
     await flushUi();
     expect(get(settingsOpen)).toBe(true);
     expect(get(SettingsMenuIndex)).toBe(2);
@@ -91,7 +92,6 @@ describe("hypa modal runtime smoke", () => {
 
     mountApp(ModalHeader, dropdownTarget, {
       searchState: null,
-      filterImportant: false,
       dropdownOpen: true,
       filterSelected: true,
       hypaV3Data: { summaries: [] },

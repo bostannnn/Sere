@@ -68,6 +68,7 @@ vi.mock(import("src/ts/stores.svelte"), async () => {
   return {
     DBState: shared.DBState,
     selectedCharID: writable(0),
+    selIdState: { selId: 0 },
     ReloadGUIPointer: writable(0),
     bookmarkListOpen: writable(false),
     CharConfigSubMenu: writable(0),
@@ -241,6 +242,9 @@ vi.mock(import("src/lib/SideBars/Toggles.svelte"), async () => ({
   default: (await import("./test-stubs/SimplePanelStub.svelte")).default,
 }));
 vi.mock(import("src/lib/SideBars/GameStateEditor.svelte"), async () => ({
+  default: (await import("./test-stubs/SimplePanelStub.svelte")).default,
+}));
+vi.mock(import("src/lib/Others/HypaV3Modal.svelte"), async () => ({
   default: (await import("./test-stubs/SimplePanelStub.svelte")).default,
 }));
 

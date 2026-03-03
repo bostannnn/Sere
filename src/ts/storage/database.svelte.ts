@@ -1381,6 +1381,11 @@ export interface loreBook{
     folder?:string
 }
 
+export interface HypaV3PromptOverride {
+    summarizationPrompt?: string
+    reSummarizationPrompt?: string
+}
+
 export interface character{
     type?:"character"
     name:string
@@ -1517,6 +1522,7 @@ export interface character{
     prebuiltAssetCommand?:boolean
     prebuiltAssetStyle?:string
     prebuiltAssetExclude?:string[]
+    hypaV3PromptOverride?: HypaV3PromptOverride
     modules?:string[]
     gameState?: Record<string, any>
 }
@@ -1606,6 +1612,7 @@ export interface groupChat{
     prebuiltAssetCommand?:boolean
     prebuiltAssetStyle?:string
     prebuiltAssetExclude?:string[]
+    hypaV3PromptOverride?: HypaV3PromptOverride
     modules?:string[]
     gameState?: Record<string, any>
 }
