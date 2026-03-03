@@ -88,8 +88,8 @@ The client (Svelte SPA) is a thin UI that sends high-level intents and renders r
 
 | Method | Path | File | Description |
 |--------|------|------|-------------|
-| POST | `/data/memory/hypav3/manual-summarize` | `hypav3_manual_routes.cjs` | Manual summarization of selected messages |
-| POST | `/data/memory/hypav3/manual-summarize/trace` | `hypav3_trace_routes.cjs` | Trace/preview manual summarization |
+| POST | `/data/memory/hypav3/manual-summarize` | `hypav3_manual_routes.cjs` | Manual summarization of selected messages. Supports optional request `promptOverride` and returns scoped `debug` metadata (`characterId`, `chatId`, `start`, `end`, `source`) |
+| POST | `/data/memory/hypav3/manual-summarize/trace` | `hypav3_trace_routes.cjs` | Trace/preview manual summarization. Supports optional request `promptOverride` |
 | POST | `/data/memory/hypav3/resummarize-preview` | `hypav3_resummary_routes.cjs` | Preview re-summarization of existing summaries |
 | POST | `/data/memory/hypav3/resummarize-apply` | `hypav3_resummary_routes.cjs` | Apply re-summarization |
 | POST | `/data/memory/hypav3/resummarize-preview/trace` | `hypav3_trace_routes.cjs` | Trace re-summarization |

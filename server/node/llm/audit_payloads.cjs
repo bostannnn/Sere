@@ -106,15 +106,26 @@ function createAuditPayloadBuilders(arg = {}) {
 
     function buildHypaV3AuditRequestPayload(endpoint, body) {
         const payload = (body && typeof body === 'object' && !Array.isArray(body)) ? body : {};
+        const promptOverride = (payload.promptOverride && typeof payload.promptOverride === 'object' && !Array.isArray(payload.promptOverride))
+            ? payload.promptOverride
+            : null;
+        const summarizationPrompt = toStringOrEmpty(promptOverride?.summarizationPrompt);
+        const reSummarizationPrompt = toStringOrEmpty(promptOverride?.reSummarizationPrompt);
+        const promptOverrideMeta = {
+            hasPromptOverride: !!promptOverride,
+            summarizationPromptChars: summarizationPrompt.length,
+            reSummarizationPromptChars: reSummarizationPrompt.length,
+        };
         const base = {
             characterId: toStringOrEmpty(payload.characterId) || null,
             chatId: toStringOrEmpty(payload.chatId) || null,
         };
-        if (endpoint === 'hypav3_manual_summarize') {
+        if (endpoint === 'hypav3_manual_summarize' || endpoint === 'hypav3_manual_summarize_trace') {
             return {
                 ...base,
                 start: Number.isFinite(Number(payload.start)) ? Number(payload.start) : null,
                 end: Number.isFinite(Number(payload.end)) ? Number(payload.end) : null,
+                ...promptOverrideMeta,
             };
         }
         if (endpoint === 'hypav3_resummarize_preview') {

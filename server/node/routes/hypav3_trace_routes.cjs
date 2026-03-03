@@ -25,6 +25,33 @@ function registerHypaV3TraceRoutes(arg = {}) {
         planPeriodicHypaV3Summarization,
     } = arg;
 
+function normalizePromptOverride(payload) {
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+        return null;
+    }
+    const raw = payload;
+    return {
+        summarizationPrompt: toStringOrEmpty(raw.summarizationPrompt),
+        reSummarizationPrompt: toStringOrEmpty(raw.reSummarizationPrompt),
+    };
+}
+
+function applyPromptOverride(character, promptOverride) {
+    const baseCharacter = (character && typeof character === 'object' && !Array.isArray(character))
+        ? character
+        : {};
+    if (!promptOverride) {
+        return baseCharacter;
+    }
+    return {
+        ...baseCharacter,
+        hypaV3PromptOverride: {
+            summarizationPrompt: promptOverride.summarizationPrompt,
+            reSummarizationPrompt: promptOverride.reSummarizationPrompt,
+        },
+    };
+}
+
 app.post('/data/memory/hypav3/manual-summarize/trace', async (req, res) => {
     const startedAt = Date.now();
     const reqId = getReqIdFromResponse(res);
@@ -69,6 +96,8 @@ app.post('/data/memory/hypav3/manual-summarize/trace', async (req, res) => {
             : settingsRaw;
         const charRaw = JSON.parse(await fs.readFile(charPath, 'utf-8'));
         const character = charRaw.character || charRaw.data || charRaw || {};
+        const promptOverride = normalizePromptOverride(body.promptOverride);
+        const characterForRequest = applyPromptOverride(character, promptOverride);
         const chatRaw = JSON.parse(await fs.readFile(chatPath, 'utf-8'));
         const chat = chatRaw.chat || chatRaw.data || chatRaw || {};
         const sourceMessages = Array.isArray(chat?.message) ? chat.message.filter((m) => m && m.disabled !== true) : [];
@@ -78,7 +107,7 @@ app.post('/data/memory/hypav3/manual-summarize/trace', async (req, res) => {
         const startIndex = Math.max(1, Math.min(start, maxCount));
         const endIndex = Math.max(startIndex, Math.min(end, maxCount));
         const slice = sourceMessages.slice(startIndex - 1, endIndex);
-        const hypaSettings = resolveHypaV3Settings(settings, character);
+        const hypaSettings = resolveHypaV3Settings(settings, characterForRequest);
         const summarizable = [];
         for (let i = 0; i < slice.length; i++) {
             const converted = convertStoredMessageForHypaSummary(slice[i]);
@@ -96,7 +125,7 @@ app.post('/data/memory/hypav3/manual-summarize/trace', async (req, res) => {
         );
         if (!promptMessages) throw new LLMHttpError(400, 'EMPTY_PROMPT_MESSAGES', 'Failed to build summarization prompt.');
 
-        const modelMeta = resolveHypaSummaryProviderModel(settings, character);
+        const modelMeta = resolveHypaSummaryProviderModel(settings, characterForRequest);
         const responsePayload = buildMemoryTraceResponsePayload({
             endpoint,
             requestId: reqId,

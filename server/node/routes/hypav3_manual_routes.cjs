@@ -26,6 +26,33 @@ function registerHypaV3ManualRoutes(arg = {}) {
         persistChatDataToRaw,
     } = arg;
 
+function normalizePromptOverride(payload) {
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+        return null;
+    }
+    const raw = payload;
+    return {
+        summarizationPrompt: toStringOrEmpty(raw.summarizationPrompt),
+        reSummarizationPrompt: toStringOrEmpty(raw.reSummarizationPrompt),
+    };
+}
+
+function applyPromptOverride(character, promptOverride) {
+    const baseCharacter = (character && typeof character === 'object' && !Array.isArray(character))
+        ? character
+        : {};
+    if (!promptOverride) {
+        return baseCharacter;
+    }
+    return {
+        ...baseCharacter,
+        hypaV3PromptOverride: {
+            summarizationPrompt: promptOverride.summarizationPrompt,
+            reSummarizationPrompt: promptOverride.reSummarizationPrompt,
+        },
+    };
+}
+
 app.post('/data/memory/hypav3/manual-summarize', async (req, res) => {
     const startedAt = Date.now();
     const reqId = getReqIdFromResponse(res);
@@ -72,6 +99,8 @@ app.post('/data/memory/hypav3/manual-summarize', async (req, res) => {
             : settingsRaw;
         const charRaw = JSON.parse(await fs.readFile(charPath, 'utf-8'));
         const character = charRaw.character || charRaw.data || charRaw || {};
+        const promptOverride = normalizePromptOverride(body.promptOverride);
+        const characterForRequest = applyPromptOverride(character, promptOverride);
         const chatRaw = JSON.parse(await fs.readFile(chatPath, 'utf-8'));
         const chat = chatRaw.chat || chatRaw.data || chatRaw || {};
         const sourceMessages = Array.isArray(chat?.message) ? chat.message.filter((m) => m && m.disabled !== true) : [];
@@ -81,7 +110,15 @@ app.post('/data/memory/hypav3/manual-summarize', async (req, res) => {
         const startIndex = Math.max(1, Math.min(start, maxCount));
         const endIndex = Math.max(startIndex, Math.min(end, maxCount));
         const slice = sourceMessages.slice(startIndex - 1, endIndex);
-        const hypaSettings = resolveHypaV3Settings(settings, character);
+        const hypaSettings = resolveHypaV3Settings(settings, characterForRequest);
+        const characterPromptOverride = (character && typeof character === 'object' && character.hypaV3PromptOverride && typeof character.hypaV3PromptOverride === 'object')
+            ? character.hypaV3PromptOverride
+            : null;
+        const promptSource = (promptOverride && promptOverride.summarizationPrompt.trim())
+            ? 'request_override'
+            : ((toStringOrEmpty(characterPromptOverride?.summarizationPrompt).trim().length > 0)
+                ? 'character_override'
+                : 'preset_or_default');
         const summarizable = [];
         const chatMemos = [];
         for (let i = 0; i < slice.length; i++) {
@@ -104,7 +141,7 @@ app.post('/data/memory/hypav3/manual-summarize', async (req, res) => {
 
         const summaryText = await executeHypaSummaryFromMessages({
             settings,
-            character,
+            character: characterForRequest,
             characterId,
             chatId,
             promptMessages,
@@ -131,11 +168,31 @@ app.post('/data/memory/hypav3/manual-summarize', async (req, res) => {
         chat.hypaV3Data = hypaData;
         await fs.writeFile(chatPath, JSON.stringify(persistChatDataToRaw(chatRaw, chat), null, 2), 'utf-8');
 
+        const debugPayload = {
+            timestamp: Date.now(),
+            model: toStringOrEmpty(summaryModelMeta.model) || '-',
+            isResummarize: false,
+            prompt: hypaSettings.summarizationPrompt,
+            input: summarizable.map((item) => `${item.role}: ${toStringOrEmpty(item.content)}`).join('\n'),
+            formatted: promptMessages.map((item) => ({
+                role: toStringOrEmpty(item.role),
+                content: toStringOrEmpty(item.content),
+            })),
+            rawResponse: summaryText,
+            characterId,
+            chatId,
+            start: startIndex,
+            end: endIndex,
+            source: 'manual',
+            promptSource,
+        };
+
         const successPayload = {
             type: 'success',
             requestId: reqId,
             summary: summaryText,
             hypaV3Data: hypaData,
+            debug: debugPayload,
         };
         const durationMs = Date.now() - startedAt;
         logLLMExecutionEnd({

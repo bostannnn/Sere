@@ -161,6 +161,8 @@ pnpm build
 
 For server-first mode locally: run both `pnpm dev` and `pnpm run runserver`. The client at `localhost:5173` proxies API calls to the server at `localhost:6001`.
 
+Memory sidebar note: in embedded right-sidebar Memory mode, manual HypaV3 summarize (`Start/End + Summarize`) always targets the currently active chat (`chatPage`).
+
 ### Data Safety — Read Before Running Any Server Script
 
 > **WARNING:** `data/` is live user data — characters, chats, settings, embeddings, and API keys. It is gitignored and never backed up by git. Smoke scripts that use `RISU_STORAGE_TEST_ALLOW_WRITE=1` will write to whatever server is running. If that server is pointed at `data/`, your production data will be modified or overwritten.

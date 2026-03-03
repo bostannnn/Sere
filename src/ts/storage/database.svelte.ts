@@ -1319,6 +1319,12 @@ export interface Database{
         input:string
         formatted:{role:string, content:string}[]
         rawResponse?:string
+        characterId?:string
+        chatId?:string
+        start?:number
+        end?:number
+        source?:"manual"
+        promptSource?:"request_override"|"character_override"|"preset_or_default"
         periodic?:{
             totalChats:number
             lastIndex:number

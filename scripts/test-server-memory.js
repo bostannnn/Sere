@@ -21,6 +21,8 @@ const runId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
 const testCharId = `test-mem-${runId}`;
 const testChatId = `test-chat-${runId}`;
+const characterPromptOverrideA = 'Character-level summarization prompt A';
+const requestPromptOverrideB = 'Request-level summarization prompt B';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -71,6 +73,10 @@ const testCharBody = {
     chaId: testCharId,
     name: 'Test Memory Character',
     supaMemory: true,
+    hypaV3PromptOverride: {
+      summarizationPrompt: characterPromptOverrideA,
+      reSummarizationPrompt: '',
+    },
   },
 };
 
@@ -179,14 +185,15 @@ async function main() {
       console.log(`  Created chat: ${testChatId}`);
     }
 
-    // Patch settings — Config A: default (empty) summarizationPrompt
+    // Patch settings — Config A: empty preset summarizationPrompt.
+    // Character-level prompt override remains set on the test character.
     {
       const overlay = makeTestSettings(origSettings);
       await putSettings(overlay, origSettingsEtag);
       console.log('  Patched settings → Config A (default template, periodicSummarizationEnabled=true)');
     }
 
-    // ── T1: manual-summarize/trace — default template → messageCount=2 ────────
+    // ── T1: manual-summarize/trace — non-{{slot}} template → messageCount=2 ──
     {
       const r = await req('/data/memory/hypav3/manual-summarize/trace', {
         method: 'POST',
@@ -197,13 +204,91 @@ async function main() {
       assert(r.json?.type === 'success', `T1: expected type='success', got '${r.json?.type}'`);
       assert(r.json?.shouldRun === true,  `T1: expected shouldRun=true`);
       assert(r.json?.reason === 'ready',  `T1: expected reason='ready', got '${r.json?.reason}'`);
-      // Default template: two messages — [user: chat content] + [system: template]
+      // Non-{{slot}} template: two messages — [user: chat content] + [system: template]
       assert(
         r.json?.messageCount === 2,
         `T1: expected messageCount=2 (default template), got ${r.json?.messageCount}`
       );
       assert(Array.isArray(r.json?.promptMessages), `T1: promptMessages should be an array`);
-      console.log('  T1 PASS: manual-summarize/trace — default template, messageCount=2');
+      console.log('  T1 PASS: manual-summarize/trace — non-{{slot}} template, messageCount=2');
+    }
+
+    // ── T1A: manual-summarize/trace — request promptOverride wins ────────────
+    {
+      const r = await req('/data/memory/hypav3/manual-summarize/trace', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          characterId: testCharId,
+          chatId: testChatId,
+          start: 1,
+          end: 5,
+          promptOverride: {
+            summarizationPrompt: requestPromptOverrideB,
+            reSummarizationPrompt: '',
+          },
+        }),
+      });
+      assert(r.res.status === 200, `T1A: expected 200, got ${r.res.status}: ${r.text}`);
+      assert(r.json?.type === 'success', `T1A: expected type='success', got '${r.json?.type}'`);
+      assert(Array.isArray(r.json?.promptMessages), 'T1A: promptMessages should be an array');
+      assert(r.json?.promptMessages?.[1]?.content === requestPromptOverrideB, 'T1A: system prompt should use request override');
+      console.log('  T1A PASS: request promptOverride overrides stored character prompt');
+    }
+
+    // ── T1B: manual-summarize/trace — blank request override falls back ──────
+    {
+      const r = await req('/data/memory/hypav3/manual-summarize/trace', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          characterId: testCharId,
+          chatId: testChatId,
+          start: 1,
+          end: 5,
+          promptOverride: {
+            summarizationPrompt: '',
+            reSummarizationPrompt: '',
+          },
+        }),
+      });
+      assert(r.res.status === 200, `T1B: expected 200, got ${r.res.status}: ${r.text}`);
+      assert(r.json?.type === 'success', `T1B: expected type='success', got '${r.json?.type}'`);
+      const prompt = r.json?.promptMessages?.[1]?.content || '';
+      assert(prompt !== requestPromptOverrideB, 'T1B: blank request override should not keep request override prompt');
+      assert(prompt !== characterPromptOverrideA, 'T1B: blank request override should not use stored character override');
+      assert(prompt.includes('Summarize the ongoing role story'), 'T1B: blank request override should fall back to preset/default prompt');
+      console.log('  T1B PASS: blank request override falls back to preset/default prompt');
+    }
+
+    // ── T1C: manual-summarize — returns scoped debug payload ─────────────────
+    {
+      const start = 1;
+      const end = 3;
+      const r = await req('/data/memory/hypav3/manual-summarize', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          characterId: testCharId,
+          chatId: testChatId,
+          start,
+          end,
+          promptOverride: {
+            summarizationPrompt: requestPromptOverrideB,
+            reSummarizationPrompt: '',
+          },
+        }),
+      });
+      assert(r.res.status === 200, `T1C: expected 200, got ${r.res.status}: ${r.text}`);
+      assert(r.json?.type === 'success', `T1C: expected type='success', got '${r.json?.type}'`);
+      assert(r.json?.debug?.characterId === testCharId, `T1C: debug.characterId expected '${testCharId}', got '${r.json?.debug?.characterId}'`);
+      assert(r.json?.debug?.chatId === testChatId, `T1C: debug.chatId expected '${testChatId}', got '${r.json?.debug?.chatId}'`);
+      assert(r.json?.debug?.start === start, `T1C: debug.start expected ${start}, got ${r.json?.debug?.start}`);
+      assert(r.json?.debug?.end === end, `T1C: debug.end expected ${end}, got ${r.json?.debug?.end}`);
+      assert(r.json?.debug?.source === 'manual', `T1C: debug.source expected 'manual', got '${r.json?.debug?.source}'`);
+      assert(r.json?.debug?.prompt === requestPromptOverrideB, 'T1C: debug.prompt should match request override');
+      assert(Array.isArray(r.json?.debug?.formatted) && r.json.debug.formatted.length > 0, 'T1C: debug.formatted should be non-empty array');
+      console.log('  T1C PASS: manual-summarize returns scoped debug payload with resolved prompt');
     }
 
     // ── T2: periodic-summarize/trace — shouldRun=true ─────────────────────────
@@ -256,7 +341,16 @@ async function main() {
       const r = await req('/data/memory/hypav3/manual-summarize/trace', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ characterId: testCharId, chatId: testChatId, start: 1, end: 5 }),
+        body: JSON.stringify({
+          characterId: testCharId,
+          chatId: testChatId,
+          start: 1,
+          end: 5,
+          promptOverride: {
+            summarizationPrompt: 'Summarize this roleplay scene: {{slot}}',
+            reSummarizationPrompt: '',
+          },
+        }),
       });
       assert(r.res.status === 200, `T4: expected 200, got ${r.res.status}: ${r.text}`);
       assert(r.json?.type === 'success', `T4: expected type='success', got '${r.json?.type}'`);

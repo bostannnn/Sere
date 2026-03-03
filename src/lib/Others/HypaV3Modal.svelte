@@ -42,6 +42,31 @@
     embedded?: boolean;
   }
 
+  interface ManualSummarizeDebug {
+    timestamp: number;
+    model: string;
+    isResummarize: boolean;
+    prompt: string;
+    input: string;
+    formatted: { role: string; content: string }[];
+    rawResponse?: string;
+    periodic?: {
+      totalChats: number;
+      lastIndex: number;
+      newMessages: number;
+      interval: number;
+      toSummarizeCount: number;
+      skippedReason?: string;
+      chatName?: string;
+    };
+    characterId?: string;
+    chatId?: string;
+    start?: number;
+    end?: number;
+    source?: "manual";
+    promptSource?: "request_override" | "character_override" | "preset_or_default";
+  }
+
   const {
     embedded = false,
   }: Props = $props();
@@ -53,6 +78,21 @@
     currentChar && currentChar.type === "character" ? currentChar : null
   );
   const chatList = $derived(currentChar?.chats ?? []);
+  const effectiveChatIndex = $derived.by(() => {
+    const baseIndex = embedded ? (currentChar?.chatPage ?? 0) : modalChatIndex;
+    if (chatList.length === 0) {
+      return 0;
+    }
+    if (baseIndex < 0) {
+      return 0;
+    }
+    if (baseIndex >= chatList.length) {
+      return chatList.length - 1;
+    }
+    return baseIndex;
+  });
+  const activeChat = $derived(chatList[effectiveChatIndex]);
+  const activeChatId = $derived(activeChat?.id ?? null);
   const isOpen = $derived(embedded || $hypaV3ModalOpen);
 
   const emptyHypaV3Data: SerializableHypaV3Data = {
@@ -118,6 +158,23 @@
   const manualRangeStartInputId = "hypav3-manual-range-start";
   const manualRangeEndInputId = "hypav3-manual-range-end";
   const hypaV3Debug = $derived(DBState.db.hypaV3Debug);
+  const scopedHypaV3Debug = $derived.by(() => {
+    if (!hypaV3Debug || !currentChar || !activeChatId) {
+      return null;
+    }
+    if (hypaV3Debug.characterId !== currentChar.chaId || hypaV3Debug.chatId !== activeChatId) {
+      return null;
+    }
+    return hypaV3Debug as ManualSummarizeDebug;
+  });
+  const activeChatManualDebug = $derived.by(() => {
+    const manualDebug = activeChat?.hypaV3Data?.lastManualDebug;
+    if (!manualDebug || typeof manualDebug !== "object") {
+      return null;
+    }
+    return manualDebug as ManualSummarizeDebug;
+  });
+  const logDebug = $derived(activeChatManualDebug ?? scopedHypaV3Debug);
   const hypaV3Settings = $derived(DBState.db.hypaV3Presets?.[DBState.db.hypaV3PresetId]?.settings);
   const hypaRuntimeDebug = $derived({
     memoryToggle: currentChar?.supaMemory,
@@ -150,7 +207,7 @@
     void filterSelected;
 
     untrack(() => {
-      const chat = chatList[modalChatIndex];
+      const chat = chatList[effectiveChatIndex];
       if (!chat) {
         hypaV3Data = emptyHypaV3Data;
         return;
@@ -174,7 +231,7 @@
   });
 
   $effect(() => {
-    const chat = chatList[modalChatIndex];
+    const chat = chatList[effectiveChatIndex];
     if (!chat) {
       hypaV3Data = emptyHypaV3Data;
       return;
@@ -192,12 +249,12 @@
   });
 
   function persistHypaV3Data() {
-    const targetChat = chatList[modalChatIndex];
+    const targetChat = chatList[effectiveChatIndex];
     if (!targetChat) return;
     const targetCharacter = DBState.db.characters?.[$selectedCharID];
     if (!targetCharacter) return;
     targetChat.hypaV3Data = hypaV3Data;
-    targetCharacter.chats[modalChatIndex] = { ...targetChat };
+    targetCharacter.chats[effectiveChatIndex] = { ...targetChat };
     targetCharacter.chats = [...targetCharacter.chats];
   }
 
@@ -216,7 +273,7 @@
         : "";
     }
 
-    if (isOpen && !wasOpen) {
+    if (isOpen && !wasOpen && !embedded) {
       modalChatIndex = currentChar?.chatPage ?? 0;
     }
     wasOpen = isOpen;
@@ -225,8 +282,22 @@
       modalChatIndex = currentChar?.chatPage ?? 0;
     }
 
-    if (chatList.length > 0 && modalChatIndex >= chatList.length) {
+    if (!embedded && chatList.length > 0 && modalChatIndex >= chatList.length) {
       modalChatIndex = chatList.length - 1;
+    }
+  });
+
+  let lastEffectiveChatIndex = $state(-1);
+  $effect(() => {
+    const nextIndex = effectiveChatIndex;
+    if (lastEffectiveChatIndex === -1) {
+      lastEffectiveChatIndex = nextIndex;
+      return;
+    }
+    if (nextIndex !== lastEffectiveChatIndex) {
+      manualStart = "";
+      manualEnd = "";
+      lastEffectiveChatIndex = nextIndex;
     }
   });
 
@@ -254,20 +325,36 @@
   }
 
   function syncHypaV3DataFromServer(data: SerializableHypaV3Data) {
-    const targetChat = chatList[modalChatIndex];
+    const targetChat = chatList[effectiveChatIndex];
     if (!targetChat) return;
     const targetCharacter = DBState.db.characters?.[$selectedCharID];
     if (!targetCharacter) return;
     hypaV3Data = data;
     targetChat.hypaV3Data = data;
-    targetCharacter.chats[modalChatIndex] = { ...targetChat };
+    targetCharacter.chats[effectiveChatIndex] = { ...targetChat };
+    targetCharacter.chats = [...targetCharacter.chats];
+  }
+
+  function persistManualDebugForActiveChat(debug: ManualSummarizeDebug) {
+    const targetChat = chatList[effectiveChatIndex];
+    if (!targetChat) return;
+    const targetCharacter = DBState.db.characters?.[$selectedCharID];
+    if (!targetCharacter) return;
+    targetChat.hypaV3Data ??= {
+      summaries: [],
+      categories: [{ id: "", name: language.hypaV3Modal.unclassified }],
+      lastSelectedSummaries: [],
+    };
+    targetChat.hypaV3Data.lastManualDebug = debug;
+    hypaV3Data = targetChat.hypaV3Data;
+    targetCharacter.chats[effectiveChatIndex] = { ...targetChat };
     targetCharacter.chats = [...targetCharacter.chats];
   }
 
   async function manualSummarizeRange() {
     if (manualProcessing) return;
     const characterId = currentChar?.chaId;
-    const chat = chatList[modalChatIndex];
+    const chat = chatList[effectiveChatIndex];
     if (!chat || !characterId || !chat.id) return;
     const messages = (chat.message ?? []).filter((m) => m && !m.disabled);
     const maxCount = messages.length;
@@ -285,14 +372,81 @@
 
     try {
       manualProcessing = true;
-      const result = await callHypaV3Server('/data/memory/hypav3/manual-summarize', {
+      const requestedPromptOverride = {
+        summarizationPrompt: promptOverrideCharacter?.hypaV3PromptOverride?.summarizationPrompt ?? "",
+        reSummarizationPrompt: promptOverrideCharacter?.hypaV3PromptOverride?.reSummarizationPrompt ?? "",
+      };
+      const requestPayload = {
         characterId,
         chatId: chat.id,
         start: startNum,
         end: endNum,
-      });
+        promptOverride: requestedPromptOverride,
+      };
+      const result = await callHypaV3Server('/data/memory/hypav3/manual-summarize', requestPayload);
       if (result?.hypaV3Data) {
         syncHypaV3DataFromServer(result.hypaV3Data as SerializableHypaV3Data);
+      }
+      if (result?.debug && typeof result.debug === "object") {
+        const debugData = result.debug as ManualSummarizeDebug;
+        DBState.db.hypaV3Debug = debugData;
+        persistManualDebugForActiveChat(debugData);
+      } else {
+        // Compatibility fallback for older server processes that do not return `debug`.
+        let fallbackDebug: ManualSummarizeDebug = {
+          timestamp: Date.now(),
+          model: "-",
+          isResummarize: false,
+          prompt: requestedPromptOverride.summarizationPrompt,
+          input: messages
+            .slice(startNum - 1, endNum)
+            .map((m) => `${m.role}: ${String(m.data ?? "")}`)
+            .join("\n"),
+          formatted: [],
+          characterId,
+          chatId: chat.id,
+          start: startNum,
+          end: endNum,
+          source: "manual",
+          promptSource: requestedPromptOverride.summarizationPrompt.trim()
+            ? "request_override"
+            : "preset_or_default",
+        };
+        try {
+          const traceResult = await callHypaV3Server('/data/memory/hypav3/manual-summarize/trace', requestPayload);
+          const promptMessages = Array.isArray(traceResult?.promptMessages) ? traceResult.promptMessages as Array<{ role?: string; content?: string }> : [];
+          const systemPrompt = promptMessages.find((item) => item?.role === "system")?.content ?? "";
+          const slotPrompt = promptMessages.length === 1 && promptMessages[0]?.role === "user"
+            ? (promptMessages[0]?.content ?? "")
+            : "";
+          const detectedPromptSource =
+            String(traceResult?.endpoint ?? "").includes("_manual_summarize_trace") &&
+            requestedPromptOverride.summarizationPrompt.trim()
+              ? ((systemPrompt || slotPrompt).includes(requestedPromptOverride.summarizationPrompt.trim())
+                  ? "request_override"
+                  : "preset_or_default")
+              : fallbackDebug.promptSource;
+          fallbackDebug = {
+            ...fallbackDebug,
+            model: String(traceResult?.model ?? "-"),
+            formatted: promptMessages
+              .filter((item) => typeof item?.role === "string" && typeof item?.content === "string")
+              .map((item) => ({ role: String(item.role), content: String(item.content) })),
+            prompt: systemPrompt || slotPrompt || fallbackDebug.prompt,
+            promptSource: detectedPromptSource,
+          };
+          if (requestedPromptOverride.summarizationPrompt.trim()) {
+            const usesRequestedPrompt = fallbackDebug.prompt.includes(requestedPromptOverride.summarizationPrompt.trim());
+            if (!usesRequestedPrompt) {
+              fallbackDebug.promptSource = "preset_or_default";
+              alertToast("Prompt override was not used by the running server. Restart runserver.");
+            }
+          }
+        } catch {
+          // Keep the fallback debug built from local state.
+        }
+        DBState.db.hypaV3Debug = fallbackDebug;
+        persistManualDebugForActiveChat(fallbackDebug);
       }
       uiState.collapsedSummaries = new Set(hypaV3Data.summaries.map((_, index) => index));
       alertToast('Summary added.');
@@ -367,7 +521,7 @@
   async function resummarizeBulkSelected() {
     if (bulkEditState.selectedSummaries.size < 2) return;
     const characterId = currentChar?.chaId;
-    const chat = chatList[modalChatIndex];
+    const chat = chatList[effectiveChatIndex];
     if (!characterId || !chat?.id) return;
 
     const sortedIndices = Array.from(bulkEditState.selectedSummaries).sort((a, b) => a - b);
@@ -403,7 +557,7 @@
   async function applyBulkResummary() {
     if (!bulkResummaryState || !bulkResummaryState.result) return;
     const characterId = currentChar?.chaId;
-    const chat = chatList[modalChatIndex];
+    const chat = chatList[effectiveChatIndex];
     if (!characterId || !chat?.id) return;
 
     try {
@@ -429,7 +583,7 @@
   async function rerollBulkResummary() {
     if (!bulkResummaryState) return;
     const characterId = currentChar?.chaId;
-    const chat = chatList[modalChatIndex];
+    const chat = chatList[effectiveChatIndex];
     if (!characterId || !chat?.id) return;
     
     const sortedIndices = bulkResummaryState.selectedIndices;
@@ -476,7 +630,7 @@
     ) {
       const targetCharacter = DBState.db.characters?.[$selectedCharID];
       if (!targetCharacter) return;
-      const targetChat = targetCharacter.chats?.[targetCharacter.chatPage];
+      const targetChat = targetCharacter.chats?.[effectiveChatIndex];
       if (!targetChat) return;
       targetChat.hypaV3Data = {
         summaries: [],
@@ -709,7 +863,7 @@
     if (!char) {
       return false;
     }
-    const chat = char.chats[modalChatIndex];
+    const chat = char.chats[effectiveChatIndex];
     if (!chat) {
       return false;
     }
@@ -726,7 +880,7 @@
           error: "Character not found.",
         };
       }
-      const chat = char.chats[modalChatIndex];
+      const chat = char.chats[effectiveChatIndex];
       if (!chat) {
         return {
           success: false,
@@ -964,12 +1118,12 @@
 
             <div class="ds-hypa-modal-tools panel-shell">
               <div class="ds-hypa-modal-tools-body">
-                {#if chatList.length > 1}
+                {#if !embedded && chatList.length > 1}
                   <div class="ds-hypa-modal-chat-row">
                     <span class="ds-hypa-modal-chat-label">Chat</span>
                     <SelectInput
                       className="ds-hypa-modal-chat-select"
-                      value={modalChatIndex}
+                      value={effectiveChatIndex}
                       onchange={(e) => {
                         const nextIndex = parseInt(e.currentTarget.value);
                         if (!Number.isNaN(nextIndex)) {
@@ -996,7 +1150,7 @@
                           class="ds-hypa-modal-manual-input control-field"
                           type="number"
                           min="1"
-                          max={chatList[modalChatIndex]?.message?.length ?? 1}
+                          max={chatList[effectiveChatIndex]?.message?.length ?? 1}
                           placeholder="Start"
                           bind:value={manualStart}
                         />
@@ -1006,7 +1160,7 @@
                           class="ds-hypa-modal-manual-input control-field"
                           type="number"
                           min="1"
-                          max={chatList[modalChatIndex]?.message?.length ?? 1}
+                          max={chatList[effectiveChatIndex]?.message?.length ?? 1}
                           placeholder="End"
                           bind:value={manualEnd}
                         />
@@ -1030,7 +1184,7 @@
               {#if isSummaryVisible(i)}
                 <ModalSummaryItem
                   summaryIndex={i}
-                  chatIndex={modalChatIndex}
+                  chatIndex={effectiveChatIndex}
                   {hypaV3Data}
                   {summaryItemStateMap}
                   bind:expandedMessageState
@@ -1066,6 +1220,7 @@
                       bind:value={promptOverrideCharacter.hypaV3PromptOverride.summarizationPrompt}
                       autocomplete="off"
                       margin="none"
+                      optimaizedInput={false}
                     />
                   </label>
                   <label class="ds-hypa-modal-prompt-override-label">
@@ -1075,6 +1230,7 @@
                       bind:value={promptOverrideCharacter.hypaV3PromptOverride.reSummarizationPrompt}
                       autocomplete="off"
                       margin="none"
+                      optimaizedInput={false}
                     />
                   </label>
                 </div>
@@ -1092,15 +1248,18 @@
             id="hypa-memory-panel-log"
             aria-label="Log panel"
           >
-            {#if hypaV3Debug}
+            {#if logDebug}
               <div class="ds-hypa-modal-debug panel-shell">
                 <div class="ds-hypa-modal-debug-summary">
                   Last summarize log
                 </div>
                 <div class="ds-hypa-modal-debug-body">
-                  <div>Model: <span class="ds-hypa-modal-debug-value">{hypaV3Debug.model}</span></div>
-                  <div>Mode: <span class="ds-hypa-modal-debug-value">{hypaV3Debug.isResummarize ? "Resummarize" : "Summarize"}</span></div>
-                  <div>Time: <span class="ds-hypa-modal-debug-value">{new Date(hypaV3Debug.timestamp).toLocaleString()}</span></div>
+                  <div>Model: <span class="ds-hypa-modal-debug-value">{logDebug.model}</span></div>
+                  <div>Mode: <span class="ds-hypa-modal-debug-value">{logDebug.isResummarize ? "Resummarize" : "Summarize"}</span></div>
+                  <div>Time: <span class="ds-hypa-modal-debug-value">{new Date(logDebug.timestamp).toLocaleString()}</span></div>
+                  {#if logDebug.promptSource}
+                    <div>Prompt source: <span class="ds-hypa-modal-debug-value">{logDebug.promptSource}</span></div>
+                  {/if}
                   <div>Memory toggle: <span class="ds-hypa-modal-debug-value">{hypaRuntimeDebug.memoryToggle ? "On" : "Off"}</span></div>
                   <div>HypaV3 enabled: <span class="ds-hypa-modal-debug-value">{hypaRuntimeDebug.hypaV3Enabled ? "On" : "Off"}</span></div>
                   <div>HypaV2 enabled: <span class="ds-hypa-modal-debug-value">{hypaRuntimeDebug.hypaV2Enabled ? "On" : "Off"}</span></div>
@@ -1111,16 +1270,16 @@
                     <div>Periodic: <span class="ds-hypa-modal-debug-value">{hypaV3Settings.periodicSummarizationEnabled && hypaV3Settings.periodicSummarizationInterval > 0 ? "On" : "Off"}</span></div>
                     <div>Interval: <span class="ds-hypa-modal-debug-value">{hypaV3Settings.periodicSummarizationInterval}</span></div>
                     <div>Last index: <span class="ds-hypa-modal-debug-value">{hypaV3Data.lastSummarizedMessageIndex ?? 0}</span></div>
-                    <div>Chat messages: <span class="ds-hypa-modal-debug-value">{chatList[modalChatIndex]?.message?.length ?? 0}</span></div>
-                    {#if hypaV3Debug.periodic}
-                      <div>Periodic total chats: <span class="ds-hypa-modal-debug-value">{hypaV3Debug.periodic.totalChats}</span></div>
-                      <div>Periodic new messages: <span class="ds-hypa-modal-debug-value">{hypaV3Debug.periodic.newMessages}</span></div>
-                      <div>Periodic to summarize: <span class="ds-hypa-modal-debug-value">{hypaV3Debug.periodic.toSummarizeCount}</span></div>
-                      {#if hypaV3Debug.periodic.skippedReason}
-                        <div>Periodic skipped: <span class="ds-hypa-modal-debug-value">{hypaV3Debug.periodic.skippedReason}</span></div>
+                    <div>Chat messages: <span class="ds-hypa-modal-debug-value">{chatList[effectiveChatIndex]?.message?.length ?? 0}</span></div>
+                    {#if logDebug.periodic}
+                      <div>Periodic total chats: <span class="ds-hypa-modal-debug-value">{logDebug.periodic.totalChats}</span></div>
+                      <div>Periodic new messages: <span class="ds-hypa-modal-debug-value">{logDebug.periodic.newMessages}</span></div>
+                      <div>Periodic to summarize: <span class="ds-hypa-modal-debug-value">{logDebug.periodic.toSummarizeCount}</span></div>
+                      {#if logDebug.periodic.skippedReason}
+                        <div>Periodic skipped: <span class="ds-hypa-modal-debug-value">{logDebug.periodic.skippedReason}</span></div>
                       {/if}
-                      {#if hypaV3Debug.periodic.chatName}
-                        <div>Periodic chat: <span class="ds-hypa-modal-debug-value">{hypaV3Debug.periodic.chatName}</span></div>
+                      {#if logDebug.periodic.chatName}
+                        <div>Periodic chat: <span class="ds-hypa-modal-debug-value">{logDebug.periodic.chatName}</span></div>
                       {/if}
                     {/if}
                   {/if}
@@ -1130,7 +1289,7 @@
                       class="ds-hypa-modal-debug-textarea control-field"
                       rows="4"
                       readonly
-                      value={hypaV3Debug.prompt}
+                      value={logDebug.prompt}
                     ></textarea>
                   </div>
                   <div>
@@ -1139,7 +1298,7 @@
                       class="ds-hypa-modal-debug-textarea control-field"
                       rows="4"
                       readonly
-                      value={hypaV3Debug.input}
+                      value={logDebug.input}
                     ></textarea>
                   </div>
                   <div>
@@ -1148,17 +1307,17 @@
                       class="ds-hypa-modal-debug-textarea control-field"
                       rows="6"
                       readonly
-                      value={JSON.stringify(hypaV3Debug.formatted, null, 2)}
+                      value={JSON.stringify(logDebug.formatted, null, 2)}
                     ></textarea>
                   </div>
-                  {#if hypaV3Debug.rawResponse}
+                  {#if logDebug.rawResponse}
                     <div>
                       <div class="ds-hypa-modal-debug-block-title">Raw Response</div>
                       <textarea
                         class="ds-hypa-modal-debug-textarea control-field"
                         rows="6"
                         readonly
-                        value={hypaV3Debug.rawResponse}
+                        value={logDebug.rawResponse}
                       ></textarea>
                     </div>
                   {/if}
@@ -1166,7 +1325,7 @@
               </div>
             {:else}
               <div class="ds-hypa-modal-empty-note empty-state">
-                No summarize logs yet.
+                No summarize logs yet for this chat.
               </div>
             {/if}
           </div>
