@@ -25,6 +25,7 @@ vi.mock(import("src/ts/stores.svelte"), async () => {
     MobileGUIStack: writable(0),
     MobileSideBar: writable(1),
     selectedCharID: writable(0),
+    selIdState: { selId: 0 },
   };
 });
 
@@ -44,6 +45,9 @@ vi.mock(import("src/lib/SideBars/SideChatList.svelte"), async () => ({
   default: (await import("./test-stubs/SimplePanelStub.svelte")).default,
 }));
 vi.mock(import("src/lib/SideBars/DevTool.svelte"), async () => ({
+  default: (await import("./test-stubs/SimplePanelStub.svelte")).default,
+}));
+vi.mock(import("src/lib/Others/RulebookManager/RulebookLibrary.svelte"), async () => ({
   default: (await import("./test-stubs/SimplePanelStub.svelte")).default,
 }));
 

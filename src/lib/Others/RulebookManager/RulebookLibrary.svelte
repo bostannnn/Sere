@@ -1,6 +1,6 @@
 <script lang="ts">
     import { DBState, openRulebookManager, ragProgressStore } from 'src/ts/stores.svelte';
-    import { Trash2Icon, UploadIcon, BookIcon, XIcon, SearchIcon, PlayIcon, InfoIcon, LayoutGridIcon, ListIcon, ChevronRightIcon, PencilIcon, StarIcon } from "@lucide/svelte";
+    import { Trash2Icon, UploadIcon, BookIcon, XIcon, SearchIcon, PlayIcon, InfoIcon, LayoutGridIcon, ListIcon, ChevronRightIcon, PencilIcon, StarIcon, MoreVerticalIcon } from "@lucide/svelte";
     import { rulebookRag } from "../../../ts/process/rag/rag";
     import { rulebookStorage } from "../../../ts/process/rag/storage";
     import { selectMultipleFile } from "src/ts/util";
@@ -12,6 +12,7 @@
     import EmbeddingModelSelect from '../../UI/GUI/EmbeddingModelSelect.svelte';
     import Button from '../../UI/GUI/Button.svelte';
     import IconButton from '../../UI/GUI/IconButton.svelte';
+    import { createCardTiltController } from "../../UI/cardTilt";
     import type { HypaModel } from 'src/ts/process/memory/hypamemory';
     const rulebookLibraryLog = (..._args: unknown[]) => {};
 
@@ -58,7 +59,31 @@
     }
 
     import { onMount } from 'svelte';
-    onMount(refreshLibrary);
+
+    let reducedMotion = $state(
+        typeof window !== "undefined"
+            ? window.matchMedia("(prefers-reduced-motion: reduce)").matches
+            : false
+    );
+
+    onMount(() => {
+        void refreshLibrary();
+        if (typeof window === "undefined") {
+            return;
+        }
+        document.addEventListener("pointerdown", handleDocumentPointerDown);
+        document.addEventListener("keydown", handleDocumentKeydown);
+        const motionMq = window.matchMedia("(prefers-reduced-motion: reduce)");
+        const handleMotionChange = (event: MediaQueryListEvent) => {
+            reducedMotion = event.matches;
+        };
+        motionMq.addEventListener("change", handleMotionChange);
+        return () => {
+            document.removeEventListener("pointerdown", handleDocumentPointerDown);
+            document.removeEventListener("keydown", handleDocumentKeydown);
+            motionMq.removeEventListener("change", handleMotionChange);
+        };
+    });
 
     const globalMetadata = $state({
         system: '',
@@ -69,8 +94,9 @@
     let editingBookData = $state({
         name: '',
         system: '',
-        edition: ''
+        edition: '',
     });
+    let openBookMenuId = $state<string | null>(null);
 
     const systemTree = $derived(() => {
         const tree = new SvelteMap<string, Set<string>>();
@@ -180,7 +206,7 @@
         editingBookData = {
             name: book.name,
             system: book.metadata?.system || '',
-            edition: book.metadata?.edition || ''
+            edition: book.metadata?.edition || '',
         };
     }
 
@@ -189,7 +215,7 @@
         try {
             await rulebookStorage.updateRulebookMetadata(editingBookId, editingBookData.name, {
                 system: editingBookData.system,
-                edition: editingBookData.edition
+                edition: editingBookData.edition,
             });
             await refreshLibrary();
             alertStore.set({ type: 'normal', msg: 'Rulebook updated!' });
@@ -234,6 +260,48 @@
             system: globalMetadata.system,
             edition: globalMetadata.edition
         }));
+    }
+
+    function toggleBookMenu(id: string) {
+        openBookMenuId = openBookMenuId === id ? null : id;
+    }
+
+    function closeBookMenu() {
+        openBookMenuId = null;
+    }
+
+    function handleDocumentPointerDown(event: PointerEvent) {
+        const target = event.target as HTMLElement | null;
+        if (target?.closest("[data-rag-book-menu]")) {
+            return;
+        }
+        closeBookMenu();
+    }
+
+    function handleDocumentKeydown(event: KeyboardEvent) {
+        if (event.key === "Escape") {
+            closeBookMenu();
+        }
+    }
+
+    const cardTiltController = createCardTiltController({
+        hostSelector: "[data-rag-tilt-card]",
+        tiltVarX: "--rag-card-tilt-x",
+        tiltVarY: "--rag-card-tilt-y",
+        glareVarX: "--rag-card-glare-x",
+        glareVarY: "--rag-card-glare-y",
+        glareOpacityVar: "--rag-card-glare-opacity",
+        getReducedMotion: () => reducedMotion,
+        maxTilt: 9,
+        glareOpacityOnMove: "0.58",
+    });
+
+    function updateRulebookCardTilt(event: PointerEvent) {
+        cardTiltController.onPointerMove(event);
+    }
+
+    function handleRulebookCardPointerLeave(event: PointerEvent) {
+        cardTiltController.onPointerLeave(event);
     }
 
     function close() {
@@ -383,7 +451,12 @@
 
             <div class="rag-content-area list-shell" class:is-grid={viewMode === 'grid'} class:is-list={viewMode === 'list'}>
                 {#each filteredRulebooks as book (book.id)}
-                    <div class="ds-settings-card panel-shell rag-book-card" class:is-editing={editingBookId === book.id} transition:fade={{duration: 150}}>
+                    <div
+                        class="ds-settings-card panel-shell rag-book-card"
+                        class:is-editing={editingBookId === book.id}
+                        transition:fade={{duration: 150}}
+                        data-rag-tilt-card
+                    >
                         {#if editingBookId === book.id}
                             <div class="rag-book-edit-form">
                                 <div class="rag-edit-field">
@@ -406,7 +479,14 @@
                                 </div>
                             </div>
                         {:else}
-                            <div class="rag-book-card-main">
+                            <div
+                                class="rag-book-card-main"
+                                role="group"
+                                aria-label={`Rulebook ${book.name}`}
+                                onpointermove={updateRulebookCardTilt}
+                                onpointerleave={handleRulebookCardPointerLeave}
+                                onpointercancel={handleRulebookCardPointerLeave}
+                            >
                                 <div class="rag-book-icon">
                                     {#if book.thumbnail}
                                         <img src={book.thumbnail} alt="Cover" class="rag-book-thumb" />
@@ -414,8 +494,79 @@
                                         <BookIcon size={32} />
                                     {/if}
                                 </div>
+                                {#if viewMode === 'grid'}
+                                    <div class="rag-book-pin-wrap action-rail" data-rag-book-menu>
+                                        <IconButton
+                                            onclick={() => togglePriority(book)}
+                                            className={`rag-book-pin-btn ${book.priority ? 'is-priority' : ''}`}
+                                            title={book.priority ? "Remove priority" : "Mark as priority"}
+                                            ariaLabel={book.priority ? `Remove priority from ${book.name}` : `Mark ${book.name} as priority`}
+                                            ariaPressed={Boolean(book.priority)}
+                                        >
+                                            <StarIcon size={16} fill={book.priority ? 'currentColor' : 'none'} />
+                                        </IconButton>
+                                    </div>
+                                {/if}
                                 <div class="rag-book-details">
-                                    <span class="rag-book-name" title={book.name}>{book.name}</span>
+                                    <div class="rag-book-head-row">
+                                        <span class="rag-book-name" title={book.name}>{book.name}</span>
+                                        <div class="rag-book-actions action-rail" data-testid="rulebook-library-book-actions" data-rag-book-menu>
+                                            {#if viewMode !== 'grid'}
+                                                <IconButton
+                                                    onclick={() => togglePriority(book)}
+                                                    className={`rag-book-action-btn ${book.priority ? 'is-priority' : ''}`}
+                                                    title={book.priority ? "Remove priority" : "Mark as priority"}
+                                                    ariaLabel={book.priority ? `Remove priority from ${book.name}` : `Mark ${book.name} as priority`}
+                                                    ariaPressed={Boolean(book.priority)}
+                                                >
+                                                    <StarIcon size={16} fill={book.priority ? 'currentColor' : 'none'} />
+                                                </IconButton>
+                                            {/if}
+                                            <button
+                                                type="button"
+                                                class="rag-book-menu-trigger icon-btn icon-btn--sm icon-btn--bordered"
+                                                title="Rulebook actions"
+                                                aria-label={`Actions for ${book.name}`}
+                                                aria-haspopup="menu"
+                                                aria-expanded={openBookMenuId === book.id}
+                                                onclick={() => toggleBookMenu(book.id)}
+                                            >
+                                                <MoreVerticalIcon size={14} />
+                                            </button>
+                                            {#if openBookMenuId === book.id}
+                                                <div class="rag-book-menu ds-ui-menu" role="menu">
+                                                    <button
+                                                        type="button"
+                                                        class="rag-book-menu-item ds-ui-menu-item"
+                                                        role="menuitem"
+                                                        title="Edit rulebook"
+                                                        aria-label={`Edit ${book.name}`}
+                                                        onclick={() => {
+                                                            closeBookMenu();
+                                                            startEdit(book);
+                                                        }}
+                                                    >
+                                                        <PencilIcon size={14} />
+                                                        <span>Edit</span>
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        class="rag-book-menu-item ds-ui-menu-item ds-ui-menu-item--danger"
+                                                        role="menuitem"
+                                                        title="Delete rulebook"
+                                                        aria-label={`Delete ${book.name}`}
+                                                        onclick={() => {
+                                                            closeBookMenu();
+                                                            void deleteRulebook(book.id);
+                                                        }}
+                                                    >
+                                                        <Trash2Icon size={14} />
+                                                        <span>Delete</span>
+                                                    </button>
+                                                </div>
+                                            {/if}
+                                        </div>
+                                    </div>
                                     <div class="rag-book-badges">
                                         {#if book.metadata?.system}
                                             <span class="rag-badge control-chip system">{book.metadata.system}</span>
@@ -426,33 +577,6 @@
                                         <span class="rag-badge control-chip chunks">{book.chunkCount ?? 0} chunks</span>
                                     </div>
                                 </div>
-                            </div>
-                            <div class="rag-book-actions action-rail" data-testid="rulebook-library-book-actions">
-                                <IconButton
-                                    onclick={() => togglePriority(book)}
-                                    className={`rag-book-action-btn ${book.priority ? 'is-priority' : ''}`}
-                                    title={book.priority ? "Remove priority" : "Mark as priority"}
-                                    ariaLabel={book.priority ? `Remove priority from ${book.name}` : `Mark ${book.name} as priority`}
-                                    ariaPressed={Boolean(book.priority)}
-                                >
-                                    <StarIcon size={16} fill={book.priority ? 'currentColor' : 'none'} />
-                                </IconButton>
-                                <IconButton
-                                    onclick={() => startEdit(book)}
-                                    className="rag-book-action-btn"
-                                    title="Edit rulebook"
-                                    ariaLabel={`Edit ${book.name}`}
-                                >
-                                    <PencilIcon size={16} /> 
-                                </IconButton>
-                                <IconButton
-                                    onclick={() => deleteRulebook(book.id)}
-                                    className="rag-book-action-btn rag-delete-btn-card"
-                                    title="Delete rulebook"
-                                    ariaLabel={`Delete ${book.name}`}
-                                >
-                                    <Trash2Icon size={18} />
-                                </IconButton>
                             </div>
                         {/if}
                     </div>
@@ -921,8 +1045,8 @@
 
     .rag-content-area.is-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-        gap: var(--ds-space-4);
+        grid-template-columns: repeat(auto-fill, minmax(13.5rem, 1fr));
+        gap: var(--ds-space-3);
         align-content: start;
     }
 
@@ -936,9 +1060,7 @@
     }
 
     .rag-book-card {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
+        display: block;
         padding: var(--ds-space-3) var(--ds-space-4);
         transition: border-color var(--ds-motion-fast) var(--ds-ease-standard);
         min-height: 80px;
@@ -982,7 +1104,7 @@
         display: flex;
         align-items: center;
         gap: var(--ds-space-4);
-        flex: 1;
+        width: 100%;
         min-width: 0;
     }
 
@@ -1009,16 +1131,27 @@
     .rag-book-details {
         display: flex;
         flex-direction: column;
-        gap: 4px;
+        gap: 6px;
+        min-width: 0;
+        flex: 1;
+    }
+
+    .rag-book-head-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--ds-space-2);
         min-width: 0;
     }
 
     .rag-book-name {
-        font-weight: var(--ds-font-weight-bold);
+        font-weight: var(--ds-font-weight-semibold);
         font-size: var(--ds-font-size-md);
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
+        min-width: 0;
+        flex: 1;
     }
 
     .rag-book-badges {
@@ -1041,13 +1174,39 @@
     .rag-badge.chunks { color: var(--ds-text-secondary); border-style: dashed; }
 
     .rag-book-actions {
-        display: flex;
+        display: inline-flex;
         align-items: center;
         gap: var(--ds-space-1);
+        flex-shrink: 0;
+        position: relative;
     }
 
     .rag-book-actions.action-rail {
-        justify-content: flex-end;
+        justify-content: flex-start;
+    }
+
+    .rag-book-menu-trigger {
+        width: 1.7rem;
+        height: 1.7rem;
+        border-radius: 999px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .rag-book-menu {
+        position: absolute;
+        top: calc(100% + 6px);
+        right: 0;
+        z-index: 5;
+        min-width: 8.5rem;
+    }
+
+    .rag-book-menu-item {
+        min-height: 1.875rem;
+        font-size: var(--ds-font-size-xs);
+        font-weight: var(--ds-font-weight-medium);
+        gap: 0.5rem;
     }
 
     :global(.is-priority) {
@@ -1056,9 +1215,205 @@
         filter: drop-shadow(0 0 2px rgba(var(--ds-text-warning-rgb), 0.3));
     }
 
-    .rag-book-actions.action-rail :global(button:hover) {
+    .rag-book-actions.action-rail :global(.rag-book-action-btn:hover),
+    .rag-book-actions.action-rail .rag-book-menu-trigger:hover {
         transform: scale(1.1);
         transition: transform var(--ds-motion-fast) var(--ds-ease-standard);
+    }
+
+    .rag-content-area.is-grid .rag-book-card {
+        text-align: left;
+        padding: 0;
+        min-height: 0;
+        border-radius: 1.35rem;
+        transform-style: preserve-3d;
+        border: 1px solid color-mix(in srgb, var(--ds-border-subtle) 80%, rgb(255 255 255 / 16%));
+        background:
+            radial-gradient(160% 100% at 0% 100%, rgb(193 206 255 / 10%) 0%, transparent 55%),
+            color-mix(in srgb, var(--surface-raised) 86%, rgb(12 15 28 / 34%));
+        box-shadow: 0 16px 30px rgb(0 0 0 / 0.24), inset 0 1px 0 rgb(255 255 255 / 0.06);
+        transform: perspective(68rem) rotateX(var(--rag-card-tilt-x, 0deg)) rotateY(var(--rag-card-tilt-y, 0deg)) translateY(0);
+        will-change: transform;
+        transition:
+            transform var(--ds-motion-base) var(--ds-ease-emphasized),
+            border-color var(--ds-motion-base) var(--ds-ease-emphasized),
+            box-shadow var(--ds-motion-base) var(--ds-ease-emphasized);
+    }
+
+    .rag-content-area.is-grid .rag-book-card:hover {
+        border-color: color-mix(in srgb, var(--ds-border-strong) 72%, rgb(255 255 255 / 20%));
+        box-shadow: 0 20px 34px rgb(0 0 0 / 0.3), inset 0 1px 0 rgb(255 255 255 / 0.1);
+        transform: perspective(68rem) rotateX(var(--rag-card-tilt-x, 0deg)) rotateY(var(--rag-card-tilt-y, 0deg)) translateY(-4px);
+    }
+
+    .rag-content-area.is-grid .rag-book-card.is-editing {
+        padding: var(--ds-space-4);
+    }
+
+    .rag-content-area.is-grid .rag-book-card-main {
+        position: relative;
+        width: 100%;
+        aspect-ratio: 3 / 4;
+        display: flex;
+        align-items: stretch;
+        justify-content: stretch;
+        text-align: left;
+        background: transparent;
+        color: inherit;
+        padding: 0.6rem;
+    }
+
+    .rag-content-area.is-grid .rag-book-icon {
+        position: absolute;
+        inset: 0.6rem;
+        width: auto;
+        height: auto;
+        border-radius: calc(1.35rem - 0.6rem);
+        border: 1px solid color-mix(in srgb, var(--ds-border-subtle) 72%, rgb(255 255 255 / 10%));
+        background: linear-gradient(160deg, rgb(20 24 36 / 96%) 0%, rgb(16 18 27 / 98%) 100%);
+        overflow: hidden;
+    }
+
+    .rag-content-area.is-grid .rag-book-icon::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        background: radial-gradient(
+            circle at var(--rag-card-glare-x, 50%) var(--rag-card-glare-y, 50%),
+            rgb(255 255 255 / 0.28) 0%,
+            rgb(255 255 255 / 0.09) 18%,
+            transparent 46%
+        );
+        opacity: var(--rag-card-glare-opacity, 0);
+        transition: opacity var(--ds-motion-base) var(--ds-ease-emphasized);
+    }
+
+    .rag-content-area.is-grid .rag-book-details {
+        position: absolute;
+        inset: 0.6rem;
+        border-radius: calc(1.35rem - 0.6rem);
+        display: flex;
+        flex-direction: column;
+        justify-content: flex-end;
+        padding: 0.85rem 0.85rem 0.75rem;
+        gap: 0.38rem;
+        background: linear-gradient(180deg, rgb(4 7 15 / 0%) 31%, rgb(8 12 24 / 56%) 61%, rgb(8 10 18 / 84%) 100%);
+        pointer-events: none;
+    }
+
+    .rag-content-area.is-grid .rag-book-pin-wrap {
+        position: absolute;
+        top: 1.05rem;
+        right: 1.05rem;
+        z-index: 4;
+        pointer-events: auto;
+    }
+
+    .rag-content-area.is-grid .rag-book-pin-wrap :global(button) {
+        width: 1.7rem;
+        height: 1.7rem;
+        min-width: 1.7rem;
+        min-height: 1.7rem;
+        border-radius: 999px;
+        border: 1px solid rgb(243 248 255 / 24%);
+        background: linear-gradient(180deg, rgb(255 255 255 / 18%) 0%, rgb(182 194 220 / 5%) 100%);
+        color: rgb(236 242 255 / 88%);
+        opacity: 0.82;
+        backdrop-filter: blur(8px);
+        transition:
+            opacity var(--ds-motion-fast) var(--ds-ease-standard),
+            transform var(--ds-motion-fast) var(--ds-ease-standard),
+            border-color var(--ds-motion-fast) var(--ds-ease-standard),
+            background-color var(--ds-motion-fast) var(--ds-ease-standard),
+            color var(--ds-motion-fast) var(--ds-ease-standard);
+    }
+
+    .rag-content-area.is-grid .rag-book-card:hover .rag-book-pin-wrap :global(button),
+    .rag-content-area.is-grid .rag-book-pin-wrap :global(button:focus-visible) {
+        opacity: 1;
+        transform: translateY(0);
+    }
+
+    .rag-content-area.is-grid .rag-book-name {
+        margin: 0;
+        font-size: clamp(1rem, 0.9rem + 0.25vw, 1.2rem);
+        line-height: 1.25;
+        color: rgb(244 248 255 / 96%);
+        text-shadow: 0 1px 2px rgb(0 0 0 / 0.45);
+    }
+
+    .rag-content-area.is-grid .rag-book-badges {
+        gap: 4px;
+    }
+
+    .rag-content-area.is-grid .rag-badge {
+        font-size: 10px;
+        padding: 1px 6px;
+        border-radius: 999px;
+        border-color: rgb(243 248 255 / 20%);
+        background: rgb(20 25 40 / 56%);
+        color: rgb(232 238 252 / 90%);
+    }
+
+    .rag-content-area.is-grid .rag-book-actions.action-rail {
+        pointer-events: auto;
+        gap: 6px;
+    }
+
+    .rag-content-area.is-grid .rag-book-actions.action-rail .rag-book-menu-trigger,
+    .rag-content-area.is-grid .rag-book-actions.action-rail :global(.rag-book-action-btn) {
+        width: 1.7rem;
+        height: 1.7rem;
+        min-width: 1.7rem;
+        min-height: 1.7rem;
+        border-radius: 999px;
+        border: 1px solid rgb(243 248 255 / 24%);
+        background: linear-gradient(180deg, rgb(255 255 255 / 18%) 0%, rgb(182 194 220 / 5%) 100%);
+        color: rgb(236 242 255 / 88%);
+        opacity: 0.76;
+        backdrop-filter: blur(8px);
+        transform: translateY(2px);
+        transition:
+            opacity var(--ds-motion-fast) var(--ds-ease-standard),
+            transform var(--ds-motion-fast) var(--ds-ease-standard),
+            border-color var(--ds-motion-fast) var(--ds-ease-standard),
+            background-color var(--ds-motion-fast) var(--ds-ease-standard),
+            color var(--ds-motion-fast) var(--ds-ease-standard);
+    }
+
+    .rag-content-area.is-grid .rag-book-card:hover .rag-book-actions.action-rail .rag-book-menu-trigger,
+    .rag-content-area.is-grid .rag-book-actions.action-rail .rag-book-menu-trigger:focus-visible,
+    .rag-content-area.is-grid .rag-book-card:hover .rag-book-actions.action-rail :global(.rag-book-action-btn),
+    .rag-content-area.is-grid .rag-book-actions.action-rail :global(.rag-book-action-btn:focus-visible) {
+        opacity: 1;
+        transform: translateY(0);
+    }
+
+    .rag-content-area.is-grid .rag-book-actions.action-rail .rag-book-menu-trigger:hover,
+    .rag-content-area.is-grid .rag-book-actions.action-rail :global(.rag-book-action-btn:hover) {
+        border-color: rgb(243 248 255 / 34%);
+        background: linear-gradient(180deg, rgb(255 255 255 / 24%) 0%, rgb(182 194 220 / 10%) 100%);
+        color: rgb(246 249 255 / 96%);
+        opacity: 1;
+        transform: translateY(0) scale(1.06);
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        .rag-content-area.is-grid .rag-book-card,
+        .rag-content-area.is-grid .rag-book-icon::after,
+        .rag-content-area.is-grid .rag-book-actions.action-rail :global(button) {
+            transition: none;
+        }
+
+        .rag-content-area.is-grid .rag-book-card {
+            will-change: auto;
+            transform: none !important;
+        }
+
+        .rag-content-area.is-grid .rag-book-icon::after {
+            display: none;
+        }
     }
 
     .rag-empty-state {

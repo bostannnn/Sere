@@ -6,6 +6,7 @@
     import { checkCharOrder } from "src/ts/globalApi.svelte";
     import { selectedCharID, DBState } from "src/ts/stores.svelte";
     import type { Chat } from "src/ts/storage/database.svelte";
+    import { createCardTiltController } from "./cardTilt";
 
     interface Props {
         shellSearchQuery?: string;
@@ -18,23 +19,6 @@
     }: Props = $props();
 
     let openMenuKey = $state<string | null>(null);
-    const tiltStateByCard = new WeakMap<HTMLElement, {
-        currentX: number;
-        currentY: number;
-        targetX: number;
-        targetY: number;
-        currentGlareX: number;
-        currentGlareY: number;
-        targetGlareX: number;
-        targetGlareY: number;
-        baseLeft: number;
-        baseTop: number;
-        baseWidth: number;
-        baseHeight: number;
-        hasBounds: boolean;
-        rafId: number | null;
-    }>();
-
     type CharacterRow = {
         key: string;
         index: number;
@@ -157,78 +141,6 @@
         selectCharacter(index);
     }
 
-    function getTiltState(host: HTMLElement) {
-        let state = tiltStateByCard.get(host);
-        if (!state) {
-            state = {
-                currentX: 0,
-                currentY: 0,
-                targetX: 0,
-                targetY: 0,
-                currentGlareX: 50,
-                currentGlareY: 50,
-                targetGlareX: 50,
-                targetGlareY: 50,
-                baseLeft: 0,
-                baseTop: 0,
-                baseWidth: 0,
-                baseHeight: 0,
-                hasBounds: false,
-                rafId: null,
-            };
-            tiltStateByCard.set(host, state);
-        }
-        return state;
-    }
-
-    function runTiltAnimation(host: HTMLElement) {
-        const state = getTiltState(host);
-        if (state.rafId !== null) {
-            return;
-        }
-
-        const step = () => {
-            if (!host.isConnected) {
-                if (state.rafId !== null) {
-                    cancelAnimationFrame(state.rafId);
-                }
-                state.rafId = null;
-                tiltStateByCard.delete(host);
-                return;
-            }
-
-            const tiltLerp = 0.2;
-            const glareLerp = 0.26;
-
-            state.currentX += (state.targetX - state.currentX) * tiltLerp;
-            state.currentY += (state.targetY - state.currentY) * tiltLerp;
-            state.currentGlareX += (state.targetGlareX - state.currentGlareX) * glareLerp;
-            state.currentGlareY += (state.targetGlareY - state.currentGlareY) * glareLerp;
-
-            host.style.setProperty("--home-card-tilt-x", `${state.currentX.toFixed(2)}deg`);
-            host.style.setProperty("--home-card-tilt-y", `${state.currentY.toFixed(2)}deg`);
-            host.style.setProperty("--home-card-glare-x", `${state.currentGlareX.toFixed(2)}%`);
-            host.style.setProperty("--home-card-glare-y", `${state.currentGlareY.toFixed(2)}%`);
-
-            const tiltSettled = Math.abs(state.targetX - state.currentX) < 0.05 && Math.abs(state.targetY - state.currentY) < 0.05;
-            const glareSettled = Math.abs(state.targetGlareX - state.currentGlareX) < 0.1 &&
-                Math.abs(state.targetGlareY - state.currentGlareY) < 0.1;
-
-            if (tiltSettled && glareSettled) {
-                state.currentX = state.targetX;
-                state.currentY = state.targetY;
-                state.currentGlareX = state.targetGlareX;
-                state.currentGlareY = state.targetGlareY;
-                state.rafId = null;
-                return;
-            }
-
-            state.rafId = requestAnimationFrame(step);
-        };
-
-        state.rafId = requestAnimationFrame(step);
-    }
-
     /* Reactive reduced-motion: subscribe to the media query so that toggling the
        OS setting while on the page takes effect immediately without a reload. */
     let reducedMotion = $state(
@@ -237,86 +149,28 @@
             : false
     );
 
-    function prefersReducedMotion() {
-        return reducedMotion;
-    }
+    const cardTiltController = createCardTiltController({
+        hostSelector: "[data-home-tilt-card]",
+        tiltVarX: "--home-card-tilt-x",
+        tiltVarY: "--home-card-tilt-y",
+        glareVarX: "--home-card-glare-x",
+        glareVarY: "--home-card-glare-y",
+        glareOpacityVar: "--home-card-glare-opacity",
+        getReducedMotion: () => reducedMotion,
+        maxTilt: 9,
+        glareOpacityOnMove: "0.58",
+    });
 
     function updateCardTilt(event: PointerEvent) {
-        const host = (event.currentTarget as HTMLElement | null)?.closest("[data-home-tilt-card]") as HTMLElement | null;
-        const area = event.currentTarget as HTMLElement | null;
-        if (!host || !area || event.pointerType !== "mouse") {
-            return;
-        }
-        if (prefersReducedMotion()) {
-            return;
-        }
-
-        const state = getTiltState(host);
-        if (!state.hasBounds) {
-            const rect = area.getBoundingClientRect();
-            if (rect.width <= 0 || rect.height <= 0) {
-                return;
-            }
-            state.baseLeft = rect.left;
-            state.baseTop = rect.top;
-            state.baseWidth = rect.width;
-            state.baseHeight = rect.height;
-            state.hasBounds = true;
-        }
-
-        const normalizedX = Math.max(0, Math.min(1, (event.clientX - state.baseLeft) / state.baseWidth));
-        const normalizedY = Math.max(0, Math.min(1, (event.clientY - state.baseTop) / state.baseHeight));
-        const offsetX = normalizedX * 2 - 1;
-        const offsetY = normalizedY * 2 - 1;
-        const maxTilt = 9;
-
-        state.targetX = -offsetY * maxTilt;
-        state.targetY = offsetX * maxTilt;
-        state.targetGlareX = normalizedX * 100;
-        state.targetGlareY = normalizedY * 100;
-
-        host.style.setProperty("--home-card-glare-opacity", "0.58");
-        runTiltAnimation(host);
+        cardTiltController.onPointerMove(event);
     }
 
     function resetCardTilt(target: EventTarget | null) {
-        const host = (target as HTMLElement | null)?.closest("[data-home-tilt-card]") as HTMLElement | null;
-        if (!host) {
-            return;
-        }
-        const state = getTiltState(host);
-        if (prefersReducedMotion()) {
-            if (state.rafId !== null) {
-                cancelAnimationFrame(state.rafId);
-                state.rafId = null;
-            }
-            state.currentX = 0;
-            state.currentY = 0;
-            state.targetX = 0;
-            state.targetY = 0;
-            state.currentGlareX = 50;
-            state.currentGlareY = 50;
-            state.targetGlareX = 50;
-            state.targetGlareY = 50;
-            state.hasBounds = false;
-            host.style.setProperty("--home-card-tilt-x", "0deg");
-            host.style.setProperty("--home-card-tilt-y", "0deg");
-            host.style.setProperty("--home-card-glare-x", "50%");
-            host.style.setProperty("--home-card-glare-y", "50%");
-            host.style.setProperty("--home-card-glare-opacity", "0");
-            return;
-        }
-        state.targetX = 0;
-        state.targetY = 0;
-        state.targetGlareX = 50;
-        state.targetGlareY = 50;
-        state.hasBounds = false;
-        host.style.setProperty("--home-card-glare-opacity", "0");
-        runTiltAnimation(host);
+        cardTiltController.resetFromTarget(target);
     }
 
     function handleCardPointerLeave(event: PointerEvent) {
-        resetCardTilt(event.currentTarget);
+        cardTiltController.onPointerLeave(event);
     }
 
     async function trashCharacter(index: number, name: string) {
@@ -568,8 +422,9 @@
             color-mix(in srgb, var(--surface-raised) 86%, rgb(12 15 28 / 34%));
         box-shadow: 0 16px 30px rgb(0 0 0 / 0.24), inset 0 1px 0 rgb(255 255 255 / 0.06);
         color: var(--ds-text-primary);
-        transform: perspective(68rem) rotateX(var(--home-card-tilt-x, 0deg)) rotateY(var(--home-card-tilt-y, 0deg));
-        transition: border-color var(--ds-motion-base) var(--ds-ease-emphasized),
+        transform: perspective(68rem) rotateX(var(--home-card-tilt-x, 0deg)) rotateY(var(--home-card-tilt-y, 0deg)) translateY(var(--home-card-lift, 0px));
+        transition: transform var(--ds-motion-base) var(--ds-ease-emphasized),
+            border-color var(--ds-motion-base) var(--ds-ease-emphasized),
             box-shadow var(--ds-motion-base) var(--ds-ease-emphasized);
         will-change: transform;
     }
@@ -577,6 +432,7 @@
     .ds-home-character-card:hover {
         border-color: color-mix(in srgb, var(--ds-border-strong) 72%, rgb(255 255 255 / 20%));
         box-shadow: 0 20px 34px rgb(0 0 0 / 0.3), inset 0 1px 0 rgb(255 255 255 / 0.1);
+        --home-card-lift: -4px;
     }
 
     .ds-home-character-card-active {
@@ -750,9 +606,11 @@
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        opacity: 0.84;
+        opacity: 0.76;
+        transform: translateY(2px);
         backdrop-filter: blur(8px);
         transition: opacity var(--ds-motion-fast) var(--ds-ease-standard),
+            transform var(--ds-motion-fast) var(--ds-ease-standard),
             border-color var(--ds-motion-fast) var(--ds-ease-standard),
             background-color var(--ds-motion-fast) var(--ds-ease-standard),
             box-shadow var(--ds-motion-fast) var(--ds-ease-standard);
@@ -761,6 +619,7 @@
     .ds-home-character-card:hover .ds-home-character-menu-trigger,
     .ds-home-character-menu-trigger:focus-visible {
         opacity: 1;
+        transform: translateY(0);
     }
 
     .ds-home-character-menu-trigger:focus-visible {
@@ -772,6 +631,7 @@
         color: rgb(255 255 255 / 98%);
         border-color: rgb(255 255 255 / 36%);
         background: linear-gradient(180deg, rgb(255 255 255 / 26%) 0%, rgb(190 203 227 / 14%) 100%);
+        transform: translateY(0) scale(1.06);
     }
 
     .ds-home-character-menu {
