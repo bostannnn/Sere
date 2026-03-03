@@ -9,8 +9,10 @@
     import SideChatList from "../SideBars/SideChatList.svelte";
     import DevTool from "../SideBars/DevTool.svelte";
     import { isLite } from "src/ts/lite";
+    import RulebookLibrary from "../Others/RulebookManager/RulebookLibrary.svelte";
     
     import { DBState } from 'src/ts/stores.svelte';
+    const loadPlaygroundMenu = () => import("../Playground/PlaygroundMenu.svelte").then((m) => m.default);
 
     $effect(() => {
         // Prevent stale side-panel state when no character is selected.
@@ -55,8 +57,14 @@
     {:else if $MobileGUIStack === 0}
         <MobileCharacters />
     {:else if $MobileGUIStack === 1}
-        <MobileCharacters />
+        <RulebookLibrary onClose={() => MobileGUIStack.set(0)} />
     {:else if $MobileGUIStack === 2}
         <Settings />
+    {:else if $MobileGUIStack === 3}
+        {#await loadPlaygroundMenu() then PlaygroundMenu}
+            <PlaygroundMenu />
+        {/await}
+    {:else}
+        <MobileCharacters />
     {/if}
 </div>

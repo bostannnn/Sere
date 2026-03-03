@@ -13,6 +13,7 @@
         rightSidebarOpen?: boolean;
         rightSidebarTab?: "chat" | "character";
         rightSidebarVisible?: boolean;
+        onOpenHome?: () => void;
     }
 
     let {
@@ -22,6 +23,7 @@
         rightSidebarOpen = $bindable(true),
         rightSidebarTab = $bindable("chat"),
         rightSidebarVisible = $bindable(false),
+        onOpenHome = () => {},
     }: Props = $props();
 </script>
 
@@ -36,7 +38,7 @@
         </div>
     {:else if workspace === "library"}
         <div class="ds-app-v2-stage-view ds-app-v2-stage-view-content">
-            <RulebookLibrary bind:shellSearchQuery={shellSearchQuery} />
+            <RulebookLibrary bind:shellSearchQuery={shellSearchQuery} onClose={onOpenHome} />
         </div>
     {:else}
         <div class="ds-app-v2-stage-view">

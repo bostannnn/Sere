@@ -32,9 +32,10 @@
 
     interface Props {
         shellSearchQuery?: string;
+        onClose?: () => void;
     }
 
-    let { shellSearchQuery = $bindable("") }: Props = $props();
+    let { shellSearchQuery = $bindable(""), onClose = () => openRulebookManager.set(false) }: Props = $props();
 
     let pendingFiles = $state<PendingFile[]>([]);
     let viewMode = $state<'grid' | 'list'>('grid');
@@ -236,7 +237,7 @@
     }
 
     function close() {
-        openRulebookManager.set(false);
+        onClose();
     }
 </script>
 

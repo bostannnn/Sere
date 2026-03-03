@@ -394,7 +394,7 @@ export function initMobileGesture(){
             }
             else if(moveX < -50 && Math.abs(moveY) < Math.abs(moveX)){
                 if(get(selectedCharID) === -1){
-                    if(get(MobileGUIStack) < 2){
+                    if(get(MobileGUIStack) < 3){
                         MobileGUIStack.update(v => v + 1)
                     }
                 }

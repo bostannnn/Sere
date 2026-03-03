@@ -288,6 +288,7 @@
         bind:rightSidebarOpen={uiShellRightSidebarOpen}
         bind:rightSidebarTab={uiShellRightSidebarTab}
         bind:rightSidebarVisible={uiShellRightSidebarVisible}
+        onOpenHome={openHomeFromTopbar}
     />
 </div>
 

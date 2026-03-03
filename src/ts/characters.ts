@@ -866,14 +866,14 @@ export async function addCharacter(arg:{
             await importCharacter()
             break
         default:
-            MobileGUIStack.set(1)
+            MobileGUIStack.set(0)
             return
     }
     const db = getDatabase()
     if(db.characters[db.characters.length-1]){
         changeChar(db.characters.length-1)
     }
-    MobileGUIStack.set(1)
+    MobileGUIStack.set(0)
 }
 
 export function changeChar(index: number, arg:{
