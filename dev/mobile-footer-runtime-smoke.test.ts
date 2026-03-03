@@ -21,6 +21,7 @@ vi.mock(import("src/ts/stores.svelte"), async () => {
     CharConfigSubMenu: writable(0),
     MobileGUIStack: writable(0),
     MobileSideBar: writable(0),
+    PlaygroundStore: writable(0),
     selectedCharID: writable(-1),
   };
 });
@@ -64,17 +65,18 @@ describe("mobile footer runtime smoke", () => {
   it("uses segmented primitives for root mobile nav and preserves workspace switching", async () => {
     await flushUi();
 
-    const rootTrack = document.querySelector(".ds-mobile-nav-track-root.seg-tabs") as HTMLElement | null;
+    const rootTrack = document.querySelector(".ds-mobile-nav-track-root.action-rail") as HTMLElement | null;
     expect(rootTrack).not.toBeNull();
 
     const rootButtons = Array.from(
-      document.querySelectorAll(".ds-mobile-nav-track-root .ds-mobile-nav-btn.seg-tab"),
+      document.querySelectorAll(".ds-mobile-nav-track-root .ds-mobile-nav-btn.ds-mobile-nav-btn-root"),
     ) as HTMLButtonElement[];
-    expect(rootButtons.length).toBe(3);
+    expect(rootButtons.length).toBe(4);
     expect(rootButtons.every((button) => button.type === "button")).toBe(true);
     expect(rootButtons[0]?.title).toBe("Home");
-    expect(rootButtons[0]?.getAttribute("aria-label")).toBe("Home");
+    expect(rootButtons[0]?.getAttribute("aria-label")).toBe("Go to Home");
     expect(rootButtons[0]?.getAttribute("aria-pressed")).toBe("true");
+    expect(rootButtons[3]?.title).toBe("More");
 
     rootButtons[1]?.click();
     await flushUi();

@@ -119,7 +119,7 @@ describe("mobile header runtime smoke", () => {
     await flushUi();
     expect(get(SettingsMenuIndex)).toBe(-1);
 
-    MobileGUIStack.set(1);
+    MobileGUIStack.set(0);
     await flushUi();
     const searchInput = document.querySelector('input[placeholder="Search..."]') as HTMLInputElement | null;
     expect(searchInput).not.toBeNull();
