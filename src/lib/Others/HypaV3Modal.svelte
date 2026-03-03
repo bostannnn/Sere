@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { untrack } from "svelte";
+  import { tick, untrack } from "svelte";
   import { SvelteSet } from "svelte/reactivity";
   import { ChevronUpIcon, ChevronDownIcon } from "@lucide/svelte";
   import { 
@@ -80,6 +80,14 @@
   let searchState = $state<SearchState | null>(null);
   let filterSelected = $state(false);
   let bulkResummaryState = $state<BulkResummaryState | null>(null);
+  type MemoryWorkspaceTab = "summary" | "settings" | "log";
+  const memoryWorkspaceTabs: MemoryWorkspaceTab[] = ["summary", "settings", "log"];
+  const memoryWorkspaceTabLabels: Record<MemoryWorkspaceTab, string> = {
+    summary: "Summary",
+    settings: "Settings",
+    log: "Log",
+  };
+  let memoryWorkspaceTab = $state<MemoryWorkspaceTab>("summary");
 
   const bulkEditState = $state<BulkEditState>({
     isEnabled: false,
@@ -108,6 +116,67 @@
     supaModelType: DBState.db.supaModelType,
     memoryAlgorithmType: DBState.db.memoryAlgorithmType,
   });
+
+  const focusMemoryWorkspaceTab = (tab: MemoryWorkspaceTab) => {
+    const tabButton = document.getElementById(`hypa-memory-tab-${tab}`) as HTMLButtonElement | null;
+    tabButton?.focus();
+  };
+
+  const selectMemoryWorkspaceTab = (tab: MemoryWorkspaceTab) => {
+    memoryWorkspaceTab = tab;
+    uiState.dropdownOpen = false;
+
+    if (tab !== "summary") {
+      searchState = null;
+      bulkEditState.isEnabled = false;
+      bulkEditState.selectedSummaries = new Set();
+      bulkResummaryState = null;
+    }
+  };
+
+  const selectMemoryWorkspaceTabAndFocus = async (tab: MemoryWorkspaceTab) => {
+    selectMemoryWorkspaceTab(tab);
+    await tick();
+    focusMemoryWorkspaceTab(tab);
+  };
+
+  const getHorizontalDirection = (key: string): 1 | -1 | 0 => {
+    if (key === "ArrowRight" || key === "Right") {
+      return 1;
+    }
+    if (key === "ArrowLeft" || key === "Left") {
+      return -1;
+    }
+    return 0;
+  };
+
+  const handleMemoryWorkspaceTabKeydown = async (
+    event: KeyboardEvent,
+    currentTab: MemoryWorkspaceTab = memoryWorkspaceTab
+  ) => {
+    if (event.key === "Home") {
+      await selectMemoryWorkspaceTabAndFocus(memoryWorkspaceTabs[0]);
+      event.preventDefault();
+      return;
+    }
+
+    if (event.key === "End") {
+      await selectMemoryWorkspaceTabAndFocus(memoryWorkspaceTabs[memoryWorkspaceTabs.length - 1]);
+      event.preventDefault();
+      return;
+    }
+
+    const direction = getHorizontalDirection(event.key);
+    if (direction === 0) {
+      return;
+    }
+
+    const currentIndex = memoryWorkspaceTabs.indexOf(currentTab);
+    const safeIndex = currentIndex >= 0 ? currentIndex : 0;
+    const nextIndex = (safeIndex + direction + memoryWorkspaceTabs.length) % memoryWorkspaceTabs.length;
+    await selectMemoryWorkspaceTabAndFocus(memoryWorkspaceTabs[nextIndex]);
+    event.preventDefault();
+  };
 
   $effect.pre(() => {
     void hypaV3Data?.summaries?.length;
@@ -782,6 +851,7 @@
       <!-- Header -->
       <ModalHeader
         {embedded}
+        activeTab={memoryWorkspaceTab}
         bind:searchState
         bind:dropdownOpen={uiState.dropdownOpen}
         bind:filterSelected
@@ -792,394 +862,381 @@
         onToggleBulkEditMode={handleToggleBulkEditMode}
       />
 
-      {#if !embedded && chatList.length > 1}
-        <div class="ds-hypa-modal-chat-row">
-          <span class="ds-hypa-modal-chat-label">Chat</span>
-          <SelectInput
-            className="ds-hypa-modal-chat-select"
-            value={modalChatIndex}
-            onchange={(e) => {
-              const nextIndex = parseInt(e.currentTarget.value);
-              if (!Number.isNaN(nextIndex)) {
-                modalChatIndex = nextIndex;
-              }
-            }}
+      <div
+        class="ds-chat-right-panel-tabs ds-hypa-modal-workspace-tabs seg-tabs"
+        role="tablist"
+        aria-label="Memory sections"
+        tabindex="-1"
+        onkeydown={(event) => {
+          if (event.target !== event.currentTarget) {
+            return;
+          }
+          handleMemoryWorkspaceTabKeydown(event);
+        }}
+      >
+        {#each memoryWorkspaceTabs as tab (tab)}
+          <button
+            type="button"
+            class="ds-chat-right-panel-tab ds-hypa-modal-workspace-tab seg-tab"
+            role="tab"
+            id={`hypa-memory-tab-${tab}`}
+            data-testid={`hypa-memory-tab-${tab}`}
+            aria-selected={memoryWorkspaceTab === tab}
+            aria-controls={`hypa-memory-panel-${tab}`}
+            tabindex={memoryWorkspaceTab === tab ? 0 : -1}
+            class:ds-chat-right-panel-tab-active={memoryWorkspaceTab === tab}
+            class:active={memoryWorkspaceTab === tab}
+            class:is-active={memoryWorkspaceTab === tab}
+            onclick={() => selectMemoryWorkspaceTabAndFocus(tab)}
+            onkeydown={(event) => handleMemoryWorkspaceTabKeydown(event, tab)}
           >
-            {#each chatList as chat, i (chat.id ?? i)}
-              <OptionInput value={i}>
-                {chat.name && chat.name.trim().length > 0 ? chat.name : `Chat ${i + 1}`}
-              </OptionInput>
-            {/each}
-          </SelectInput>
-        </div>
-      {/if}
+            {memoryWorkspaceTabLabels[tab]}
+          </button>
+        {/each}
+      </div>
 
       <!-- Scrollable Container -->
       <div class="ds-hypa-modal-scroll" tabindex="-1">
-        {#if hypaV3Data.summaries.length === 0}
-          <!-- Conversion Section -->
-          {#if isHypaV2ConversionPossible()}
-            <div
-              class="ds-hypa-modal-convert-card panel-shell"
-            >
-              <div class="ds-hypa-modal-convert-center">
-                <div class="ds-hypa-modal-convert-label">
-                  {language.hypaV3Modal.convertLabel}
+        {#if memoryWorkspaceTab === "summary"}
+          <div
+            class="ds-hypa-modal-tab-panel"
+            role="tabpanel"
+            id="hypa-memory-panel-summary"
+            aria-labelledby="hypa-memory-tab-summary"
+          >
+            {#if hypaV3Data.summaries.length === 0}
+              {#if isHypaV2ConversionPossible()}
+                <div class="ds-hypa-modal-convert-card panel-shell">
+                  <div class="ds-hypa-modal-convert-center">
+                    <div class="ds-hypa-modal-convert-label">
+                      {language.hypaV3Modal.convertLabel}
+                    </div>
+                    <button
+                      type="button"
+                      class="ds-hypa-modal-convert-button control-chip"
+                      tabindex="-1"
+                      onclick={async () => {
+                        const conversionResult = convertHypaV2ToV3();
+
+                        if (conversionResult.success) {
+                          await alertNormalWait(
+                            language.hypaV3Modal.convertSuccessMessage
+                          );
+                        } else {
+                          await alertNormalWait(
+                            language.hypaV3Modal.convertErrorMessage.replace(
+                              "{0}",
+                              conversionResult.error ?? "Unknown error"
+                            )
+                          );
+                        }
+                      }}
+                    >
+                      {language.hypaV3Modal.convertButton}
+                    </button>
+                  </div>
                 </div>
-                <button
-                  type="button"
-                  class="ds-hypa-modal-convert-button control-chip"
-                  tabindex="-1"
-                  onclick={async () => {
-                    const conversionResult = convertHypaV2ToV3();
-
-                    if (conversionResult.success) {
-                      await alertNormalWait(
-                        language.hypaV3Modal.convertSuccessMessage
-                      );
-                    } else {
-                      await alertNormalWait(
-                        language.hypaV3Modal.convertErrorMessage.replace(
-                          "{0}",
-                          conversionResult.error ?? "Unknown error"
-                        )
-                      );
-                    }
-                  }}
-                >
-                  {language.hypaV3Modal.convertButton}
-                </button>
-              </div>
-            </div>
-          {:else}
-            <div class="ds-hypa-modal-empty-note empty-state">
-              {language.hypaV3Modal.noSummariesLabel}
-            </div>
-          {/if}
-
-          <!-- Search Bar -->
-        {:else if searchState}
-          <div class="ds-hypa-modal-search-sticky">
-            <div class="ds-hypa-modal-search-row">
-              <div class="ds-hypa-modal-search-form-wrap">
-                <form
-                  class="ds-hypa-modal-search-form"
-                  onsubmit={(e) => {
-                    e.preventDefault();
-                    onSearch({ key: "Enter" } as KeyboardEvent);
-                  }}
-                >
-                  <input
-                    class="ds-hypa-modal-search-input control-field"
-                    placeholder={language.hypaV3Modal.searchPlaceholder}
-                    bind:this={searchState.ref}
-                    bind:value={searchState.query}
-                    oninput={() => {
-                      if (searchState) {
-                        searchState.results = [];
-                        searchState.currentResultIndex = -1;
-                      }
-                    }}
-                    onkeydown={(e) => onSearch(e)}
-                  />
-                </form>
-
-                {#if searchState.results.length > 0}
-                  <span
-                    class="ds-hypa-modal-search-counter"
-                  >
-                    {searchState.currentResultIndex + 1}/{searchState.results
-                      .length}
-                  </span>
-                {/if}
-              </div>
-
-              <!-- Previous Button -->
-              <button
-                type="button"
-                class="ds-hypa-modal-search-nav-button icon-btn icon-btn--sm"
-                tabindex="-1"
-                title="Previous search result"
-                aria-label="Previous search result"
-                onclick={() => {
-                  onSearch({ shiftKey: true, key: "Enter" } as KeyboardEvent);
-                }}
-              >
-                <ChevronUpIcon class="ds-hypa-modal-search-nav-icon" />
-              </button>
-
-              <!-- Next Button -->
-              <button
-                type="button"
-                class="ds-hypa-modal-search-nav-button icon-btn icon-btn--sm"
-                tabindex="-1"
-                title="Next search result"
-                aria-label="Next search result"
-                onclick={() => {
-                  onSearch({ key: "Enter" } as KeyboardEvent);
-                }}
-              >
-                <ChevronDownIcon class="ds-hypa-modal-search-nav-icon" />
-              </button>
-            </div>
-          </div>
-        {/if}
-
-        <!-- Manual Summarize -->
-        {#if embedded}
-          <details class="ds-hypa-modal-tools panel-shell">
-            <summary class="ds-hypa-modal-tools-summary">
-              {language.tools ?? "Tools"}
-            </summary>
-            <div class="ds-hypa-modal-tools-body">
-              {#if chatList.length > 1}
-                <div class="ds-hypa-modal-chat-row ds-hypa-modal-chat-row-embedded">
-                  <span class="ds-hypa-modal-chat-label">Chat</span>
-                  <SelectInput
-                    className="ds-hypa-modal-chat-select"
-                    value={modalChatIndex}
-                    onchange={(e) => {
-                      const nextIndex = parseInt(e.currentTarget.value);
-                      if (!Number.isNaN(nextIndex)) {
-                        modalChatIndex = nextIndex;
-                      }
-                    }}
-                  >
-                    {#each chatList as chat, i (chat.id ?? i)}
-                      <OptionInput value={i}>
-                        {chat.name && chat.name.trim().length > 0 ? chat.name : `Chat ${i + 1}`}
-                      </OptionInput>
-                    {/each}
-                  </SelectInput>
+              {:else}
+                <div class="ds-hypa-modal-empty-note empty-state">
+                  {language.hypaV3Modal.noSummariesLabel}
                 </div>
               {/if}
+            {:else if searchState}
+              <div class="ds-hypa-modal-search-sticky">
+                <div class="ds-hypa-modal-search-row">
+                  <div class="ds-hypa-modal-search-form-wrap">
+                    <form
+                      class="ds-hypa-modal-search-form"
+                      onsubmit={(e) => {
+                        e.preventDefault();
+                        onSearch({ key: "Enter" } as KeyboardEvent);
+                      }}
+                    >
+                      <input
+                        class="ds-hypa-modal-search-input control-field"
+                        placeholder={language.hypaV3Modal.searchPlaceholder}
+                        bind:this={searchState.ref}
+                        bind:value={searchState.query}
+                        oninput={() => {
+                          if (searchState) {
+                            searchState.results = [];
+                            searchState.currentResultIndex = -1;
+                          }
+                        }}
+                        onkeydown={(e) => onSearch(e)}
+                      />
+                    </form>
 
-              <div class="ds-hypa-modal-manual-sticky ds-hypa-modal-manual-embedded">
-                <div class="ds-hypa-modal-manual-row">
-                  <div class="ds-hypa-modal-manual-col">
-                    <label class="ds-hypa-modal-manual-label" for={manualRangeStartInputId}>Manual summarize range</label>
-                    <div class="ds-hypa-modal-manual-input-row">
-                      <input
-                        id={manualRangeStartInputId}
-                        class="ds-hypa-modal-manual-input control-field"
-                        type="number"
-                        min="1"
-                        max={chatList[modalChatIndex]?.message?.length ?? 1}
-                        placeholder="Start"
-                        bind:value={manualStart}
-                      />
-                      <span class="ds-hypa-modal-manual-to">to</span>
-                      <input
-                        id={manualRangeEndInputId}
-                        class="ds-hypa-modal-manual-input control-field"
-                        type="number"
-                        min="1"
-                        max={chatList[modalChatIndex]?.message?.length ?? 1}
-                        placeholder="End"
-                        bind:value={manualEnd}
-                      />
-                    </div>
+                    {#if searchState.results.length > 0}
+                      <span class="ds-hypa-modal-search-counter">
+                        {searchState.currentResultIndex + 1}/{searchState.results
+                          .length}
+                      </span>
+                    {/if}
                   </div>
+
                   <button
                     type="button"
-                    class="ds-hypa-modal-manual-submit ds-ui-button ds-ui-button-size-md ds-ui-button--primary"
-                    class:is-disabled={manualProcessing}
-                    disabled={manualProcessing}
-                    onclick={manualSummarizeRange}
+                    class="ds-hypa-modal-search-nav-button icon-btn icon-btn--sm"
+                    tabindex="-1"
+                    title="Previous search result"
+                    aria-label="Previous search result"
+                    onclick={() => {
+                      onSearch({ shiftKey: true, key: "Enter" } as KeyboardEvent);
+                    }}
                   >
-                    {manualProcessing ? 'Summarizing...' : 'Summarize'}
+                    <ChevronUpIcon class="ds-hypa-modal-search-nav-icon" />
+                  </button>
+
+                  <button
+                    type="button"
+                    class="ds-hypa-modal-search-nav-button icon-btn icon-btn--sm"
+                    tabindex="-1"
+                    title="Next search result"
+                    aria-label="Next search result"
+                    onclick={() => {
+                      onSearch({ key: "Enter" } as KeyboardEvent);
+                    }}
+                  >
+                    <ChevronDownIcon class="ds-hypa-modal-search-nav-icon" />
                   </button>
                 </div>
               </div>
+            {/if}
 
-              {#if promptOverrideCharacter}
-                <div class="ds-hypa-modal-prompt-override panel-shell">
-                  <div class="ds-hypa-modal-prompt-override-title">Per-character memory prompt override</div>
-                  <div class="ds-hypa-modal-prompt-override-grid">
-                    <label class="ds-hypa-modal-prompt-override-label">
-                      Summarization Prompt
-                      <TextAreaInput
-                        className="ds-hypa-modal-prompt-override-input"
-                        bind:value={promptOverrideCharacter.hypaV3PromptOverride.summarizationPrompt}
-                        autocomplete="off"
-                        margin="none"
-                      />
-                    </label>
-                    <label class="ds-hypa-modal-prompt-override-label">
-                      Re-summarization Prompt
-                      <TextAreaInput
-                        className="ds-hypa-modal-prompt-override-input"
-                        bind:value={promptOverrideCharacter.hypaV3PromptOverride.reSummarizationPrompt}
-                        autocomplete="off"
-                        margin="none"
-                      />
-                    </label>
+            <div class="ds-hypa-modal-tools panel-shell">
+              <div class="ds-hypa-modal-tools-body">
+                {#if chatList.length > 1}
+                  <div class="ds-hypa-modal-chat-row">
+                    <span class="ds-hypa-modal-chat-label">Chat</span>
+                    <SelectInput
+                      className="ds-hypa-modal-chat-select"
+                      value={modalChatIndex}
+                      onchange={(e) => {
+                        const nextIndex = parseInt(e.currentTarget.value);
+                        if (!Number.isNaN(nextIndex)) {
+                          modalChatIndex = nextIndex;
+                        }
+                      }}
+                    >
+                      {#each chatList as chat, i (chat.id ?? i)}
+                        <OptionInput value={i}>
+                          {chat.name && chat.name.trim().length > 0 ? chat.name : `Chat ${i + 1}`}
+                        </OptionInput>
+                      {/each}
+                    </SelectInput>
+                  </div>
+                {/if}
+
+                <div class={`ds-hypa-modal-manual-sticky${embedded ? " ds-hypa-modal-manual-embedded" : ""}`}>
+                  <div class="ds-hypa-modal-manual-row">
+                    <div class="ds-hypa-modal-manual-col">
+                      <label class="ds-hypa-modal-manual-label" for={manualRangeStartInputId}>Manual summarize range</label>
+                      <div class="ds-hypa-modal-manual-input-row">
+                        <input
+                          id={manualRangeStartInputId}
+                          class="ds-hypa-modal-manual-input control-field"
+                          type="number"
+                          min="1"
+                          max={chatList[modalChatIndex]?.message?.length ?? 1}
+                          placeholder="Start"
+                          bind:value={manualStart}
+                        />
+                        <span class="ds-hypa-modal-manual-to">to</span>
+                        <input
+                          id={manualRangeEndInputId}
+                          class="ds-hypa-modal-manual-input control-field"
+                          type="number"
+                          min="1"
+                          max={chatList[modalChatIndex]?.message?.length ?? 1}
+                          placeholder="End"
+                          bind:value={manualEnd}
+                        />
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      class="ds-hypa-modal-manual-submit ds-ui-button ds-ui-button-size-md ds-ui-button--primary"
+                      class:is-disabled={manualProcessing}
+                      disabled={manualProcessing}
+                      onclick={manualSummarizeRange}
+                    >
+                      {manualProcessing ? "Summarizing..." : "Summarize"}
+                    </button>
                   </div>
                 </div>
-              {/if}
+              </div>
             </div>
-          </details>
-        {:else}
-          <div class="ds-hypa-modal-manual-sticky">
-            <div class="ds-hypa-modal-manual-row">
-              <div class="ds-hypa-modal-manual-col">
-                <label class="ds-hypa-modal-manual-label" for={manualRangeStartInputId}>Manual summarize range</label>
-                <div class="ds-hypa-modal-manual-input-row">
-                  <input
-                    id={manualRangeStartInputId}
-                    class="ds-hypa-modal-manual-input control-field"
-                    type="number"
-                    min="1"
-                    max={chatList[modalChatIndex]?.message?.length ?? 1}
-                    placeholder="Start"
-                    bind:value={manualStart}
-                  />
-                  <span class="ds-hypa-modal-manual-to">to</span>
-                  <input
-                    id={manualRangeEndInputId}
-                    class="ds-hypa-modal-manual-input control-field"
-                    type="number"
-                    min="1"
-                    max={chatList[modalChatIndex]?.message?.length ?? 1}
-                    placeholder="End"
-                    bind:value={manualEnd}
-                  />
+
+            {#each hypaV3Data.summaries as summary, i (summary)}
+              {#if isSummaryVisible(i)}
+                <ModalSummaryItem
+                  summaryIndex={i}
+                  chatIndex={modalChatIndex}
+                  {hypaV3Data}
+                  {summaryItemStateMap}
+                  bind:expandedMessageState
+                  bind:searchState
+                  {filterSelected}
+                  {bulkEditState}
+                  {uiState}
+                  onToggleSummarySelection={handleToggleSummarySelection}
+                  onToggleCollapse={handleToggleCollapse}
+                  onDeleteSummary={handleDeleteSummary}
+                  onDeleteAfter={handleDeleteAfter}
+                />
+              {/if}
+            {/each}
+
+            <ModalFooter {hypaV3Data} />
+          </div>
+        {:else if memoryWorkspaceTab === "settings"}
+          <div
+            class="ds-hypa-modal-tab-panel"
+            role="tabpanel"
+            id="hypa-memory-panel-settings"
+            aria-labelledby="hypa-memory-tab-settings"
+          >
+            {#if promptOverrideCharacter}
+              <div class="ds-hypa-modal-prompt-override panel-shell">
+                <div class="ds-hypa-modal-prompt-override-title">Per-character memory prompt override</div>
+                <div class="ds-hypa-modal-prompt-override-grid">
+                  <label class="ds-hypa-modal-prompt-override-label">
+                    Summarization Prompt
+                    <TextAreaInput
+                      className="ds-hypa-modal-prompt-override-input"
+                      bind:value={promptOverrideCharacter.hypaV3PromptOverride.summarizationPrompt}
+                      autocomplete="off"
+                      margin="none"
+                    />
+                  </label>
+                  <label class="ds-hypa-modal-prompt-override-label">
+                    Re-summarization Prompt
+                    <TextAreaInput
+                      className="ds-hypa-modal-prompt-override-input"
+                      bind:value={promptOverrideCharacter.hypaV3PromptOverride.reSummarizationPrompt}
+                      autocomplete="off"
+                      margin="none"
+                    />
+                  </label>
                 </div>
               </div>
-              <button
-                type="button"
-                class="ds-hypa-modal-manual-submit ds-ui-button ds-ui-button-size-md ds-ui-button--primary"
-                class:is-disabled={manualProcessing}
-                disabled={manualProcessing}
-                onclick={manualSummarizeRange}
-              >
-                {manualProcessing ? 'Summarizing...' : 'Summarize'}
-              </button>
-            </div>
+            {:else}
+              <div class="ds-hypa-modal-empty-note empty-state">
+                Memory prompt override is available only for character chats.
+              </div>
+            {/if}
+          </div>
+        {:else}
+          <div
+            class="ds-hypa-modal-tab-panel"
+            role="tabpanel"
+            id="hypa-memory-panel-log"
+            aria-labelledby="hypa-memory-tab-log"
+          >
+            {#if hypaV3Debug}
+              <div class="ds-hypa-modal-debug panel-shell">
+                <div class="ds-hypa-modal-debug-summary">
+                  Last summarize log
+                </div>
+                <div class="ds-hypa-modal-debug-body">
+                  <div>Model: <span class="ds-hypa-modal-debug-value">{hypaV3Debug.model}</span></div>
+                  <div>Mode: <span class="ds-hypa-modal-debug-value">{hypaV3Debug.isResummarize ? "Resummarize" : "Summarize"}</span></div>
+                  <div>Time: <span class="ds-hypa-modal-debug-value">{new Date(hypaV3Debug.timestamp).toLocaleString()}</span></div>
+                  <div>Memory toggle: <span class="ds-hypa-modal-debug-value">{hypaRuntimeDebug.memoryToggle ? "On" : "Off"}</span></div>
+                  <div>HypaV3 enabled: <span class="ds-hypa-modal-debug-value">{hypaRuntimeDebug.hypaV3Enabled ? "On" : "Off"}</span></div>
+                  <div>HypaV2 enabled: <span class="ds-hypa-modal-debug-value">{hypaRuntimeDebug.hypaV2Enabled ? "On" : "Off"}</span></div>
+                  <div>Hanurai enabled: <span class="ds-hypa-modal-debug-value">{hypaRuntimeDebug.hanuraiEnabled ? "On" : "Off"}</span></div>
+                  <div>SupaModelType: <span class="ds-hypa-modal-debug-value">{hypaRuntimeDebug.supaModelType || "none"}</span></div>
+                  <div>Memory algorithm: <span class="ds-hypa-modal-debug-value">{hypaRuntimeDebug.memoryAlgorithmType || "n/a"}</span></div>
+                  {#if hypaV3Settings}
+                    <div>Periodic: <span class="ds-hypa-modal-debug-value">{hypaV3Settings.periodicSummarizationEnabled && hypaV3Settings.periodicSummarizationInterval > 0 ? "On" : "Off"}</span></div>
+                    <div>Interval: <span class="ds-hypa-modal-debug-value">{hypaV3Settings.periodicSummarizationInterval}</span></div>
+                    <div>Last index: <span class="ds-hypa-modal-debug-value">{hypaV3Data.lastSummarizedMessageIndex ?? 0}</span></div>
+                    <div>Chat messages: <span class="ds-hypa-modal-debug-value">{chatList[modalChatIndex]?.message?.length ?? 0}</span></div>
+                    {#if hypaV3Debug.periodic}
+                      <div>Periodic total chats: <span class="ds-hypa-modal-debug-value">{hypaV3Debug.periodic.totalChats}</span></div>
+                      <div>Periodic new messages: <span class="ds-hypa-modal-debug-value">{hypaV3Debug.periodic.newMessages}</span></div>
+                      <div>Periodic to summarize: <span class="ds-hypa-modal-debug-value">{hypaV3Debug.periodic.toSummarizeCount}</span></div>
+                      {#if hypaV3Debug.periodic.skippedReason}
+                        <div>Periodic skipped: <span class="ds-hypa-modal-debug-value">{hypaV3Debug.periodic.skippedReason}</span></div>
+                      {/if}
+                      {#if hypaV3Debug.periodic.chatName}
+                        <div>Periodic chat: <span class="ds-hypa-modal-debug-value">{hypaV3Debug.periodic.chatName}</span></div>
+                      {/if}
+                    {/if}
+                  {/if}
+                  <div>
+                    <div class="ds-hypa-modal-debug-block-title">Prompt</div>
+                    <textarea
+                      class="ds-hypa-modal-debug-textarea control-field"
+                      rows="4"
+                      readonly
+                      value={hypaV3Debug.prompt}
+                    ></textarea>
+                  </div>
+                  <div>
+                    <div class="ds-hypa-modal-debug-block-title">Input</div>
+                    <textarea
+                      class="ds-hypa-modal-debug-textarea control-field"
+                      rows="4"
+                      readonly
+                      value={hypaV3Debug.input}
+                    ></textarea>
+                  </div>
+                  <div>
+                    <div class="ds-hypa-modal-debug-block-title">Formatted</div>
+                    <textarea
+                      class="ds-hypa-modal-debug-textarea control-field"
+                      rows="6"
+                      readonly
+                      value={JSON.stringify(hypaV3Debug.formatted, null, 2)}
+                    ></textarea>
+                  </div>
+                  {#if hypaV3Debug.rawResponse}
+                    <div>
+                      <div class="ds-hypa-modal-debug-block-title">Raw Response</div>
+                      <textarea
+                        class="ds-hypa-modal-debug-textarea control-field"
+                        rows="6"
+                        readonly
+                        value={hypaV3Debug.rawResponse}
+                      ></textarea>
+                    </div>
+                  {/if}
+                </div>
+              </div>
+            {:else}
+              <div class="ds-hypa-modal-empty-note empty-state">
+                No summarize logs yet.
+              </div>
+            {/if}
           </div>
         {/if}
-
-        {#if hypaV3Debug}
-          <details class="ds-hypa-modal-debug">
-            <summary class="ds-hypa-modal-debug-summary">
-              Last summarize log
-            </summary>
-            <div class="ds-hypa-modal-debug-body">
-              <div>Model: <span class="ds-hypa-modal-debug-value">{hypaV3Debug.model}</span></div>
-              <div>Mode: <span class="ds-hypa-modal-debug-value">{hypaV3Debug.isResummarize ? 'Resummarize' : 'Summarize'}</span></div>
-              <div>Time: <span class="ds-hypa-modal-debug-value">{new Date(hypaV3Debug.timestamp).toLocaleString()}</span></div>
-              <div>Memory toggle: <span class="ds-hypa-modal-debug-value">{hypaRuntimeDebug.memoryToggle ? 'On' : 'Off'}</span></div>
-              <div>HypaV3 enabled: <span class="ds-hypa-modal-debug-value">{hypaRuntimeDebug.hypaV3Enabled ? 'On' : 'Off'}</span></div>
-              <div>HypaV2 enabled: <span class="ds-hypa-modal-debug-value">{hypaRuntimeDebug.hypaV2Enabled ? 'On' : 'Off'}</span></div>
-              <div>Hanurai enabled: <span class="ds-hypa-modal-debug-value">{hypaRuntimeDebug.hanuraiEnabled ? 'On' : 'Off'}</span></div>
-              <div>SupaModelType: <span class="ds-hypa-modal-debug-value">{hypaRuntimeDebug.supaModelType || 'none'}</span></div>
-              <div>Memory algorithm: <span class="ds-hypa-modal-debug-value">{hypaRuntimeDebug.memoryAlgorithmType || 'n/a'}</span></div>
-              {#if hypaV3Settings}
-                <div>Periodic: <span class="ds-hypa-modal-debug-value">{hypaV3Settings.periodicSummarizationEnabled && hypaV3Settings.periodicSummarizationInterval > 0 ? 'On' : 'Off'}</span></div>
-                <div>Interval: <span class="ds-hypa-modal-debug-value">{hypaV3Settings.periodicSummarizationInterval}</span></div>
-                <div>Last index: <span class="ds-hypa-modal-debug-value">{hypaV3Data.lastSummarizedMessageIndex ?? 0}</span></div>
-                <div>Chat messages: <span class="ds-hypa-modal-debug-value">{chatList[modalChatIndex]?.message?.length ?? 0}</span></div>
-                {#if hypaV3Debug.periodic}
-                  <div>Periodic total chats: <span class="ds-hypa-modal-debug-value">{hypaV3Debug.periodic.totalChats}</span></div>
-                  <div>Periodic new messages: <span class="ds-hypa-modal-debug-value">{hypaV3Debug.periodic.newMessages}</span></div>
-                  <div>Periodic to summarize: <span class="ds-hypa-modal-debug-value">{hypaV3Debug.periodic.toSummarizeCount}</span></div>
-                  {#if hypaV3Debug.periodic.skippedReason}
-                    <div>Periodic skipped: <span class="ds-hypa-modal-debug-value">{hypaV3Debug.periodic.skippedReason}</span></div>
-                  {/if}
-                  {#if hypaV3Debug.periodic.chatName}
-                    <div>Periodic chat: <span class="ds-hypa-modal-debug-value">{hypaV3Debug.periodic.chatName}</span></div>
-                  {/if}
-                {/if}
-              {/if}
-              <div>
-                <div class="ds-hypa-modal-debug-block-title">Prompt</div>
-                <textarea
-                  class="ds-hypa-modal-debug-textarea control-field"
-                  rows="4"
-                  readonly
-                  value={hypaV3Debug.prompt}
-                ></textarea>
-              </div>
-              <div>
-                <div class="ds-hypa-modal-debug-block-title">Input</div>
-                <textarea
-                  class="ds-hypa-modal-debug-textarea control-field"
-                  rows="4"
-                  readonly
-                  value={hypaV3Debug.input}
-                ></textarea>
-              </div>
-              <div>
-                <div class="ds-hypa-modal-debug-block-title">Formatted</div>
-                <textarea
-                  class="ds-hypa-modal-debug-textarea control-field"
-                  rows="6"
-                  readonly
-                  value={JSON.stringify(hypaV3Debug.formatted, null, 2)}
-                ></textarea>
-              </div>
-              {#if hypaV3Debug.rawResponse}
-                <div>
-                  <div class="ds-hypa-modal-debug-block-title">Raw Response</div>
-                  <textarea
-                    class="ds-hypa-modal-debug-textarea control-field"
-                    rows="6"
-                    readonly
-                    value={hypaV3Debug.rawResponse}
-                  ></textarea>
-                </div>
-              {/if}
-            </div>
-          </details>
-        {/if}
-
-        <!-- Summaries List -->
-        {#each hypaV3Data.summaries as summary, i (summary)}
-          {#if isSummaryVisible(i)}
-            <!-- Summary Item  -->
-            <ModalSummaryItem
-              summaryIndex={i}
-              chatIndex={modalChatIndex}
-              {hypaV3Data}
-              {summaryItemStateMap}
-              bind:expandedMessageState
-              bind:searchState
-              {filterSelected}
-              {bulkEditState}
-              {uiState}
-              onToggleSummarySelection={handleToggleSummarySelection}
-              onToggleCollapse={handleToggleCollapse}
-              onDeleteSummary={handleDeleteSummary}
-              onDeleteAfter={handleDeleteAfter}
-            />
-          {/if}
-        {/each}
-
-        <!-- Footer -->
-        <ModalFooter {hypaV3Data} />
       </div>
 
       <!-- Bulk Resummary Result -->
-      <BulkResummaryResult
-        {bulkResummaryState}
-        onReroll={rerollBulkResummary}
-        onApply={applyBulkResummary}
-        onCancel={cancelBulkResummary}
-      />
+      {#if memoryWorkspaceTab === "summary"}
+        <BulkResummaryResult
+          {bulkResummaryState}
+          onReroll={rerollBulkResummary}
+          onApply={applyBulkResummary}
+          onCancel={cancelBulkResummary}
+        />
 
-      <!-- Bulk Edit Actions -->
-      <BulkEditActions
-        {bulkEditState}
-        {categories}
-        showImportantOnly={false}
-        selectedCategoryFilter="all"
-        onResummarize={resummarizeBulkSelected}
-        onClearSelection={handleBulkEditClearSelection}
-        onUpdateSelectedCategory={handleBulkEditUpdateSelectedCategory}
-        onUpdateBulkSelectInput={handleBulkEditUpdateBulkSelectInput}
-        onApplyCategory={handleBulkEditApplyCategory}
-        onParseAndSelectSummaries={handleBulkEditParseAndSelectSummaries}
-      />
+        <BulkEditActions
+          {bulkEditState}
+          {categories}
+          showImportantOnly={false}
+          selectedCategoryFilter="all"
+          onResummarize={resummarizeBulkSelected}
+          onClearSelection={handleBulkEditClearSelection}
+          onUpdateSelectedCategory={handleBulkEditUpdateSelectedCategory}
+          onUpdateBulkSelectInput={handleBulkEditUpdateBulkSelectInput}
+          onApplyCategory={handleBulkEditApplyCategory}
+          onParseAndSelectSummaries={handleBulkEditParseAndSelectSummaries}
+        />
+      {/if}
     </div>
   </div>
 </div>

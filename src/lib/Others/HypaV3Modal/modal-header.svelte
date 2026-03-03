@@ -20,6 +20,7 @@
 
   interface Props {
     embedded?: boolean;
+    activeTab?: "summary" | "settings" | "log";
     searchState: SearchState | null;
     dropdownOpen: boolean;
     filterSelected: boolean;
@@ -32,6 +33,7 @@
 
   let {
     embedded = false,
+    activeTab = "summary",
     searchState = $bindable(),
     dropdownOpen = $bindable(),
     filterSelected = $bindable(),
@@ -121,19 +123,21 @@
 <div class="hypa-modal-header">
   <!-- Buttons Container -->
   <div class="hypa-modal-actions action-rail">
-    <!-- Open Search Button -->
-    <button
-      class="hypa-modal-icon-btn icon-btn icon-btn--md"
-      title="Search summaries"
-      aria-label="Search summaries"
-      tabindex="-1"
-      onclick={async () => await toggleSearch()}
-    >
-      <SearchIcon size={24} />
-    </button>
+    {#if activeTab === "summary"}
+      <!-- Open Search Button -->
+      <button
+        class="hypa-modal-icon-btn icon-btn icon-btn--md"
+        title="Search summaries"
+        aria-label="Search summaries"
+        tabindex="-1"
+        onclick={async () => await toggleSearch()}
+      >
+        <SearchIcon size={24} />
+      </button>
+    {/if}
 
     <!-- Bulk Edit Mode Button -->
-    {#if bulkEditState}
+    {#if bulkEditState && activeTab === "summary"}
       <button
         class="hypa-modal-icon-btn hypa-modal-icon-btn-accent icon-btn icon-btn--md"
         class:is-active={bulkEditState.isEnabled}
@@ -175,10 +179,12 @@
         <div class="hypa-modal-dropdown-panel panel-shell">
           <!-- Buttons Container -->
           <div class="hypa-modal-dropdown-actions action-rail">
-            <button class="hypa-modal-dropdown-item" type="button" onclick={handleToggleFilterSelected}>
-              <BarChartIcon size={16} />
-              <span>{filterSelected ? "Show all summaries" : "Show selected only"}</span>
-            </button>
+            {#if activeTab === "summary"}
+              <button class="hypa-modal-dropdown-item" type="button" onclick={handleToggleFilterSelected}>
+                <BarChartIcon size={16} />
+                <span>{filterSelected ? "Show all summaries" : "Show selected only"}</span>
+              </button>
+            {/if}
 
             {#if embedded}
               <button class="hypa-modal-dropdown-item" type="button" onclick={handleOpenGlobalSettings}>
