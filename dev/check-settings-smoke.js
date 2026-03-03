@@ -20,6 +20,10 @@ const checks = [
     ],
   },
   {
+    name: "prompt-settings-runtime",
+    cmd: ["pnpm", "exec", "vitest", "run", "dev/prompt-settings-runtime-smoke.test.ts"],
+  },
+  {
     name: "module-settings-runtime",
     cmd: ["pnpm", "exec", "vitest", "run", "dev/module-settings-runtime-smoke.test.ts"],
   },
