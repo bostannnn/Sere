@@ -2,7 +2,7 @@ import { get, writable } from "svelte/store";
 import { saveImage, setDatabase, type character, type Chat, type loreBook, getDatabase, getCharacterByIndex, setCharacterByIndex } from "./storage/database.svelte";
 import { alertAddCharacter, alertConfirm, alertError, alertNormal, alertSelect, alertStore, alertWait } from "./alert";
 import { language } from "../lang";
-import { checkNullish, findCharacterbyId, getUserName, selectMultipleFile, selectSingleFile } from "./util";
+import { checkNullish, findCharacterbyId, getUserName, selectMultipleFile, selectSingleFile, sleep } from "./util";
 import { v4 as uuidv4, v4 } from 'uuid';
 import { MobileGUIStack, selectedCharID } from "./stores.svelte";
 import { AppendableBuffer, changeChatTo, checkCharOrder, downloadFile, getFileSrc, requiresFullEncoderReload } from "./globalApi.svelte";
@@ -10,6 +10,8 @@ import { updateInlayScreen } from "./process/inlayScreen";
 import { checkImageType, parseMarkdownSafe } from "./parser.svelte";
 import { translateHTML } from "./translator/translator";
 import { isDoingChat } from "./process/index.svelte";
+import { isNodeServer } from "./platform";
+import { saveServerDatabase } from "./storage/serverDb";
 import { importCharacter } from "./characterCards";
 import { PngChunk } from "./pngChunk";
 const characterLog = (..._args: unknown[]) => {};
@@ -824,6 +826,7 @@ function dataURLtoBuffer(string:string){
 
 export async function removeChar(index:number,name:string, type:'normal'|'permanent'|'permanentForce' = 'normal'){
     const db = getDatabase()
+    const targetCharId = db.characters[index]?.chaId ?? ''
     if(type !== 'permanentForce'){
         const conf = await alertConfirm(language.removeConfirm + name)
         if(!conf){
@@ -846,6 +849,32 @@ export async function removeChar(index:number,name:string, type:'normal'|'perman
     requiresFullEncoderReload.state = true
     setDatabase(db)
     selectedCharID.set(-1)
+
+    if (isNodeServer) {
+        const savePayload = {
+            character: type === 'normal' && targetCharId ? [targetCharId] : [],
+            chat: [] as [string, string][],
+        }
+        try {
+            if (get(isDoingChat)) {
+                void (async () => {
+                    for (let i = 0; i < 120; i++) {
+                        if (!get(isDoingChat)) {
+                            await saveServerDatabase(getDatabase(), savePayload)
+                            return
+                        }
+                        await sleep(250)
+                    }
+                })().catch((error) => {
+                    alertError(error)
+                })
+            } else {
+                await saveServerDatabase(db, savePayload)
+            }
+        } catch (error) {
+            alertError(error)
+        }
+    }
 }
 
 export async function addCharacter(arg:{

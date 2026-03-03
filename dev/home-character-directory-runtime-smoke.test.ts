@@ -290,6 +290,37 @@ describe("home character directory runtime smoke", () => {
     expect(removeCharMock).toHaveBeenCalledWith(0, "Alpha", "normal");
   });
 
+  it("resolves trash action by character id when list indices drift", async () => {
+    const target = document.createElement("div");
+    document.body.appendChild(target);
+
+    app = mount(HomeCharacterDirectory as never, {
+      target,
+      props: {
+        shellSearchQuery: "",
+      },
+    });
+    await tick();
+
+    const menuButton = document.querySelector('[data-testid="home-directory-menu-char-1"]') as HTMLButtonElement | null;
+    expect(menuButton).not.toBeNull();
+    menuButton!.click();
+    await tick();
+
+    DBState.db.characters = [
+      DBState.db.characters[1],
+      DBState.db.characters[0],
+      DBState.db.characters[2],
+    ];
+
+    const trashButton = document.querySelector('[data-testid="home-directory-trash-char-1"]') as HTMLButtonElement | null;
+    expect(trashButton).not.toBeNull();
+    trashButton!.click();
+    await tick();
+
+    expect(removeCharMock).toHaveBeenCalledWith(1, "Alpha", "normal");
+  });
+
   it("preserves trash management actions (restore and permanent delete)", async () => {
     const target = document.createElement("div");
     document.body.appendChild(target);
@@ -331,6 +362,38 @@ describe("home character directory runtime smoke", () => {
 
     expect(DBState.db.characters[2].trashTime).toBeUndefined();
     expect(checkCharOrderMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("resolves permanent delete action by character id when list indices drift", async () => {
+    const target = document.createElement("div");
+    document.body.appendChild(target);
+
+    app = mount(HomeCharacterDirectory as never, {
+      target,
+      props: {
+        shellSearchQuery: "",
+        showTrash: true,
+      },
+    });
+    await tick();
+
+    const menuButton = document.querySelector('[data-testid="home-directory-menu-char-3"]') as HTMLButtonElement | null;
+    expect(menuButton).not.toBeNull();
+    menuButton!.click();
+    await tick();
+
+    DBState.db.characters = [
+      DBState.db.characters[2],
+      DBState.db.characters[0],
+      DBState.db.characters[1],
+    ];
+
+    const deleteButton = document.querySelector('[data-testid="home-directory-delete-char-3"]') as HTMLButtonElement | null;
+    expect(deleteButton).not.toBeNull();
+    deleteButton!.click();
+    await tick();
+
+    expect(removeCharMock).toHaveBeenCalledWith(0, "Gamma", "permanent");
   });
 
   it("keeps menu keyboard events uncanceled and avoids selecting character from menu control", async () => {

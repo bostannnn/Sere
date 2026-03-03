@@ -21,6 +21,7 @@
     let openMenuKey = $state<string | null>(null);
     type CharacterRow = {
         key: string;
+        chaId: string;
         index: number;
         name: string;
         isGroup: boolean;
@@ -93,6 +94,7 @@
 
             results.push({
                 key: `${entry.chaId ?? index}:${safeChatIndex}:${isTrash ? "trash" : "active"}`,
+                chaId: entry.chaId ?? "",
                 index,
                 name,
                 isGroup: entry.type === "group",
@@ -117,6 +119,14 @@
 
     function selectCharacter(index: number) {
         changeChar(index);
+    }
+
+    function resolveCurrentCharacterIndex(row: CharacterRow) {
+        if (!row.chaId) {
+            return -1;
+        }
+        const characters = DBState.db.characters ?? [];
+        return characters.findIndex((entry) => entry?.chaId === row.chaId);
     }
 
     function isCardMenuTarget(target: EventTarget | null) {
@@ -173,17 +183,32 @@
         cardTiltController.onPointerLeave(event);
     }
 
-    async function trashCharacter(index: number, name: string) {
-        await removeChar(index, name, "normal");
+    async function trashCharacter(row: CharacterRow) {
+        const index = resolveCurrentCharacterIndex(row);
+        if (index === -1) {
+            closeOpenMenu();
+            return;
+        }
+        await removeChar(index, row.name, "normal");
         closeOpenMenu();
     }
 
-    async function deleteCharacter(index: number, name: string) {
-        await removeChar(index, name, "permanent");
+    async function deleteCharacter(row: CharacterRow) {
+        const index = resolveCurrentCharacterIndex(row);
+        if (index === -1) {
+            closeOpenMenu();
+            return;
+        }
+        await removeChar(index, row.name, "permanent");
         closeOpenMenu();
     }
 
-    function restoreCharacter(index: number) {
+    function restoreCharacter(row: CharacterRow) {
+        const index = resolveCurrentCharacterIndex(row);
+        if (index === -1) {
+            closeOpenMenu();
+            return;
+        }
         const targetCharacter = DBState.db.characters[index];
         if (!targetCharacter) {
             return;
@@ -341,7 +366,7 @@
                                                         title="Restore character"
                                                         aria-label="Restore character"
                                                         onclick={() => {
-                                                            restoreCharacter(row.index);
+                                                            restoreCharacter(row);
                                                         }}
                                                         data-testid={`home-directory-restore-char-${row.index + 1}`}
                                                     >
@@ -355,7 +380,7 @@
                                                         title="Delete character permanently"
                                                         aria-label="Delete character permanently"
                                                         onclick={() => {
-                                                            void deleteCharacter(row.index, row.name);
+                                                            void deleteCharacter(row);
                                                         }}
                                                         data-testid={`home-directory-delete-char-${row.index + 1}`}
                                                     >
@@ -370,7 +395,7 @@
                                                         title="Move character to trash"
                                                         aria-label="Move character to trash"
                                                         onclick={() => {
-                                                            void trashCharacter(row.index, row.name);
+                                                            void trashCharacter(row);
                                                         }}
                                                         data-testid={`home-directory-trash-char-${row.index + 1}`}
                                                     >
