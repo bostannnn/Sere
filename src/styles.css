@@ -770,18 +770,25 @@ body {
 
 .ds-model-list-overlay {
   position: fixed;
-  inset: 0;
-  z-index: 50;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100dvh;
+  z-index: var(--z-overlay, 110);
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
+  overflow-y: auto;
+  padding: max(var(--ds-space-4), env(safe-area-inset-top))
+    var(--ds-space-4)
+    max(var(--ds-space-4), env(safe-area-inset-bottom));
   background: rgb(0 0 0 / 0.5);
 }
 
 .ds-model-list-panel.panel-shell {
   width: 24rem;
-  max-width: 100%;
-  max-height: 100%;
+  max-width: min(24rem, calc(100vw - var(--ds-space-6)));
+  max-height: calc(100dvh - (var(--ds-space-4) * 2));
   overflow-y: auto;
   overflow-x: hidden;
   display: flex;

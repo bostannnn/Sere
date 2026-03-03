@@ -153,26 +153,26 @@
         clearTransientOverlays();
         $settingsOpen = false;
         openRulebookManager.set(false);
-        selectedCharID.set(-1);
         PlaygroundStore.set(1);
+        selectedCharID.set(-1);
         topbarOverflowOpen = false;
     }
 
     function openRulebooksFromTopbar() {
         clearTransientOverlays();
         settingsOpen.set(false);
-        selectedCharID.set(-1);
-        PlaygroundStore.set(0);
         openRulebookManager.set(true);
+        PlaygroundStore.set(0);
+        selectedCharID.set(-1);
         topbarOverflowOpen = false;
     }
 
     function openSettingsFromTopbar() {
         clearTransientOverlays();
         openRulebookManager.set(false);
-        selectedCharID.set(-1);
-        PlaygroundStore.set(0);
         settingsOpen.set(true);
+        PlaygroundStore.set(0);
+        selectedCharID.set(-1);
         topbarOverflowOpen = false;
     }
 

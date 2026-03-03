@@ -19,7 +19,7 @@
     }
 
     const { send, messageInput }: Props = $props();
-    let suggestMessages:string[] = $state(DBState.db.characters[$selectedCharID]?.chats[DBState.db.characters[$selectedCharID].chatPage]?.suggestMessages)
+    let suggestMessages:string[] = $state(DBState.db.characters[$selectedCharID]?.chats?.[DBState.db.characters[$selectedCharID]?.chatPage ?? 0]?.suggestMessages ?? [])
     let suggestMessagesTranslated:string[] = $state()
     let toggleTranslate:boolean = $state(DBState.db.autoTranslate)
     let progress:boolean = $state();
@@ -34,7 +34,11 @@
                 abortController?.abort()
             }
             const currentChar = DBState.db.characters[$selectedCharID];
-            suggestMessages = currentChar?.chats[currentChar.chatPage].suggestMessages
+            if (!currentChar) {
+                suggestMessages = []
+                return
+            }
+            suggestMessages = currentChar?.chats?.[currentChar.chatPage]?.suggestMessages ?? []
         }
     }
     
@@ -46,7 +50,12 @@
             suggestMessages = []
         }
         if(!v && $selectedCharID > -1 && (!suggestMessages || suggestMessages.length === 0) && !progress){
-            const currentChar:character|groupChat = DBState.db.characters[$selectedCharID];
+            const requestCharId = $selectedCharID
+            const currentChar:character|groupChat = DBState.db.characters[requestCharId];
+            if (!currentChar) {
+                progress = false
+                return
+            }
             let messages:Message[] = []
             
             messages = [...messages, ...currentChar.chats[currentChar.chatPage].message];
@@ -89,10 +98,20 @@
                 if(rq2.type !== 'fail' && rq2.type !== 'streaming' && rq2.type !== 'multiline' && progress){
                     var suggestMessagesNew = rq2.result.split('\n').filter(msg => msg.startsWith('-')).map(msg => msg.replace('-','').trim())
                     const db:Database = DBState.db;
-                    db.characters[$selectedCharID].chats[currentChar.chatPage].suggestMessages = suggestMessagesNew
+                    const targetChar = db.characters?.[requestCharId]
+                    const targetChat = targetChar?.chats?.[currentChar.chatPage]
+                    if (!targetChar || !targetChat) {
+                        progress = false
+                        return
+                    }
+                    targetChat.suggestMessages = suggestMessagesNew
                     setDatabase(db)
-                    suggestMessages = suggestMessagesNew
+                    if ($selectedCharID === requestCharId) {
+                        suggestMessages = suggestMessagesNew
+                    }
                 }
+                progress = false
+            }).catch(() => {
                 progress = false
             })
             }
@@ -109,12 +128,21 @@
         }
     }
 
-    onDestroy(unsub)
+    onDestroy(() => {
+        abortController?.abort()
+        unsub()
+    })
 
     $effect(() => {
         void $selectedCharID
         //FIXME add selectedChatPage for optimize render
-        chatPage = DBState.db.characters[$selectedCharID].chatPage
+        const activeChar = DBState.db.characters[$selectedCharID]
+        if (!activeChar) {
+            chatPage = -1
+            suggestMessages = []
+            return
+        }
+        chatPage = activeChar.chatPage
         updateSuggestions()
     });
     $effect(() => {translateSuggest(toggleTranslate, suggestMessages)});

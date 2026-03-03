@@ -44,7 +44,7 @@
 
   let modalChatIndex = $state(0);
   let wasOpen = $state(false);
-  const currentChar = $derived(DBState.db.characters[$selectedCharID]);
+  const currentChar = $derived(DBState.db.characters?.[$selectedCharID] ?? null);
   const chatList = $derived(currentChar?.chats ?? []);
 
   const emptyHypaV3Data: SerializableHypaV3Data = {
@@ -170,9 +170,11 @@
   function persistHypaV3Data() {
     const targetChat = chatList[modalChatIndex];
     if (!targetChat) return;
+    const targetCharacter = DBState.db.characters?.[$selectedCharID];
+    if (!targetCharacter) return;
     targetChat.hypaV3Data = hypaV3Data;
-    DBState.db.characters[$selectedCharID].chats[modalChatIndex] = { ...targetChat };
-    DBState.db.characters[$selectedCharID].chats = [...DBState.db.characters[$selectedCharID].chats];
+    targetCharacter.chats[modalChatIndex] = { ...targetChat };
+    targetCharacter.chats = [...targetCharacter.chats];
   }
 
   $effect(() => {
@@ -237,10 +239,12 @@
   function syncHypaV3DataFromServer(data: SerializableHypaV3Data) {
     const targetChat = chatList[modalChatIndex];
     if (!targetChat) return;
+    const targetCharacter = DBState.db.characters?.[$selectedCharID];
+    if (!targetCharacter) return;
     hypaV3Data = data;
     targetChat.hypaV3Data = data;
-    DBState.db.characters[$selectedCharID].chats[modalChatIndex] = { ...targetChat };
-    DBState.db.characters[$selectedCharID].chats = [...DBState.db.characters[$selectedCharID].chats];
+    targetCharacter.chats[modalChatIndex] = { ...targetChat };
+    targetCharacter.chats = [...targetCharacter.chats];
   }
 
   async function manualSummarizeRange() {
@@ -485,9 +489,11 @@
         language.hypaV3Modal.resetConfirmSecondMessage
       )
     ) {
-      DBState.db.characters[$selectedCharID].chats[
-        DBState.db.characters[$selectedCharID].chatPage
-      ].hypaV3Data = {
+      const targetCharacter = DBState.db.characters?.[$selectedCharID];
+      if (!targetCharacter) return;
+      const targetChat = targetCharacter.chats?.[targetCharacter.chatPage];
+      if (!targetChat) return;
+      targetChat.hypaV3Data = {
         summaries: [],
       };
     }
@@ -738,16 +744,34 @@
   }
 
   function isHypaV2ConversionPossible(): boolean {
-    const char = DBState.db.characters[$selectedCharID];
+    const char = DBState.db.characters?.[$selectedCharID];
+    if (!char) {
+      return false;
+    }
     const chat = char.chats[modalChatIndex];
+    if (!chat) {
+      return false;
+    }
 
     return chat.hypaV3Data?.summaries?.length === 0 && chat.hypaV2Data != null;
   }
 
   function convertHypaV2ToV3(): { success: boolean; error?: string } {
     try {
-      const char = DBState.db.characters[$selectedCharID];
+      const char = DBState.db.characters?.[$selectedCharID];
+      if (!char) {
+        return {
+          success: false,
+          error: "Character not found.",
+        };
+      }
       const chat = char.chats[modalChatIndex];
+      if (!chat) {
+        return {
+          success: false,
+          error: "Chat not found.",
+        };
+      }
       const hypaV2Data = chat.hypaV2Data;
 
       if ((chat.hypaV3Data?.summaries?.length ?? 0) > 0) {

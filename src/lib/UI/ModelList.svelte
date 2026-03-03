@@ -4,6 +4,7 @@
     import { DBState } from 'src/ts/stores.svelte';
     import { getHordeModels } from "src/ts/horde/getModels";
     import Accordion from "./Accordion.svelte";
+    import Portal from "./GUI/Portal.svelte";
     import { language } from "src/lang";
     import CheckInput from "./GUI/CheckInput.svelte";
     import { getModelInfo, getModelList } from 'src/ts/model/modellist';
@@ -12,15 +13,12 @@
     interface Props {
         value?: string;
         onChange?: (v:string) => void;
-        onclick?: (event: MouseEvent & {
-            currentTarget: EventTarget & HTMLDialogElement;
-        }) => unknown
+        onclick?: (event: MouseEvent) => unknown
         blankable?: boolean
     }
 
     let { value = $bindable(), onChange = (_v) => {}, onclick, blankable }: Props = $props();
     let openOptions = $state(false)
-    let dialogEl = $state<HTMLDialogElement | null>(null)
     const selectedValue = $derived(typeof value === 'string' ? value : '')
 
     function changeModel(name:string){
@@ -33,19 +31,6 @@
         openOptions = false
     }
 
-    $effect(() => {
-        if (!dialogEl) return
-        if (openOptions) {
-            if (!dialogEl.open) {
-                dialogEl.showModal()
-            }
-        } else {
-            if (dialogEl.open) {
-                dialogEl.close()
-            }
-        }
-    })
-
     let showUnrec = $state(false)
     const providers = $derived(getModelList({
         recommendedOnly: !showUnrec,
@@ -53,19 +38,7 @@
     }))
 </script>
 
-<!-- Native <dialog> provides built-in focus trap, Escape key handling, and
-     correct modal semantics. The ::backdrop pseudo-element handles the scrim. -->
-<dialog
-    bind:this={dialogEl}
-    class="ds-model-list-dialog"
-    aria-label={language.model}
-    onclose={close}
-    onclick={(e) => {
-        /* Close when clicking the backdrop (the <dialog> element itself, not its content) */
-        if (e.target === e.currentTarget) close()
-        onclick?.(e as unknown as MouseEvent & { currentTarget: EventTarget & HTMLDialogElement })
-    }}
->
+{#snippet modelListPanel()}
     <div class="ds-model-list-panel panel-shell">
         <div class="ds-model-list-header">
             <button
@@ -126,29 +99,27 @@
             <CheckInput name={language.showUnrecommended} grayText bind:check={showUnrec}/>
         </div>
     </div>
-</dialog>
+{/snippet}
+
+{#if openOptions}
+    <Portal>
+        <div class="ds-model-list-overlay" role="button" tabindex="0" aria-label="Close model list" onclick={close} onkeydown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault()
+                close()
+            }
+        }}>
+            <div role="dialog" aria-modal="true" aria-label={language.model} tabindex="-1" onclick={(e) => {
+                e.stopPropagation()
+                onclick?.(e as unknown as MouseEvent)
+            }} onkeydown={(e) => e.stopPropagation()}>
+                {@render modelListPanel()}
+            </div>
+        </div>
+    </Portal>
+{/if}
 
 <button type="button" onclick={() => {openOptions = true}}
     class="ds-model-list-trigger">
         {getModelInfo(selectedValue)?.fullName || language.none}
 </button>
-
-<style>
-    /* <dialog> resets — the global @layer base sets margin: auto, which is what we want.
-       Override display so the dialog matches the old overlay layout. */
-    .ds-model-list-dialog {
-        /* Transparent dialog element itself; the panel-shell inside provides the card */
-        background: transparent;
-        border: none;
-        padding: 0;
-        margin: auto;
-        max-width: 100%;
-        max-height: 100%;
-        overflow: visible;
-    }
-
-    /* Scrim — replaces the old .ds-model-list-overlay div */
-    .ds-model-list-dialog::backdrop {
-        background: rgb(0 0 0 / 0.5);
-    }
-</style>
