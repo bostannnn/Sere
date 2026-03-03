@@ -308,8 +308,8 @@ ensureIncludes(homeDirectoryContent, homeDirectoryFile, "import { changeChar, ge
 ensureIncludes(homeDirectoryContent, homeDirectoryFile, "import { checkCharOrder } from \"src/ts/globalApi.svelte\";", failures);
 ensureIncludes(homeDirectoryContent, homeDirectoryFile, "showTrash = false", failures);
 ensureIncludes(homeDirectoryContent, homeDirectoryFile, "changeChar(index);", failures);
-ensureIncludes(homeDirectoryContent, homeDirectoryFile, "await removeChar(index, name, \"normal\");", failures);
-ensureIncludes(homeDirectoryContent, homeDirectoryFile, "await removeChar(index, name, \"permanent\");", failures);
+ensureIncludes(homeDirectoryContent, homeDirectoryFile, "await removeChar(index, row.name, \"normal\");", failures);
+ensureIncludes(homeDirectoryContent, homeDirectoryFile, "await removeChar(index, row.name, \"permanent\");", failures);
 ensureIncludes(homeDirectoryContent, homeDirectoryFile, "checkCharOrder();", failures);
 ensureIncludes(homeDirectoryContent, homeDirectoryFile, "data-show-trash={showTrash ? \"1\" : \"0\"}", failures);
 ensureIncludes(homeDirectoryContent, homeDirectoryFile, "data-testid={`home-directory-menu-char-${row.index + 1}`}", failures);

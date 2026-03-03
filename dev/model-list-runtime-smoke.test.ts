@@ -113,7 +113,7 @@ describe("model list runtime smoke", () => {
     await flushUi();
 
     expect(onChange).toHaveBeenLastCalledWith("provider:model-b");
-    expect((document.querySelector(".ds-model-list-dialog") as HTMLDialogElement | null)?.open).toBe(false);
+    expect(document.querySelector(".ds-model-list-overlay")).toBeNull();
   });
 
   it("keeps blank selection path stable when blankable is enabled", async () => {
@@ -145,7 +145,7 @@ describe("model list runtime smoke", () => {
     await flushUi();
 
     expect(onChange).toHaveBeenLastCalledWith("");
-    expect((document.querySelector(".ds-model-list-dialog") as HTMLDialogElement | null)?.open).toBe(false);
+    expect(document.querySelector(".ds-model-list-overlay")).toBeNull();
   });
 
   it("stays stable when mounted with an undefined value", async () => {

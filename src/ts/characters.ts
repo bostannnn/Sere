@@ -826,6 +826,9 @@ function dataURLtoBuffer(string:string){
 
 export async function removeChar(index:number,name:string, type:'normal'|'permanent'|'permanentForce' = 'normal'){
     const db = getDatabase()
+    if (!Number.isInteger(index) || index < 0 || index >= db.characters.length) {
+        return
+    }
     const targetCharId = db.characters[index]?.chaId ?? ''
     if(type !== 'permanentForce'){
         const conf = await alertConfirm(language.removeConfirm + name)
@@ -865,6 +868,8 @@ export async function removeChar(index:number,name:string, type:'normal'|'perman
                         }
                         await sleep(250)
                     }
+                    // Ensure deletion/trash is persisted even if generation does not settle quickly.
+                    await saveServerDatabase(getDatabase(), savePayload)
                 })().catch((error) => {
                     alertError(error)
                 })
