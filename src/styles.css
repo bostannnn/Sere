@@ -2156,12 +2156,12 @@ body {
   height: fit-content;
 }
 
-.ds-hypa-modal-workspace-tabs.ds-chat-right-panel-tabs {
-  margin-bottom: var(--ds-space-2);
-  padding: 0;
+.ds-hypa-memory-tabs.ds-settings-tabs {
+  overflow: hidden;
 }
 
-.ds-hypa-modal-workspace-tab.ds-chat-right-panel-tab {
+.ds-hypa-memory-tabs .ds-settings-tab {
+  flex: 1 1 0;
   min-width: 0;
 }
 

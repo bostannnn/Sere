@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { tick, untrack } from "svelte";
+  import { untrack } from "svelte";
   import { SvelteSet } from "svelte/reactivity";
   import { ChevronUpIcon, ChevronDownIcon } from "@lucide/svelte";
   import { 
@@ -35,6 +35,7 @@
   import SelectInput from "src/lib/UI/GUI/SelectInput.svelte";
   import OptionInput from "src/lib/UI/GUI/OptionInput.svelte";
   import TextAreaInput from "src/lib/UI/GUI/TextAreaInput.svelte";
+  import SettingsSubTabs from "src/lib/Setting/SettingsSubTabs.svelte";
   const hypaV3ModalLog = (..._args: unknown[]) => {};
 
   interface Props {
@@ -81,13 +82,23 @@
   let filterSelected = $state(false);
   let bulkResummaryState = $state<BulkResummaryState | null>(null);
   type MemoryWorkspaceTab = "summary" | "settings" | "log";
-  const memoryWorkspaceTabs: MemoryWorkspaceTab[] = ["summary", "settings", "log"];
-  const memoryWorkspaceTabLabels: Record<MemoryWorkspaceTab, string> = {
-    summary: "Summary",
-    settings: "Settings",
-    log: "Log",
+  const memoryWorkspaceTabIdByValue: Record<MemoryWorkspaceTab, number> = {
+    summary: 0,
+    settings: 1,
+    log: 2,
   };
+  const memoryWorkspaceTabById: Record<number, MemoryWorkspaceTab> = {
+    0: "summary",
+    1: "settings",
+    2: "log",
+  };
+  const memoryWorkspaceTabItems = [
+    { id: 0, label: "Summary" },
+    { id: 1, label: "Settings" },
+    { id: 2, label: "Log" },
+  ];
   let memoryWorkspaceTab = $state<MemoryWorkspaceTab>("summary");
+  const selectedMemoryWorkspaceTabId = $derived(memoryWorkspaceTabIdByValue[memoryWorkspaceTab]);
 
   const bulkEditState = $state<BulkEditState>({
     isEnabled: false,
@@ -117,11 +128,6 @@
     memoryAlgorithmType: DBState.db.memoryAlgorithmType,
   });
 
-  const focusMemoryWorkspaceTab = (tab: MemoryWorkspaceTab) => {
-    const tabButton = document.getElementById(`hypa-memory-tab-${tab}`) as HTMLButtonElement | null;
-    tabButton?.focus();
-  };
-
   const selectMemoryWorkspaceTab = (tab: MemoryWorkspaceTab) => {
     memoryWorkspaceTab = tab;
     uiState.dropdownOpen = false;
@@ -134,48 +140,9 @@
     }
   };
 
-  const selectMemoryWorkspaceTabAndFocus = async (tab: MemoryWorkspaceTab) => {
+  const selectMemoryWorkspaceTabById = (id: number) => {
+    const tab = memoryWorkspaceTabById[id] ?? "summary";
     selectMemoryWorkspaceTab(tab);
-    await tick();
-    focusMemoryWorkspaceTab(tab);
-  };
-
-  const getHorizontalDirection = (key: string): 1 | -1 | 0 => {
-    if (key === "ArrowRight" || key === "Right") {
-      return 1;
-    }
-    if (key === "ArrowLeft" || key === "Left") {
-      return -1;
-    }
-    return 0;
-  };
-
-  const handleMemoryWorkspaceTabKeydown = async (
-    event: KeyboardEvent,
-    currentTab: MemoryWorkspaceTab = memoryWorkspaceTab
-  ) => {
-    if (event.key === "Home") {
-      await selectMemoryWorkspaceTabAndFocus(memoryWorkspaceTabs[0]);
-      event.preventDefault();
-      return;
-    }
-
-    if (event.key === "End") {
-      await selectMemoryWorkspaceTabAndFocus(memoryWorkspaceTabs[memoryWorkspaceTabs.length - 1]);
-      event.preventDefault();
-      return;
-    }
-
-    const direction = getHorizontalDirection(event.key);
-    if (direction === 0) {
-      return;
-    }
-
-    const currentIndex = memoryWorkspaceTabs.indexOf(currentTab);
-    const safeIndex = currentIndex >= 0 ? currentIndex : 0;
-    const nextIndex = (safeIndex + direction + memoryWorkspaceTabs.length) % memoryWorkspaceTabs.length;
-    await selectMemoryWorkspaceTabAndFocus(memoryWorkspaceTabs[nextIndex]);
-    event.preventDefault();
   };
 
   $effect.pre(() => {
@@ -848,52 +815,28 @@
         uiState.dropdownOpen = false;
       }}
     >
-      <!-- Header -->
-      <ModalHeader
-        {embedded}
-        activeTab={memoryWorkspaceTab}
-        bind:searchState
-        bind:dropdownOpen={uiState.dropdownOpen}
-        bind:filterSelected
-        {bulkEditState}
-        {uiState}
-        {hypaV3Data}
-        onResetData={handleResetData}
-        onToggleBulkEditMode={handleToggleBulkEditMode}
-      />
+      {#if !embedded}
+        <!-- Header -->
+        <ModalHeader
+          {embedded}
+          activeTab={memoryWorkspaceTab}
+          bind:searchState
+          bind:dropdownOpen={uiState.dropdownOpen}
+          bind:filterSelected
+          {bulkEditState}
+          {uiState}
+          {hypaV3Data}
+          onResetData={handleResetData}
+          onToggleBulkEditMode={handleToggleBulkEditMode}
+        />
+      {/if}
 
-      <div
-        class="ds-chat-right-panel-tabs ds-hypa-modal-workspace-tabs seg-tabs"
-        role="tablist"
-        aria-label="Memory sections"
-        tabindex="-1"
-        onkeydown={(event) => {
-          if (event.target !== event.currentTarget) {
-            return;
-          }
-          handleMemoryWorkspaceTabKeydown(event);
-        }}
-      >
-        {#each memoryWorkspaceTabs as tab (tab)}
-          <button
-            type="button"
-            class="ds-chat-right-panel-tab ds-hypa-modal-workspace-tab seg-tab"
-            role="tab"
-            id={`hypa-memory-tab-${tab}`}
-            data-testid={`hypa-memory-tab-${tab}`}
-            aria-selected={memoryWorkspaceTab === tab}
-            aria-controls={`hypa-memory-panel-${tab}`}
-            tabindex={memoryWorkspaceTab === tab ? 0 : -1}
-            class:ds-chat-right-panel-tab-active={memoryWorkspaceTab === tab}
-            class:active={memoryWorkspaceTab === tab}
-            class:is-active={memoryWorkspaceTab === tab}
-            onclick={() => selectMemoryWorkspaceTabAndFocus(tab)}
-            onkeydown={(event) => handleMemoryWorkspaceTabKeydown(event, tab)}
-          >
-            {memoryWorkspaceTabLabels[tab]}
-          </button>
-        {/each}
-      </div>
+      <SettingsSubTabs
+        className="ds-hypa-memory-tabs"
+        items={memoryWorkspaceTabItems}
+        selectedId={selectedMemoryWorkspaceTabId}
+        onSelect={selectMemoryWorkspaceTabById}
+      />
 
       <!-- Scrollable Container -->
       <div class="ds-hypa-modal-scroll" tabindex="-1">
@@ -902,8 +845,23 @@
             class="ds-hypa-modal-tab-panel"
             role="tabpanel"
             id="hypa-memory-panel-summary"
-            aria-labelledby="hypa-memory-tab-summary"
+            aria-label="Summary panel"
           >
+            {#if embedded}
+              <ModalHeader
+                {embedded}
+                activeTab={memoryWorkspaceTab}
+                bind:searchState
+                bind:dropdownOpen={uiState.dropdownOpen}
+                bind:filterSelected
+                {bulkEditState}
+                {uiState}
+                {hypaV3Data}
+                onResetData={handleResetData}
+                onToggleBulkEditMode={handleToggleBulkEditMode}
+              />
+            {/if}
+
             {#if hypaV3Data.summaries.length === 0}
               {#if isHypaV2ConversionPossible()}
                 <div class="ds-hypa-modal-convert-card panel-shell">
@@ -1095,7 +1053,7 @@
             class="ds-hypa-modal-tab-panel"
             role="tabpanel"
             id="hypa-memory-panel-settings"
-            aria-labelledby="hypa-memory-tab-settings"
+            aria-label="Settings panel"
           >
             {#if promptOverrideCharacter}
               <div class="ds-hypa-modal-prompt-override panel-shell">
@@ -1132,7 +1090,7 @@
             class="ds-hypa-modal-tab-panel"
             role="tabpanel"
             id="hypa-memory-panel-log"
-            aria-labelledby="hypa-memory-tab-log"
+            aria-label="Log panel"
           >
             {#if hypaV3Debug}
               <div class="ds-hypa-modal-debug panel-shell">

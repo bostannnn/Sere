@@ -7,10 +7,11 @@
   interface Props {
     items: SettingsSubTabItem[];
     selectedId: number;
+    className?: string;
     onSelect?: (id: number) => void;
   }
 
-  const { items, selectedId, onSelect = () => {} }: Props = $props();
+  const { items, selectedId, className = "", onSelect = () => {} }: Props = $props();
 
   function handleTabKeydown(event: KeyboardEvent, index: number) {
     if (items.length === 0) return;
@@ -35,7 +36,7 @@
   }
 </script>
 
-<div class="ds-settings-tabs seg-tabs" role="tablist" aria-orientation="horizontal">
+<div class={`ds-settings-tabs seg-tabs ${className}`.trim()} role="tablist" aria-orientation="horizontal">
   {#each items as item, index (item.id ?? index)}
     <button
       type="button"
