@@ -28,7 +28,7 @@
     let extokens = $state(0)
     let draggedIndex = $state(-1)
     let dragOverIndex = $state(-1)
-    let openedItemIndices = new SvelteSet<number>()
+    let openedItemIndices = $state(new SvelteSet<number>())
     executeTokenize(DBState.db.promptTemplate)
   interface Props {
     onGoBack?: () => void;

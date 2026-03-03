@@ -41,6 +41,7 @@ These rules are mandatory for every next iteration in this concept.
 - `Escape` and outside-click close topbar overflow deterministically.
 - Right workspace sidebar toggle is idempotent: click once open, click again close.
 - Scrim state must reflect actual open overlays only.
+- Model picker overlays must render through a body-level portal (`document.body`) so shell/content overflow containers cannot clip the modal surface.
 
 ## 4) Tab system contract
 

@@ -184,4 +184,43 @@ describe("model list runtime smoke", () => {
       window.removeEventListener("unhandledrejection", onUnhandledRejection);
     }
   });
+
+  it("renders the picker in a body portal so parent overflow cannot clip it", async () => {
+    const onChange = vi.fn();
+    const clippingContainer = document.createElement("div");
+    clippingContainer.style.overflow = "hidden";
+    clippingContainer.style.height = "12px";
+    clippingContainer.style.position = "relative";
+    document.body.appendChild(clippingContainer);
+
+    const target = document.createElement("div");
+    clippingContainer.appendChild(target);
+
+    app = mount(ModelList, {
+      target,
+      props: {
+        value: "provider:model-a",
+        onChange,
+      },
+    });
+    await flushUi();
+
+    const trigger = clippingContainer.querySelector(".ds-model-list-trigger") as HTMLButtonElement | null;
+    expect(trigger).not.toBeNull();
+    trigger?.click();
+    await flushUi();
+
+    const overlay = document.querySelector(".ds-model-list-overlay") as HTMLElement | null;
+    expect(overlay).not.toBeNull();
+    expect(overlay?.parentElement).toBe(document.body);
+    expect(overlay ? clippingContainer.contains(overlay) : true).toBe(false);
+    expect(overlay?.getAttribute("role")).toBe("button");
+
+    const dialog = overlay?.querySelector('[role="dialog"][aria-modal="true"]') as HTMLElement | null;
+    expect(dialog).not.toBeNull();
+
+    overlay?.click();
+    await flushUi();
+    expect(document.querySelector(".ds-model-list-overlay")).toBeNull();
+  });
 });

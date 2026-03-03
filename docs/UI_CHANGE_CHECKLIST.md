@@ -18,6 +18,7 @@ Run `pnpm run check:prototype` first — it automates ~70 of these checks. Only 
 - Library stage contains no second title/search/toolbar lane; shared topbar search is the only search field.
 - Library topbar right controls are present and functional: `grid/list`, `Add Documents`, sidebar toggle.
 - Library right sidebar exposes `Library` and `Settings` tabs and both panes render correctly.
+- Model picker opens as a body-level overlay (not nested in local panel containers), and remains visible when launched inside overflow-constrained settings panes.
 - Narrow shell widths trigger topbar compact mode (search stays usable, controls remain reachable, no overflow clipping).
 - Topbar nav row must keep a stable x-position when switching workspaces (no jumping due to dynamic title text).
 
