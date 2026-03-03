@@ -35,6 +35,7 @@ const failures = [];
 const appFile = "/Users/andrewbostan/Documents/RisuAII/src/App.svelte";
 const appShellFile = "/Users/andrewbostan/Documents/RisuAII/src/lib/UI/AppShellV2.svelte";
 const topbarFile = "/Users/andrewbostan/Documents/RisuAII/src/lib/UI/AppShellTopbar.svelte";
+const topbarCssFile = "/Users/andrewbostan/Documents/RisuAII/src/lib/UI/AppShellTopbar.css";
 const stageFile = "/Users/andrewbostan/Documents/RisuAII/src/lib/UI/AppShellStage.svelte";
 const stylesFile = "/Users/andrewbostan/Documents/RisuAII/src/styles.css";
 const homeDirectoryFile = "/Users/andrewbostan/Documents/RisuAII/src/lib/UI/HomeCharacterDirectory.svelte";
@@ -65,7 +66,16 @@ const lorebookDataFile = "/Users/andrewbostan/Documents/RisuAII/src/lib/SideBars
 const gameStateHudFile = "/Users/andrewbostan/Documents/RisuAII/src/lib/SideBars/GameStateHUD.svelte";
 const gameStateEditorFile = "/Users/andrewbostan/Documents/RisuAII/src/lib/SideBars/GameStateEditor.svelte";
 const rulebookLibraryFile = "/Users/andrewbostan/Documents/RisuAII/src/lib/Others/RulebookManager/RulebookLibrary.svelte";
+const rulebookLibraryCssFile = "/Users/andrewbostan/Documents/RisuAII/src/lib/Others/RulebookManager/RulebookLibrary.css";
 const rulebookLibrarySidebarFile = "/Users/andrewbostan/Documents/RisuAII/src/lib/Others/RulebookManager/RulebookLibrarySidebar.svelte";
+const rulebookLibraryHeaderFile = "/Users/andrewbostan/Documents/RisuAII/src/lib/Others/RulebookManager/RulebookLibraryLegacyHeader.svelte";
+const rulebookLibraryToolbarFile = "/Users/andrewbostan/Documents/RisuAII/src/lib/Others/RulebookManager/RulebookLibraryToolbar.svelte";
+const rulebookLibraryLegacySidebarFile = "/Users/andrewbostan/Documents/RisuAII/src/lib/Others/RulebookManager/RulebookLibraryLegacySidebar.svelte";
+const rulebookLibraryBookCardFile = "/Users/andrewbostan/Documents/RisuAII/src/lib/Others/RulebookManager/RulebookLibraryBookCardDisplay.svelte";
+const rulebookLibraryRightDrawerFile = "/Users/andrewbostan/Documents/RisuAII/src/lib/Others/RulebookManager/RulebookLibraryRightDrawer.svelte";
+const rulebookLibraryEmptyStateFile = "/Users/andrewbostan/Documents/RisuAII/src/lib/Others/RulebookManager/RulebookLibraryEmptyState.svelte";
+const rulebookLibraryStagingFile = "/Users/andrewbostan/Documents/RisuAII/src/lib/Others/RulebookManager/RulebookLibraryStagingDrawer.svelte";
+const rulebookLibraryProgressFile = "/Users/andrewbostan/Documents/RisuAII/src/lib/Others/RulebookManager/RulebookLibraryProgressToast.svelte";
 const mobileHeaderFile = "/Users/andrewbostan/Documents/RisuAII/src/lib/Mobile/MobileHeader.svelte";
 const mobileBodyFile = "/Users/andrewbostan/Documents/RisuAII/src/lib/Mobile/MobileBody.svelte";
 const mobileFooterFile = "/Users/andrewbostan/Documents/RisuAII/src/lib/Mobile/MobileFooter.svelte";
@@ -93,7 +103,7 @@ const hypaSummaryItemFile = "/Users/andrewbostan/Documents/RisuAII/src/lib/Other
 
 const appContent = readFile(appFile);
 const appShellContent = readFile(appShellFile);
-const topbarContent = readFile(topbarFile);
+const topbarContent = [readFile(topbarFile), readFile(topbarCssFile)].join("\n");
 const stageContent = readFile(stageFile);
 const stylesContent = readFile(stylesFile);
 const homeDirectoryContent = readFile(homeDirectoryFile);
@@ -123,7 +133,18 @@ const lorebookSettingContent = readFile(lorebookSettingFile);
 const lorebookDataContent = readFile(lorebookDataFile);
 const gameStateHudContent = readFile(gameStateHudFile);
 const gameStateEditorContent = readFile(gameStateEditorFile);
-const rulebookLibraryContent = readFile(rulebookLibraryFile);
+const rulebookLibraryContent = [
+  readFile(rulebookLibraryFile),
+  readFile(rulebookLibraryCssFile),
+  readFile(rulebookLibraryHeaderFile),
+  readFile(rulebookLibraryToolbarFile),
+  readFile(rulebookLibraryLegacySidebarFile),
+  readFile(rulebookLibraryBookCardFile),
+  readFile(rulebookLibraryRightDrawerFile),
+  readFile(rulebookLibraryEmptyStateFile),
+  readFile(rulebookLibraryStagingFile),
+  readFile(rulebookLibraryProgressFile),
+].join("\n");
 const rulebookLibrarySidebarContent = readFile(rulebookLibrarySidebarFile);
 const mobileHeaderContent = readFile(mobileHeaderFile);
 const mobileBodyContent = readFile(mobileBodyFile);
