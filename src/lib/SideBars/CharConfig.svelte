@@ -535,9 +535,7 @@
 </script>
 
 <div class="char-config-root">
-{#if !DBState.db.characters[$selectedCharID]}
-    <div class="char-config-empty empty-state">No character selected.</div>
-{:else}
+{#if DBState.db.characters[$selectedCharID]}
 {@const selectedCharacter = DBState.db.characters[$selectedCharID]!}
 {#if selectedCharacter.type === 'character' && !editorCharacter}
     <div class="char-config-empty empty-state">Loading character...</div>

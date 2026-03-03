@@ -168,7 +168,7 @@ describe("global launcher runtime smoke", () => {
     expect(document.querySelector(".ds-global-nav-brand")).toBeNull();
     expect(document.querySelector(".ds-global-nav-collapse")).toBeNull();
     const navControls = navButtons();
-    expect(navControls.length).toBe(6);
+    expect(navControls.length).toBe(4);
     expect(navControls.every((button) => button.getAttribute("type") === "button")).toBe(true);
     expect(
       navControls.every((button) => (button.getAttribute("aria-label") ?? "").length > 0),
@@ -307,7 +307,7 @@ describe("global launcher runtime smoke", () => {
     openRulebookManager.set(false);
     selectedCharID.set(0);
     await tick();
-    expect(document.querySelector('[data-testid="global-launcher-nav-chats"]')?.classList.contains("ds-global-nav-item-active")).toBe(true);
+    expect(document.querySelector(".ds-global-nav-item-active")).toBeNull();
 
     selectedCharID.set(-1);
     PlaygroundStore.set(1);

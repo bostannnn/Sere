@@ -1,11 +1,9 @@
 <script lang="ts">
     import {
         BookIcon,
-        DatabaseIcon,
         HomeIcon,
         SettingsIcon,
         ShellIcon,
-        User2Icon,
     } from "@lucide/svelte";
     import PluginDefinedIcon from "../Others/PluginDefinedIcon.svelte";
     import { DBState } from "src/ts/stores.svelte";
@@ -27,8 +25,6 @@
     }
 
     const {
-        onOpenChatList = () => {},
-        onOpenCharacterCatalog = () => {},
         onResetOverlays = () => {},
         activeOverlay = "none",
         visible = true,
@@ -39,10 +35,7 @@
     const inSettingsWorkspace = $derived($settingsOpen);
     const inLibraryWorkspace = $derived($openRulebookManager);
     const inPlaygroundWorkspace = $derived($PlaygroundStore === 1);
-    const inChatsWorkspace = $derived($selectedCharID >= 0 && !inSettingsWorkspace && !inLibraryWorkspace && !inPlaygroundWorkspace);
     const homeActive = $derived(!inSettingsWorkspace && !inLibraryWorkspace && !inPlaygroundWorkspace && $selectedCharID < 0 && activeOverlay === "none");
-    const chatsActive = $derived(activeOverlay === "chats" || (inChatsWorkspace && activeOverlay === "none"));
-    const charactersActive = $derived(activeOverlay === "characters");
     const playgroundActive = $derived(inPlaygroundWorkspace);
     const libraryActive = $derived(inLibraryWorkspace);
     const settingsActive = $derived(inSettingsWorkspace);
@@ -126,24 +119,6 @@
         });
         return items.slice(0, 5);
     });
-
-    function openCharacterCatalog() {
-        onOpenCharacterCatalog();
-    }
-
-    function openChatList() {
-        if ($selectedCharID >= 0) {
-            onOpenChatList();
-            return;
-        }
-        const firstCharacterIndex = DBState.db.characters.findIndex((character) => !character.trashTime);
-        if (firstCharacterIndex >= 0) {
-            selectedCharID.set(firstCharacterIndex);
-            onOpenChatList();
-            return;
-        }
-        onOpenCharacterCatalog();
-    }
 
     function goHome() {
         onResetOverlays();
@@ -250,32 +225,6 @@
             <button
                 type="button"
                 class="ds-global-nav-item"
-                class:ds-global-nav-item-active={charactersActive}
-                onclick={openCharacterCatalog}
-                title="Characters"
-                aria-label="Characters"
-                aria-pressed={charactersActive}
-                data-testid="global-launcher-nav-characters"
-            >
-                <User2Icon size={18} />
-                <span class="ds-global-nav-label">Characters</span>
-            </button>
-            <button
-                type="button"
-                class="ds-global-nav-item"
-                class:ds-global-nav-item-active={chatsActive}
-                onclick={openChatList}
-                title="Chats"
-                aria-label="Chats"
-                aria-pressed={chatsActive}
-                data-testid="global-launcher-nav-chats"
-            >
-                <DatabaseIcon size={18} />
-                <span class="ds-global-nav-label">Chats</span>
-            </button>
-            <button
-                type="button"
-                class="ds-global-nav-item"
                 class:ds-global-nav-item-active={playgroundActive}
                 onclick={openPlayground}
                 title="Playground"
@@ -357,15 +306,13 @@
             </div>
         {/if}
 
-        <div class="ds-global-nav-footer">
-            {#if selectedCharacter}
+        {#if selectedCharacter}
+            <div class="ds-global-nav-footer">
                 <span class="ds-global-nav-footer-pill control-chip" title={selectedCharacter.name}>
                     {selectedCharacter.name}
                 </span>
-            {:else}
-                <span class="ds-global-nav-footer-muted">No character selected</span>
-            {/if}
-        </div>
+            </div>
+        {/if}
     </aside>
 {/if}
 
@@ -532,9 +479,4 @@
         text-overflow: ellipsis;
     }
 
-    .ds-global-nav-footer-muted {
-        color: var(--ds-text-tertiary);
-        font-size: var(--ds-font-size-xs);
-        font-weight: var(--ds-font-weight-regular);
-    }
 </style>
