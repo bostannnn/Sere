@@ -175,63 +175,148 @@ function createExecuteRouteHandler(arg = {}) {
                 const decoder = new TextDecoder();
                 let fullText = '';
                 let anthropicThinkingOpen = false;
+                let sseBuffer = '';
+                let clientDisconnected = false;
+
+                const markClientDisconnected = () => {
+                    clientDisconnected = true;
+                };
+                req.on('aborted', markClientDisconnected);
+                req.on('close', markClientDisconnected);
+                res.on('close', markClientDisconnected);
+
+                const toDisconnectError = () => {
+                    const disconnectError = new Error('Client disconnected during streaming response.');
+                    disconnectError.code = 'CLIENT_DISCONNECTED';
+                    return disconnectError;
+                };
+
+                const writeSSEEvent = async (payload) => {
+                    if (clientDisconnected || res.writableEnded || res.destroyed) {
+                        throw toDisconnectError();
+                    }
+                    const frame = `data: ${JSON.stringify(payload)}\n\n`;
+                    if (res.write(frame)) {
+                        return;
+                    }
+                    await new Promise((resolve, reject) => {
+                        const onDrain = () => {
+                            cleanup();
+                            resolve();
+                        };
+                        const onClose = () => {
+                            cleanup();
+                            reject(toDisconnectError());
+                        };
+                        const onError = (error) => {
+                            cleanup();
+                            reject(error);
+                        };
+                        const cleanup = () => {
+                            res.off('drain', onDrain);
+                            res.off('close', onClose);
+                            res.off('error', onError);
+                        };
+                        res.on('drain', onDrain);
+                        res.on('close', onClose);
+                        res.on('error', onError);
+                    });
+                };
+
+                const extractTextFromEvent = (data) => {
+                    let text = data?.choices?.[0]?.delta?.content || '';
+                    if (!text && normalized.provider === 'anthropic') {
+                        const dtype = data?.delta?.type;
+                        if (dtype === 'text' || dtype === 'text_delta') {
+                            if (anthropicThinkingOpen) {
+                                text += '</Thoughts>\n\n';
+                                anthropicThinkingOpen = false;
+                            }
+                            text += data?.delta?.text || '';
+                        } else if (dtype === 'thinking' || dtype === 'thinking_delta') {
+                            if (!anthropicThinkingOpen) {
+                                text += '<Thoughts>\n';
+                                anthropicThinkingOpen = true;
+                            }
+                            text += data?.delta?.thinking || '';
+                        } else if (dtype === 'redacted_thinking') {
+                            if (!anthropicThinkingOpen) {
+                                text += '<Thoughts>\n';
+                                anthropicThinkingOpen = true;
+                            }
+                            text += '\n{{redacted_thinking}}\n';
+                        }
+                    }
+                    if (!text && normalized.provider === 'google') {
+                        const parts = Array.isArray(data?.candidates?.[0]?.content?.parts)
+                            ? data.candidates[0].content.parts
+                            : [];
+                        for (const part of parts) {
+                            if (!part || typeof part !== 'object' || typeof part.text !== 'string' || !part.text) {
+                                continue;
+                            }
+                            if (part.thought === true) continue;
+                            text += part.text;
+                        }
+                    }
+                    return text;
+                };
+
+                const handleSSEEventBlock = async (rawEvent) => {
+                    if (!rawEvent || !rawEvent.trim()) return;
+                    const lines = rawEvent.split('\n');
+                    const dataLines = [];
+                    for (const line of lines) {
+                        if (line.startsWith('data:')) {
+                            dataLines.push(line.slice(5).trimStart());
+                        }
+                    }
+                    if (dataLines.length === 0) return;
+                    const payload = dataLines.join('\n').trim();
+                    if (!payload || payload === '[DONE]') return;
+                    let data = null;
+                    try {
+                        data = JSON.parse(payload);
+                    } catch {
+                        return;
+                    }
+                    const text = extractTextFromEvent(data);
+                    if (!text) return;
+                    fullText += text;
+                    await writeSSEEvent({ type: 'chunk', text });
+                };
+
+                const flushSSEBuffer = async (flushTrailing = false) => {
+                    let splitIndex = sseBuffer.indexOf('\n\n');
+                    while (splitIndex !== -1) {
+                        const eventBlock = sseBuffer.slice(0, splitIndex);
+                        sseBuffer = sseBuffer.slice(splitIndex + 2);
+                        await handleSSEEventBlock(eventBlock);
+                        splitIndex = sseBuffer.indexOf('\n\n');
+                    }
+                    if (flushTrailing && sseBuffer.trim()) {
+                        const trailingEvent = sseBuffer;
+                        sseBuffer = '';
+                        await handleSSEEventBlock(trailingEvent);
+                    }
+                };
 
                 try {
                     while (true) {
+                        if (clientDisconnected) {
+                            throw toDisconnectError();
+                        }
                         const { done, value } = await reader.read();
                         if (done) break;
-                        const chunk = decoder.decode(value, { stream: true });
-                        const lines = chunk.split('\n');
-                        for (const line of lines) {
-                            if (!line.trim() || line.includes('[DONE]')) continue;
-                            if (line.startsWith('data: ')) {
-                                try {
-                                    const data = JSON.parse(line.slice(6));
-                                    let text = data.choices?.[0]?.delta?.content || '';
-                                    if (!text && normalized.provider === 'anthropic') {
-                                        const dtype = data?.delta?.type;
-                                        if (dtype === 'text' || dtype === 'text_delta') {
-                                            if (anthropicThinkingOpen) {
-                                                text += '</Thoughts>\n\n';
-                                                anthropicThinkingOpen = false;
-                                            }
-                                            text += data?.delta?.text || '';
-                                        } else if (dtype === 'thinking' || dtype === 'thinking_delta') {
-                                            if (!anthropicThinkingOpen) {
-                                                text += '<Thoughts>\n';
-                                                anthropicThinkingOpen = true;
-                                            }
-                                            text += data?.delta?.thinking || '';
-                                        } else if (dtype === 'redacted_thinking') {
-                                            if (!anthropicThinkingOpen) {
-                                                text += '<Thoughts>\n';
-                                                anthropicThinkingOpen = true;
-                                            }
-                                            text += '\n{{redacted_thinking}}\n';
-                                        }
-                                    }
-                                    if (!text && normalized.provider === 'google') {
-                                        const parts = Array.isArray(data?.candidates?.[0]?.content?.parts)
-                                            ? data.candidates[0].content.parts
-                                            : [];
-                                        for (const part of parts) {
-                                            if (!part || typeof part !== 'object' || typeof part.text !== 'string' || !part.text) {
-                                                continue;
-                                            }
-                                            if (part.thought === true) continue;
-                                            text += part.text;
-                                        }
-                                    }
-                                    fullText += text;
-                                    res.write(`data: ${JSON.stringify({ type: 'chunk', text })}\n\n`);
-                                } catch {}
-                            }
-                        }
+                        sseBuffer += decoder.decode(value, { stream: true });
+                        await flushSSEBuffer(false);
                     }
+                    sseBuffer += decoder.decode();
+                    await flushSSEBuffer(true);
 
                     if (anthropicThinkingOpen) {
                         fullText += '</Thoughts>\n\n';
-                        res.write(`data: ${JSON.stringify({ type: 'chunk', text: '</Thoughts>\n\n' })}\n\n`);
+                        await writeSSEEvent({ type: 'chunk', text: '</Thoughts>\n\n' });
                         anthropicThinkingOpen = false;
                     }
 
@@ -289,11 +374,15 @@ function createExecuteRouteHandler(arg = {}) {
                         ok: true,
                     });
 
-                    res.write(`data: ${JSON.stringify({ type: 'done', newCharEtag })}\n\n`);
-                    res.end();
+                    await writeSSEEvent({ type: 'done', newCharEtag });
                 } catch (err) {
-                    console.error('[LLMAPI] Stream error:', err);
+                    const disconnected = clientDisconnected || err?.code === 'CLIENT_DISCONNECTED';
                     const durationMs = Date.now() - startedAt;
+                    const status = disconnected ? 499 : 500;
+                    const errorCode = disconnected ? 'CLIENT_DISCONNECTED' : 'STREAM_ERROR';
+                    if (!disconnected) {
+                        console.error('[LLMAPI] Stream error:', err);
+                    }
                     logLLMExecutionEnd({
                         reqId,
                         endpoint: normalized.endpoint,
@@ -301,8 +390,8 @@ function createExecuteRouteHandler(arg = {}) {
                         provider: normalized.provider,
                         characterId: normalized.characterId,
                         chatId: normalized.chatId,
-                        status: 500,
-                        code: 'STREAM_ERROR',
+                        status,
+                        code: errorCode,
                         durationMs,
                     });
                     await appendLLMAudit({
@@ -315,13 +404,13 @@ function createExecuteRouteHandler(arg = {}) {
                         characterId: normalized.characterId || null,
                         chatId: normalized.chatId || null,
                         streaming: true,
-                        status: 500,
+                        status,
                         ok: false,
                         durationMs,
                         ragMeta: normalized._ragMeta || null,
                         request: buildExecutionAuditRequest(auditEndpointForRequest, requestBody),
                         error: {
-                            error: 'STREAM_ERROR',
+                            error: errorCode,
                             message: String(err),
                         },
                     });
@@ -330,15 +419,33 @@ function createExecuteRouteHandler(arg = {}) {
                         reqId,
                         normalized,
                         durationMs,
-                        status: 500,
+                        status,
                         ok: false,
                         error: {
-                            error: 'STREAM_ERROR',
+                            error: errorCode,
                             message: String(err),
                         },
                     });
-                    res.write(`data: ${JSON.stringify({ type: 'error', message: String(err) })}\n\n`);
-                    res.end();
+                    if (!disconnected && !res.writableEnded && !res.destroyed) {
+                        try {
+                            await writeSSEEvent({ type: 'error', message: String(err) });
+                        } catch {}
+                    }
+                } finally {
+                    req.off('aborted', markClientDisconnected);
+                    req.off('close', markClientDisconnected);
+                    res.off('close', markClientDisconnected);
+                    try {
+                        await reader.cancel();
+                    } catch {}
+                    try {
+                        reader.releaseLock();
+                    } catch {}
+                    if (!res.writableEnded && !res.destroyed) {
+                        try {
+                            res.end();
+                        } catch {}
+                    }
                 }
                 return;
             }
@@ -424,12 +531,65 @@ function createExecuteRouteHandler(arg = {}) {
                 res.setHeader('Content-Type', 'text/event-stream');
                 res.setHeader('Cache-Control', 'no-cache');
                 res.setHeader('Connection', 'keep-alive');
-                if (sanitizedResponseText) {
-                    res.write(`data: ${JSON.stringify({ type: 'chunk', text: sanitizedResponseText })}\n\n`);
+                let clientDisconnected = false;
+                const markClientDisconnected = () => {
+                    clientDisconnected = true;
+                };
+                req.on('aborted', markClientDisconnected);
+                req.on('close', markClientDisconnected);
+                res.on('close', markClientDisconnected);
+
+                const writeRawFrame = async (frame) => {
+                    if (clientDisconnected || res.writableEnded || res.destroyed) {
+                        return;
+                    }
+                    if (res.write(frame)) {
+                        return;
+                    }
+                    await new Promise((resolve, reject) => {
+                        const onDrain = () => {
+                            cleanup();
+                            resolve();
+                        };
+                        const onClose = () => {
+                            cleanup();
+                            resolve();
+                        };
+                        const onError = (error) => {
+                            cleanup();
+                            reject(error);
+                        };
+                        const cleanup = () => {
+                            res.off('drain', onDrain);
+                            res.off('close', onClose);
+                            res.off('error', onError);
+                        };
+                        res.on('drain', onDrain);
+                        res.on('close', onClose);
+                        res.on('error', onError);
+                    });
+                };
+
+                try {
+                    if (sanitizedResponseText) {
+                        await writeRawFrame(`data: ${JSON.stringify({ type: 'chunk', text: sanitizedResponseText })}\n\n`);
+                    }
+                    await writeRawFrame(`data: ${JSON.stringify({ type: 'done', newCharEtag })}\n\n`);
+                    await writeRawFrame('data: [DONE]\n\n');
+                } catch (streamWriteError) {
+                    if (!clientDisconnected) {
+                        console.error('[LLMAPI] Fallback SSE write error:', streamWriteError);
+                    }
+                } finally {
+                    req.off('aborted', markClientDisconnected);
+                    req.off('close', markClientDisconnected);
+                    res.off('close', markClientDisconnected);
+                    if (!res.writableEnded && !res.destroyed) {
+                        try {
+                            res.end();
+                        } catch {}
+                    }
                 }
-                res.write(`data: ${JSON.stringify({ type: 'done', newCharEtag })}\n\n`);
-                res.write('data: [DONE]\n\n');
-                res.end();
                 return;
             }
 

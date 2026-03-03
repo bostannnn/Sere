@@ -66,6 +66,8 @@ Set `RISU_DEV_NODE_API=0` before `pnpm dev` to disable this behavior.
 - Non-migrated providers return `PROVIDER_NOT_MIGRATED`.
 - Streaming on server path is implemented on `POST /data/llm/execute` (SSE).
 - Streaming is also available on `POST /data/llm/generate` because it reuses the execute pipeline.
+- Streaming handlers now track client disconnects (`aborted`/`close`) and always run cleanup (`reader.cancel`, lock release, `res.end`) in `finally`.
+- Premature client disconnects during streaming are audited as `CLIENT_DISCONNECTED` with status `499` in LLM audit logs.
 - `POST /data/llm/generate` now does server-side baseline assembly from stored character/chat data:
   - main/system prompt
   - chat history
