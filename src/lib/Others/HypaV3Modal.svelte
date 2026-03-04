@@ -175,16 +175,6 @@
     return manualDebug as ManualSummarizeDebug;
   });
   const logDebug = $derived(activeChatManualDebug ?? scopedHypaV3Debug);
-  const hypaV3Settings = $derived(DBState.db.hypaV3Presets?.[DBState.db.hypaV3PresetId]?.settings);
-  const hypaRuntimeDebug = $derived({
-    memoryToggle: currentChar?.supaMemory,
-    hypaV3Enabled: DBState.db.hypaV3,
-    hypaV2Enabled: DBState.db.hypav2,
-    hanuraiEnabled: DBState.db.hanuraiEnable,
-    supaModelType: DBState.db.supaModelType,
-    memoryAlgorithmType: DBState.db.memoryAlgorithmType,
-  });
-
   const selectMemoryWorkspaceTab = (tab: MemoryWorkspaceTab) => {
     memoryWorkspaceTab = tab;
     uiState.dropdownOpen = false;
@@ -1260,28 +1250,8 @@
                   {#if logDebug.promptSource}
                     <div>Prompt source: <span class="ds-hypa-modal-debug-value">{logDebug.promptSource}</span></div>
                   {/if}
-                  <div>Memory toggle: <span class="ds-hypa-modal-debug-value">{hypaRuntimeDebug.memoryToggle ? "On" : "Off"}</span></div>
-                  <div>HypaV3 enabled: <span class="ds-hypa-modal-debug-value">{hypaRuntimeDebug.hypaV3Enabled ? "On" : "Off"}</span></div>
-                  <div>HypaV2 enabled: <span class="ds-hypa-modal-debug-value">{hypaRuntimeDebug.hypaV2Enabled ? "On" : "Off"}</span></div>
-                  <div>Hanurai enabled: <span class="ds-hypa-modal-debug-value">{hypaRuntimeDebug.hanuraiEnabled ? "On" : "Off"}</span></div>
-                  <div>SupaModelType: <span class="ds-hypa-modal-debug-value">{hypaRuntimeDebug.supaModelType || "none"}</span></div>
-                  <div>Memory algorithm: <span class="ds-hypa-modal-debug-value">{hypaRuntimeDebug.memoryAlgorithmType || "n/a"}</span></div>
-                  {#if hypaV3Settings}
-                    <div>Periodic: <span class="ds-hypa-modal-debug-value">{hypaV3Settings.periodicSummarizationEnabled && hypaV3Settings.periodicSummarizationInterval > 0 ? "On" : "Off"}</span></div>
-                    <div>Interval: <span class="ds-hypa-modal-debug-value">{hypaV3Settings.periodicSummarizationInterval}</span></div>
-                    <div>Last index: <span class="ds-hypa-modal-debug-value">{hypaV3Data.lastSummarizedMessageIndex ?? 0}</span></div>
-                    <div>Chat messages: <span class="ds-hypa-modal-debug-value">{chatList[effectiveChatIndex]?.message?.length ?? 0}</span></div>
-                    {#if logDebug.periodic}
-                      <div>Periodic total chats: <span class="ds-hypa-modal-debug-value">{logDebug.periodic.totalChats}</span></div>
-                      <div>Periodic new messages: <span class="ds-hypa-modal-debug-value">{logDebug.periodic.newMessages}</span></div>
-                      <div>Periodic to summarize: <span class="ds-hypa-modal-debug-value">{logDebug.periodic.toSummarizeCount}</span></div>
-                      {#if logDebug.periodic.skippedReason}
-                        <div>Periodic skipped: <span class="ds-hypa-modal-debug-value">{logDebug.periodic.skippedReason}</span></div>
-                      {/if}
-                      {#if logDebug.periodic.chatName}
-                        <div>Periodic chat: <span class="ds-hypa-modal-debug-value">{logDebug.periodic.chatName}</span></div>
-                      {/if}
-                    {/if}
+                  {#if typeof logDebug.start === "number" && typeof logDebug.end === "number"}
+                    <div>Range: <span class="ds-hypa-modal-debug-value">{logDebug.start} - {logDebug.end}</span></div>
                   {/if}
                   <div>
                     <div class="ds-hypa-modal-debug-block-title">Prompt</div>
