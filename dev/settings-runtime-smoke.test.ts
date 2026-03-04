@@ -134,6 +134,10 @@ function navButtons() {
   ) as HTMLButtonElement[];
 }
 
+function navButtonLabels() {
+  return navButtons().map((button) => (button.textContent ?? "").trim());
+}
+
 function assertNavButtonSemantics(context: string) {
   const buttons = navButtons();
   expect(buttons.length, `${context}: expected nav buttons`).toBeGreaterThan(0);
@@ -265,6 +269,18 @@ describe("settings runtime smoke", () => {
     await assertSettingsContentVisible("initial render");
     assertDesktopCloseButtonPrimitive("desktop nav run");
     assertNavButtonSemantics("desktop nav run");
+    expect(navButtonLabels()).toEqual([
+      "Chat Bot",
+      "Other Bots",
+      "Persona",
+      "Display",
+      "Language",
+      "Accessibility",
+      "Modules",
+      "Plugin",
+      "Hotkey",
+      "Advanced Settings",
+    ]);
     const buttons = navButtons();
     expect(buttons.length).toBeGreaterThan(0);
 

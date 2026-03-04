@@ -1045,7 +1045,6 @@ export interface Database{
     }[]
     assetWidth:number
     animationSpeed:number
-    botSettingAtStart:false
     NAIsettings:NAISettings
     colorScheme:ColorScheme
     colorSchemeName:string
@@ -1266,7 +1265,6 @@ export interface Database{
     }[]
     igpPrompt:string
     useTokenizerCaching:boolean
-    showMenuHypaMemoryModal:boolean
     authRefreshes:{
         url:string
         tokenUrl:string

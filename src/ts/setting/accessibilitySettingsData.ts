@@ -60,25 +60,11 @@ export const accessibilitySettingsItems: SettingItem[] = [
         keywords: ['click', 'edit', 'message']
     },
     {
-        id: 'acc.botSettingAtStart',
-        type: 'check',
-        labelKey: 'botSettingAtStart',
-        bindKey: 'botSettingAtStart',
-        keywords: ['bot', 'setting', 'start', 'open']
-    },
-    {
         id: 'acc.showMenuChatList',
         type: 'check',
         labelKey: 'showMenuChatList',
         bindKey: 'showMenuChatList',
         keywords: ['menu', 'chat', 'list', 'show']
-    },
-    {
-        id: 'acc.showMenuHypaMemoryModal',
-        type: 'check',
-        labelKey: 'showMenuHypaMemoryModal',
-        bindKey: 'showMenuHypaMemoryModal',
-        keywords: ['menu', 'hypa', 'memory', 'modal']
     },
     {
         id: 'acc.sideMenuRerollButton',

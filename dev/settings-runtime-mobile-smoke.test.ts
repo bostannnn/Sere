@@ -119,6 +119,10 @@ function navButtons() {
   ) as HTMLButtonElement[];
 }
 
+function navButtonLabels() {
+  return navButtons().map((button) => (button.textContent ?? "").trim());
+}
+
 function assertNavButtonSemantics(context: string) {
   const buttons = navButtons();
   expect(buttons.length, `${context}: expected nav buttons`).toBeGreaterThan(0);
@@ -238,6 +242,17 @@ describe("settings runtime mobile smoke", () => {
     await assertNavVisible("mobile shell initial");
     const nav = document.querySelector(NAV_SHELL_SELECTOR) as HTMLElement | null;
     expect(nav?.classList.contains("ds-settings-nav-shell-stacked")).toBe(true);
+    expect(navButtonLabels()).toEqual([
+      "Chat Bot",
+      "Other Bots",
+      "Persona",
+      "Display",
+      "Language",
+      "Accessibility",
+      "Modules",
+      "Plugin",
+      "Advanced Settings",
+    ]);
     const hasHotkey = navButtons().some(
       (button) => button.textContent?.trim() === "Hotkey",
     );
@@ -252,8 +267,8 @@ describe("settings runtime mobile smoke", () => {
   it("clicks each top-level mobile settings nav item twice without blank content", async () => {
     const labels = [
       "Chat Bot",
-      "Persona",
       "Other Bots",
+      "Persona",
       "Display",
       "Language",
       "Accessibility",

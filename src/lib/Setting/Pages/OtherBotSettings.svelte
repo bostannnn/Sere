@@ -30,6 +30,9 @@
     let emotionEmbeddingModel = $state<HypaModel>("MiniLM");
     let emotionPromptHydrated = $state(false);
     let emotionListCharacterId = $state("");
+    const visibleEmotionCharacters = $derived.by(() =>
+        (DBState.db.characters ?? []).filter((char) => Boolean(char) && !char.trashTime)
+    );
 
     $effect(() => {
         if (!allowedSubmenus.has(submenu)) {
@@ -60,14 +63,16 @@
     });
 
     $effect(() => {
-        const chars = DBState.db.characters ?? [];
+        const chars = visibleEmotionCharacters;
         if (chars.length === 0) {
             emotionListCharacterId = "";
             return;
         }
 
         const selectedChar = DBState.db.characters[$selectedCharID];
-        const selectedCharId = selectedChar?.chaId ?? "";
+        const selectedCharId = selectedChar && !selectedChar.trashTime
+            ? (selectedChar.chaId ?? "")
+            : "";
         const hasCurrent = chars.some((char) => char.chaId === emotionListCharacterId);
         if (!emotionListCharacterId || !hasCurrent) {
             emotionListCharacterId = selectedCharId || chars[0].chaId;
@@ -135,8 +140,13 @@
         return model === 'custom';
     }
 
+    function getEmotionCharacterLabel(char: (typeof DBState.db.characters)[number]) {
+        const trimmed = char?.name?.trim();
+        return trimmed ? trimmed : "Unnamed";
+    }
+
     function getEmotionListCharacter() {
-        return DBState.db.characters.find((char) => char.chaId === emotionListCharacterId);
+        return visibleEmotionCharacters.find((char) => char.chaId === emotionListCharacterId);
     }
     // End HypaV3
 </script>
@@ -161,25 +171,31 @@
 {#if submenu === 1}
     <div class="ds-settings-section">
     <span class="ds-settings-label">Auto Speech</span>
-    <CheckInput bind:check={DBState.db.ttsAutoSpeech}/>
+    <CheckInput
+        bare
+        hiddenName={true}
+        margin={false}
+        name="Auto Speech"
+        bind:check={DBState.db.ttsAutoSpeech}
+    />
 
     <span class="ds-settings-label">ElevenLabs API key</span>
-    <TextInput size="sm" bind:value={DBState.db.elevenLabKey}/>
+    <TextInput size="sm" hideText={DBState.db.hideApiKey} bind:value={DBState.db.elevenLabKey}/>
 
     <span class="ds-settings-label">VOICEVOX URL</span>
     <TextInput size="sm" bind:value={DBState.db.voicevoxUrl}/>
 
     <span class="ds-settings-label">OpenAI Key</span>
-    <TextInput size="sm" bind:value={DBState.db.openAIKey}/>
+    <TextInput size="sm" hideText={DBState.db.hideApiKey} bind:value={DBState.db.openAIKey}/>
 
     <span class="ds-settings-label">NovelAI API key</span>
-    <TextInput size="sm" placeholder="pst-..." bind:value={DBState.db.novelai.token}/>
+    <TextInput size="sm" hideText={DBState.db.hideApiKey} placeholder="pst-..." bind:value={DBState.db.novelai.token}/>
 
     <span class="ds-settings-label">Huggingface Key</span>
-    <TextInput size="sm" bind:value={DBState.db.huggingfaceKey} placeholder="hf_..."/>
+    <TextInput size="sm" hideText={DBState.db.hideApiKey} bind:value={DBState.db.huggingfaceKey} placeholder="hf_..."/>
 
     <span class="ds-settings-label">fish-speech API Key</span>
-    <TextInput size="sm" bind:value={DBState.db.fishSpeechKey}/>
+    <TextInput size="sm" hideText={DBState.db.hideApiKey} bind:value={DBState.db.fishSpeechKey}/>
     </div>
 {/if}
 
@@ -207,14 +223,14 @@
 
         {#if isOpenAIEmbeddingModel(emotionEmbeddingModel)}
             <span class="ds-settings-label">OpenAI API Key</span>
-            <TextInput size="sm" bind:value={DBState.db.supaMemoryKey}/>
+            <TextInput size="sm" hideText={DBState.db.hideApiKey} bind:value={DBState.db.supaMemoryKey}/>
         {/if}
 
         {#if isCustomEmbeddingModel(emotionEmbeddingModel)}
             <span class="ds-settings-label">URL</span>
             <TextInput size="sm" bind:value={DBState.db.hypaCustomSettings.url}/>
             <span class="ds-settings-label">Key/Password</span>
-            <TextInput size="sm" bind:value={DBState.db.hypaCustomSettings.key}/>
+            <TextInput size="sm" hideText={DBState.db.hideApiKey} bind:value={DBState.db.hypaCustomSettings.key}/>
             <span class="ds-settings-label">Request Model</span>
             <TextInput size="sm" bind:value={DBState.db.hypaCustomSettings.model}/>
         {/if}
@@ -227,8 +243,8 @@
 
     <span class="ds-settings-label">Emotion List Character</span>
     <SelectInput bind:value={emotionListCharacterId}>
-        {#each DBState.db.characters as char (char.chaId)}
-            <OptionInput value={char.chaId}>{char.name || char.chaId}</OptionInput>
+        {#each visibleEmotionCharacters as char (char.chaId)}
+            <OptionInput value={char.chaId}>{getEmotionCharacterLabel(char)}</OptionInput>
         {/each}
     </SelectInput>
 

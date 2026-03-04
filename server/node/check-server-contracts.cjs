@@ -9,6 +9,7 @@ const { spawn } = require('child_process');
 const request = require('supertest');
 
 const PASSWORD = 'contract-test-password';
+const REDACTED_SECRET_VALUE = '[REDACTED_SECRET_STORED_ON_SERVER]';
 
 function sleep(ms) {
     return new Promise((resolve) => setTimeout(resolve, ms));
@@ -87,6 +88,12 @@ function stopChild(child) {
             }
         }, 2000).unref();
     });
+}
+
+function getAtPath(root, pathExpr) {
+    return String(pathExpr)
+        .split('.')
+        .reduce((acc, key) => (acc && typeof acc === 'object' ? acc[key] : undefined), root);
 }
 
 async function runContracts() {
@@ -230,6 +237,127 @@ async function runContracts() {
             .set('risu-auth', PASSWORD);
         if (![200, 404].includes(authSettings.status)) {
             throw new Error(`Expected authenticated /data/settings to be 200 or 404, got ${authSettings.status}.`);
+        }
+        if (authSettings.status === 200) {
+            const authSettingsEtag = authSettings.headers.etag;
+            if (!authSettingsEtag) {
+                throw new Error('Expected ETag on authenticated /data/settings response.');
+            }
+
+            const updateWithSecrets = JSON.parse(JSON.stringify(authSettings.body || {}));
+            if (!updateWithSecrets.data || typeof updateWithSecrets.data !== 'object') {
+                updateWithSecrets.data = {};
+            }
+            if (!updateWithSecrets.data.novelai || typeof updateWithSecrets.data.novelai !== 'object') {
+                updateWithSecrets.data.novelai = {};
+            }
+            updateWithSecrets.data.openAIKey = 'sk-contract-secret';
+            updateWithSecrets.data.novelai.token = 'pst-contract-secret';
+            updateWithSecrets.data.elevenLabKey = '';
+
+            const putWithSecrets = await api
+                .put('/data/settings')
+                .set('risu-auth', PASSWORD)
+                .set('If-Match', authSettingsEtag)
+                .send(updateWithSecrets)
+                .expect(200);
+            const putWithSecretsEtag = putWithSecrets.headers.etag;
+            if (!putWithSecretsEtag) {
+                throw new Error('Expected ETag on PUT /data/settings response.');
+            }
+
+            if (getAtPath(putWithSecrets.body, 'data.openAIKey') !== REDACTED_SECRET_VALUE) {
+                throw new Error(
+                    'Expected openAIKey to be redacted in PUT response, ' +
+                    `got ${JSON.stringify(getAtPath(putWithSecrets.body, 'data.openAIKey'))}`
+                );
+            }
+            if (getAtPath(putWithSecrets.body, 'data.novelai.token') !== REDACTED_SECRET_VALUE) {
+                throw new Error(
+                    'Expected novelai.token to be redacted in PUT response, ' +
+                    `got ${JSON.stringify(getAtPath(putWithSecrets.body, 'data.novelai.token'))}`
+                );
+            }
+            if (getAtPath(putWithSecrets.body, 'data.elevenLabKey') !== '') {
+                throw new Error(
+                    'Expected empty elevenLabKey to stay empty in PUT response, ' +
+                    `got ${JSON.stringify(getAtPath(putWithSecrets.body, 'data.elevenLabKey'))}`
+                );
+            }
+
+            const persistedWithSecrets = JSON.parse(await fs.readFile(path.join(dataRoot, 'settings.json'), 'utf-8'));
+            if (getAtPath(persistedWithSecrets, 'data.openAIKey') !== 'sk-contract-secret') {
+                throw new Error('Expected persisted data.openAIKey to keep real secret value.');
+            }
+            if (getAtPath(persistedWithSecrets, 'data.novelai.token') !== 'pst-contract-secret') {
+                throw new Error('Expected persisted data.novelai.token to keep real secret value.');
+            }
+
+            const keepRedactedPayload = JSON.parse(JSON.stringify(putWithSecrets.body || {}));
+            keepRedactedPayload.data.voicevoxUrl = 'http://localhost:50021';
+            const putWithRedactedMarkers = await api
+                .put('/data/settings')
+                .set('risu-auth', PASSWORD)
+                .set('If-Match', putWithSecretsEtag)
+                .send(keepRedactedPayload)
+                .expect(200);
+            const putWithRedactedMarkersEtag = putWithRedactedMarkers.headers.etag;
+            if (!putWithRedactedMarkersEtag) {
+                throw new Error('Expected ETag on follow-up PUT /data/settings response.');
+            }
+
+            const persistedAfterMarkerPut = JSON.parse(await fs.readFile(path.join(dataRoot, 'settings.json'), 'utf-8'));
+            if (getAtPath(persistedAfterMarkerPut, 'data.openAIKey') !== 'sk-contract-secret') {
+                throw new Error('Expected redacted marker PUT to preserve existing openAIKey secret.');
+            }
+            if (getAtPath(persistedAfterMarkerPut, 'data.novelai.token') !== 'pst-contract-secret') {
+                throw new Error('Expected redacted marker PUT to preserve existing novelai.token secret.');
+            }
+
+            const clearSecretsPayload = JSON.parse(JSON.stringify(putWithRedactedMarkers.body || {}));
+            clearSecretsPayload.data.openAIKey = '';
+            if (!clearSecretsPayload.data.novelai || typeof clearSecretsPayload.data.novelai !== 'object') {
+                clearSecretsPayload.data.novelai = {};
+            }
+            clearSecretsPayload.data.novelai.token = '';
+            const putClearSecrets = await api
+                .put('/data/settings')
+                .set('risu-auth', PASSWORD)
+                .set('If-Match', putWithRedactedMarkersEtag)
+                .send(clearSecretsPayload)
+                .expect(200);
+            if (getAtPath(putClearSecrets.body, 'data.openAIKey') !== '') {
+                throw new Error('Expected clearing openAIKey to return empty string.');
+            }
+            if (getAtPath(putClearSecrets.body, 'data.novelai.token') !== '') {
+                throw new Error('Expected clearing novelai.token to return empty string.');
+            }
+
+            const legacyBody = JSON.parse(JSON.stringify(persistedAfterMarkerPut || {}));
+            if (!legacyBody.data || typeof legacyBody.data !== 'object') {
+                legacyBody.data = {};
+            }
+            if (!legacyBody.data.novelai || typeof legacyBody.data.novelai !== 'object') {
+                legacyBody.data.novelai = {};
+            }
+            legacyBody.data.openAIKey = '[REDACTED]';
+            legacyBody.data.novelai.token = REDACTED_SECRET_VALUE;
+            await fs.writeFile(path.join(dataRoot, 'settings.json'), JSON.stringify(legacyBody, null, 2), 'utf-8');
+
+            const getLegacyMarkers = await api
+                .get('/data/settings')
+                .set('risu-auth', PASSWORD)
+                .expect(200);
+            if (getAtPath(getLegacyMarkers.body, 'data.openAIKey') !== '') {
+                throw new Error(
+                    'Expected legacy [REDACTED] marker in persisted settings to normalize to empty string.'
+                );
+            }
+            if (getAtPath(getLegacyMarkers.body, 'data.novelai.token') !== '') {
+                throw new Error(
+                    'Expected legacy redacted marker in persisted settings to normalize to empty string.'
+                );
+            }
         }
 
         const oauthMissingState = await api

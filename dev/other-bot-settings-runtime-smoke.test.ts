@@ -1,0 +1,258 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { mount, tick, unmount } from "svelte";
+
+const shared = vi.hoisted(() => ({
+  dbState: {
+    db: {} as Record<string, unknown>,
+  },
+}));
+
+function createHypaPresetSettings() {
+  return {
+    summarizationPrompt: "summary prompt",
+    reSummarizationPrompt: "resummary prompt",
+    summarizationAllowThinking: false,
+    memoryTokensRatio: 0.5,
+    extraSummarizationRatio: 0.1,
+    periodicSummarizationInterval: 2,
+    recentMemoryRatio: 0.3,
+    similarMemoryRatio: 0.3,
+    preserveOrphanedMemory: false,
+    processRegexScript: false,
+    doNotSummarizeUserMessage: false,
+    useExperimentalImpl: false,
+    alwaysToggleOn: false,
+    summarizationRequestsPerMinute: 20,
+    summarizationMaxConcurrent: 2,
+    embeddingRequestsPerMinute: 20,
+    embeddingMaxConcurrent: 2,
+    enableSimilarityCorrection: true,
+  };
+}
+
+function createDbState() {
+  return {
+    characters: [
+      {
+        chaId: "char-trash",
+        name: "assistant",
+        type: "character",
+        trashTime: 12345,
+        chats: [],
+        chatPage: 0,
+        emotionImages: [],
+      },
+      {
+        chaId: "char-visible-1",
+        name: "Yuki",
+        type: "character",
+        chats: [],
+        chatPage: 0,
+        emotionImages: [["smile", "assets/emotion-smile.png"]],
+      },
+      {
+        chaId: "char-visible-2",
+        name: "   ",
+        type: "character",
+        chats: [],
+        chatPage: 0,
+        emotionImages: [],
+      },
+    ],
+    emotionProcesser: "submodel",
+    emotionPrompt2: "",
+    hypaModel: "MiniLM",
+    hideApiKey: true,
+    ttsAutoSpeech: false,
+    elevenLabKey: "",
+    voicevoxUrl: "",
+    openAIKey: "",
+    novelai: { token: "" },
+    huggingfaceKey: "",
+    fishSpeechKey: "",
+    supaMemoryKey: "",
+    hypaCustomSettings: {
+      url: "",
+      key: "",
+      model: "",
+    },
+    hypaV3PresetId: 0,
+    hypaV3Presets: [
+      {
+        name: "Default Preset",
+        settings: createHypaPresetSettings(),
+      },
+    ],
+    promptTemplate: [],
+    loreBookToken: 8000,
+    maxResponse: 300,
+    maxContext: 4000,
+  };
+}
+
+vi.mock(import("src/lang"), () => ({
+  language: {
+    otherBots: "Other Bots",
+    longTermMemory: "Long Term Memory",
+    emotionImage: "Emotion Images",
+    emotionMethod: "Emotion Method",
+    emotionPrompt: "Emotion Prompt",
+    embedding: "Embedding",
+    summarizationPrompt: "Summarization Prompt",
+    reSummarizationPrompt: "Re-Summarization Prompt",
+    removeConfirm: "Remove ",
+    successExport: "Exported",
+    successImport: "Imported",
+    hypaV3Settings: {
+      descriptionLabel: "Description",
+      supaMemoryPromptPlaceHolder: "Prompt placeholder",
+      maxMemoryTokensRatioLabel: "Max ratio",
+      maxMemoryTokensRatioError: "Max ratio error",
+      memoryTokensRatioLabel: "Memory ratio",
+      extraSummarizationRatioLabel: "Extra ratio",
+      recentMemoryRatioLabel: "Recent ratio",
+      similarMemoryRatioLabel: "Similar ratio",
+      randomMemoryRatioLabel: "Random ratio",
+      preserveOrphanedMemoryLabel: "Preserve orphaned",
+      applyRegexScriptWhenRerollingLabel: "Apply regex",
+      doNotSummarizeUserMessageLabel: "Do not summarize user",
+      enableSimilarityCorrectionLabel: "Similarity correction",
+    },
+  },
+}));
+
+vi.mock(import("src/ts/stores.svelte"), async () => {
+  const { writable } = await import("svelte/store");
+  return {
+    DBState: shared.dbState,
+    selectedCharID: writable(0),
+  };
+});
+
+vi.mock(import("src/ts/process/prompt"), () => ({
+  tokenizePreset: async () => 0,
+}));
+
+vi.mock(import("src/ts/tokenizer"), () => ({
+  getCharToken: async () => ({ persistant: 0, dynamic: 0 }),
+}));
+
+vi.mock(import("src/ts/alert"), () => ({
+  alertError: vi.fn(),
+  alertInput: vi.fn(async () => ""),
+  alertConfirm: vi.fn(async () => true),
+  alertNormal: vi.fn(),
+}));
+
+vi.mock(import("src/ts/process/memory/hypav3"), () => ({
+  createHypaV3Preset: () => ({
+    name: "Generated",
+    settings: createHypaPresetSettings(),
+  }),
+}));
+
+vi.mock(import("src/ts/globalApi.svelte"), () => ({
+  downloadFile: async () => {},
+}));
+
+vi.mock(import("src/ts/util"), () => ({
+  selectSingleFile: async () => null,
+}));
+
+vi.mock(import("src/ts/process/emotion/defaultPrompt"), () => ({
+  DEFAULT_EMOTION_PROMPT: "default emotion prompt",
+}));
+
+vi.mock(import("src/lib/Others/Help.svelte"), async () => ({
+  default: (await import("./test-stubs/SettingsPageStub.svelte")).default,
+}));
+
+vi.mock(import("src/lib/UI/Accordion.svelte"), async () => ({
+  default: (await import("./test-stubs/AccordionOpenStub.svelte")).default,
+}));
+
+vi.mock(import("src/lib/UI/GUI/NumberInput.svelte"), async () => ({
+  default: (await import("./test-stubs/BindableFieldStub.svelte")).default,
+}));
+
+vi.mock(import("src/lib/UI/GUI/TextInput.svelte"), async () => ({
+  default: (await import("./test-stubs/BindableFieldStub.svelte")).default,
+}));
+
+vi.mock(import("src/lib/UI/GUI/EmbeddingModelSelect.svelte"), async () => ({
+  default: (await import("./test-stubs/BindableFieldStub.svelte")).default,
+}));
+
+vi.mock(import("src/lib/UI/GUI/SliderInput.svelte"), async () => ({
+  default: (await import("./test-stubs/BindableFieldStub.svelte")).default,
+}));
+
+vi.mock(import("src/lib/UI/GUI/CheckInput.svelte"), async () => ({
+  default: (await import("./test-stubs/BindableFieldStub.svelte")).default,
+}));
+
+vi.mock(import("src/lib/UI/GUI/TextAreaInput.svelte"), async () => ({
+  default: (await import("./test-stubs/BindableFieldStub.svelte")).default,
+}));
+
+vi.mock(import("src/lib/UI/GUI/Button.svelte"), async () => ({
+  default: (await import("./test-stubs/ComponentActionButtonStub.svelte")).default,
+}));
+
+import OtherBotSettings from "src/lib/Setting/Pages/OtherBotSettings.svelte";
+import { selectedCharID } from "src/ts/stores.svelte";
+
+let app: Record<string, unknown> | undefined;
+
+async function flushUi() {
+  await tick();
+  await Promise.resolve();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+describe("other bots settings runtime smoke", () => {
+  beforeEach(() => {
+    shared.dbState.db = createDbState();
+    selectedCharID.set(0);
+    document.body.innerHTML = "";
+  });
+
+  afterEach(async () => {
+    if (app) {
+      await unmount(app);
+      app = undefined;
+    }
+  });
+
+  it("filters Emotion List Character to active characters and falls back from trashed active selection", async () => {
+    const target = document.createElement("div");
+    document.body.appendChild(target);
+    app = mount(OtherBotSettings, { target });
+    await flushUi();
+
+    const emotionTab = document.querySelector(
+      'button.ds-settings-tab[title="Emotion Images"]',
+    ) as HTMLButtonElement | null;
+    expect(emotionTab).not.toBeNull();
+    emotionTab?.click();
+    await flushUi();
+
+    const selects = Array.from(document.querySelectorAll("select")) as HTMLSelectElement[];
+    const charSelect = selects.find((select) => {
+      const values = Array.from(select.options).map((option) => option.value);
+      return values.includes("char-visible-1") && values.includes("char-visible-2");
+    });
+
+    expect(charSelect).toBeDefined();
+    const options = Array.from(charSelect!.options).map((option) => ({
+      value: option.value,
+      label: (option.textContent ?? "").trim(),
+    }));
+
+    expect(options).toEqual([
+      { value: "char-visible-1", label: "Yuki" },
+      { value: "char-visible-2", label: "Unnamed" },
+    ]);
+    expect(charSelect?.value).toBe("char-visible-1");
+  });
+});

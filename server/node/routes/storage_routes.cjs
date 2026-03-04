@@ -68,6 +68,30 @@ function registerStorageRoutes(arg = {}) {
         return false;
     };
 
+    const normalizeSensitiveValue = (value) => {
+        if (typeof value === 'string' && LEGACY_REDACTED_SECRET_VALUES.has(value)) {
+            return '';
+        }
+        return value;
+    };
+
+    const shouldRedactSensitiveValue = (value) => {
+        const normalized = normalizeSensitiveValue(value);
+        if (typeof normalized === 'string') {
+            return normalized.trim().length > 0;
+        }
+        if (normalized === null || normalized === undefined) {
+            return false;
+        }
+        if (Array.isArray(normalized)) {
+            return normalized.length > 0;
+        }
+        if (typeof normalized === 'object') {
+            return Object.keys(normalized).length > 0;
+        }
+        return Boolean(normalized);
+    };
+
     const redactSettingsSecrets = (value, pathParts = []) => {
         if (Array.isArray(value)) {
             return value.map((entry, index) => redactSettingsSecrets(entry, [...pathParts, String(index)]));
@@ -79,7 +103,9 @@ function registerStorageRoutes(arg = {}) {
         for (const [key, entryValue] of Object.entries(value)) {
             const nextPath = [...pathParts, key.toLowerCase()];
             if (isSensitiveSettingsValue(pathParts, key)) {
-                out[key] = REDACTED_SECRET_VALUE;
+                out[key] = shouldRedactSensitiveValue(entryValue)
+                    ? REDACTED_SECRET_VALUE
+                    : normalizeSensitiveValue(entryValue);
                 continue;
             }
             out[key] = redactSettingsSecrets(entryValue, nextPath);
@@ -98,10 +124,13 @@ function registerStorageRoutes(arg = {}) {
         }
         const out = { ...incoming };
         for (const [key, incomingValue] of Object.entries(out)) {
-            const existingValue = existing && typeof existing === 'object' ? existing[key] : undefined;
+            const existingValueRaw = existing && typeof existing === 'object' ? existing[key] : undefined;
+            const existingValue = normalizeSensitiveValue(existingValueRaw);
             if (isSensitiveSettingsValue(pathParts, key)) {
                 if (LEGACY_REDACTED_SECRET_VALUES.has(incomingValue) && existingValue !== undefined) {
                     out[key] = existingValue;
+                } else {
+                    out[key] = normalizeSensitiveValue(incomingValue);
                 }
                 continue;
             }

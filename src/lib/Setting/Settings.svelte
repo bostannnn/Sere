@@ -121,20 +121,6 @@
                     <button
                         type="button"
                         class="ds-settings-nav-item"
-                        title={language.persona}
-                        aria-label={language.persona}
-                        aria-pressed={$SettingsMenuIndex === 12}
-                        onkeydown={handleNavListKeydown}
-                        class:is-active={$SettingsMenuIndex === 12}
-                        onclick={() => {
-                            selectMenu(12)
-                    }}>
-                        <ContactIcon />
-                        <span>{language.persona}</span>
-                    </button>
-                    <button
-                        type="button"
-                        class="ds-settings-nav-item"
                         title={language.otherBots}
                         aria-label={language.otherBots}
                         aria-pressed={$SettingsMenuIndex === 2}
@@ -145,6 +131,20 @@
                     }}>
                         <Sailboat />
                         <span>{language.otherBots}</span>
+                    </button>
+                    <button
+                        type="button"
+                        class="ds-settings-nav-item"
+                        title={language.persona}
+                        aria-label={language.persona}
+                        aria-pressed={$SettingsMenuIndex === 12}
+                        onkeydown={handleNavListKeydown}
+                        class:is-active={$SettingsMenuIndex === 12}
+                        onclick={() => {
+                            selectMenu(12)
+                    }}>
+                        <ContactIcon />
+                        <span>{language.persona}</span>
                     </button>
                     <button
                         type="button"

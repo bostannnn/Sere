@@ -1,7 +1,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import { get } from "svelte/store";
 import { setDatabase, getDatabase } from "./storage/database.svelte";
-import { MobileGUI, botMakerMode, selectedCharID, loadedStore, DBState, LoadingStatusState } from "./stores.svelte";
+import { MobileGUI, selectedCharID, loadedStore, DBState, LoadingStatusState } from "./stores.svelte";
 import { loadPlugins } from "./plugins/plugins.svelte";
 import { alertError, alertMd, alertTOS, waitAlert } from "./alert";
 import { defaultJailbreak, defaultMainPrompt, oldJailbreak, oldMainPrompt } from "./storage/defaultPrompts";
@@ -51,7 +51,6 @@ export async function loadData() {
             }
             LoadingStatusState.text = "Checking For Format Update..."
             await checkNewFormat()
-            const db = getDatabase();
 
             LoadingStatusState.text = "Updating States..."
             updateColorScheme()
@@ -65,9 +64,6 @@ export async function loadData() {
                 await waitAlert()
                 //for testing, leave empty
                 localStorage.setItem('nightlyWarned', '')
-            }
-            if (db.botSettingAtStart) {
-                botMakerMode.set(true)
             }
             const shouldUseMobileLayout = window.innerWidth <= 900;
             MobileGUI.set(shouldUseMobileLayout)
