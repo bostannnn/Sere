@@ -5,6 +5,9 @@ const shared = vi.hoisted(() => {
   const fetchCalls: Array<{ path: string; body: Record<string, unknown> }> = [];
   const globalFetchMock = vi.fn(async (path: string, args: { body: Record<string, unknown> }) => {
     fetchCalls.push({ path, body: args.body });
+    const requestPrompt = String((args.body.promptOverride as { summarizationPrompt?: unknown } | undefined)?.summarizationPrompt ?? "");
+    const resolvedPrompt = requestPrompt.trim().length > 0 ? requestPrompt : "Preset prompt";
+    const promptSource = requestPrompt.trim().length > 0 ? "request_override" : "preset_or_default";
     return {
       ok: true,
       data: {
@@ -17,7 +20,7 @@ const shared = vi.hoisted(() => {
           timestamp: Date.now(),
           model: "test-model",
           isResummarize: false,
-          prompt: "test prompt",
+          prompt: resolvedPrompt,
           input: "test input",
           formatted: [{ role: "user", content: "x" }],
           characterId: String(args.body.characterId ?? ""),
@@ -25,6 +28,7 @@ const shared = vi.hoisted(() => {
           start: Number(args.body.start ?? 0),
           end: Number(args.body.end ?? 0),
           source: "manual",
+          promptSource,
         },
       },
     };
@@ -101,9 +105,6 @@ vi.mock(import("src/lib/UI/GUI/OptionInput.svelte"), async () => ({
 }));
 vi.mock(import("src/lib/UI/GUI/TextAreaInput.svelte"), async () => ({
   default: (await import("./test-stubs/BindableFieldStub.svelte")).default,
-}));
-vi.mock(import("src/lib/Setting/SettingsSubTabs.svelte"), async () => ({
-  default: (await import("./test-stubs/SimplePanelStub.svelte")).default,
 }));
 
 import HypaV3Modal from "src/lib/Others/HypaV3Modal.svelte";
@@ -254,5 +255,169 @@ describe("hypa modal embedded manual summarize runtime smoke", () => {
 
     expect(shared.globalFetchMock).toHaveBeenCalledTimes(0);
     expect(target?.textContent).toContain("Invalid range. Use values between 1 and 1, and keep Start less than or equal to End.");
+  });
+
+  it("renders summary/settings/log tabs and settings prompt override without legacy title", async () => {
+    app = mount(HypaV3Modal, {
+      target: target!,
+      props: { embedded: true },
+    });
+    await flushUi();
+
+    expect(target?.textContent).not.toContain("HypaV3");
+
+    const tabs = Array.from(target?.querySelectorAll(".ds-settings-tab") ?? []) as HTMLButtonElement[];
+    expect(tabs.map((tab) => tab.textContent?.trim())).toEqual(["Summary", "Settings", "Log"]);
+
+    const startInput = target?.querySelector("#hypav3-manual-range-start");
+    const endInput = target?.querySelector("#hypav3-manual-range-end");
+    const summarizeButton = target?.querySelector(".ds-hypa-modal-manual-submit");
+    expect(startInput).not.toBeNull();
+    expect(endInput).not.toBeNull();
+    expect(summarizeButton).not.toBeNull();
+
+    const settingsTab = tabs.find((tab) => tab.textContent?.includes("Settings"));
+    expect(settingsTab).toBeDefined();
+    settingsTab?.click();
+    await flushUi();
+
+    expect(target?.textContent).toContain("Per-character memory prompt override");
+    expect(target?.textContent).toContain("Summarization Prompt");
+    expect(target?.textContent).toContain("Re-summarization Prompt");
+  });
+
+  it("uses latest prompt override immediately and keeps override scoped per character", async () => {
+    DBState.db = {
+      ...DBState.db,
+      characters: [
+        {
+          ...DBState.db.characters[0],
+          chaId: "char-a",
+          hypaV3PromptOverride: {
+            summarizationPrompt: "TRACKER_A",
+            reSummarizationPrompt: "",
+          },
+          chats: [
+            {
+              id: "chat-a",
+              name: "Chat A",
+              message: [{ role: "user", data: "hello", chatId: "a1" }],
+              hypaV3Data: {
+                summaries: [],
+                categories: [{ id: "", name: "Unclassified" }],
+                lastSelectedSummaries: [],
+              },
+            },
+          ],
+          chatPage: 0,
+        },
+        {
+          ...DBState.db.characters[0],
+          chaId: "char-c",
+          name: "Character C",
+          hypaV3PromptOverride: {
+            summarizationPrompt: "TRACKER_C",
+            reSummarizationPrompt: "",
+          },
+          chats: [
+            {
+              id: "chat-c",
+              name: "Chat C",
+              message: [{ role: "user", data: "hola", chatId: "c1" }],
+              hypaV3Data: {
+                summaries: [],
+                categories: [{ id: "", name: "Unclassified" }],
+                lastSelectedSummaries: [],
+              },
+            },
+          ],
+          chatPage: 0,
+        },
+      ],
+    } as never;
+    selectedCharID.set(0);
+    shared.fetchCalls.length = 0;
+    shared.globalFetchMock.mockClear();
+
+    app = mount(HypaV3Modal, {
+      target: target!,
+      props: { embedded: true },
+    });
+    await flushUi();
+
+    const tabs = Array.from(target?.querySelectorAll(".ds-settings-tab") ?? []) as HTMLButtonElement[];
+    tabs.find((tab) => tab.textContent?.includes("Settings"))?.click();
+    await flushUi();
+
+    const promptInput = target?.querySelector(
+      ".ds-hypa-modal-prompt-override-input [data-testid='bindable-field-value']",
+    ) as HTMLInputElement | null;
+    expect(promptInput).not.toBeNull();
+    promptInput!.value = "TRACKER_A_LATEST";
+    promptInput!.dispatchEvent(new Event("input", { bubbles: true }));
+
+    tabs.find((tab) => tab.textContent?.includes("Summary"))?.click();
+    await flushUi();
+
+    const summarizeButton = target?.querySelector(".ds-hypa-modal-manual-submit") as HTMLButtonElement | null;
+    expect(summarizeButton).not.toBeNull();
+    summarizeButton?.click();
+    await flushUi();
+
+    expect(shared.globalFetchMock).toHaveBeenCalledTimes(1);
+    expect(shared.fetchCalls[0]?.body.characterId).toBe("char-a");
+    expect(shared.fetchCalls[0]?.body.chatId).toBe("chat-a");
+    expect((shared.fetchCalls[0]?.body.promptOverride as { summarizationPrompt?: string } | undefined)?.summarizationPrompt).toBe("TRACKER_A_LATEST");
+
+    selectedCharID.set(1);
+    await flushUi();
+    summarizeButton?.click();
+    await flushUi();
+
+    expect(shared.globalFetchMock).toHaveBeenCalledTimes(2);
+    expect(shared.fetchCalls[1]?.body.characterId).toBe("char-c");
+    expect(shared.fetchCalls[1]?.body.chatId).toBe("chat-c");
+    expect((shared.fetchCalls[1]?.body.promptOverride as { summarizationPrompt?: string } | undefined)?.summarizationPrompt).toBe("TRACKER_C");
+  });
+
+  it("uses provided range and shows scoped log without legacy runtime rows", async () => {
+    app = mount(HypaV3Modal, {
+      target: target!,
+      props: { embedded: true },
+    });
+    await flushUi();
+
+    const startInput = target?.querySelector("#hypav3-manual-range-start") as HTMLInputElement | null;
+    const endInput = target?.querySelector("#hypav3-manual-range-end") as HTMLInputElement | null;
+    const summarizeButton = target?.querySelector(".ds-hypa-modal-manual-submit") as HTMLButtonElement | null;
+    expect(startInput).not.toBeNull();
+    expect(endInput).not.toBeNull();
+    expect(summarizeButton).not.toBeNull();
+
+    startInput!.value = "1";
+    startInput!.dispatchEvent(new Event("input", { bubbles: true }));
+    endInput!.value = "1";
+    endInput!.dispatchEvent(new Event("input", { bubbles: true }));
+    summarizeButton?.click();
+    await flushUi();
+
+    expect(shared.globalFetchMock).toHaveBeenCalledTimes(1);
+    expect(shared.fetchCalls[0]?.body.start).toBe(1);
+    expect(shared.fetchCalls[0]?.body.end).toBe(1);
+
+    const tabs = Array.from(target?.querySelectorAll(".ds-settings-tab") ?? []) as HTMLButtonElement[];
+    tabs.find((tab) => tab.textContent?.includes("Log"))?.click();
+    await flushUi();
+
+    expect(target?.textContent).toContain("Last summarize log");
+    expect(target?.textContent).toContain("Range:");
+    expect(target?.textContent).not.toContain("HypaV2 enabled");
+    expect(target?.textContent).not.toContain("Hanurai enabled");
+    expect(target?.textContent).not.toContain("SupaModelType");
+    expect(target?.textContent).not.toContain("Memory algorithm");
+    expect(target?.textContent).not.toContain("Periodic:");
+    expect(target?.textContent).not.toContain("Interval:");
+    expect(target?.textContent).not.toContain("Last index:");
+    expect(target?.textContent).not.toContain("Chat messages:");
   });
 });

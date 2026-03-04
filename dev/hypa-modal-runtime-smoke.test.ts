@@ -106,4 +106,27 @@ describe("hypa modal runtime smoke", () => {
       dropdownTarget.querySelector(".hypa-modal-dropdown-actions.action-rail"),
     ).not.toBeNull();
   });
+
+  it("does not reintroduce legacy star/tag/translation actions", async () => {
+    const target = document.createElement("div");
+    document.body.appendChild(target);
+
+    mountApp(ModalHeader, target, {
+      embedded: true,
+      activeTab: "summary",
+      searchState: null,
+      dropdownOpen: true,
+      filterSelected: false,
+      hypaV3Data: { summaries: [] },
+      bulkEditState: { isEnabled: false, selectedSummaries: new Set(), selectedCategory: "", bulkSelectInput: "" },
+    });
+
+    await flushUi();
+
+    const headerText = target.textContent?.toLowerCase() ?? "";
+    expect(headerText).not.toContain("star");
+    expect(headerText).not.toContain("favorite");
+    expect(headerText).not.toContain("tag");
+    expect(headerText).not.toContain("translate");
+  });
 });
