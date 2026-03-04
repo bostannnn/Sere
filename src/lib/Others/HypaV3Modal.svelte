@@ -227,24 +227,6 @@
     });
   });
 
-  $effect(() => {
-    const chat = chatList[effectiveChatIndex];
-    if (!chat) {
-      hypaV3Data = emptyHypaV3Data;
-      return;
-    }
-
-    chat.hypaV3Data ??= {
-      summaries: [],
-      categories: [{ id: "", name: language.hypaV3Modal.unclassified }],
-      lastSelectedSummaries: [],
-    };
-    chat.hypaV3Data.categories ??= [{ id: "", name: language.hypaV3Modal.unclassified }];
-    chat.hypaV3Data.lastSelectedSummaries ??= [];
-
-    hypaV3Data = chat.hypaV3Data;
-  });
-
   function persistHypaV3Data() {
     const targetChat = chatList[effectiveChatIndex];
     if (!targetChat) return;
@@ -284,17 +266,24 @@
     }
   });
 
-  let lastEffectiveChatIndex = $state(-1);
+  const activeManualScopeKey = $derived.by(() => {
+    const characterId = currentChar?.chaId ?? "";
+    const chatId = activeChatId ?? "";
+    return `${characterId}:${chatId}`;
+  });
+  let lastManualScopeKey = $state<string | null>(null);
   $effect(() => {
-    const nextIndex = effectiveChatIndex;
-    if (lastEffectiveChatIndex === -1) {
-      lastEffectiveChatIndex = nextIndex;
+    const nextScopeKey = activeManualScopeKey;
+    if (lastManualScopeKey === null) {
+      lastManualScopeKey = nextScopeKey;
       return;
     }
-    if (nextIndex !== lastEffectiveChatIndex) {
+    if (nextScopeKey !== lastManualScopeKey) {
       manualStart = "";
       manualEnd = "";
-      lastEffectiveChatIndex = nextIndex;
+      manualFeedbackMessage = "";
+      manualFeedbackTone = null;
+      lastManualScopeKey = nextScopeKey;
     }
   });
 
@@ -319,6 +308,16 @@
       throw new Error(message);
     }
     return (response.data ?? {}) as Record<string, unknown>;
+  }
+
+  function toErrorMessage(error: unknown): string {
+    if (error instanceof Error && typeof error.message === "string") {
+      return error.message;
+    }
+    if (typeof error === "object" && error !== null && "message" in error) {
+      return String((error as { message?: unknown }).message ?? "Unknown error");
+    }
+    return String(error ?? "Unknown error");
   }
 
   function findManualSummarizeTargetIndices(target: ManualSummarizeTarget) {
@@ -488,7 +487,7 @@
       manualFeedbackMessage = "Summary added.";
     } catch (error) {
       hypaV3ModalLog('Manual summarize failed:', error);
-      const errorMessage = String((error as { message?: unknown })?.message ?? error ?? "Unknown error");
+      const errorMessage = toErrorMessage(error);
       manualFeedbackTone = "error";
       manualFeedbackMessage = `Manual summarize failed: ${errorMessage}`;
     }
@@ -588,7 +587,7 @@
     } catch (error) {
       hypaV3ModalLog('Re-summarize Failed:', error);
       bulkResummaryState = null;
-      await alertNormalWait(`Re-summarize Failed: ${error.message || error}`);
+      await alertNormalWait(`Re-summarize Failed: ${toErrorMessage(error)}`);
     }
   }
 
@@ -614,7 +613,7 @@
       bulkEditState.selectedSummaries = new Set();
     } catch (error) {
       hypaV3ModalLog('Apply re-summarize failed:', error);
-      await alertNormalWait(`Apply re-summarize Failed: ${error.message || error}`);
+      await alertNormalWait(`Apply re-summarize Failed: ${toErrorMessage(error)}`);
     }
   }
 
@@ -650,7 +649,7 @@
     } catch (error) {
       hypaV3ModalLog('Re-summarize Retry Failed:', error);
       bulkResummaryState = null;
-      await alertNormalWait(`Re-summarize Retry Failed: ${error.message || error}`);
+      await alertNormalWait(`Re-summarize Retry Failed: ${toErrorMessage(error)}`);
     }
   }
 
@@ -832,11 +831,11 @@
       });
 
       // Highlight chatMemo
-      button.classList.add("ring-2", "ring-zinc-500");
+      button.classList.add("ds-hypa-chatmemo-highlight");
 
       // Remove highlight after a short delay
       window.setTimeout(() => {
-        button.classList.remove("ring-2", "ring-zinc-500");
+        button.classList.remove("ds-hypa-chatmemo-highlight");
       }, 1000);
     }
 
@@ -984,7 +983,7 @@
     } catch (error) {
       return {
         success: false,
-        error: `Error occurred: ${error.message}`,
+        error: `Error occurred: ${toErrorMessage(error)}`,
       };
     }
   }
@@ -1064,7 +1063,6 @@
                     <button
                       type="button"
                       class="ds-hypa-modal-convert-button control-chip"
-                      tabindex="-1"
                       onclick={async () => {
                         const conversionResult = convertHypaV2ToV3();
 
@@ -1128,7 +1126,6 @@
                   <button
                     type="button"
                     class="ds-hypa-modal-search-nav-button icon-btn icon-btn--sm"
-                    tabindex="-1"
                     title="Previous search result"
                     aria-label="Previous search result"
                     onclick={() => {
@@ -1141,7 +1138,6 @@
                   <button
                     type="button"
                     class="ds-hypa-modal-search-nav-button icon-btn icon-btn--sm"
-                    tabindex="-1"
                     title="Next search result"
                     aria-label="Next search result"
                     onclick={() => {

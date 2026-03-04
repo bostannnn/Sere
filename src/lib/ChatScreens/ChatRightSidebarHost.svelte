@@ -24,6 +24,7 @@
     }: Props = $props();
 
     const rightPanelTabs: RightPanelTab[] = ["chat", "character", "memory"];
+    const selectedCharacter = $derived($selectedCharID >= 0 ? DBState.db.characters[$selectedCharID] : null);
     const chatPanelId = "chat-sidebar-panel-chat";
     const characterPanelId = "chat-sidebar-panel-character";
     const memoryPanelId = "chat-sidebar-panel-memory";
@@ -128,7 +129,6 @@
             aria-controls={chatPanelId}
             tabindex={rightSidebarTab === "chat" ? 0 : -1}
             class:ds-chat-right-panel-tab-active={rightSidebarTab === "chat"}
-            class:active={rightSidebarTab === "chat"}
             class:is-active={rightSidebarTab === "chat"}
             onclick={() => selectTabAndFocus("chat")}
             onkeydown={(event) => handleRightPanelTabKeydown(event, "chat")}
@@ -145,7 +145,6 @@
             aria-controls={characterPanelId}
             tabindex={rightSidebarTab === "character" ? 0 : -1}
             class:ds-chat-right-panel-tab-active={rightSidebarTab === "character"}
-            class:active={rightSidebarTab === "character"}
             class:is-active={rightSidebarTab === "character"}
             onclick={() => selectTabAndFocus("character")}
             onkeydown={handleCharacterTabKeydown}
@@ -162,7 +161,6 @@
             aria-controls={memoryPanelId}
             tabindex={rightSidebarTab === "memory" ? 0 : -1}
             class:ds-chat-right-panel-tab-active={rightSidebarTab === "memory"}
-            class:active={rightSidebarTab === "memory"}
             class:is-active={rightSidebarTab === "memory"}
             onclick={() => selectTabAndFocus("memory")}
             onkeydown={(event) => handleRightPanelTabKeydown(event, "memory")}
@@ -184,7 +182,7 @@
                     handleRightPanelTabKeydown(event, "chat")
                 }}
             >
-                <SideChatList chara={DBState.db.characters[$selectedCharID]} />
+                <SideChatList chara={selectedCharacter ?? undefined} />
             </div>
         {:else if rightSidebarTab === "character"}
             <div

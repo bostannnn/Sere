@@ -211,6 +211,8 @@ pnpm exec vitest run dev/chat-sidebar-integration-runtime-smoke.test.ts
 pnpm exec vitest run dev/lorebook-runtime-smoke.test.ts
 ```
 
+The source of truth is [`dev/check-ui-shell-smoke.js`](/Users/andrewbostan/Documents/RisuAII/dev/check-ui-shell-smoke.js); it includes additional runtime suites (including Memory/Hypa regressions) beyond the short list above.
+
 What it gates:
 - Static shell contract invariants in `src/App.svelte` + `src/styles.css` (route sync, overlay-clear contract, topbar token usage, workspace stage composition).
 - Shell composition boundary invariants (`src/App.svelte` stays orchestration-only; shell orchestration/chrome/stage live in `src/lib/UI/AppShellV2.svelte`, `src/lib/UI/AppShellTopbar.svelte`, and `src/lib/UI/AppShellStage.svelte`).
@@ -312,8 +314,11 @@ The `/scripts/*` rule in `.gitignore` ignores all scripts by default. Add explic
 
 | File | Type | Coverage |
 |------|------|----------|
-| `scripts/test-memory-unit.cjs` | Unit | HypaV3 memory pipeline (7 suites, 97 assertions) |
+| `scripts/test-memory-unit.cjs` | Unit | HypaV3 memory pipeline core logic (7 suites) |
 | `server/node/routes/hypav3_manual_routes.test.ts` | Unit (Vitest) | Manual summarize route contract (`promptOverride`, `promptSource`, scoped debug payload) |
+| `server/node/routes/hypav3_trace_routes.test.ts` | Unit (Vitest) | Trace route guardrails (route-level auth short-circuit, `safeResolve` invalid-path handling) |
+| `server/node/routes/hypav3_resummary_routes.test.ts` | Unit (Vitest) | Re-summarize route guardrails (route-level auth short-circuit, `safeResolve` invalid-path handling) |
+| `server/node/llm/hypav3_prompt_override.test.ts` | Unit (Vitest) | Prompt-override helper behavior and prompt-source precedence |
 | `scripts/test-server-auth.js` | Smoke | Password auth — set, change, lockout |
 | `scripts/test-server-memory.js` | Smoke | HypaV3 trace endpoints + character/chat/settings CRUD |
 

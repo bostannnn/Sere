@@ -171,12 +171,19 @@ function buildHandler(): RegisteredHandler {
 
   registerHypaV3ManualRoutes({
     app,
-    path,
     fs,
     dataDirs,
     existsSync,
     LLMHttpError: MockLLMHttpError,
     isSafePathSegment: (value: string) => /^[a-zA-Z0-9._-]+$/.test(value),
+    requirePasswordAuth: () => true,
+    safeResolve: (baseDir: string, relPath: string) => {
+      const resolved = path.resolve(baseDir, relPath);
+      if (!resolved.startsWith(path.resolve(baseDir) + path.sep)) {
+        throw new Error("Invalid path");
+      }
+      return resolved;
+    },
     getReqIdFromResponse: () => "req-test-1",
     toStringOrEmpty,
     logLLMExecutionStart: () => {},
@@ -242,6 +249,93 @@ function buildHandler(): RegisteredHandler {
 
 async function invokeManualSummarize(body: Record<string, unknown>) {
   const handler = buildHandler();
+  const req = createReq(body);
+  const res = createRes();
+  await handler(req, res);
+  return res;
+}
+
+async function invokeWithAuthBlocked(body: Record<string, unknown>) {
+  const postHandlers = new Map<string, RegisteredHandler>();
+  const app = {
+    post(route: string, handler: RegisteredHandler) {
+      postHandlers.set(route, handler);
+    },
+  };
+
+  registerHypaV3ManualRoutes({
+    app,
+    fs,
+    dataDirs,
+    existsSync,
+    LLMHttpError: MockLLMHttpError,
+    isSafePathSegment: (value: string) => /^[a-zA-Z0-9._-]+$/.test(value),
+    requirePasswordAuth: (_req: unknown, res: MockRes) => {
+      res.statusCode = 401;
+      res.payload = { error: "UNAUTHORIZED", message: "Unauthorized" };
+      return false;
+    },
+    safeResolve: (baseDir: string, relPath: string) => {
+      const resolved = path.resolve(baseDir, relPath);
+      if (!resolved.startsWith(path.resolve(baseDir) + path.sep)) {
+        throw new Error("Invalid path");
+      }
+      return resolved;
+    },
+    getReqIdFromResponse: () => "req-test-1",
+    toStringOrEmpty,
+    logLLMExecutionStart: () => {},
+    logLLMExecutionEnd: () => {},
+    appendLLMAudit: async () => {},
+    appendMemoryTraceAudit: async () => {},
+    buildHypaV3AuditRequestPayload: () => ({}),
+    buildHypaV3AuditResponsePayload: () => ({}),
+    sendJson: (res: MockRes, status: number, payload: unknown) => {
+      res.statusCode = status;
+      res.payload = payload;
+    },
+    toLLMErrorResponse,
+    resolveHypaV3Settings,
+    convertStoredMessageForHypaSummary: (message: { role?: string; data?: unknown; memo?: unknown }) => {
+      const role = message?.role === "char" ? "assistant" : "user";
+      return {
+        role,
+        content: toStringOrEmpty(message?.data),
+        memo: toStringOrEmpty(message?.memo),
+      };
+    },
+    buildHypaSummarizationPromptMessages: (
+      messages: Array<{ role: string; content: string }>,
+      prompt: string,
+    ) => {
+      const transcript = messages.map((item) => `${item.role}: ${item.content}`).join("\n");
+      return [
+        { role: "user", content: transcript },
+        { role: "system", content: prompt },
+      ];
+    },
+    executeHypaSummaryFromMessages: async () => "Stub summary output",
+    generateSummaryEmbedding: async () => null,
+    normalizeHypaV3DataForEdit: (raw: unknown) => {
+      const base = (raw && typeof raw === "object" && !Array.isArray(raw)) ? raw as Record<string, unknown> : {};
+      const summaries = Array.isArray(base.summaries) ? base.summaries : [];
+      return {
+        ...base,
+        summaries: [...summaries],
+      };
+    },
+    persistChatDataToRaw: (chatRaw: Record<string, unknown>, chat: Record<string, unknown>) => {
+      if (chatRaw && typeof chatRaw === "object" && "chat" in chatRaw) {
+        return { ...chatRaw, chat };
+      }
+      return { chat };
+    },
+  });
+
+  const handler = postHandlers.get("/data/memory/hypav3/manual-summarize");
+  if (!handler) {
+    throw new Error("manual summarize handler was not registered");
+  }
   const req = createReq(body);
   const res = createRes();
   await handler(req, res);
@@ -354,5 +448,17 @@ describe("hypav3 manual summarize route", () => {
     const debug = payload.debug as Record<string, unknown>;
     expect(debug.promptSource).toBe("preset_or_default");
     expect(debug.prompt).toBe("Preset fallback prompt");
+  });
+
+  it("returns early when auth fails", async () => {
+    const res = await invokeWithAuthBlocked({
+      characterId,
+      chatId,
+      start: 1,
+      end: 2,
+    });
+
+    expect(res.statusCode).toBe(401);
+    expect(res.payload).toEqual({ error: "UNAUTHORIZED", message: "Unauthorized" });
   });
 });

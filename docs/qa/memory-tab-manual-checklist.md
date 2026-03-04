@@ -27,6 +27,7 @@ This checklist is for the right-sidebar Memory redesign and HypaV3 manual summar
 - For `FAIL`/`BLOCKED`, add one short note and a screenshot.
 - Validate in order, batch by batch. Do not proceed to next batch until current batch is accepted.
 - Keep `pnpm run check:ui-shell-smoke` green while validating; it now includes Memory sidebar runtime regressions and memory layout CSS contracts.
+- Keep `pnpm run test:server:unit` green while validating server-side Hypa route contract changes.
 
 ## Batch 1: Navigation and Layout
 - [ ] `TC-01` Desktop right sidebar shows exactly 3 top tabs: `Chat`, `Character`, `Memory`.
@@ -60,6 +61,7 @@ This checklist is for the right-sidebar Memory redesign and HypaV3 manual summar
 - [ ] `TC-21` Opening `Log` in a different chat/character with no run shows: `No summarize logs yet for this chat.`
 - [ ] `TC-22` Invalid manual range is rejected gracefully (no crash, clear failure behavior).
 - [ ] `TC-23` No blocking runtime errors in browser console during the above flows.
+- [ ] `TC-24` After a validation/summarize feedback message appears in one chat, switching to another chat clears that feedback state.
 
 ## Final Sign-Off
 - [ ] All test cases passed.

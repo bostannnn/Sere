@@ -83,7 +83,9 @@
         if (isPersistedRightPanelTab(savedTab)) {
             rightSidebarTab = savedTab
         } else if (savedTab === "memory") {
-            window.localStorage.removeItem(rightPanelTabKey)
+            // Memory is intentionally not persisted across sessions; restore a safe explicit default.
+            rightSidebarTab = "chat"
+            window.localStorage.setItem(rightPanelTabKey, "chat")
         }
     })
 

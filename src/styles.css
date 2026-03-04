@@ -2253,6 +2253,10 @@ body {
   padding: var(--ds-space-3);
 }
 
+.ds-hypa-chatmemo-highlight {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--ds-border-strong) 75%, transparent);
+}
+
 .ds-hypa-modal-prompt-override.panel-shell {
   padding: var(--ds-space-2);
   border: 1px solid var(--ds-border-subtle);
@@ -5352,7 +5356,6 @@ body {
 }
 
 .ds-chat-right-panel-tab-active,
-.ds-chat-right-panel-tab.active,
 .ds-chat-right-panel-tab:hover {
   background: var(--ds-surface-active);
   color: var(--ds-text-primary);
@@ -5657,7 +5660,7 @@ body {
 .ds-mobile-topbar {
   width: 100%;
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
   box-sizing: border-box;
   height: var(--ds-height-control-md);
   align-items: stretch;

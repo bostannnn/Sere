@@ -1273,6 +1273,7 @@ export const languageGerman = {
     "useTokenizerCaching": "Tokenizer-Caching verwenden",
     "hypaMemoryV2Modal": "Hypa V2 Modal",
     "hypaMemoryV3Modal": "Hypa V3 Modal",
+    "memoryTab": "Speicher",
     "showMenuHypaMemoryModal": "Menü Hypa Modal anzeigen",
     "promptInfoInsideChat": "Anweisungsinformationen zum Chat hinzufügen",
     "promptTextInfoInsideChat": "Anweisungstext zum Chat hinzufügen",

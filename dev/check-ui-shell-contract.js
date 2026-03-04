@@ -30,6 +30,12 @@ function ensureNotIncludes(content, file, pattern, failures) {
   }
 }
 
+function ensureNotRegex(content, file, pattern, failures, label = pattern.toString()) {
+  if (pattern.test(content)) {
+    failures.push(`[ui-shell-contract] Forbidden pattern in ${file}: ${label}`);
+  }
+}
+
 const failures = [];
 
 const appFile = "/Users/andrewbostan/Documents/RisuAII/src/App.svelte";
@@ -592,7 +598,7 @@ ensureIncludes(mobileBodyContent, mobileBodyFile, "title={language.Chat} aria-la
 ensureIncludes(mobileBodyContent, mobileBodyFile, "title={language.character} aria-label={language.character} aria-pressed={$MobileSideBar === 2}", failures);
 ensureIncludes(mobileBodyContent, mobileBodyFile, "title={language.memoryTab} aria-label={language.memoryTab} aria-pressed={$MobileSideBar === 3}", failures);
 ensureIncludes(stylesContent, stylesFile, ".ds-mobile-topbar {", failures);
-ensureIncludes(stylesContent, stylesFile, "grid-template-columns: repeat(3, minmax(0, 1fr));", failures);
+ensureIncludes(stylesContent, stylesFile, "grid-template-columns: repeat(auto-fit, minmax(0, 1fr));", failures);
 ensureIncludes(stylesContent, stylesFile, ".ds-mobile-topbar.seg-tabs {", failures);
 ensureIncludes(stylesContent, stylesFile, "overflow: visible;", failures);
 ensureIncludes(mobileFooterContent, mobileFooterFile, "class=\"ds-mobile-nav-track ds-mobile-nav-track-root action-rail\"", failures);
@@ -703,6 +709,20 @@ ensureIncludes(hypaModalContent, hypaModalFile, "class=\"ds-hypa-modal-manual-su
 ensureIncludes(hypaModalContent, hypaModalFile, "class=\"ds-hypa-modal-debug-textarea control-field\"", failures);
 ensureIncludes(hypaModalContent, hypaModalFile, "import SettingsSubTabs from \"src/lib/Setting/SettingsSubTabs.svelte\";", failures);
 ensureIncludes(hypaModalContent, hypaModalFile, "className=\"ds-hypa-memory-tabs\"", failures);
+ensureNotRegex(
+  hypaModalContent,
+  hypaModalFile,
+  /class="ds-hypa-modal-convert-button control-chip"[\s\S]{0,120}tabindex="-1"/,
+  failures,
+  "convert button must remain keyboard reachable",
+);
+ensureNotRegex(
+  hypaModalContent,
+  hypaModalFile,
+  /class="ds-hypa-modal-search-nav-button icon-btn icon-btn--sm"[\s\S]{0,140}tabindex="-1"/,
+  failures,
+  "search nav buttons must remain keyboard reachable",
+);
 ensureIncludes(hypaModalHeaderContent, hypaModalHeaderFile, "<div class=\"hypa-modal-actions action-rail\">", failures);
 ensureIncludes(hypaModalHeaderContent, hypaModalHeaderFile, "class=\"hypa-modal-icon-btn icon-btn icon-btn--md\"", failures);
 ensureIncludes(hypaModalHeaderContent, hypaModalHeaderFile, "class=\"hypa-modal-dropdown-panel panel-shell\"", failures);

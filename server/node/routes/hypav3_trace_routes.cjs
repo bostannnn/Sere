@@ -1,12 +1,18 @@
+const {
+    normalizePromptOverride,
+    applyPromptOverride,
+} = require('../llm/hypav3_prompt_override.cjs');
+
 function registerHypaV3TraceRoutes(arg = {}) {
     const {
         app,
-        path,
         fs,
         dataDirs,
         existsSync,
         LLMHttpError,
         isSafePathSegment,
+        requirePasswordAuth,
+        safeResolve,
         getReqIdFromResponse,
         toStringOrEmpty,
         logLLMExecutionStart,
@@ -25,34 +31,18 @@ function registerHypaV3TraceRoutes(arg = {}) {
         planPeriodicHypaV3Summarization,
     } = arg;
 
-function normalizePromptOverride(payload) {
-    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
-        return null;
+    if (!app || typeof app.post !== 'function') {
+        throw new Error('registerHypaV3TraceRoutes requires an Express app instance.');
     }
-    const raw = payload;
-    return {
-        summarizationPrompt: toStringOrEmpty(raw.summarizationPrompt),
-        reSummarizationPrompt: toStringOrEmpty(raw.reSummarizationPrompt),
-    };
-}
-
-function applyPromptOverride(character, promptOverride) {
-    const baseCharacter = (character && typeof character === 'object' && !Array.isArray(character))
-        ? character
-        : {};
-    if (!promptOverride) {
-        return baseCharacter;
+    if (typeof safeResolve !== 'function') {
+        throw new Error('registerHypaV3TraceRoutes requires safeResolve.');
     }
-    return {
-        ...baseCharacter,
-        hypaV3PromptOverride: {
-            summarizationPrompt: promptOverride.summarizationPrompt,
-            reSummarizationPrompt: promptOverride.reSummarizationPrompt,
-        },
-    };
-}
 
 app.post('/data/memory/hypav3/manual-summarize/trace', async (req, res) => {
+    if (typeof requirePasswordAuth === 'function' && !requirePasswordAuth(req, res)) {
+        return;
+    }
+
     const startedAt = Date.now();
     const reqId = getReqIdFromResponse(res);
     const endpoint = 'hypav3_manual_summarize_trace';
@@ -83,9 +73,17 @@ app.post('/data/memory/hypav3/manual-summarize/trace', async (req, res) => {
             throw new LLMHttpError(400, 'INVALID_RANGE', 'start/end must be positive numbers with start <= end.');
         }
 
-        const settingsPath = path.join(dataDirs.root, 'settings.json');
-        const charPath = path.join(dataDirs.characters, characterId, 'character.json');
-        const chatPath = path.join(dataDirs.characters, characterId, 'chats', `${chatId}.json`);
+        let settingsPath = '';
+        let charPath = '';
+        let chatPath = '';
+        try {
+            settingsPath = safeResolve(dataDirs.root, 'settings.json');
+            const characterDir = safeResolve(dataDirs.characters, characterId);
+            charPath = safeResolve(characterDir, 'character.json');
+            chatPath = safeResolve(characterDir, `chats/${chatId}.json`);
+        } catch {
+            throw new LLMHttpError(400, 'INVALID_PATH', 'Invalid characterId/chatId path segments.');
+        }
         if (!existsSync(settingsPath)) throw new LLMHttpError(404, 'SETTINGS_NOT_FOUND', 'Server settings are not initialized.');
         if (!existsSync(charPath)) throw new LLMHttpError(404, 'CHARACTER_NOT_FOUND', `Character not found: ${characterId}`);
         if (!existsSync(chatPath)) throw new LLMHttpError(404, 'CHAT_NOT_FOUND', `Chat not found: ${chatId}`);
@@ -205,6 +203,10 @@ app.post('/data/memory/hypav3/manual-summarize/trace', async (req, res) => {
 });
 
 app.post('/data/memory/hypav3/resummarize-preview/trace', async (req, res) => {
+    if (typeof requirePasswordAuth === 'function' && !requirePasswordAuth(req, res)) {
+        return;
+    }
+
     const startedAt = Date.now();
     const reqId = getReqIdFromResponse(res);
     const endpoint = 'hypav3_resummarize_preview_trace';
@@ -237,9 +239,17 @@ app.post('/data/memory/hypav3/resummarize-preview/trace', async (req, res) => {
             throw new LLMHttpError(400, 'INVALID_SUMMARY_SELECTION', 'Select at least two summaries to re-summarize.');
         }
 
-        const settingsPath = path.join(dataDirs.root, 'settings.json');
-        const charPath = path.join(dataDirs.characters, characterId, 'character.json');
-        const chatPath = path.join(dataDirs.characters, characterId, 'chats', `${chatId}.json`);
+        let settingsPath = '';
+        let charPath = '';
+        let chatPath = '';
+        try {
+            settingsPath = safeResolve(dataDirs.root, 'settings.json');
+            const characterDir = safeResolve(dataDirs.characters, characterId);
+            charPath = safeResolve(characterDir, 'character.json');
+            chatPath = safeResolve(characterDir, `chats/${chatId}.json`);
+        } catch {
+            throw new LLMHttpError(400, 'INVALID_PATH', 'Invalid characterId/chatId path segments.');
+        }
         if (!existsSync(settingsPath)) throw new LLMHttpError(404, 'SETTINGS_NOT_FOUND', 'Server settings are not initialized.');
         if (!existsSync(charPath)) throw new LLMHttpError(404, 'CHARACTER_NOT_FOUND', `Character not found: ${characterId}`);
         if (!existsSync(chatPath)) throw new LLMHttpError(404, 'CHAT_NOT_FOUND', `Chat not found: ${chatId}`);
@@ -353,6 +363,10 @@ app.post('/data/memory/hypav3/resummarize-preview/trace', async (req, res) => {
 });
 
 app.post('/data/memory/hypav3/periodic-summarize/trace', async (req, res) => {
+    if (typeof requirePasswordAuth === 'function' && !requirePasswordAuth(req, res)) {
+        return;
+    }
+
     const startedAt = Date.now();
     const reqId = getReqIdFromResponse(res);
     const endpoint = 'hypav3_periodic_summarize_trace';
@@ -378,9 +392,17 @@ app.post('/data/memory/hypav3/periodic-summarize/trace', async (req, res) => {
             throw new LLMHttpError(400, 'INVALID_CHAT_ID', 'chatId is required and must be a safe id.');
         }
 
-        const settingsPath = path.join(dataDirs.root, 'settings.json');
-        const charPath = path.join(dataDirs.characters, characterId, 'character.json');
-        const chatPath = path.join(dataDirs.characters, characterId, 'chats', `${chatId}.json`);
+        let settingsPath = '';
+        let charPath = '';
+        let chatPath = '';
+        try {
+            settingsPath = safeResolve(dataDirs.root, 'settings.json');
+            const characterDir = safeResolve(dataDirs.characters, characterId);
+            charPath = safeResolve(characterDir, 'character.json');
+            chatPath = safeResolve(characterDir, `chats/${chatId}.json`);
+        } catch {
+            throw new LLMHttpError(400, 'INVALID_PATH', 'Invalid characterId/chatId path segments.');
+        }
         if (!existsSync(settingsPath)) throw new LLMHttpError(404, 'SETTINGS_NOT_FOUND', 'Server settings are not initialized.');
         if (!existsSync(charPath)) throw new LLMHttpError(404, 'CHARACTER_NOT_FOUND', `Character not found: ${characterId}`);
         if (!existsSync(chatPath)) throw new LLMHttpError(404, 'CHAT_NOT_FOUND', `Chat not found: ${chatId}`);

@@ -1276,6 +1276,7 @@ export const languageKorean = {
     "useTokenizerCaching": "토크나이저 캐싱",
     "hypaMemoryV2Modal": "하이파 V2 모달",
     "hypaMemoryV3Modal": "하이파 V3 모달",
+    "memoryTab": "메모리",
     "showMenuHypaMemoryModal": "메뉴에서 하이파 모달 보이기",
     "promptInfoInsideChat": "채팅에 프롬프트 정보 추가하기",
     "promptTextInfoInsideChat": "채팅에 프롬프트 텍스트 정보 추가하기",

@@ -1273,6 +1273,7 @@ export const languageChineseTraditional = {
     "useTokenizerCaching": "使用 Tokenizer 快取",
     "hypaMemoryV2Modal": "Hypa V2 模態",
     "hypaMemoryV3Modal": "Hypa V3 模態",
+    "memoryTab": "記憶",
     "showMenuHypaMemoryModal": "顯示選單 Hypa 模態",
     "promptInfoInsideChat": "將提示詞資訊加入聊天",
     "promptTextInfoInsideChat": "將提示詞文本加入聊天",

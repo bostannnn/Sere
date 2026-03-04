@@ -258,6 +258,35 @@ describe("hypa modal embedded manual summarize runtime smoke", () => {
     expect(target?.textContent).toContain("Invalid range. Use values between 1 and 1, and keep Start less than or equal to End.");
   });
 
+  it("clears manual feedback when active chat scope changes", async () => {
+    app = mount(HypaV3Modal, {
+      target: target!,
+      props: { embedded: true },
+    });
+    await flushUi();
+
+    const startInput = target?.querySelector("#hypav3-manual-range-start") as HTMLInputElement | null;
+    const endInput = target?.querySelector("#hypav3-manual-range-end") as HTMLInputElement | null;
+    const summarizeButton = target?.querySelector(".ds-hypa-modal-manual-submit") as HTMLButtonElement | null;
+    expect(startInput).not.toBeNull();
+    expect(endInput).not.toBeNull();
+    expect(summarizeButton).not.toBeNull();
+
+    startInput!.value = "2";
+    startInput!.dispatchEvent(new Event("input", { bubbles: true }));
+    endInput!.value = "1";
+    endInput!.dispatchEvent(new Event("input", { bubbles: true }));
+    summarizeButton?.click();
+    await flushUi();
+
+    expect(target?.textContent).toContain("Invalid range. Use values between 1 and 1, and keep Start less than or equal to End.");
+
+    DBState.db.characters[0].chatPage = 1;
+    await flushUi();
+
+    expect(target?.textContent).not.toContain("Invalid range. Use values between 1 and 1, and keep Start less than or equal to End.");
+  });
+
   it("renders summary/settings/log tabs and settings prompt override without legacy title", async () => {
     app = mount(HypaV3Modal, {
       target: target!,
