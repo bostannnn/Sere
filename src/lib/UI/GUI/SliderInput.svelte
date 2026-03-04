@@ -1,55 +1,57 @@
-<div class={`ds-ui-slider-wrap control-field${className ? ` ${className}` : ""}`} class:ds-input-margin-bottom={marginBottom}>
+<div
+  class={`ds-ui-slider-wrap control-field${className ? ` ${className}` : ""}`}
+  class:ds-ui-slider-wrap-has-toggle={disableable}
+  class:ds-input-margin-bottom={marginBottom}
+>
   {#if disableable}
-
-    <div class="ds-ui-slider-toggle">
-      <CheckInput check={value !== -1000 && value !== undefined} margin={false} onChange={(c) => {
-        onchange?.()
-        if(c) {
-          value = min;
-        } else {
+    <div
+      class="ds-ui-slider-toggle"
+    >
+      <CheckInput
+        bare
+        hiddenName
+        margin={false}
+        name="Enable slider"
+        check={!isSliderDisabled()}
+        onChange={(checked) => {
+          onchange?.();
+          if (checked) {
+            value = getMinValue();
+            return;
+          }
           value = -1000;
-        }
-      }}></CheckInput>
+        }}
+      />
     </div>
   {/if}
-  <div 
+
+  <div
     class="ds-ui-slider-track"
     class:ds-ui-slider-track-with-toggle={disableable}
-    role="slider"
-    tabindex={isSliderDisabled() ? -1 : 0}
-    aria-disabled={isSliderDisabled()}
-    aria-valuemin={getMinValue()}
-    aria-valuemax={getMaxValue()}
-    aria-valuenow={getSliderAriaValue()}
-    style:background={
-      `linear-gradient(to right, var(--risu-theme-darkbutton) 0%, var(--risu-theme-darkbutton) ${getSliderFillPercent()}%, var(--risu-theme-darkbg) ${getSliderFillPercent()}%, var(--risu-theme-darkbg) 100%)`
-    }
-    onpointerdown={(event) => {
-      mouseDown = true;
-      changeValue(event);
-    }}
-
-    onpointermove={(event) => {
-      if (mouseDown) {
-        changeValue(event);
-      }
-    }}
-
-
-    onpointerup={() => {
-      mouseDown = false;
-    }}
-
-    onpointerleave={() => {
-      mouseDown = false;
-    }}
-    onkeydown={handleSliderKeydown}
-    bind:this={slider}
+    class:is-disabled={isSliderDisabled()}
+    style={`--ds-slider-fill-percent: ${getSliderFillPercent()}%`}
   >
-    <span class="ds-ui-slider-value">
-      {customText === undefined ? ((value === -1000 || value === undefined) ? language.disabled : (value * multiple).toFixed(fixed)) : customText}
-    </span>
+    <input
+      class="ds-ui-slider-native"
+      type="range"
+      min={getMinValue()}
+      max={getMaxValue()}
+      step={step > 0 ? step : 1}
+      value={getSliderAriaValue()}
+      disabled={isSliderDisabled()}
+      aria-valuemin={getMinValue()}
+      aria-valuemax={getMaxValue()}
+      aria-valuenow={getSliderAriaValue()}
+      oninput={(event) => {
+        const target = event.currentTarget as HTMLInputElement;
+        value = normalizeValue(Number(target.value));
+      }}
+    />
   </div>
+
+  <span class="ds-ui-slider-value">
+    {getSliderText()}
+  </span>
 </div>
 
 
@@ -57,9 +59,6 @@
      
   import { language } from "src/lang";
   import CheckInput from "./CheckInput.svelte";
-
-    let slider: HTMLDivElement = $state()
-    let mouseDown = $state(false)
   interface Props {
     min?: number;
     max?: number;
@@ -122,54 +121,10 @@
         return ((currentValue - minValue) / rangeValue) * 100;
     }
 
-    function handleSliderKeydown(event: KeyboardEvent) {
-        if (isSliderDisabled()) return;
-
-        const minValue = getMinValue();
-        const maxValue = getMaxValue();
-        const stepValue = step > 0 ? step : 1;
-        const currentValue = Number.isFinite(value) ? value : minValue;
-        let nextValue = currentValue;
-
-        switch (event.key) {
-            case "ArrowRight":
-            case "ArrowUp":
-                nextValue = currentValue + stepValue;
-                break;
-            case "ArrowLeft":
-            case "ArrowDown":
-                nextValue = currentValue - stepValue;
-                break;
-            case "PageUp":
-                nextValue = currentValue + stepValue * 10;
-                break;
-            case "PageDown":
-                nextValue = currentValue - stepValue * 10;
-                break;
-            case "Home":
-                nextValue = minValue;
-                break;
-            case "End":
-                nextValue = maxValue;
-                break;
-            default:
-                return;
-        }
-
-        event.preventDefault();
-        value = normalizeValue(nextValue);
+    function getSliderText() {
+        if (customText !== undefined) return customText;
+        if (value === -1000 || value === undefined) return language.disabled;
+        return (value * multiple).toFixed(fixed);
     }
 
-    function changeValue(event) {
-        if (isSliderDisabled()) return;
-        const minValue = getMinValue();
-        const maxValue = getMaxValue();
-        const rangeValue = maxValue - minValue;
-        if (rangeValue <= 0) return;
-
-        const rect = slider.getBoundingClientRect();
-        const x = event.clientX - rect.left;
-        const newValue = ((x / rect.width) * rangeValue) + minValue;
-        value = normalizeValue(newValue);
-    }
 </script>
