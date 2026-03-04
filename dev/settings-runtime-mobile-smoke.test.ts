@@ -25,6 +25,8 @@ vi.mock(import("src/lang"), () => ({
     plugin: "Plugin",
     hotkey: "Hotkey",
     advancedSettings: "Advanced Settings",
+    comfyCommander: "Comfy Commander",
+    logs: "Logs",
   },
 }));
 
@@ -73,6 +75,12 @@ vi.mock(
   }),
 );
 vi.mock(import("src/lib/Setting/Pages/HotkeySettings.svelte"), async () => ({
+  default: (await import("./test-stubs/SettingsPageStub.svelte")).default,
+}));
+vi.mock(import("src/lib/Setting/Pages/ComfyCommanderPage.svelte"), async () => ({
+  default: (await import("./test-stubs/SettingsPageStub.svelte")).default,
+}));
+vi.mock(import("src/lib/Setting/Pages/LogsSettingsPage.svelte"), async () => ({
   default: (await import("./test-stubs/SettingsPageStub.svelte")).default,
 }));
 vi.mock(import("src/lib/Others/PluginDefinedIcon.svelte"), async () => ({
@@ -252,6 +260,8 @@ describe("settings runtime mobile smoke", () => {
       "Modules",
       "Plugin",
       "Advanced Settings",
+      "Comfy Commander",
+      "Logs",
     ]);
     const hasHotkey = navButtons().some(
       (button) => button.textContent?.trim() === "Hotkey",
@@ -275,6 +285,8 @@ describe("settings runtime mobile smoke", () => {
       "Modules",
       "Plugin",
       "Advanced Settings",
+      "Comfy Commander",
+      "Logs",
     ];
 
     for (const label of labels) {

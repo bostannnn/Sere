@@ -633,6 +633,8 @@ export const languageEnglish = {
     frequencyPenalty: "Frequency Penalty",
     presensePenalty: "Presense Penalty",
     advancedSettings: "Advanced Settings",
+    comfyCommander: "Comfy Commander",
+    logs: "Logs",
     advancedSettingsWarn: "Warn: If you don't know what the option does, don't change it!",
     formatingOrder: "Formating Order",
     authorNote: "Author's Note",

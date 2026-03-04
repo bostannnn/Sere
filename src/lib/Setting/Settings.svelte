@@ -15,13 +15,15 @@
     import ModuleSettings from "./Pages/Module/ModuleSettings.svelte";
     import { isLite } from "src/ts/lite";
     import HotkeySettings from "./Pages/HotkeySettings.svelte";
+    import ComfyCommanderPage from "./Pages/ComfyCommanderPage.svelte";
+    import LogsSettingsPage from "./Pages/LogsSettingsPage.svelte";
     import PluginDefinedIcon from "../Others/PluginDefinedIcon.svelte";
     import { isWebKit } from "src/ts/platform";
     import Button from "src/lib/UI/GUI/Button.svelte";
 
     const isDesktopSettings = $derived($SizeStore.w >= 700 && !$MobileGUI)
     const isStackedSettings = $derived(!isDesktopSettings)
-    const allowedSettingsMenus = new Set([-1, 1, 2, 3, 4, 6, 10, 11, 12, 13, 14, 15]);
+    const allowedSettingsMenus = new Set([-1, 1, 2, 3, 4, 6, 10, 11, 12, 13, 14, 15, 16, 17]);
 
     function selectMenu(index: number) {
         if ($SettingsMenuIndex === index) {
@@ -250,6 +252,34 @@
                         <ActivityIcon />
                         <span>{language.advancedSettings}</span>
                     </button>
+                    <button
+                        type="button"
+                        class="ds-settings-nav-item"
+                        title={language.comfyCommander}
+                        aria-label={language.comfyCommander}
+                        aria-pressed={$SettingsMenuIndex === 16}
+                        onkeydown={handleNavListKeydown}
+                        class:is-active={$SettingsMenuIndex === 16}
+                        onclick={() => {
+                        selectMenu(16)
+                    }}>
+                        <ActivityIcon />
+                        <span>{language.comfyCommander}</span>
+                    </button>
+                    <button
+                        type="button"
+                        class="ds-settings-nav-item"
+                        title={language.logs}
+                        aria-label={language.logs}
+                        aria-pressed={$SettingsMenuIndex === 17}
+                        onkeydown={handleNavListKeydown}
+                        class:is-active={$SettingsMenuIndex === 17}
+                        onclick={() => {
+                        selectMenu(17)
+                    }}>
+                        <CodeIcon />
+                        <span>{language.logs}</span>
+                    </button>
                     {#each additionalSettingsMenu as menu, index (`${menu.name}-${index}`)}
                         <button
                             type="button"
@@ -302,6 +332,10 @@
                         }}/>
                     {:else if $SettingsMenuIndex === 15 && $SizeStore.w >= 768}
                         <HotkeySettings/>
+                    {:else if $SettingsMenuIndex === 16}
+                        <ComfyCommanderPage/>
+                    {:else if $SettingsMenuIndex === 17}
+                        <LogsSettingsPage/>
                     {/if}
             </div>
             {/key}

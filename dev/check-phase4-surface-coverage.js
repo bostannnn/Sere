@@ -351,6 +351,29 @@ const PHASE4_UNCOVERED_MATRIX = [
     ],
   },
   {
+    file: "src/lib/Setting/Pages/ComfyCommanderPage.svelte",
+    classification: "migrate",
+    owner: "settings-contract",
+    rationale: "Comfy Commander is exposed as a dedicated settings page with direct section rendering.",
+    requiredPatterns: [
+      "class=\"ds-settings-page\"",
+      ">{language.comfyCommander}</h2>",
+      "<ComfyCommanderSettings />",
+    ],
+  },
+  {
+    file: "src/lib/Setting/Pages/LogsSettingsPage.svelte",
+    classification: "migrate",
+    owner: "settings-contract",
+    rationale: "Logs page is a dedicated settings surface that keeps export actions and opens fullscreen logs modal.",
+    requiredPatterns: [
+      "class=\"ds-settings-page\"",
+      ">{language.logs}</h2>",
+      "class=\"action-rail ds-settings-export-actions\"",
+      "alertRequestLogs();",
+    ],
+  },
+  {
     file: "src/lib/Setting/Pages/Advanced/SettingsExportButtons.svelte",
     classification: "migrate",
     owner: "settings-contract",

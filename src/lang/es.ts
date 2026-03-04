@@ -536,6 +536,8 @@ export const languageSpanish = {
     "frequencyPenalty": "Penalización por Frecuencia",
     "presensePenalty": "Penalización por Presencia",
     "advancedSettings": "Configuraciones Avanzadas",
+    "comfyCommander": "Comfy Commander",
+    "logs": "Registros",
     "advancedSettingsWarn": "Advertencia: ¡Si no sabes lo que hace la opción, no la cambies!",
     "formatingOrder": "Orden de Formateo",
     "authorNote": "Nota del Autor",

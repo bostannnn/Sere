@@ -26,6 +26,8 @@ vi.mock(import("src/lang"), () => ({
     plugin: "Plugin",
     hotkey: "Hotkey",
     advancedSettings: "Advanced Settings",
+    comfyCommander: "Comfy Commander",
+    logs: "Logs",
   },
 }));
 
@@ -74,6 +76,12 @@ vi.mock(
   }),
 );
 vi.mock(import("src/lib/Setting/Pages/HotkeySettings.svelte"), async () => ({
+  default: (await import("./test-stubs/SettingsPageStub.svelte")).default,
+}));
+vi.mock(import("src/lib/Setting/Pages/ComfyCommanderPage.svelte"), async () => ({
+  default: (await import("./test-stubs/SettingsPageStub.svelte")).default,
+}));
+vi.mock(import("src/lib/Setting/Pages/LogsSettingsPage.svelte"), async () => ({
   default: (await import("./test-stubs/SettingsPageStub.svelte")).default,
 }));
 vi.mock(import("src/lib/Others/PluginDefinedIcon.svelte"), async () => ({
@@ -280,6 +288,8 @@ describe("settings runtime smoke", () => {
       "Plugin",
       "Hotkey",
       "Advanced Settings",
+      "Comfy Commander",
+      "Logs",
     ]);
     const buttons = navButtons();
     expect(buttons.length).toBeGreaterThan(0);

@@ -536,6 +536,8 @@ export const languageVietnamese = {
     "frequencyPenalty": "Hình phạt tần số",
     "presensePenalty": "Hình phạt có mặt",
     "advancedSettings": "Cài đặt nâng cao",
+    "comfyCommander": "Comfy Commander",
+    "logs": "Nhật ký",
     "advancedSettingsWarn": "Cảnh báo: Nếu bạn không biết tùy chọn này làm gì, đừng thay đổi nó!",
     "formatingOrder": "Thứ tự hình thành",
     "authorNote": "Ghi chú của tác giả",

@@ -44,6 +44,14 @@ const checks = [
     cmd: ["pnpm", "exec", "vitest", "run", "dev/plugin-settings-runtime-smoke.test.ts"],
   },
   {
+    name: "logs-settings-page-runtime",
+    cmd: ["pnpm", "exec", "vitest", "run", "dev/logs-settings-page-runtime-smoke.test.ts"],
+  },
+  {
+    name: "comfy-commander-settings-runtime",
+    cmd: ["pnpm", "exec", "vitest", "run", "dev/comfy-commander-settings-runtime-smoke.test.ts"],
+  },
+  {
     name: "persona-settings-runtime",
     cmd: ["pnpm", "exec", "vitest", "run", "dev/persona-settings-runtime-smoke.test.ts"],
   },

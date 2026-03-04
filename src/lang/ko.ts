@@ -537,6 +537,8 @@ export const languageKorean = {
     "frequencyPenalty": "빈도 패널티",
     "presensePenalty": "프리센스 패널티",
     "advancedSettings": "고급 설정",
+    "comfyCommander": "Comfy Commander",
+    "logs": "로그",
     "advancedSettingsWarn": "어떤 설정인지 모르겠으면, 만지지 마세요!",
     "formatingOrder": "포맷 순서",
     "authorNote": "작가의 노트",

@@ -2,7 +2,6 @@
     import { PlusIcon, TrashIcon } from "@lucide/svelte";
     import { DBState } from "src/ts/stores.svelte";
     import { createComfyCommanderEntityId } from "src/ts/integrations/comfy/store.svelte";
-    import Accordion from "src/lib/UI/Accordion.svelte";
     import Button from "src/lib/UI/GUI/Button.svelte";
     import Check from "src/lib/UI/GUI/CheckInput.svelte";
     import NumberInput from "src/lib/UI/GUI/NumberInput.svelte";
@@ -10,6 +9,7 @@
     import SelectInput from "src/lib/UI/GUI/SelectInput.svelte";
     import TextAreaInput from "src/lib/UI/GUI/TextAreaInput.svelte";
     import TextInput from "src/lib/UI/GUI/TextInput.svelte";
+    import Help from "src/lib/Others/Help.svelte";
 
     function ensureComfyCommanderState() {
         DBState.db.comfyCommander ??= {
@@ -89,11 +89,7 @@
     ensureComfyCommanderState();
 </script>
 
-<Accordion
-    styled
-    name="Comfy Commander"
-    className="ds-settings-section"
->
+{#snippet commanderContent()}
     <div class="ds-settings-stack-col ds-comfy-commander-settings">
         <span class="ds-settings-label">Base URL</span>
         <TextInput size="sm" bind:value={DBState.db.comfyCommander.config.baseUrl} />
@@ -108,8 +104,15 @@
         <span class="ds-settings-label">Poll Interval (ms)</span>
         <NumberInput size="sm" min={100} bind:value={DBState.db.comfyCommander.config.pollIntervalMs} />
 
-        <Accordion styled name="Workflows" help="comfyWorkflow" className="ds-settings-section">
+        <div class="ds-settings-card ds-comfy-section">
+            <div class="ds-settings-inline-actions action-rail ds-comfy-section-header">
+                <span class="ds-settings-label">Workflows</span>
+                <Help key="comfyWorkflow" />
+            </div>
             <div class="ds-settings-stack-col">
+                {#if DBState.db.comfyCommander.workflows.length === 0}
+                    <div class="ds-settings-empty-state empty-state">No workflows yet.</div>
+                {/if}
                 {#each DBState.db.comfyCommander.workflows as workflow, index (workflow.id)}
                     <div class="ds-comfy-entity">
                         <div class="ds-settings-inline-actions action-rail ds-comfy-entity-header">
@@ -142,10 +145,16 @@
                     Add Workflow
                 </Button>
             </div>
-        </Accordion>
+        </div>
 
-        <Accordion styled name="Templates" className="ds-settings-section">
+        <div class="ds-settings-card ds-comfy-section">
+            <div class="ds-settings-inline-actions action-rail ds-comfy-section-header">
+                <span class="ds-settings-label">Templates</span>
+            </div>
             <div class="ds-settings-stack-col">
+                {#if DBState.db.comfyCommander.templates.length === 0}
+                    <div class="ds-settings-empty-state empty-state">No templates yet.</div>
+                {/if}
                 {#each DBState.db.comfyCommander.templates as template, index (template.id)}
                     <div class="ds-comfy-entity">
                         <div class="ds-settings-inline-actions action-rail ds-comfy-entity-header">
@@ -201,7 +210,7 @@
                     Add Template
                 </Button>
             </div>
-        </Accordion>
+        </div>
 
         {#if DBState.db.comfyCommander.migratedFromPlugin}
             <span class="ds-settings-renderer-warning">
@@ -209,22 +218,43 @@
             </span>
         {/if}
     </div>
-</Accordion>
+{/snippet}
+
+<div class="ds-settings-card ds-comfy-standalone">
+    {@render commanderContent()}
+</div>
 
 <style>
     .ds-comfy-commander-settings {
-        gap: var(--ds-space-2);
+        gap: var(--ds-space-3);
     }
 
     .ds-comfy-entity {
         display: flex;
         flex-direction: column;
         gap: var(--ds-space-2);
-        padding: var(--ds-space-2);
+        padding: var(--ds-space-3);
         margin-bottom: var(--ds-space-2);
+        border: 1px solid var(--ds-border-subtle);
+        border-radius: var(--ds-radius-md);
+        background: color-mix(in srgb, var(--ds-surface-2) 88%, transparent);
     }
 
     .ds-comfy-entity-header {
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .ds-comfy-standalone {
+        padding: var(--ds-space-3);
+    }
+
+    .ds-comfy-section {
+        padding: var(--ds-space-3);
+        gap: var(--ds-space-2);
+    }
+
+    .ds-comfy-section-header {
         justify-content: space-between;
         align-items: center;
     }
