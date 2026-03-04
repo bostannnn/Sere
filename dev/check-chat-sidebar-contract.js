@@ -135,7 +135,7 @@ ensureIncludes(hostContent, hostFile, "aria-labelledby=\"chat-sidebar-tab-memory
 ensureIncludes(hostContent, hostFile, "onkeydown={(event) => handleRightPanelTabKeydown(event, \"chat\")}", failures);
 ensureIncludes(hostContent, hostFile, "handleRightPanelTabKeydown(event, \"character\")", failures);
 ensureIncludes(hostContent, hostFile, "handleRightPanelTabKeydown(event, \"memory\")", failures);
-ensureIncludes(hostContent, hostFile, "<SideChatList chara={DBState.db.characters[$selectedCharID]} />", failures);
+ensureIncludes(hostContent, hostFile, "<SideChatList chara={selectedCharacter ?? undefined} />", failures);
 ensureIncludes(hostContent, hostFile, "<CharConfig />", failures);
 ensureIncludes(hostContent, hostFile, "<HypaV3Modal embedded />", failures);
 ensureNotIncludes(hostContent, hostFile, "data-testid=\"chat-sidebar-toggle\"", failures);

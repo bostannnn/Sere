@@ -33,12 +33,12 @@ async function request(path, options = {}, authToken) {
   return { res, text, json };
 }
 
-async function digestPassword(raw) {
+async function digestPassword(raw, authToken) {
   const r = await request('/data/auth/crypto', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ data: raw }),
-  });
+  }, authToken);
   assert(r.res.status === 200, `crypto hash expected 200, got ${r.res.status}`);
   assert(r.text, 'crypto hash expected non-empty response body');
   return r.text.trim();
@@ -88,7 +88,7 @@ async function main() {
     `auth settings expected 200/404, got ${authSettings.res.status}`
   );
 
-  const token2 = await digestPassword(`smoke-pass-2-${runId}`);
+  const token2 = await digestPassword(`smoke-pass-2-${runId}`, token1);
   const changePassword = await request(
     '/data/auth/password/change',
     {

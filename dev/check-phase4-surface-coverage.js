@@ -130,6 +130,16 @@ const PHASE4_UNCOVERED_MATRIX = [
     ],
   },
   {
+    file: "src/lib/Others/HypaV3Modal/modal-footer.svelte",
+    classification: "migrate",
+    owner: "ui-shell-contract",
+    rationale: "Hypa modal footer keeps control-field semantics for summarization target preview and explicit error-state typography.",
+    requiredPatterns: [
+      "class=\"hypa-footer-textarea control-field\"",
+      "class=\"hypa-footer-error\"",
+    ],
+  },
+  {
     file: "src/lib/Others/PluginAlertModal.svelte",
     classification: "migrate",
     owner: "ui-shell-contract",
