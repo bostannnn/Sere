@@ -36,12 +36,13 @@ function registerServerRoutes(arg = {}) {
 
     registerMemoryRoutes({
         app: arg.app,
-        path: arg.path,
         fs: arg.fs,
         dataDirs: arg.dataDirs,
         existsSync: arg.existsSync,
         LLMHttpError: arg.LLMHttpError,
         isSafePathSegment: arg.isSafePathSegment,
+        requirePasswordAuth: arg.requirePasswordAuth,
+        safeResolve: arg.safeResolve,
         getReqIdFromResponse: arg.getReqIdFromResponse,
         toStringOrEmpty: arg.toStringOrEmpty,
         logLLMExecutionStart: arg.logLLMExecutionStart,

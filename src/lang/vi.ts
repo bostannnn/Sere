@@ -1273,6 +1273,7 @@ export const languageVietnamese = {
     "useTokenizerCaching": "Lưu trữ đệm Tokenizer",
     "hypaMemoryV2Modal": "Hypa V2 Modal",
     "hypaMemoryV3Modal": "Hypa V3 Modal",
+    "memoryTab": "Bộ nhớ",
     "showMenuHypaMemoryModal": "Hiển thị Menu Hypa Modal",
     "promptInfoInsideChat": "Thêm thông tin lời nhắc vào trò chuyện",
     "promptTextInfoInsideChat": "Thêm văn bản lời nhắc vào trò chuyện",

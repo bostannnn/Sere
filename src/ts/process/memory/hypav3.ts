@@ -52,6 +52,21 @@ export interface HypaV3Settings {
 
 interface HypaV3Data {
   summaries: Summary[];
+  lastManualDebug?: {
+    timestamp: number;
+    model: string;
+    isResummarize: boolean;
+    prompt: string;
+    input: string;
+    formatted: { role: string; content: string }[];
+    rawResponse?: string;
+    characterId?: string;
+    chatId?: string;
+    start?: number;
+    end?: number;
+    source?: "manual";
+    promptSource?: "request_override" | "character_override" | "preset_or_default";
+  };
   categories?: { id: string; name: string }[];
   lastSelectedSummaries?: number[]; // legacy
   lastSummarizedMessageIndex?: number;

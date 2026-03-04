@@ -211,6 +211,8 @@ pnpm exec vitest run dev/chat-sidebar-integration-runtime-smoke.test.ts
 pnpm exec vitest run dev/lorebook-runtime-smoke.test.ts
 ```
 
+The source of truth is [`dev/check-ui-shell-smoke.js`](/Users/andrewbostan/Documents/RisuAII/dev/check-ui-shell-smoke.js); it includes additional runtime suites (including Memory/Hypa regressions) beyond the short list above.
+
 What it gates:
 - Static shell contract invariants in `src/App.svelte` + `src/styles.css` (route sync, overlay-clear contract, topbar token usage, workspace stage composition).
 - Shell composition boundary invariants (`src/App.svelte` stays orchestration-only; shell orchestration/chrome/stage live in `src/lib/UI/AppShellV2.svelte`, `src/lib/UI/AppShellTopbar.svelte`, and `src/lib/UI/AppShellStage.svelte`).
@@ -222,6 +224,8 @@ What it gates:
 - Runtime chat sidebar host behavior (open/close controls, tab switching, overlay interaction).
 - Runtime right-sidebar host integration with real `SideChatList` and `CharConfig` composition (non-stub host-level parity gate).
 - Runtime lorebook sidebar tab behavior (`includeRulebookTab` composition contract).
+- Memory sidebar regressions in embedded mode (`Summary/Settings/Log`, prompt override wiring, scoped logs, manual summarize payload targeting).
+- Mobile memory layout contracts (equal-width top tabs + memory tab strip no horizontal overflow contract).
 
 ---
 
@@ -248,7 +252,7 @@ Every new server endpoint, pipeline function, or bug fix must ship with **both**
 **Run before every commit:**
 
 ```bash
-node scripts/test-memory-unit.cjs
+pnpm run test:server:unit
 ```
 
 ### 4b. Integration smoke tests (`scripts/test-server-*.js`)
@@ -310,7 +314,11 @@ The `/scripts/*` rule in `.gitignore` ignores all scripts by default. Add explic
 
 | File | Type | Coverage |
 |------|------|----------|
-| `scripts/test-memory-unit.cjs` | Unit | HypaV3 memory pipeline (7 suites, 97 assertions) |
+| `scripts/test-memory-unit.cjs` | Unit | HypaV3 memory pipeline core logic (7 suites) |
+| `server/node/routes/hypav3_manual_routes.test.ts` | Unit (Vitest) | Manual summarize route contract (`promptOverride`, `promptSource`, scoped debug payload) |
+| `server/node/routes/hypav3_trace_routes.test.ts` | Unit (Vitest) | Trace route guardrails (route-level auth short-circuit, `safeResolve` invalid-path handling) |
+| `server/node/routes/hypav3_resummary_routes.test.ts` | Unit (Vitest) | Re-summarize route guardrails (route-level auth short-circuit, `safeResolve` invalid-path handling) |
+| `server/node/llm/hypav3_prompt_override.test.ts` | Unit (Vitest) | Prompt-override helper behavior and prompt-source precedence |
 | `scripts/test-server-auth.js` | Smoke | Password auth — set, change, lockout |
 | `scripts/test-server-memory.js` | Smoke | HypaV3 trace endpoints + character/chat/settings CRUD |
 
@@ -328,3 +336,9 @@ After all command checks pass, open the prototype in a browser and verify:
 6. Visual layer hierarchy: topbar lighter than drawers, overlays stronger than panels, active states distinct
 
 Use `docs/UI_CHANGE_CHECKLIST.md` as the pass/fail criteria for each step.
+
+When the change touches HypaV3 Memory sidebar/manual summarize flows, also run:
+
+1. `docs/qa/memory-tab-manual-checklist.md`
+
+Record the final pass/fail decision in that checklist as the merge sign-off artifact.

@@ -1,16 +1,11 @@
 export interface SummaryItemState {
   originalRef: HTMLTextAreaElement | null;
-  translationRef: HTMLTextAreaElement | null;
-  rerolledTranslationRef: HTMLTextAreaElement | null;
   chatMemoRefs: Array<HTMLButtonElement | null>;
 }
 
 export interface ExpandedMessageState {
   summaryIndex: number;
   selectedChatMemo: string | null;
-  isTranslating: boolean;
-  translation: string | null;
-  translationRef: HTMLTextAreaElement | null;
 }
 
 export interface SearchState {
@@ -42,8 +37,6 @@ export interface BulkResummaryState {
     result: string | null;
     selectedIndices: number[];
     mergedChatMemos: string[];
-    isTranslating: boolean;
-    translation: string | null;
 }
 
 // Category Management Types

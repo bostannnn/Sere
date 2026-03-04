@@ -1,7 +1,7 @@
 <script lang="ts">
   interface Props {
     rightSidebarOpen?: boolean;
-    rightSidebarTab?: "chat" | "character";
+    rightSidebarTab?: "chat" | "character" | "memory";
     rightSidebarVisible?: boolean;
   }
 
@@ -34,6 +34,14 @@
     }}
   >
     tab-character
+  </button>
+  <button
+    data-testid="app-chat-sidebar-tab-memory"
+    onclick={() => {
+      rightSidebarTab = "memory";
+    }}
+  >
+    tab-memory
   </button>
   <button
     data-testid="app-chat-sidebar-visible-hide"

@@ -1,15 +1,12 @@
 <script lang="ts">
      
-  import { tick, untrack } from "svelte";
+  import { untrack } from "svelte";
   import {
-    LanguagesIcon,
-    StarIcon,
     RefreshCw,
     Trash2Icon,
     ScissorsLineDashed,
     XIcon,
     CheckIcon,
-    TagIcon,
     ChevronUpIcon,
     ChevronDownIcon,
   } from "@lucide/svelte";
@@ -22,23 +19,19 @@
   } from "src/ts/process/memory/hypav3";
   import { type OpenAIChat } from "src/ts/process/index.svelte";
   import { type Message } from "src/ts/storage/database.svelte";
-  import { translateHTML } from "src/ts/translator/translator";
   import { alertConfirm } from "src/ts/alert";
   import { DBState, selectedCharID } from "src/ts/stores.svelte";
   import type {
     SummaryItemState,
     ExpandedMessageState,
     SearchState,
-    Category,
     BulkEditState,
     UIState,
   } from "./types";
   import {
     alertConfirmTwice,
-    handleDualAction,
     getFirstMessage,
     processRegexScript,
-    getCategoryName,
   } from "./utils";
 
   interface Props {
@@ -49,11 +42,9 @@
     expandedMessageState: ExpandedMessageState | null;
     searchState: SearchState | null;
     filterSelected: boolean;
-    categories: Category[];
     bulkEditState?: BulkEditState;
     uiState?: UIState;
     onToggleSummarySelection?: (index: number) => void;
-    onOpenTagManager?: (index: number) => void;
     onToggleCollapse?: (index: number) => void;
     onDeleteSummary?: (index: number) => void;
     onDeleteAfter?: (index: number) => void;
@@ -67,11 +58,9 @@
     expandedMessageState = $bindable(),
     searchState = $bindable(),
     filterSelected,
-    categories,
     bulkEditState,
     uiState,
     onToggleSummarySelection,
-    onOpenTagManager,
     onToggleCollapse,
     onDeleteSummary,
     onDeleteAfter,
@@ -80,17 +69,11 @@
   const summary = $derived(hypaV3Data.summaries[summaryIndex]);
   const summaryItemState = $state<SummaryItemState>({
     originalRef: null,
-    translationRef: null,
-    rerolledTranslationRef: null,
     chatMemoRefs: [],
   });
 
-  let isTranslating = $state(false);
-  let translation = $state<string | null>(null);
   let isRerolling = $state(false);
   let rerolled = $state<string | null>(null);
-  let isTranslatingRerolled = $state(false);
-  let rerolledTranslation = $state<string | null>(null);
 
   $effect.pre(() => {
     summaryItemStateMap.set(summary, summaryItemState);
@@ -109,47 +92,6 @@
       searchState = null;
     });
   });
-
-  async function toggleTranslate(regenerate: boolean): Promise<void> {
-    if (isTranslating) return;
-
-    if (translation) {
-      translation = null;
-      return;
-    }
-
-    isTranslating = true;
-    translation = "Loading...";
-
-    // Focus on translation element after it's rendered
-    await tick();
-
-    if (summaryItemState.translationRef) {
-      summaryItemState.translationRef.focus();
-      summaryItemState.translationRef.scrollIntoView({
-        behavior: "smooth",
-        block: "nearest",
-      });
-    }
-
-    // Translate
-    const result = await translate(summary.text, regenerate);
-
-    translation = result;
-    isTranslating = false;
-  }
-
-  async function translate(text: string, regenerate: boolean): Promise<string> {
-    try {
-      return await translateHTML(text, false, "", -1, regenerate);
-    } catch (error) {
-      return `Translation failed: ${error}`;
-    }
-  }
-
-  function toggleImportant(): void {
-    summary.isImportant = !summary.isImportant;
-  }
 
   function isOrphan(): boolean {
     const char = DBState.db.characters[$selectedCharID];
@@ -261,85 +203,14 @@
     }
   }
 
-  async function toggleTranslateRerolled(regenerate: boolean): Promise<void> {
-    if (isTranslatingRerolled) return;
-
-    if (rerolledTranslation) {
-      rerolledTranslation = null;
-      return;
-    }
-
-    if (!rerolled) return;
-
-    isTranslatingRerolled = true;
-    rerolledTranslation = "Loading...";
-
-    // Focus on rerolled translation element after it's rendered
-    await tick();
-
-    if (summaryItemState.rerolledTranslationRef) {
-      summaryItemState.rerolledTranslationRef.focus();
-      summaryItemState.rerolledTranslationRef.scrollIntoView({
-        behavior: "smooth",
-        block: "nearest",
-      });
-    }
-
-    // Translate
-    const result = await translate(rerolled, regenerate);
-
-    rerolledTranslation = result;
-    isTranslatingRerolled = false;
-  }
-
   function cancelRerolled(): void {
     rerolled = null;
-    rerolledTranslation = null;
   }
 
   function applyRerolled(): void {
     if (!rerolled) return;
     summary.text = rerolled;
-    translation = null;
     rerolled = null;
-    rerolledTranslation = null;
-  }
-
-  async function toggleTranslateExpandedMessage(
-    regenerate: boolean
-  ): Promise<void> {
-    if (!expandedMessageState || expandedMessageState.isTranslating) return;
-
-    if (expandedMessageState.translation) {
-      expandedMessageState.translation = null;
-      return;
-    }
-
-    const message = await getMessageFromChatMemo(
-      expandedMessageState.selectedChatMemo
-    );
-
-    if (!message) return;
-
-    expandedMessageState.isTranslating = true;
-    expandedMessageState.translation = "Loading...";
-
-    // Focus on translation element after it's rendered
-    await tick();
-
-    if (expandedMessageState.translationRef) {
-      expandedMessageState.translationRef.focus();
-      expandedMessageState.translationRef.scrollIntoView({
-        behavior: "smooth",
-        block: "nearest",
-      });
-    }
-
-    // Translate
-    const result = await translate(message.data, regenerate);
-
-    expandedMessageState.translation = result;
-    expandedMessageState.isTranslating = false;
   }
 
   function isMessageExpanded(chatMemo: string | null): boolean {
@@ -357,9 +228,6 @@
       : {
           summaryIndex,
           selectedChatMemo: chatMemo,
-          isTranslating: false,
-          translation: null,
-          translationRef: null,
         };
   }
 
@@ -403,35 +271,6 @@
         )}</span
       >
 
-      <!-- Category Tag -->
-      <span class="hypa-summary-chip control-chip">
-        <TagIcon class="hypa-summary-icon-xs-inline" />
-        {getCategoryName(summary.categoryId, categories)}
-      </span>
-
-      <!-- Individual Tags -->
-      {#if summary.tags && summary.tags.length > 0}
-        {#each summary.tags as tag (tag)}
-          <button
-            type="button"
-            class="hypa-summary-tag-button control-chip"
-            onclick={() => onOpenTagManager?.(summaryIndex)}
-          >
-            #{tag}
-          </button>
-        {/each}
-      {/if}
-
-      <!-- Add Tag Button -->
-      <button
-        type="button"
-        class="hypa-summary-chip-button control-chip"
-        onclick={() => onOpenTagManager?.(summaryIndex)}
-        title={language.hypaV3Modal.tagManager}
-      >
-        + {language.hypaV3Modal.tag}
-      </button>
-
       {#if filterSelected && hypaV3Data.metrics}
         <div class="hypa-summary-chip-wrap-tight">
           {#if hypaV3Data.metrics.lastImportantSummaries.includes(summaryIndex)}
@@ -468,34 +307,6 @@
 
     <!-- Buttons Container -->
     <div class="hypa-summary-row-inline action-rail">
-      <!-- Translate Button -->
-      <button
-        type="button"
-        class="hypa-summary-icon-button icon-btn icon-btn--sm"
-        title="Translate summary"
-        aria-label="Translate summary"
-        tabindex="-1"
-        use:handleDualAction={{
-          onMainAction: () => toggleTranslate(false),
-          onAlternativeAction: () => toggleTranslate(true),
-        }}
-      >
-        <LanguagesIcon class="hypa-summary-icon" />
-      </button>
-
-      <!-- Important Button -->
-      <button
-        type="button"
-        class="hypa-summary-icon-button icon-btn icon-btn--sm"
-        class:hypa-summary-icon-button-important={summary.isImportant}
-        title="Toggle important"
-        aria-label="Toggle important"
-        tabindex="-1"
-        onclick={toggleImportant}
-      >
-        <StarIcon class="hypa-summary-icon" />
-      </button>
-
       <!-- Reroll Button -->
       <button
         type="button"
@@ -550,23 +361,6 @@
     </textarea>
   </div>
 
-  <!-- Original Summary Translation -->
-  {#if translation}
-    <div class="hypa-summary-section">
-      <div class="hypa-summary-subtitle">
-        {language.hypaV3Modal.translationLabel}
-      </div>
-
-      <textarea
-        class="hypa-summary-textarea control-field"
-        readonly
-        tabindex="-1"
-        bind:this={summaryItemState.translationRef}
-        value={translation}
-      ></textarea>
-    </div>
-  {/if}
-
   {#if rerolled}
     <!-- Rerolled Summary Header -->
     <div class="hypa-summary-section">
@@ -575,21 +369,6 @@
           >{language.hypaV3Modal.rerolledSummaryLabel}</span
         >
         <div class="hypa-summary-row-inline action-rail">
-          <!-- Translate Rerolled Button -->
-          <button
-            type="button"
-            class="hypa-summary-icon-button icon-btn icon-btn--sm"
-            title="Translate rerolled summary"
-            aria-label="Translate rerolled summary"
-            tabindex="-1"
-            use:handleDualAction={{
-              onMainAction: () => toggleTranslateRerolled(false),
-              onAlternativeAction: () => toggleTranslateRerolled(true),
-            }}
-          >
-            <LanguagesIcon class="hypa-summary-icon" />
-          </button>
-
           <!-- Cancel Button -->
           <button
             type="button"
@@ -626,23 +405,6 @@
       >
       </textarea>
     </div>
-
-    <!-- Rerolled Summary Translation -->
-    {#if rerolledTranslation}
-      <div class="hypa-summary-section">
-        <div class="hypa-summary-subtitle">
-          {language.hypaV3Modal.rerolledTranslationLabel}
-        </div>
-
-        <textarea
-          class="hypa-summary-textarea control-field"
-          readonly
-          tabindex="-1"
-          bind:this={summaryItemState.rerolledTranslationRef}
-          value={rerolledTranslation}
-        ></textarea>
-      </div>
-    {/if}
   {/if}
 
   <!-- Connected Messages Header -->
@@ -664,23 +426,6 @@
           summary.chatMemos.length.toString()
         )}</span>
       </button>
-
-      <div class="hypa-summary-row-inline action-rail">
-        <!-- Translate Message Button -->
-        <button
-          type="button"
-          class="hypa-summary-icon-button icon-btn icon-btn--sm"
-          title="Translate connected message"
-          aria-label="Translate connected message"
-          tabindex="-1"
-          use:handleDualAction={{
-            onMainAction: () => toggleTranslateExpandedMessage(false),
-            onAlternativeAction: () => toggleTranslateExpandedMessage(true),
-          }}
-        >
-          <LanguagesIcon class="hypa-summary-icon" />
-        </button>
-      </div>
     </div>
   </div>
 
@@ -737,23 +482,6 @@
           >
         {/await}
       </div>
-
-      <!-- Expanded Message Translation -->
-      {#if expandedMessageState.translation}
-        <div class="hypa-summary-section">
-          <div class="hypa-summary-subtitle">
-            {language.hypaV3Modal.connectedMessageTranslationLabel}
-          </div>
-
-          <textarea
-            class="hypa-summary-textarea control-field"
-            readonly
-            tabindex="-1"
-            bind:this={expandedMessageState.translationRef}
-            value={expandedMessageState.translation}
-          ></textarea>
-        </div>
-      {/if}
     {/if}
   {/if}
 
@@ -788,47 +516,6 @@
   .hypa-summary-label {
     color: var(--ds-text-secondary);
     font-size: var(--ds-font-size-sm);
-  }
-
-  .hypa-summary-chip.control-chip {
-    display: inline-flex;
-    align-items: center;
-    padding: var(--ds-space-1) var(--ds-space-2);
-    border-radius: var(--ds-radius-pill);
-    background: var(--ds-surface-3);
-    color: var(--ds-text-secondary);
-    font-size: var(--ds-font-size-xs);
-  }
-
-  :global(.hypa-summary-icon-xs-inline) {
-    width: 0.75rem;
-    height: 0.75rem;
-    display: inline-block;
-    margin-right: var(--ds-space-1);
-  }
-
-  .hypa-summary-tag-button.control-chip {
-    padding: var(--ds-space-1) var(--ds-space-2);
-    border-radius: var(--ds-radius-pill);
-    background: var(--ds-surface-active);
-    color: var(--ds-text-primary);
-    font-size: var(--ds-font-size-xs);
-    transition: background-color var(--ds-motion-fast) var(--ds-ease-standard);
-  }
-
-  .hypa-summary-chip-button.control-chip {
-    padding: var(--ds-space-1) var(--ds-space-2);
-    border-radius: var(--ds-radius-pill);
-    background: var(--ds-surface-3);
-    color: var(--ds-text-secondary);
-    font-size: var(--ds-font-size-xs);
-    transition: background-color var(--ds-motion-fast) var(--ds-ease-standard),
-      color var(--ds-motion-fast) var(--ds-ease-standard);
-  }
-
-  .hypa-summary-chip-button.control-chip:hover {
-    background: var(--ds-surface-active);
-    color: var(--ds-text-primary);
   }
 
   .hypa-summary-chip-wrap-tight {
@@ -870,12 +557,6 @@
 
   .hypa-summary-icon-button.icon-btn.icon-btn--sm:hover {
     color: var(--ds-text-primary);
-  }
-
-  .hypa-summary-icon-button-important.icon-btn.icon-btn--sm {
-    color: var(--ds-text-primary);
-    background: var(--ds-surface-active);
-    border-radius: var(--ds-radius-sm);
   }
 
   :global(.hypa-summary-icon) {

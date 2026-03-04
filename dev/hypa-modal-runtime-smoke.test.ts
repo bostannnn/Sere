@@ -57,7 +57,6 @@ describe("hypa modal runtime smoke", () => {
 
     mountApp(ModalHeader, target, {
       searchState: null,
-      filterImportant: false,
       dropdownOpen: false,
       filterSelected: false,
       hypaV3Data: { summaries: [] },
@@ -71,9 +70,11 @@ describe("hypa modal runtime smoke", () => {
     const actionButtons = [
       ...target.querySelectorAll(".hypa-modal-actions .hypa-modal-icon-btn.icon-btn.icon-btn--md"),
     ] as HTMLButtonElement[];
-    expect(actionButtons.length).toBeGreaterThanOrEqual(5);
+    expect(actionButtons.length).toBeGreaterThanOrEqual(4);
 
-    actionButtons[2]?.click();
+    const settingsButton = actionButtons.find((button) => button.getAttribute("title") === "Open memory settings");
+    expect(settingsButton).toBeDefined();
+    settingsButton?.click();
     await flushUi();
     expect(get(settingsOpen)).toBe(true);
     expect(get(SettingsMenuIndex)).toBe(2);
@@ -91,7 +92,6 @@ describe("hypa modal runtime smoke", () => {
 
     mountApp(ModalHeader, dropdownTarget, {
       searchState: null,
-      filterImportant: false,
       dropdownOpen: true,
       filterSelected: true,
       hypaV3Data: { summaries: [] },
@@ -105,5 +105,28 @@ describe("hypa modal runtime smoke", () => {
     expect(
       dropdownTarget.querySelector(".hypa-modal-dropdown-actions.action-rail"),
     ).not.toBeNull();
+  });
+
+  it("does not reintroduce legacy star/tag/translation actions", async () => {
+    const target = document.createElement("div");
+    document.body.appendChild(target);
+
+    mountApp(ModalHeader, target, {
+      embedded: true,
+      activeTab: "summary",
+      searchState: null,
+      dropdownOpen: true,
+      filterSelected: false,
+      hypaV3Data: { summaries: [] },
+      bulkEditState: { isEnabled: false, selectedSummaries: new Set(), selectedCategory: "", bulkSelectInput: "" },
+    });
+
+    await flushUi();
+
+    const headerText = target.textContent?.toLowerCase() ?? "";
+    expect(headerText).not.toContain("star");
+    expect(headerText).not.toContain("favorite");
+    expect(headerText).not.toContain("tag");
+    expect(headerText).not.toContain("translate");
   });
 });

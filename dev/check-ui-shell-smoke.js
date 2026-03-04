@@ -115,6 +115,14 @@ const checks = [
     cmd: ["pnpm", "exec", "vitest", "run", "dev/hypa-modal-runtime-smoke.test.ts"],
   },
   {
+    name: "hypa-modal-embedded-manual-runtime",
+    cmd: ["pnpm", "exec", "vitest", "run", "dev/hypa-modal-embedded-manual-runtime-smoke.test.ts"],
+  },
+  {
+    name: "hypa-modal-log-scope-runtime",
+    cmd: ["pnpm", "exec", "vitest", "run", "dev/hypa-modal-log-scope-runtime-smoke.test.ts"],
+  },
+  {
     name: "hypa-category-bulk-runtime",
     cmd: ["pnpm", "exec", "vitest", "run", "dev/hypa-category-bulk-runtime-smoke.test.ts"],
   },

@@ -124,7 +124,27 @@ function normalizeSummary(summary) {
     };
 }
 
-function resolveHypaV3Settings(settings) {
+function normalizeCharacterPromptOverride(character) {
+    if (!character || typeof character !== 'object') {
+        return {
+            summarizationPrompt: '',
+            reSummarizationPrompt: '',
+        };
+    }
+    const raw = character.hypaV3PromptOverride;
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+        return {
+            summarizationPrompt: '',
+            reSummarizationPrompt: '',
+        };
+    }
+    return {
+        summarizationPrompt: toStringOrEmpty(raw.summarizationPrompt),
+        reSummarizationPrompt: toStringOrEmpty(raw.reSummarizationPrompt),
+    };
+}
+
+function resolveHypaV3Settings(settings, character = null) {
     const dbSettings = settings && typeof settings === 'object' ? settings : {};
     const presets = Array.isArray(dbSettings.hypaV3Presets) ? dbSettings.hypaV3Presets : [];
     const presetId = clampInt(dbSettings.hypaV3PresetId, 0, Number.MAX_SAFE_INTEGER, 0);
@@ -142,6 +162,13 @@ function resolveHypaV3Settings(settings) {
     }
     // Current product direction: HypaV3 summaries run on auxiliary model only.
     resolved.summarizationModel = 'subModel';
+    const characterOverride = normalizeCharacterPromptOverride(character);
+    if (characterOverride.summarizationPrompt.trim()) {
+        resolved.summarizationPrompt = characterOverride.summarizationPrompt;
+    }
+    if (characterOverride.reSummarizationPrompt.trim()) {
+        resolved.reSummarizationPrompt = characterOverride.reSummarizationPrompt;
+    }
     return resolved;
 }
 
@@ -283,7 +310,7 @@ function planPeriodicHypaV3Summarization(arg = {}) {
         return { shouldRun: false, reason: 'hypav3_disabled_in_settings' };
     }
 
-    const hypaSettings = resolveHypaV3Settings(settings);
+    const hypaSettings = resolveHypaV3Settings(settings, character);
     if (hypaSettings.periodicSummarizationEnabled !== true) {
         return { shouldRun: false, reason: 'periodic_summarization_disabled' };
     }
@@ -483,7 +510,7 @@ async function buildServerMemoryMessages(arg = {}) {
         .filter(Boolean);
     if (summaries.length === 0) return [];
 
-    const hypaSettings = resolveHypaV3Settings(settings);
+    const hypaSettings = resolveHypaV3Settings(settings, character);
     const maxSelectedSummaries = clampInt(
         arg.maxSelectedSummaries,
         1,

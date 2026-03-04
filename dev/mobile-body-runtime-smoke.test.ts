@@ -6,6 +6,7 @@ vi.mock(import("src/lang"), () => ({
   language: {
     Chat: "Chat",
     character: "Character",
+    memoryTab: "Memory",
   },
 }));
 
@@ -44,10 +45,10 @@ vi.mock(import("src/lib/SideBars/CharConfig.svelte"), async () => ({
 vi.mock(import("src/lib/SideBars/SideChatList.svelte"), async () => ({
   default: (await import("./test-stubs/SimplePanelStub.svelte")).default,
 }));
-vi.mock(import("src/lib/SideBars/DevTool.svelte"), async () => ({
+vi.mock(import("src/lib/Others/RulebookManager/RulebookLibrary.svelte"), async () => ({
   default: (await import("./test-stubs/SimplePanelStub.svelte")).default,
 }));
-vi.mock(import("src/lib/Others/RulebookManager/RulebookLibrary.svelte"), async () => ({
+vi.mock(import("src/lib/Others/HypaV3Modal.svelte"), async () => ({
   default: (await import("./test-stubs/SimplePanelStub.svelte")).default,
 }));
 
@@ -93,13 +94,14 @@ describe("mobile body runtime smoke", () => {
       document.querySelectorAll(".ds-mobile-topbar .ds-mobile-topbar-btn.seg-tab"),
     ) as HTMLButtonElement[];
     expect(buttons.length).toBe(3);
-    expect(buttons[2]?.classList.contains("icon-btn")).toBe(true);
+    expect(buttons.every((button) => button.classList.contains("ds-mobile-topbar-btn-divider"))).toBe(true);
+    expect(buttons[2]?.classList.contains("icon-btn")).toBe(false);
     expect(buttons.every((button) => button.type === "button")).toBe(true);
     expect(buttons[0]?.title).toBe("Chat");
     expect(buttons[0]?.getAttribute("aria-label")).toBe("Chat");
     expect(buttons[0]?.getAttribute("aria-pressed")).toBe("true");
-    expect(buttons[2]?.title).toBe("Developer tools");
-    expect(buttons[2]?.getAttribute("aria-label")).toBe("Developer tools");
+    expect(buttons[2]?.title).toBe("Memory");
+    expect(buttons[2]?.getAttribute("aria-label")).toBe("Memory");
 
     buttons[1]?.click();
     await flushUi();

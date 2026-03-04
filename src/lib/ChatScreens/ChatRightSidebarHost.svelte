@@ -2,14 +2,16 @@
     import { tick } from "svelte";
     import SideChatList from "../SideBars/SideChatList.svelte";
     import CharConfig from "../SideBars/CharConfig.svelte";
+    import HypaV3Modal from "../Others/HypaV3Modal.svelte";
     import { DBState, selectedCharID } from "src/ts/stores.svelte";
 
-    type RightPanelTab = "chat" | "character";
+    type RightPanelTab = "chat" | "character" | "memory";
 
     interface Props {
         rightSidebarTab?: RightPanelTab;
         chatTabLabel?: string;
         configTabLabel?: string;
+        memoryTabLabel?: string;
         onSelectTab?: (tab: RightPanelTab) => void;
     }
 
@@ -17,14 +19,18 @@
         rightSidebarTab = "chat",
         chatTabLabel = "Chat",
         configTabLabel = "Character",
+        memoryTabLabel = "Memory",
         onSelectTab = () => {},
     }: Props = $props();
 
-    const rightPanelTabs: RightPanelTab[] = ["chat", "character"];
+    const rightPanelTabs: RightPanelTab[] = ["chat", "character", "memory"];
+    const selectedCharacter = $derived($selectedCharID >= 0 ? DBState.db.characters[$selectedCharID] : null);
     const chatPanelId = "chat-sidebar-panel-chat";
     const characterPanelId = "chat-sidebar-panel-character";
+    const memoryPanelId = "chat-sidebar-panel-memory";
     let chatTabButton: HTMLButtonElement | null = null;
     let characterTabButton: HTMLButtonElement | null = null;
+    let memoryTabButton: HTMLButtonElement | null = null;
 
     const selectTab = (nextTab: RightPanelTab) => {
         onSelectTab(nextTab);
@@ -35,7 +41,11 @@
             chatTabButton?.focus();
             return;
         }
-        characterTabButton?.focus();
+        if (tab === "character") {
+            characterTabButton?.focus();
+            return;
+        }
+        memoryTabButton?.focus();
     };
 
     const selectTabAndFocus = async (nextTab: RightPanelTab) => {
@@ -68,7 +78,7 @@
         }
 
         if (event.key === "End") {
-            await selectTabAndFocus("character");
+            await selectTabAndFocus("memory");
             event.preventDefault();
             return;
         }
@@ -119,7 +129,6 @@
             aria-controls={chatPanelId}
             tabindex={rightSidebarTab === "chat" ? 0 : -1}
             class:ds-chat-right-panel-tab-active={rightSidebarTab === "chat"}
-            class:active={rightSidebarTab === "chat"}
             class:is-active={rightSidebarTab === "chat"}
             onclick={() => selectTabAndFocus("chat")}
             onkeydown={(event) => handleRightPanelTabKeydown(event, "chat")}
@@ -136,11 +145,26 @@
             aria-controls={characterPanelId}
             tabindex={rightSidebarTab === "character" ? 0 : -1}
             class:ds-chat-right-panel-tab-active={rightSidebarTab === "character"}
-            class:active={rightSidebarTab === "character"}
             class:is-active={rightSidebarTab === "character"}
             onclick={() => selectTabAndFocus("character")}
             onkeydown={handleCharacterTabKeydown}
         >{configTabLabel}</button>
+        <button
+            type="button"
+            class="ds-chat-right-panel-tab seg-tab"
+            data-testid="chat-sidebar-tab-memory"
+            data-chat-sidebar-tab="memory"
+            role="tab"
+            id="chat-sidebar-tab-memory"
+            bind:this={memoryTabButton}
+            aria-selected={rightSidebarTab === "memory"}
+            aria-controls={memoryPanelId}
+            tabindex={rightSidebarTab === "memory" ? 0 : -1}
+            class:ds-chat-right-panel-tab-active={rightSidebarTab === "memory"}
+            class:is-active={rightSidebarTab === "memory"}
+            onclick={() => selectTabAndFocus("memory")}
+            onkeydown={(event) => handleRightPanelTabKeydown(event, "memory")}
+        >{memoryTabLabel}</button>
     </div>
     <div class="ds-chat-right-panel-content">
         {#if rightSidebarTab === "chat"}
@@ -158,9 +182,9 @@
                     handleRightPanelTabKeydown(event, "chat")
                 }}
             >
-                <SideChatList chara={DBState.db.characters[$selectedCharID]} />
+                <SideChatList chara={selectedCharacter ?? undefined} />
             </div>
-        {:else}
+        {:else if rightSidebarTab === "character"}
             <div
                 class="ds-chat-right-panel-pane ds-chat-right-panel-pane-character"
                 data-testid="chat-sidebar-pane-character"
@@ -176,6 +200,23 @@
                 }}
             >
                 <CharConfig />
+            </div>
+        {:else}
+            <div
+                class="ds-chat-right-panel-pane ds-chat-right-panel-pane-memory"
+                data-testid="chat-sidebar-pane-memory"
+                role="tabpanel"
+                id={memoryPanelId}
+                aria-labelledby="chat-sidebar-tab-memory"
+                tabindex={0}
+                onkeydown={(event) => {
+                    if (event.target !== event.currentTarget) {
+                        return
+                    }
+                    handleRightPanelTabKeydown(event, "memory")
+                }}
+            >
+                <HypaV3Modal embedded />
             </div>
         {/if}
     </div>

@@ -1319,6 +1319,12 @@ export interface Database{
         input:string
         formatted:{role:string, content:string}[]
         rawResponse?:string
+        characterId?:string
+        chatId?:string
+        start?:number
+        end?:number
+        source?:"manual"
+        promptSource?:"request_override"|"character_override"|"preset_or_default"
         periodic?:{
             totalChats:number
             lastIndex:number
@@ -1379,6 +1385,11 @@ export interface loreBook{
     bookVersion?:number
     id?:string
     folder?:string
+}
+
+export interface HypaV3PromptOverride {
+    summarizationPrompt?: string
+    reSummarizationPrompt?: string
 }
 
 export interface character{
@@ -1517,6 +1528,7 @@ export interface character{
     prebuiltAssetCommand?:boolean
     prebuiltAssetStyle?:string
     prebuiltAssetExclude?:string[]
+    hypaV3PromptOverride?: HypaV3PromptOverride
     modules?:string[]
     gameState?: Record<string, any>
 }
@@ -1606,6 +1618,7 @@ export interface groupChat{
     prebuiltAssetCommand?:boolean
     prebuiltAssetStyle?:string
     prebuiltAssetExclude?:string[]
+    hypaV3PromptOverride?: HypaV3PromptOverride
     modules?:string[]
     gameState?: Record<string, any>
 }

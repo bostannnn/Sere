@@ -606,6 +606,16 @@ export function characterFormatUpdate(indexOrCharacter:number|character, arg:{
             cha.postHistoryInstructions = null
         }
         cha.additionalText ??= ''
+        cha.hypaV3PromptOverride ??= {
+            summarizationPrompt: '',
+            reSummarizationPrompt: '',
+        }
+        cha.hypaV3PromptOverride.summarizationPrompt = typeof cha.hypaV3PromptOverride.summarizationPrompt === 'string'
+            ? cha.hypaV3PromptOverride.summarizationPrompt
+            : ''
+        cha.hypaV3PromptOverride.reSummarizationPrompt = typeof cha.hypaV3PromptOverride.reSummarizationPrompt === 'string'
+            ? cha.hypaV3PromptOverride.reSummarizationPrompt
+            : ''
         cha.depth_prompt ??= {
             depth: 0,
             prompt: ''
@@ -733,7 +743,11 @@ export function createBlankChar():character{
             conditions: [],
             effect: []
         }],
-        additionalText: ''
+        additionalText: '',
+        hypaV3PromptOverride: {
+            summarizationPrompt: '',
+            reSummarizationPrompt: '',
+        },
     }
 }
 

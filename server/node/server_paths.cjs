@@ -5,7 +5,7 @@ function createServerPaths(arg = {}) {
         : (() => process.cwd());
     const dataRootEnv = typeof arg.dataRootEnv === 'string'
         ? arg.dataRootEnv
-        : process.env.SERE_DATA_ROOT;
+        : (process.env.RISU_DATA_ROOT || process.env.SERE_DATA_ROOT);
 
     const projectRoot = cwd();
     const sslPath = path.join(projectRoot, 'server/node/ssl/certificate');

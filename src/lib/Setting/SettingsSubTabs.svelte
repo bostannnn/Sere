@@ -7,10 +7,12 @@
   interface Props {
     items: SettingsSubTabItem[];
     selectedId: number;
+    className?: string;
     onSelect?: (id: number) => void;
   }
 
-  const { items, selectedId, onSelect = () => {} }: Props = $props();
+  const { items, selectedId, className = "", onSelect = () => {} }: Props = $props();
+  const hasExtraClassName = $derived(className.trim().length > 0);
 
   function handleTabKeydown(event: KeyboardEvent, index: number) {
     if (items.length === 0) return;
@@ -35,21 +37,44 @@
   }
 </script>
 
-<div class="ds-settings-tabs seg-tabs" role="tablist" aria-orientation="horizontal">
-  {#each items as item, index (item.id ?? index)}
-    <button
-      type="button"
-      class="ds-settings-tab seg-tab"
-      class:active={selectedId === item.id}
-      role="tab"
-      aria-selected={selectedId === item.id}
-      title={item.label}
-      aria-label={item.label}
-      tabindex={selectedId === item.id ? 0 : -1}
-      onclick={() => onSelect(item.id)}
-      onkeydown={(event) => handleTabKeydown(event, index)}
-    >
-      <span>{item.label}</span>
-    </button>
-  {/each}
-</div>
+{#if hasExtraClassName}
+  <div class={className}>
+    <div class="ds-settings-tabs seg-tabs" role="tablist" aria-orientation="horizontal">
+      {#each items as item, index (item.id ?? index)}
+        <button
+          type="button"
+          class="ds-settings-tab seg-tab"
+          class:active={selectedId === item.id}
+          role="tab"
+          aria-selected={selectedId === item.id}
+          title={item.label}
+          aria-label={item.label}
+          tabindex={selectedId === item.id ? 0 : -1}
+          onclick={() => onSelect(item.id)}
+          onkeydown={(event) => handleTabKeydown(event, index)}
+        >
+          <span>{item.label}</span>
+        </button>
+      {/each}
+    </div>
+  </div>
+{:else}
+  <div class="ds-settings-tabs seg-tabs" role="tablist" aria-orientation="horizontal">
+    {#each items as item, index (item.id ?? index)}
+      <button
+        type="button"
+        class="ds-settings-tab seg-tab"
+        class:active={selectedId === item.id}
+        role="tab"
+        aria-selected={selectedId === item.id}
+        title={item.label}
+        aria-label={item.label}
+        tabindex={selectedId === item.id ? 0 : -1}
+        onclick={() => onSelect(item.id)}
+        onkeydown={(event) => handleTabKeydown(event, index)}
+      >
+        <span>{item.label}</span>
+      </button>
+    {/each}
+  </div>
+{/if}

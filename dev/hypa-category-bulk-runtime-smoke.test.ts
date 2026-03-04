@@ -180,7 +180,6 @@ describe("hypa category/bulk runtime smoke", () => {
     const onUpdateSelectedCategory = vi.fn();
     const onUpdateBulkSelectInput = vi.fn();
     const onApplyCategory = vi.fn();
-    const onToggleImportant = vi.fn();
     const onParseAndSelectSummaries = vi.fn();
 
     const target = document.createElement("div");
@@ -204,7 +203,6 @@ describe("hypa category/bulk runtime smoke", () => {
       onUpdateSelectedCategory,
       onUpdateBulkSelectInput,
       onApplyCategory,
-      onToggleImportant,
       onParseAndSelectSummaries,
     });
     await flushUi();
@@ -217,12 +215,8 @@ describe("hypa category/bulk runtime smoke", () => {
 
     const select = target.querySelector(".hypa-bulk-select.control-field") as HTMLSelectElement | null;
     const input = target.querySelector(".hypa-bulk-input.control-field") as HTMLInputElement | null;
-    const starButton = target.querySelector(
-      ".hypa-bulk-btn-warning.icon-btn.icon-btn--sm",
-    ) as HTMLButtonElement | null;
     expect(select).not.toBeNull();
     expect(input).not.toBeNull();
-    expect(starButton).not.toBeNull();
 
     select!.value = "cat-1";
     select!.dispatchEvent(new Event("change", { bubbles: true }));
@@ -245,13 +239,11 @@ describe("hypa category/bulk runtime smoke", () => {
 
     resummarizeButton?.click();
     applyButton?.click();
-    starButton?.click();
     clearButton?.click();
     await flushUi();
 
     expect(onResummarize).toHaveBeenCalledTimes(1);
     expect(onApplyCategory).toHaveBeenCalledTimes(1);
-    expect(onToggleImportant).toHaveBeenCalledTimes(1);
     expect(onClearSelection).toHaveBeenCalledTimes(1);
   });
 });

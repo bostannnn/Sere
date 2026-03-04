@@ -1375,6 +1375,7 @@ export const languageEnglish = {
     useTokenizerCaching: "Tokenizer Caching",
     hypaMemoryV2Modal: "Hypa V2 Modal",
     hypaMemoryV3Modal: "Hypa V3 Modal",
+    memoryTab: "Memory",
     showMenuHypaMemoryModal: "Show Menu Hypa Modal",
     promptInfoInsideChat: "Add Prompt Info to Chat",
     promptTextInfoInsideChat: "Add Prompt Text to Chat",

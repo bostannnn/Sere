@@ -16,7 +16,7 @@
     import { language } from "../../lang";
     interface Props {
         rightSidebarOpen?: boolean;
-        rightSidebarTab?: "chat" | "character";
+        rightSidebarTab?: "chat" | "character" | "memory";
         rightSidebarVisible?: boolean;
     }
 
@@ -29,10 +29,11 @@
     let openChatList = $state(false)
     let openModuleList = $state(false)
     let viewportWidth = $state(typeof window !== "undefined" ? window.innerWidth : 1440)
-    type RightPanelTab = "chat" | "character";
+    type RightPanelTab = "chat" | "character" | "memory";
+    type PersistedRightPanelTab = Exclude<RightPanelTab, "memory">;
     const rightPanelTabKey = "risu:desktop-right-panel-tab"
     const rightSidebarPanelId = "chat-right-sidebar-drawer"
-    const isRightPanelTab = (value: string | null): value is RightPanelTab => value === "chat" || value === "character"
+    const isPersistedRightPanelTab = (value: string | null): value is PersistedRightPanelTab => value === "chat" || value === "character"
 
     const currentCharacter = $derived($selectedCharID >= 0 ? DBState.db.characters[$selectedCharID] : null)
     const configTabLabel = $derived(currentCharacter?.type === "group" ? language.group : language.character)
@@ -79,8 +80,12 @@
         updateViewport()
         window.addEventListener("resize", updateViewport)
         const savedTab = window.localStorage.getItem(rightPanelTabKey)
-        if (isRightPanelTab(savedTab)) {
+        if (isPersistedRightPanelTab(savedTab)) {
             rightSidebarTab = savedTab
+        } else if (savedTab === "memory") {
+            // Memory is intentionally not persisted across sessions; restore a safe explicit default.
+            rightSidebarTab = "chat"
+            window.localStorage.setItem(rightPanelTabKey, "chat")
         }
     })
 
@@ -111,6 +116,9 @@
     const setRightPanelTab = (nextTab: RightPanelTab) => {
         rightSidebarTab = nextTab
         if (typeof window !== "undefined") {
+            if (nextTab === "memory") {
+                return
+            }
             window.localStorage.setItem(rightPanelTabKey, nextTab)
         }
     }
@@ -265,6 +273,7 @@
                 rightSidebarTab={rightSidebarTab}
                 chatTabLabel={language.Chat}
                 configTabLabel={configTabLabel}
+                memoryTabLabel={language.memoryTab}
                 onSelectTab={setRightPanelTab}
             />
         </div>

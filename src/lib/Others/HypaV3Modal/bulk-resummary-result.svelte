@@ -1,17 +1,14 @@
 <script lang="ts">
   import {
-    LanguagesIcon,
     RefreshCw,
     CheckIcon,
     XIcon,
   } from "@lucide/svelte";
   import { language } from "src/lang";
   import type { BulkResummaryState } from "./types";
-  import { handleDualAction } from "./utils";
 
   interface Props {
     bulkResummaryState: BulkResummaryState | null;
-    onToggleTranslation: (regenerate: boolean) => void;
     onReroll: () => void;
     onApply: () => void;
     onCancel: () => void;
@@ -19,7 +16,6 @@
 
   const {
     bulkResummaryState,
-    onToggleTranslation,
     onReroll,
     onApply,
     onCancel,
@@ -33,20 +29,6 @@
       <div class="hypa-resummary-header">
         <h3 class="hypa-resummary-title">{language.hypaV3Modal.reSummarizeResult}</h3>
         <div class="hypa-resummary-actions action-rail">
-          <!-- Translate Button -->
-          <button
-            class="hypa-resummary-icon-btn icon-btn icon-btn--sm"
-            class:is-disabled={bulkResummaryState.isProcessing || !bulkResummaryState.result}
-            disabled={bulkResummaryState.isProcessing || !bulkResummaryState.result}
-            title={language.hypaV3Modal.translate}
-            use:handleDualAction={{
-              onMainAction: () => onToggleTranslation(false),
-              onAlternativeAction: () => onToggleTranslation(true),
-            }}
-          >
-            <LanguagesIcon size={16} />
-          </button>
-          
           <!-- Reroll Button -->
           <button
             class="hypa-resummary-icon-btn hypa-resummary-icon-btn-warning icon-btn icon-btn--sm"
@@ -92,20 +74,6 @@
           readonly
           value={bulkResummaryState.result}
         ></textarea>
-        
-        <!-- Translation Result -->
-        {#if bulkResummaryState.translation}
-          <div class="hypa-resummary-translation">
-            <div class="hypa-resummary-translation-label">
-              {language.hypaV3Modal.translationLabel}
-            </div>
-            <textarea
-              class="hypa-resummary-textarea control-field"
-              readonly
-              value={bulkResummaryState.translation}
-            ></textarea>
-          </div>
-        {/if}
       {/if}
     </div>
   </div>
@@ -214,13 +182,4 @@
     border-color: var(--ds-border-strong);
   }
 
-  .hypa-resummary-translation {
-    margin-top: var(--ds-space-3);
-  }
-
-  .hypa-resummary-translation-label {
-    margin-bottom: var(--ds-space-2);
-    color: var(--ds-text-secondary);
-    font-size: var(--ds-font-size-sm);
-  }
 </style>
