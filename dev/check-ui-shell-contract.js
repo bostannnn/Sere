@@ -103,7 +103,6 @@ const hypaModalHeaderFile = "/Users/andrewbostan/Documents/RisuAII/src/lib/Other
 const hypaBulkResummaryFile = "/Users/andrewbostan/Documents/RisuAII/src/lib/Others/HypaV3Modal/bulk-resummary-result.svelte";
 const hypaCategoryManagerFile = "/Users/andrewbostan/Documents/RisuAII/src/lib/Others/HypaV3Modal/category-manager-modal.svelte";
 const hypaBulkEditActionsFile = "/Users/andrewbostan/Documents/RisuAII/src/lib/Others/HypaV3Modal/bulk-edit-actions.svelte";
-const hypaModalFooterFile = "/Users/andrewbostan/Documents/RisuAII/src/lib/Others/HypaV3Modal/modal-footer.svelte";
 const hypaTagManagerFile = "/Users/andrewbostan/Documents/RisuAII/src/lib/Others/HypaV3Modal/tag-manager-modal.svelte";
 const hypaSummaryItemFile = "/Users/andrewbostan/Documents/RisuAII/src/lib/Others/HypaV3Modal/modal-summary-item.svelte";
 
@@ -173,7 +172,6 @@ const hypaModalHeaderContent = readFile(hypaModalHeaderFile);
 const hypaBulkResummaryContent = readFile(hypaBulkResummaryFile);
 const hypaCategoryManagerContent = readFile(hypaCategoryManagerFile);
 const hypaBulkEditActionsContent = readFile(hypaBulkEditActionsFile);
-const hypaModalFooterContent = readFile(hypaModalFooterFile);
 const hypaTagManagerContent = readFile(hypaTagManagerFile);
 const hypaSummaryItemContent = readFile(hypaSummaryItemFile);
 
@@ -765,8 +763,7 @@ ensureIncludes(hypaBulkEditActionsContent, hypaBulkEditActionsFile, ".hypa-bulk-
 ensureIncludes(hypaBulkEditActionsContent, hypaBulkEditActionsFile, ".hypa-bulk-left.action-rail,", failures);
 ensureIncludes(hypaBulkEditActionsContent, hypaBulkEditActionsFile, ".hypa-bulk-select.control-field {", failures);
 ensureIncludes(hypaBulkEditActionsContent, hypaBulkEditActionsFile, ".hypa-bulk-input.control-field {", failures);
-ensureIncludes(hypaModalFooterContent, hypaModalFooterFile, "class=\"hypa-footer-textarea control-field\"", failures);
-ensureIncludes(hypaModalFooterContent, hypaModalFooterFile, ".hypa-footer-textarea.control-field {", failures);
+ensureNotIncludes(hypaModalContent, hypaModalFile, "<ModalFooter", failures);
 ensureIncludes(hypaTagManagerContent, hypaTagManagerFile, "class=\"ds-hypa-tag-modal panel-shell\"", failures);
 ensureIncludes(hypaTagManagerContent, hypaTagManagerFile, "class=\"ds-hypa-tag-close icon-btn icon-btn--sm\"", failures);
 ensureIncludes(hypaTagManagerContent, hypaTagManagerFile, "class=\"ds-hypa-tag-add-row action-rail\"", failures);

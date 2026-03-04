@@ -87,9 +87,6 @@ vi.mock(import("src/lib/Others/HypaV3Modal/modal-header.svelte"), async () => ({
 vi.mock(import("src/lib/Others/HypaV3Modal/modal-summary-item.svelte"), async () => ({
   default: (await import("./test-stubs/SimplePanelStub.svelte")).default,
 }));
-vi.mock(import("src/lib/Others/HypaV3Modal/modal-footer.svelte"), async () => ({
-  default: (await import("./test-stubs/SimplePanelStub.svelte")).default,
-}));
 vi.mock(import("src/lib/Others/HypaV3Modal/bulk-edit-actions.svelte"), async () => ({
   default: (await import("./test-stubs/SimplePanelStub.svelte")).default,
 }));
@@ -305,6 +302,9 @@ describe("hypa modal embedded manual summarize runtime smoke", () => {
     expect(startInput).not.toBeNull();
     expect(endInput).not.toBeNull();
     expect(summarizeButton).not.toBeNull();
+    expect(target?.textContent).not.toContain("HypaV3 will summarize");
+    expect(target?.textContent).not.toContain("Tip: HypaV3 begins summarization when input tokens exceed the maximum context size.");
+    expect(target?.textContent).not.toContain("WARN: Selected first message is empty");
 
     const settingsTab = tabs.find((tab) => tab.textContent?.includes("Settings"));
     expect(settingsTab).toBeDefined();

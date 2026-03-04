@@ -13,7 +13,6 @@
   import { alertConfirmTwice } from "./HypaV3Modal/utils";
   import ModalHeader from "./HypaV3Modal/modal-header.svelte";
   import ModalSummaryItem from "./HypaV3Modal/modal-summary-item.svelte";
-  import ModalFooter from "./HypaV3Modal/modal-footer.svelte";
   import BulkEditActions from "./HypaV3Modal/bulk-edit-actions.svelte";
   import BulkResummaryResult from "./HypaV3Modal/bulk-resummary-result.svelte";
   
@@ -1244,7 +1243,6 @@
               {/if}
             {/each}
 
-            <ModalFooter {hypaV3Data} />
           </div>
         {:else if memoryWorkspaceTab === "settings"}
           <div

@@ -53,9 +53,6 @@ vi.mock(import("src/lib/Others/HypaV3Modal/modal-header.svelte"), async () => ({
 vi.mock(import("src/lib/Others/HypaV3Modal/modal-summary-item.svelte"), async () => ({
   default: (await import("./test-stubs/SimplePanelStub.svelte")).default,
 }));
-vi.mock(import("src/lib/Others/HypaV3Modal/modal-footer.svelte"), async () => ({
-  default: (await import("./test-stubs/SimplePanelStub.svelte")).default,
-}));
 vi.mock(import("src/lib/Others/HypaV3Modal/bulk-edit-actions.svelte"), async () => ({
   default: (await import("./test-stubs/SimplePanelStub.svelte")).default,
 }));
