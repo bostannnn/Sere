@@ -1,9 +1,3 @@
-const {
-    normalizePromptOverride,
-    applyPromptOverride,
-    resolveManualPromptSource,
-} = require('../llm/hypav3_prompt_override.cjs');
-
 function registerHypaV3ManualRoutes(arg = {}) {
     const {
         app,
@@ -31,6 +25,9 @@ function registerHypaV3ManualRoutes(arg = {}) {
         generateSummaryEmbedding,
         normalizeHypaV3DataForEdit,
         persistChatDataToRaw,
+        normalizePromptOverride,
+        applyPromptOverride,
+        resolveManualPromptSource,
     } = arg;
 
     if (!app || typeof app.post !== 'function') {
@@ -38,6 +35,13 @@ function registerHypaV3ManualRoutes(arg = {}) {
     }
     if (typeof safeResolve !== 'function') {
         throw new Error('registerHypaV3ManualRoutes requires safeResolve.');
+    }
+    if (typeof normalizePromptOverride !== 'function'
+        || typeof applyPromptOverride !== 'function'
+        || typeof resolveManualPromptSource !== 'function') {
+        throw new Error(
+            'registerHypaV3ManualRoutes requires normalizePromptOverride/applyPromptOverride/resolveManualPromptSource.'
+        );
     }
 
     app.post('/data/memory/hypav3/manual-summarize', async (req, res) => {

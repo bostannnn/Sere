@@ -5,6 +5,11 @@ import * as os from "node:os";
 import * as path from "node:path";
 
 import { registerHypaV3ManualRoutes } from "./hypav3_manual_routes.cjs";
+import {
+  normalizePromptOverride,
+  applyPromptOverride,
+  resolveManualPromptSource,
+} from "../llm/hypav3_prompt_override.cjs";
 
 class MockLLMHttpError extends Error {
   status: number;
@@ -232,6 +237,9 @@ function buildHandler(): RegisteredHandler {
         summaries: [...summaries],
       };
     },
+    normalizePromptOverride,
+    applyPromptOverride,
+    resolveManualPromptSource,
     persistChatDataToRaw: (chatRaw: Record<string, unknown>, chat: Record<string, unknown>) => {
       if (chatRaw && typeof chatRaw === "object" && "chat" in chatRaw) {
         return { ...chatRaw, chat };
@@ -324,6 +332,9 @@ async function invokeWithAuthBlocked(body: Record<string, unknown>) {
         summaries: [...summaries],
       };
     },
+    normalizePromptOverride,
+    applyPromptOverride,
+    resolveManualPromptSource,
     persistChatDataToRaw: (chatRaw: Record<string, unknown>, chat: Record<string, unknown>) => {
       if (chatRaw && typeof chatRaw === "object" && "chat" in chatRaw) {
         return { ...chatRaw, chat };

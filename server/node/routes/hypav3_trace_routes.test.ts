@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { registerHypaV3TraceRoutes } from "./hypav3_trace_routes.cjs";
+import { normalizePromptOverride, applyPromptOverride } from "../llm/hypav3_prompt_override.cjs";
 
 class MockLLMHttpError extends Error {
   status: number;
@@ -111,6 +112,8 @@ function buildHandlers(arg: {
     normalizeHypaV3DataForEdit: () => ({ summaries: [] }),
     sanitizeHypaSummarizationContent: (text: string) => text,
     planPeriodicHypaV3Summarization: () => ({ shouldRun: false, reason: "not_ready", promptMessages: [] }),
+    normalizePromptOverride,
+    applyPromptOverride,
   });
 
   return postHandlers;

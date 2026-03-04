@@ -45,6 +45,11 @@ const {
     resolveHypaV3Settings,
     cleanSummaryOutput,
 } = require('./llm/memory.cjs');
+const {
+    normalizePromptOverride,
+    applyPromptOverride,
+    resolveManualPromptSource,
+} = require('./llm/hypav3_prompt_override.cjs');
 const promptPipeline = require('./llm/prompt.cjs');
 const { extractTextFromMessageContent } = require('./llm/tokenizer.cjs');
 const { stripThoughtBlocks } = require('./llm/scripts.cjs');
@@ -281,6 +286,9 @@ registerServerRoutes({
     persistChatDataToRaw,
     cleanSummaryOutput,
     generateSummaryEmbedding,
+    normalizePromptOverride,
+    applyPromptOverride,
+    resolveManualPromptSource,
     dataRoot,
     promptPipeline,
     listOpenRouterModels,

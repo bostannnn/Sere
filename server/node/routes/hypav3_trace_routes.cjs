@@ -1,8 +1,3 @@
-const {
-    normalizePromptOverride,
-    applyPromptOverride,
-} = require('../llm/hypav3_prompt_override.cjs');
-
 function registerHypaV3TraceRoutes(arg = {}) {
     const {
         app,
@@ -29,6 +24,8 @@ function registerHypaV3TraceRoutes(arg = {}) {
         normalizeHypaV3DataForEdit,
         sanitizeHypaSummarizationContent,
         planPeriodicHypaV3Summarization,
+        normalizePromptOverride,
+        applyPromptOverride,
     } = arg;
 
     if (!app || typeof app.post !== 'function') {
@@ -36,6 +33,9 @@ function registerHypaV3TraceRoutes(arg = {}) {
     }
     if (typeof safeResolve !== 'function') {
         throw new Error('registerHypaV3TraceRoutes requires safeResolve.');
+    }
+    if (typeof normalizePromptOverride !== 'function' || typeof applyPromptOverride !== 'function') {
+        throw new Error('registerHypaV3TraceRoutes requires normalizePromptOverride/applyPromptOverride.');
     }
 
 app.post('/data/memory/hypav3/manual-summarize/trace', async (req, res) => {
