@@ -94,6 +94,7 @@ describe("mobile body runtime smoke", () => {
       document.querySelectorAll(".ds-mobile-topbar .ds-mobile-topbar-btn.seg-tab"),
     ) as HTMLButtonElement[];
     expect(buttons.length).toBe(3);
+    expect(buttons.every((button) => button.classList.contains("ds-mobile-topbar-btn-divider"))).toBe(true);
     expect(buttons[2]?.classList.contains("icon-btn")).toBe(false);
     expect(buttons.every((button) => button.type === "button")).toBe(true);
     expect(buttons[0]?.title).toBe("Chat");

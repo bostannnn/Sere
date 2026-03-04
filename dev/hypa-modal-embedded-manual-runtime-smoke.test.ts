@@ -198,4 +198,35 @@ describe("hypa modal embedded manual summarize runtime smoke", () => {
     expect(shared.globalFetchMock).toHaveBeenCalledTimes(2);
     expect(shared.fetchCalls[1]?.body.chatId).toBe("chat-b");
   });
+
+  it("uses selected modal chat in non-embedded mode manual summarize", async () => {
+    app = mount(HypaV3Modal, {
+      target: target!,
+      props: { embedded: false },
+    });
+    await flushUi();
+
+    const summarizeButton = target?.querySelector(".ds-hypa-modal-manual-submit") as HTMLButtonElement | null;
+    expect(summarizeButton).not.toBeNull();
+
+    summarizeButton?.click();
+    await flushUi();
+
+    expect(shared.globalFetchMock).toHaveBeenCalledTimes(1);
+    expect(shared.fetchCalls[0]?.body.chatId).toBe("chat-a");
+
+    const chatSelectValueInput = target?.querySelector(
+      ".ds-hypa-modal-chat-select [data-testid='bindable-field-value']",
+    ) as HTMLInputElement | null;
+    expect(chatSelectValueInput).not.toBeNull();
+    chatSelectValueInput!.value = "1";
+    chatSelectValueInput!.dispatchEvent(new Event("change", { bubbles: true }));
+    await flushUi();
+
+    summarizeButton?.click();
+    await flushUi();
+
+    expect(shared.globalFetchMock).toHaveBeenCalledTimes(2);
+    expect(shared.fetchCalls[1]?.body.chatId).toBe("chat-b");
+  });
 });

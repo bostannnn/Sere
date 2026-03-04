@@ -591,6 +591,10 @@ ensureIncludes(mobileBodyContent, mobileBodyFile, "class:is-active={$MobileSideB
 ensureIncludes(mobileBodyContent, mobileBodyFile, "title={language.Chat} aria-label={language.Chat} aria-pressed={$MobileSideBar === 1}", failures);
 ensureIncludes(mobileBodyContent, mobileBodyFile, "title={language.character} aria-label={language.character} aria-pressed={$MobileSideBar === 2}", failures);
 ensureIncludes(mobileBodyContent, mobileBodyFile, "title={language.memoryTab} aria-label={language.memoryTab} aria-pressed={$MobileSideBar === 3}", failures);
+ensureIncludes(stylesContent, stylesFile, ".ds-mobile-topbar {", failures);
+ensureIncludes(stylesContent, stylesFile, "grid-template-columns: repeat(3, minmax(0, 1fr));", failures);
+ensureIncludes(stylesContent, stylesFile, ".ds-mobile-topbar.seg-tabs {", failures);
+ensureIncludes(stylesContent, stylesFile, "overflow: visible;", failures);
 ensureIncludes(mobileFooterContent, mobileFooterFile, "class=\"ds-mobile-nav-track ds-mobile-nav-track-root action-rail\"", failures);
 ensureIncludes(mobileFooterContent, mobileFooterFile, "class=\"ds-mobile-nav-btn ds-mobile-nav-btn-root icon-btn icon-btn--md\"", failures);
 ensureIncludes(mobileFooterContent, mobileFooterFile, "title=\"Home\"", failures);
