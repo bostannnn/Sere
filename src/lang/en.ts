@@ -122,7 +122,6 @@ export const languageEnglish = {
         showUnrecommended: "If enabled, it will show unrecommended, deprecated settings. it is NOT RECOMMENDED to use these settings.",
         imageCompression: "If enabled, it will compress images when exporting character. if animated images doesn't works, try disabling this option.",
         useExperimental: "If enabled, it will show some experimental features.",
-        forceProxyAsOpenAI: "If enabled, it will force to use OpenAI format when using reverse proxy.",
         forcePlainFetch: "If enabled, it will use browser fetch api instead of native http request. this can cause CORS errors.",
         autoFillRequestURL: "If enabled, it will autofill request url to match the current model.",
         chainOfThought: "If enabled, it will add chain of thought prompt to the prompt.",
@@ -208,7 +207,6 @@ export const languageEnglish = {
         autoTranslateCachedOnly: "If enabled with Auto Translation option on, it will automatically translate only the messages that the user has translated previously.",
         presetChain:
             "If it is not blank, the preset will be changed and applied randomly every time when user sends a message in the preset list in this input. preset list should be seperated by comma, for example, `preset1,preset2`.",
-        legacyMediaFindings: "If enabled, it will use the old method to find media assets, without using the additional search algorithm.",
         comfyWorkflow:
             "Put the API workflow of comfy UI. you can get your API workflow in comfy UI by pressing the 'Workflow > Export (API)' button. you must also put {{risu_prompt}} in you workflow text. the {{risu_prompt}} will be replaced with the prompt provided by the Risu.",
         automaticCachePoint: "Automatically creates cache point after the chat ends, if the caching point doesn't exist.",
@@ -920,7 +918,6 @@ export const languageEnglish = {
     usePromptTemplate: "Use Prompt Template",
     specialType: "Special Type",
     noSpecialType: "No Special Type",
-    forceProxyAsOpenAI: "Force Proxy Format as OpenAI",
     promptTemplate: "Prompt Template",
     customInnerFormat: "Custom Inner Format",
     innerFormat: "Inner Format",
@@ -1203,7 +1200,6 @@ export const languageEnglish = {
     enableCustomFlags: "Enable Custom Flags",
     googleCloudTokenization: "Google Cloud Tokenization",
     presetChain: "Preset Chain",
-    legacyMediaFindings: "Legacy Media Findings",
     staticsDisclaimer: "The statistics are based on the data from after July 2024. the data may not be accurate.",
     subtitles: "Subtitles",
     subtitlesWarning1: "You must use model with audio/video input to use this feature.",

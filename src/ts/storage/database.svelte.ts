@@ -1057,7 +1057,6 @@ export interface Database{
     colorScheme:ColorScheme
     colorSchemeName:string
     promptTemplate?:PromptItem[]
-    forceProxyAsOpenAI?:boolean
     hypaModel:HypaModel
     saveTime?:number
     mancerHeader:string
@@ -1204,7 +1203,6 @@ export interface Database{
     enableCustomFlags: boolean
     googleClaudeTokenizing: boolean
     presetChain: string
-    legacyMediaFindings?:boolean
     geminiStream?:boolean
     assetMaxDifference:number
     menuSideBar:boolean

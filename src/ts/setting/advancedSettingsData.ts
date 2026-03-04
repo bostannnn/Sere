@@ -97,8 +97,6 @@ export const advancedSettingsItems: SettingItem[] = [
     { id: 'adv.imgComp', type: 'check', labelKey: 'imageCompression', bindKey: 'imageCompression', helpKey: 'imageCompression', classes: 'ds-settings-renderer-offset-md' },
     { id: 'adv.useExp', type: 'check', labelKey: 'useExperimental', bindKey: 'useExperimental', helpKey: 'useExperimental', classes: 'ds-settings-renderer-offset-md' },
     { id: 'adv.sourceMap', type: 'check', labelKey: 'sourcemapTranslate', bindKey: 'sourcemapTranslate', helpKey: 'sourcemapTranslate', classes: 'ds-settings-renderer-offset-md' },
-    { id: 'adv.forceProxy', type: 'check', labelKey: 'forceProxyAsOpenAI', bindKey: 'forceProxyAsOpenAI', helpKey: 'forceProxyAsOpenAI', classes: 'ds-settings-renderer-offset-md' },
-    { id: 'adv.legacyMedia', type: 'check', labelKey: 'legacyMediaFindings', bindKey: 'legacyMediaFindings', helpKey: 'legacyMediaFindings', classes: 'ds-settings-renderer-offset-md' },
     { id: 'adv.autoFill', type: 'check', labelKey: 'autoFillRequestURL', bindKey: 'autofillRequestUrl', helpKey: 'autoFillRequestURL', classes: 'ds-settings-renderer-offset-md' },
     { id: 'adv.autoCont', type: 'check', labelKey: 'autoContinueChat', bindKey: 'autoContinueChat', helpKey: 'autoContinueChat', classes: 'ds-settings-renderer-offset-md' },
     { id: 'adv.remIncomp', type: 'check', labelKey: 'removeIncompleteResponse', bindKey: 'removeIncompleteResponse', classes: 'ds-settings-renderer-offset-md' },

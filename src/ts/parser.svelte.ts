@@ -511,10 +511,6 @@ async function parseAdditionalAssets(data:string, char:simpleCharacterArgument|c
         let match = assetPaths?.[name]
 
         if(!match){
-            if(DBState.db.legacyMediaFindings){
-                return ''
-            }
-
             if(assetPaths){
                 match = getClosestMatch(char, name, assetPaths)
             }
