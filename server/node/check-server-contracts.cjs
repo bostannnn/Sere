@@ -162,21 +162,14 @@ async function runContracts() {
             throw new Error(`Expected password bootstrap 200, got ${setPassword.status}. Body=${JSON.stringify(setPassword.body)}`);
         }
 
-        await api
-            .post('/data/auth/crypto')
-            .send({ data: 'probe' })
-            .expect(401);
-
         for (let i = 0; i < 3; i += 1) {
             await api
                 .post('/data/auth/crypto')
-                .set('risu-auth', PASSWORD)
                 .send({ data: `probe-${i}` })
                 .expect(200);
         }
         const hashRateLimited = await api
             .post('/data/auth/crypto')
-            .set('risu-auth', PASSWORD)
             .send({ data: 'probe-over' })
             .expect(429);
         if (hashRateLimited.body?.error !== 'TOO_MANY_REQUESTS') {

@@ -186,7 +186,6 @@ function registerLegacyRoutes(arg = {}) {
     }));
 
     app.post('/data/auth/crypto', withAsyncRoute('POST /data/auth/crypto', async (req, res) => {
-        if (!requirePasswordAuth(req, res)) return;
         const nowMs = Date.now();
         cleanupCryptoLimiter(nowMs);
         const rateKey = getClientRateKey(req);

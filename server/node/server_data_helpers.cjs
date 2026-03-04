@@ -78,6 +78,7 @@ function createServerDataHelpers(arg = {}) {
 
     function installDataApiMiddleware() {
         const publicAuthPaths = new Set([
+            '/auth/crypto',
             '/auth/password',
             '/auth/password/status',
             '/oauth/callback',
