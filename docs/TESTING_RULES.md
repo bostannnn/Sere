@@ -328,3 +328,9 @@ After all command checks pass, open the prototype in a browser and verify:
 6. Visual layer hierarchy: topbar lighter than drawers, overlays stronger than panels, active states distinct
 
 Use `docs/UI_CHANGE_CHECKLIST.md` as the pass/fail criteria for each step.
+
+When the change touches HypaV3 Memory sidebar/manual summarize flows, also run:
+
+1. `docs/qa/memory-tab-manual-checklist.md`
+
+Record the final pass/fail decision in that checklist as the merge sign-off artifact.
