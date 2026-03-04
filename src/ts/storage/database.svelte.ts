@@ -811,8 +811,16 @@ export function setDatabase(data:Database){
     }
     data.customModels ??= []
     data.authRefreshes ??= []
-    data.rememberToolUsage ??= true
-    data.simplifiedToolUse ??= false
+    // Removed legacy anthropic/tool-behavior toggles:
+    // - claude1HourCaching
+    // - claudeBatching
+    // - rememberToolUsage
+    // - simplifiedToolUse
+    const legacyToggleCleanup = data as unknown as Record<string, unknown>
+    delete legacyToggleCleanup.claude1HourCaching
+    delete legacyToggleCleanup.claudeBatching
+    delete legacyToggleCleanup.rememberToolUsage
+    delete legacyToggleCleanup.simplifiedToolUse
     data.streamGeminiThoughts ??= false
     data.sourcemapTranslate ??= false
     data.settingsCloseButtonSize ??= 24
@@ -1274,10 +1282,6 @@ export interface Database{
     }[]
     promptInfoInsideChat:boolean
     promptTextInfoInsideChat:boolean
-    claudeBatching:boolean
-    claude1HourCaching:boolean
-    rememberToolUsage:boolean
-    simplifiedToolUse:boolean
     requestLocation:string
     newImageHandlingBeta?: boolean
     showFirstMessagePages:boolean

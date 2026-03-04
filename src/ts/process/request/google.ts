@@ -1017,27 +1017,11 @@ async function requestGoogle(url:string, body:any, headers:{[key:string]:string}
     if(calls.length > 0){
         const chat = body.contents as GeminiChat[]
 
-        // Add the model response part to the request content (only function calls if simplifiedToolUse is enabled)
-        if(db.simplifiedToolUse){
-            chat.push({
-                role: 'model',
-                parts: calls.map((call) => {
-                    return {
-                        functionCall: {
-                            name: call.name,
-                            args: call.args
-                        }
-                    } as GeminiPart
-                })
-            })
-        }
-        // Add the model response part to the request content (text response and function calls)
-        else{
-            chat.push({
-                role: 'model',
-                parts: parts.filter((p) => !p.thought)
-            })
-        }
+        // Add the model response part to the request content (text response and function calls).
+        chat.push({
+            role: 'model',
+            parts: parts.filter((p) => !p.thought)
+        })
         // If the last part is a model response, merge it with the previous model response
         if(chat[chat.length - 2]?.role === 'model') {
             chat[chat.length - 2].parts = chat[chat.length - 2].parts.concat(chat[chat.length - 1].parts)
@@ -1067,17 +1051,15 @@ async function requestGoogle(url:string, body:any, headers:{[key:string]:string}
                     })
                 }
                 
-                // Store the encoded tool call history for later use
-                if(arg.rememberToolUsage){
-                    callCodes.push(await encodeToolCall({
-                        call: {
-                            id: call.id,
-                            name: call.name,
-                            arg: call.args
-                        },
-                        response: result
-                    }))
-                }
+                // Store the encoded tool call history for later use.
+                callCodes.push(await encodeToolCall({
+                    call: {
+                        id: call.id,
+                        name: call.name,
+                        arg: call.args
+                    },
+                    response: result
+                }))
                 
                 for(let i=0;i<result.length;i++){
                     let response:any = result[i].text
@@ -1129,8 +1111,7 @@ async function requestGoogle(url:string, body:any, headers:{[key:string]:string}
             }
         } while (attempt <= db.requestRetrys) // Retry up to db.requestRetrys times
         
-        // Does not include the text response if simplifiedToolUse is enabled
-        const result = (db.simplifiedToolUse ? '' : processTextResponse(rDatas) + '\n\n') + callCodes.join('\n\n')
+        const result = processTextResponse(rDatas) + '\n\n' + callCodes.join('\n\n')
 
         // If the next request fails, only the responses so far are returned
         if(resRec.type === 'fail'){
@@ -1285,39 +1266,23 @@ function wrapToolStream(
                     if(calls && calls.length > 0){
                         const chat = body.contents as GeminiChat[]
 
-                        // Add the model response part to the request content (only function calls if simplifiedToolUse is enabled)
-                        if(db.simplifiedToolUse){
-                            chat.push({
-                                role: 'model',
-                                parts: calls.map((call) => {
-                                    return {
-                                        functionCall: {
-                                            name: call.name,
-                                            args: call.args
-                                        }
-                                    } as GeminiPart
-                                })
-                            })
-                        }
-                        // Add the model response part to the request content (text response and function calls)
-                        else{
-                            chat.push({
-                                role: 'model',
-                                parts: [{
-                                    text: content,
-                                    ...(signText ? { thoughtSignature: signText } : {})
-                                } as GeminiPart]
-                                .concat(
-                                    calls.map((call, index) => ({
-                                        functionCall: {
-                                            name: call.name,
-                                            args: call.args
-                                        },
-                                        ...(index === 0 && signFunction ? { thoughtSignature: signFunction } : {})
-                                    } as GeminiPart))
-                                )
-                            })
-                        }
+                        // Add the model response part to the request content (text response and function calls).
+                        chat.push({
+                            role: 'model',
+                            parts: [{
+                                text: content,
+                                ...(signText ? { thoughtSignature: signText } : {})
+                            } as GeminiPart]
+                            .concat(
+                                calls.map((call, index) => ({
+                                    functionCall: {
+                                        name: call.name,
+                                        args: call.args
+                                    },
+                                    ...(index === 0 && signFunction ? { thoughtSignature: signFunction } : {})
+                                } as GeminiPart))
+                            )
+                        })
                         // If the last part is a model response, merge it with the previous model response
                         if(chat[chat.length - 2]?.role === 'model') {
                             chat[chat.length - 2].parts = chat[chat.length - 2].parts.concat(chat[chat.length - 1].parts)
@@ -1343,17 +1308,15 @@ function wrapToolStream(
                                         }
                                     })
                                 }
-                                // Store the encoded tool call history for later use
-                                if(arg.rememberToolUsage){
-                                    callCodes.push(await encodeToolCall({
-                                        call: {
-                                            id: call.id,
-                                            name: call.name,
-                                            arg: call.args
-                                        },
-                                        response: result
-                                    }))
-                                }
+                                // Store the encoded tool call history for later use.
+                                callCodes.push(await encodeToolCall({
+                                    call: {
+                                        id: call.id,
+                                        name: call.name,
+                                        arg: call.args
+                                    },
+                                    response: result
+                                }))
                                 for(let i=0;i<result.length;i++){
                                     let response:any = result[i].text
                                     try {
@@ -1431,14 +1394,9 @@ function wrapToolStream(
 
                         reader = transtream.readable.getReader()
 
-                        if(db.simplifiedToolUse) {
-                            prefix += callCodes.join('\n\n')
-                        }
-                        else {
-                            prefix += (thoughts + lastThought ? `<Thoughts>\n\n${thoughts + lastThought}\n\n</Thoughts>\n\n` : '')
-                                + (content ? content + '\n\n' : '')
-                                + callCodes.join('\n\n')
-                        }
+                        prefix += (thoughts + lastThought ? `<Thoughts>\n\n${thoughts + lastThought}\n\n</Thoughts>\n\n` : '')
+                            + (content ? content + '\n\n' : '')
+                            + callCodes.join('\n\n')
 
                         controller.enqueue({"0": prefix})
                         

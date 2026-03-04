@@ -1230,11 +1230,6 @@ export async function requestHTTPOpenAI(replacerURL:string, body:any, headers:Re
                 const messages = body.messages as OpenAIChatExtra[]
                 
                 messages.push(dat.choices[0].message)
-
-                // Remove the last message content if simplifiedToolUse is enabled
-                if(db.simplifiedToolUse && messages[messages.length - 1].content) {
-                    messages[messages.length - 1].content = ''
-                }
                 
                 const callCodes: string[] = []
 
@@ -1262,16 +1257,14 @@ export async function requestHTTPOpenAI(replacerURL:string, body:any, headers:Re
                                         content: x[0].text,
                                         tool_call_id: toolCall.id
                                     })
-                                    if(arg.rememberToolUsage){
-                                        callCodes.push(await encodeToolCall({
-                                            call: {
-                                                id: toolCall.id,
-                                                name: toolCall.function.name,
-                                                arg: toolCall.function.arguments
-                                            },
-                                            response: x
-                                        }))
-                                    }
+                                    callCodes.push(await encodeToolCall({
+                                        call: {
+                                            id: toolCall.id,
+                                            name: toolCall.function.name,
+                                            arg: toolCall.function.arguments
+                                        },
+                                        response: x
+                                    }))
                                 }
                                 else{
                                     messages.push({
@@ -1308,8 +1301,7 @@ export async function requestHTTPOpenAI(replacerURL:string, body:any, headers:Re
 
                 const callCode = callCodes.join('\n\n')
 
-                // Combine the tool call results with the main response (does not include text response if simplifiedToolUse is enabled)
-                const result = (db.simplifiedToolUse ? '' : (processTextResponse(dat) ?? '') + '\n\n') + callCode
+                const result = (processTextResponse(dat) ?? '') + '\n\n' + callCode
                         
                 if(resRec.type === 'fail') {
                     alertError(`Failed to fetch model response after tool execution`)
@@ -1823,7 +1815,7 @@ function wrapToolStream(
 
                         messages.push({
                             role: 'assistant',
-                            content: (db.simplifiedToolUse ? '' : content),
+                            content: content,
                             tool_calls: toolCalls.map(call => ({
                                 id: call.id,
                                 type: 'function',
@@ -1860,16 +1852,14 @@ function wrapToolStream(
                                                 content: x[0].text,
                                                 tool_call_id: toolCall.id
                                             })
-                                            if(arg.rememberToolUsage){
-                                                callCodes.push(await encodeToolCall({
-                                                    call: {
-                                                        id: toolCall.id,
-                                                        name: toolCall.function.name,
-                                                        arg: toolCall.function.arguments
-                                                    },
-                                                    response: x
-                                                }))
-                                            }
+                                            callCodes.push(await encodeToolCall({
+                                                call: {
+                                                    id: toolCall.id,
+                                                    name: toolCall.function.name,
+                                                    arg: toolCall.function.arguments
+                                                },
+                                                response: x
+                                            }))
                                         }
                                         else{
                                             messages.push({
@@ -1929,7 +1919,7 @@ function wrapToolStream(
                         
                         reader = transtream.readable.getReader()
                         
-                        prefix += (content && !db.simplifiedToolUse ? content + '\n\n' : '') + callCodes.join('\n\n')
+                        prefix += (content ? content + '\n\n' : '') + callCodes.join('\n\n')
                         controller.enqueue({"0": prefix})
 
                         continue

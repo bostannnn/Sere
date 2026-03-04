@@ -113,9 +113,6 @@ function buildExecutionRequest(input, settings, arg = {}) {
     if (Number(requestBody.max_tokens) > 8192) {
         betas.push('output-128k-2025-02-19');
     }
-    if (settings?.claude1HourCaching) {
-        betas.push('extended-cache-ttl-2025-04-11');
-    }
     if (betas.length > 0) {
         headers['anthropic-beta'] = betas.join(',');
     }
@@ -200,4 +197,3 @@ module.exports = {
     previewAnthropicExecution,
     executeAnthropic,
 };
-

@@ -7,7 +7,6 @@ import { registerClaudeObserver } from "src/ts/observer.svelte"
 import { isNodeServer } from "src/ts/platform"
 import { getDatabase } from "src/ts/storage/database.svelte"
 import { replaceAsync, simplifySchema, sleep } from "src/ts/util"
-import { v4 } from "uuid"
 import type { MultiModal } from "../index.svelte"
 import { extractJSON } from "../templates/jsonSchema"
 import { applyParameters, type RequestDataArgumentExtended, type requestDataResponse, type StreamResponseChunk } from "./request"
@@ -412,17 +411,8 @@ export async function requestClaude(arg:RequestDataArgumentExtended):Promise<req
                 }
             }
             if(chat.cache){
-
-                if(db.claude1HourCaching){
-                    content[content.length-1].cache_control = {
-                        type: 'ephemeral',
-                        ttl: "1h"
-                    }
-                }
-                else{
-                    content[content.length-1].cache_control = {
-                        type: 'ephemeral'
-                    }
+                content[content.length-1].cache_control = {
+                    type: 'ephemeral'
                 }
             }
             claudeChat[claudeChat.length-1].content = content
@@ -459,16 +449,8 @@ export async function requestClaude(arg:RequestDataArgumentExtended):Promise<req
 
             }
             if(chat.cache){
-                if(db.claude1HourCaching){
-                    formatedChat.content[0].cache_control = {
-                        type: 'ephemeral',
-                        ttl: "1h"
-                    }
-                }
-                else{
-                    formatedChat.content[0].cache_control = {
-                        type: 'ephemeral'
-                    }
+                formatedChat.content[0].cache_control = {
+                    type: 'ephemeral'
                 }
             }
             claudeChat.push(formatedChat)
@@ -795,10 +777,6 @@ export async function requestClaude(arg:RequestDataArgumentExtended):Promise<req
     }
 
 
-    if(db.claude1HourCaching){
-        betas.push('extended-cache-ttl-2025-04-11')
-    }
-
     if(betas.length > 0){
         headers['anthropic-beta'] = betas.join(',')
     }
@@ -822,7 +800,6 @@ export async function requestClaude(arg:RequestDataArgumentExtended):Promise<req
         isNodeServer &&
         !bedrock &&
         aiModel !== 'reverse_proxy' &&
-        !db.claudeBatching &&
         !(arg.tools && arg.tools.length > 0);
 
     if (useServerAnthropic) {
@@ -840,122 +817,6 @@ export async function requestClaude(arg:RequestDataArgumentExtended):Promise<req
         }
     }
 
-    if(db.claudeBatching){
-        if(body.stream !== undefined){
-            delete body.stream
-        }
-        const id = v4()
-        const resp = await fetchNative(replacerURL + '/batches', {
-            "body": JSON.stringify({
-                "requests": [{
-                    "custom_id": id,
-                    "params": body,
-                }]
-            }),
-            "method": "POST",
-            signal: arg.abortSignal,
-            headers: headers
-        })
-
-        if(resp.status !== 200){
-            return {
-                type: 'fail',
-                result: await textifyReadableStream(resp.body)
-            }
-        }
-
-        const r = (await resp.json())
-
-        if(!r.id){
-            return {
-                type: 'fail',
-                result: 'No results URL returned from Claude batch request'
-            }
-        }
-
-        const resultsUrl = replacerURL + `/batches/${r.id}/results`
-        const statusUrl = replacerURL + `/batches/${r.id}`
-
-        const received = false
-        while(!received){
-            try {
-                await sleep(3000)
-                if(arg?.abortSignal?.aborted){
-                    return {
-                        type: 'fail',
-                        result: 'Request aborted'
-                    }
-                }
-
-                const statusRes = await fetchNative(statusUrl, {
-                    "method": "GET",
-                    "headers": {
-                        "x-api-key": apiKey,
-                        "anthropic-version": "2023-06-01",
-                    },
-                    "signal": arg.abortSignal,
-                })
-
-                if(statusRes.status !== 200){
-                    return {
-                        type: 'fail',
-                        result: await textifyReadableStream(statusRes.body)
-                    }
-                }
-
-                const statusData = await statusRes.json()
-
-                if(statusData.processing_status !== 'ended'){
-                    continue
-                }
-
-                const batchRes = await fetchNative(resultsUrl, {
-                    "method": "GET",
-                    "headers": {
-                        "x-api-key": apiKey,
-                        "anthropic-version": "2023-06-01",
-                    },
-                    "signal": arg.abortSignal,
-                })
-
-                if(batchRes.status !== 200){
-                    return {
-                        type: 'fail',
-                        result: await textifyReadableStream(batchRes.body)
-                    }
-                }
-
-                //since jsonl
-                const batchTextData = (await batchRes.text()).split('\n').filter((v) => v.trim() !== ''). map((v) => {
-                    try {
-                        return JSON.parse(v)
-                    } catch {
-                        return null
-                    }
-                }).filter((v) => v !== null)
-                for(const batchData of batchTextData){
-                    const type = batchData?.result?.type
-                    anthropicLog('Claude batch result type:', type)
-                    if(batchData?.result?.type === 'succeeded'){
-                        return {
-                            type: 'success',
-                            result: batchData.result.message.content?.[0]?.text ?? ''
-                        }
-                    }
-                    if(batchData?.result?.type === 'errored'){
-                        return {
-                            type: 'fail',
-                            result:  JSON.stringify(batchData.result.error),
-                        }
-                    }
-                }   
-            } catch (error) {
-                anthropicLog('Error while waiting for Claude batch results:', error)
-            }
-        }
-    }
-    
-    
     if(db.claudeRetrivalCaching){
         registerClaudeObserver({
             url: replacerURL,
@@ -1201,17 +1062,15 @@ async function requestClaudeHTTP(replacerURL:string, headers:{[key:string]:strin
                     })
                 }
                 response.content.push(r)
-                if(arg.rememberToolUsage){
-                    arg.additionalOutput ??= ''
-                    arg.additionalOutput += await encodeToolCall({
-                        call: {
-                            id: content.id,
-                            name: content.name,
-                            arg: content.input
-                        },
-                        response: used
-                    })
-                }
+                arg.additionalOutput ??= ''
+                arg.additionalOutput += await encodeToolCall({
+                    call: {
+                        id: content.id,
+                        name: content.name,
+                        arg: content.input
+                    },
+                    response: used
+                })
             }
 
             (messages[messages.length-1] as Claude3Chat).content.push(content)
