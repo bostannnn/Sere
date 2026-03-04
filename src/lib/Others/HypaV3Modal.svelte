@@ -155,6 +155,8 @@
   let manualStart = $state('');
   let manualEnd = $state('');
   let manualProcessing = $state(false);
+  let manualFeedbackMessage = $state("");
+  let manualFeedbackTone = $state<"error" | "success" | null>(null);
   const manualRangeStartInputId = "hypav3-manual-range-start";
   const manualRangeEndInputId = "hypav3-manual-range-end";
   const hypaV3Debug = $derived(DBState.db.hypaV3Debug);
@@ -343,20 +345,26 @@
 
   async function manualSummarizeRange() {
     if (manualProcessing) return;
+    manualFeedbackMessage = "";
+    manualFeedbackTone = null;
     const characterId = currentChar?.chaId;
     const chat = chatList[effectiveChatIndex];
     if (!chat || !characterId || !chat.id) return;
     const messages = (chat.message ?? []).filter((m) => m && !m.disabled);
     const maxCount = messages.length;
     if (maxCount === 0) {
-        alertToast('No messages to summarize.');
-        return;
+      manualFeedbackTone = "error";
+      manualFeedbackMessage = "No messages available in this chat to summarize.";
+      return;
     }
 
-    const startNum = Math.max(1, Number(manualStart || 1));
-    const endNum = Math.min(maxCount, Number(manualEnd || maxCount));
+    const parsedStart = Number(manualStart || 1);
+    const parsedEnd = Number(manualEnd || maxCount);
+    const startNum = Math.max(1, Math.trunc(parsedStart));
+    const endNum = Math.min(maxCount, Math.trunc(parsedEnd));
     if (!Number.isFinite(startNum) || !Number.isFinite(endNum) || startNum > endNum) {
-      alertToast('Invalid range. Use Start ≤ End.');
+      manualFeedbackTone = "error";
+      manualFeedbackMessage = `Invalid range. Use values between 1 and ${maxCount}, and keep Start less than or equal to End.`;
       return;
     }
 
@@ -439,10 +447,13 @@
         persistManualDebugForActiveChat(fallbackDebug);
       }
       uiState.collapsedSummaries = new Set(hypaV3Data.summaries.map((_, index) => index));
-      alertToast('Summary added.');
+      manualFeedbackTone = "success";
+      manualFeedbackMessage = "Summary added.";
     } catch (error) {
       hypaV3ModalLog('Manual summarize failed:', error);
-      alertToast(`Manual summarize failed: ${error.message || error}`);
+      const errorMessage = String((error as { message?: unknown })?.message ?? error ?? "Unknown error");
+      manualFeedbackTone = "error";
+      manualFeedbackMessage = `Manual summarize failed: ${errorMessage}`;
     }
     manualProcessing = false;
   }
@@ -1166,6 +1177,16 @@
                       {manualProcessing ? "Summarizing..." : "Summarize"}
                     </button>
                   </div>
+                  {#if manualFeedbackMessage}
+                    <div
+                      class={`ds-hypa-modal-manual-feedback control-chip ${manualFeedbackTone === "error"
+                        ? "ds-hypa-modal-manual-feedback-error"
+                        : "ds-hypa-modal-manual-feedback-success"}`}
+                      role={manualFeedbackTone === "error" ? "alert" : "status"}
+                    >
+                      {manualFeedbackMessage}
+                    </div>
+                  {/if}
                 </div>
               </div>
             </div>

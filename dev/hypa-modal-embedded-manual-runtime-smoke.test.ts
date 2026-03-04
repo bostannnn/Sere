@@ -229,4 +229,30 @@ describe("hypa modal embedded manual summarize runtime smoke", () => {
     expect(shared.globalFetchMock).toHaveBeenCalledTimes(2);
     expect(shared.fetchCalls[1]?.body.chatId).toBe("chat-b");
   });
+
+  it("renders inline range validation error for invalid manual summarize range", async () => {
+    app = mount(HypaV3Modal, {
+      target: target!,
+      props: { embedded: true },
+    });
+    await flushUi();
+
+    const startInput = target?.querySelector("#hypav3-manual-range-start") as HTMLInputElement | null;
+    const endInput = target?.querySelector("#hypav3-manual-range-end") as HTMLInputElement | null;
+    const summarizeButton = target?.querySelector(".ds-hypa-modal-manual-submit") as HTMLButtonElement | null;
+    expect(startInput).not.toBeNull();
+    expect(endInput).not.toBeNull();
+    expect(summarizeButton).not.toBeNull();
+
+    startInput!.value = "2";
+    startInput!.dispatchEvent(new Event("input", { bubbles: true }));
+    endInput!.value = "1";
+    endInput!.dispatchEvent(new Event("input", { bubbles: true }));
+
+    summarizeButton?.click();
+    await flushUi();
+
+    expect(shared.globalFetchMock).toHaveBeenCalledTimes(0);
+    expect(target?.textContent).toContain("Invalid range. Use values between 1 and 1, and keep Start less than or equal to End.");
+  });
 });
