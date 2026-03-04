@@ -701,6 +701,8 @@ ensureIncludes(hypaModalContent, hypaModalFile, "class=\"ds-hypa-modal-search-na
 ensureIncludes(hypaModalContent, hypaModalFile, "class=\"ds-hypa-modal-manual-input control-field\"", failures);
 ensureIncludes(hypaModalContent, hypaModalFile, "class=\"ds-hypa-modal-manual-submit ds-ui-button ds-ui-button-size-md ds-ui-button--primary\"", failures);
 ensureIncludes(hypaModalContent, hypaModalFile, "class=\"ds-hypa-modal-debug-textarea control-field\"", failures);
+ensureIncludes(hypaModalContent, hypaModalFile, "import SettingsSubTabs from \"src/lib/Setting/SettingsSubTabs.svelte\";", failures);
+ensureIncludes(hypaModalContent, hypaModalFile, "className=\"ds-hypa-memory-tabs\"", failures);
 ensureIncludes(hypaModalHeaderContent, hypaModalHeaderFile, "<div class=\"hypa-modal-actions action-rail\">", failures);
 ensureIncludes(hypaModalHeaderContent, hypaModalHeaderFile, "class=\"hypa-modal-icon-btn icon-btn icon-btn--md\"", failures);
 ensureIncludes(hypaModalHeaderContent, hypaModalHeaderFile, "class=\"hypa-modal-dropdown-panel panel-shell\"", failures);
@@ -788,6 +790,24 @@ ensureIncludes(stylesContent, stylesFile, ".ds-hypa-modal-search-nav-button.icon
 ensureIncludes(stylesContent, stylesFile, ".ds-hypa-modal-manual-input.control-field {", failures);
 ensureIncludes(stylesContent, stylesFile, ".ds-hypa-modal-manual-submit.ds-ui-button {", failures);
 ensureIncludes(stylesContent, stylesFile, ".ds-hypa-modal-debug-textarea.control-field {", failures);
+ensureIncludes(
+  stylesContent,
+  stylesFile,
+  ".ds-hypa-modal-scroll {\n  display: flex;\n  flex-direction: column;\n  gap: var(--ds-space-2);\n  overflow-y: auto;\n  overflow-x: hidden;",
+  failures,
+);
+ensureIncludes(
+  stylesContent,
+  stylesFile,
+  ".ds-hypa-memory-tabs .ds-settings-tabs {\n  overflow: hidden;\n}",
+  failures,
+);
+ensureIncludes(
+  stylesContent,
+  stylesFile,
+  ".ds-hypa-memory-tabs .ds-settings-tab {\n  flex: 1 1 0;\n  min-width: 0;\n}",
+  failures,
+);
 
 ensureNotIncludes(
   appShellContent,

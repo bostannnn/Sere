@@ -67,6 +67,11 @@
     promptSource?: "request_override" | "character_override" | "preset_or_default";
   }
 
+  interface ManualSummarizeTarget {
+    characterId: string;
+    chatId: string;
+  }
+
   const {
     embedded = false,
   }: Props = $props();
@@ -316,30 +321,58 @@
     return (response.data ?? {}) as Record<string, unknown>;
   }
 
-  function syncHypaV3DataFromServer(data: SerializableHypaV3Data) {
-    const targetChat = chatList[effectiveChatIndex];
-    if (!targetChat) return;
-    const targetCharacter = DBState.db.characters?.[$selectedCharID];
-    if (!targetCharacter) return;
-    hypaV3Data = data;
+  function findManualSummarizeTargetIndices(target: ManualSummarizeTarget) {
+    const characters = DBState.db.characters ?? [];
+    const characterIndex = characters.findIndex((item) => item?.chaId === target.characterId);
+    if (characterIndex < 0) {
+      return null;
+    }
+    const chats = characters[characterIndex]?.chats ?? [];
+    const chatIndex = chats.findIndex((item) => item?.id === target.chatId);
+    if (chatIndex < 0) {
+      return null;
+    }
+    return { characterIndex, chatIndex };
+  }
+
+  function syncHypaV3DataFromServer(data: SerializableHypaV3Data, target?: ManualSummarizeTarget) {
+    const resolvedTarget = target ?? (currentChar?.chaId && activeChatId
+      ? { characterId: currentChar.chaId, chatId: activeChatId }
+      : null);
+    if (!resolvedTarget) return;
+    const targetIndices = findManualSummarizeTargetIndices(resolvedTarget);
+    if (!targetIndices) return;
+    const targetCharacter = DBState.db.characters?.[targetIndices.characterIndex];
+    const targetChat = targetCharacter?.chats?.[targetIndices.chatIndex];
+    if (!targetCharacter || !targetChat) return;
     targetChat.hypaV3Data = data;
-    targetCharacter.chats[effectiveChatIndex] = { ...targetChat };
+    if (currentChar?.chaId === resolvedTarget.characterId && activeChatId === resolvedTarget.chatId) {
+      hypaV3Data = data;
+    }
+    targetCharacter.chats[targetIndices.chatIndex] = { ...targetChat };
     targetCharacter.chats = [...targetCharacter.chats];
   }
 
-  function persistManualDebugForActiveChat(debug: ManualSummarizeDebug) {
-    const targetChat = chatList[effectiveChatIndex];
-    if (!targetChat) return;
-    const targetCharacter = DBState.db.characters?.[$selectedCharID];
-    if (!targetCharacter) return;
+  function persistManualDebugForActiveChat(debug: ManualSummarizeDebug, target?: ManualSummarizeTarget) {
+    const resolvedTarget = target ?? (currentChar?.chaId && activeChatId
+      ? { characterId: currentChar.chaId, chatId: activeChatId }
+      : null);
+    if (!resolvedTarget) return;
+    const targetIndices = findManualSummarizeTargetIndices(resolvedTarget);
+    if (!targetIndices) return;
+    const targetCharacter = DBState.db.characters?.[targetIndices.characterIndex];
+    const targetChat = targetCharacter?.chats?.[targetIndices.chatIndex];
+    if (!targetCharacter || !targetChat) return;
     targetChat.hypaV3Data ??= {
       summaries: [],
       categories: [{ id: "", name: language.hypaV3Modal.unclassified }],
       lastSelectedSummaries: [],
     };
     targetChat.hypaV3Data.lastManualDebug = debug;
-    hypaV3Data = targetChat.hypaV3Data;
-    targetCharacter.chats[effectiveChatIndex] = { ...targetChat };
+    if (currentChar?.chaId === resolvedTarget.characterId && activeChatId === resolvedTarget.chatId) {
+      hypaV3Data = targetChat.hypaV3Data;
+    }
+    targetCharacter.chats[targetIndices.chatIndex] = { ...targetChat };
     targetCharacter.chats = [...targetCharacter.chats];
   }
 
@@ -350,6 +383,10 @@
     const characterId = currentChar?.chaId;
     const chat = chatList[effectiveChatIndex];
     if (!chat || !characterId || !chat.id) return;
+    const requestTarget: ManualSummarizeTarget = {
+      characterId,
+      chatId: chat.id,
+    };
     const messages = (chat.message ?? []).filter((m) => m && !m.disabled);
     const maxCount = messages.length;
     if (maxCount === 0) {
@@ -383,12 +420,12 @@
       };
       const result = await callHypaV3Server('/data/memory/hypav3/manual-summarize', requestPayload);
       if (result?.hypaV3Data) {
-        syncHypaV3DataFromServer(result.hypaV3Data as SerializableHypaV3Data);
+        syncHypaV3DataFromServer(result.hypaV3Data as SerializableHypaV3Data, requestTarget);
       }
       if (result?.debug && typeof result.debug === "object") {
         const debugData = result.debug as ManualSummarizeDebug;
         DBState.db.hypaV3Debug = debugData;
-        persistManualDebugForActiveChat(debugData);
+        persistManualDebugForActiveChat(debugData, requestTarget);
       } else {
         // Compatibility fallback for older server processes that do not return `debug`.
         let fallbackDebug: ManualSummarizeDebug = {
@@ -444,7 +481,7 @@
           // Keep the fallback debug built from local state.
         }
         DBState.db.hypaV3Debug = fallbackDebug;
-        persistManualDebugForActiveChat(fallbackDebug);
+        persistManualDebugForActiveChat(fallbackDebug, requestTarget);
       }
       uiState.collapsedSummaries = new Set(hypaV3Data.summaries.map((_, index) => index));
       manualFeedbackTone = "success";

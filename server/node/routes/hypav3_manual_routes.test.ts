@@ -300,7 +300,7 @@ describe("hypav3 manual summarize route", () => {
     expect((debug.formatted as Array<unknown>).length).toBeGreaterThan(0);
   });
 
-  it("marks promptSource as character_override when request override is blank", async () => {
+  it("marks promptSource as preset_or_default when request override is blank and effective character override is empty", async () => {
     const res = await invokeManualSummarize({
       characterId,
       chatId,
@@ -315,8 +315,23 @@ describe("hypav3 manual summarize route", () => {
     expect(res.statusCode).toBe(200);
     const payload = res.payload as Record<string, unknown>;
     const debug = payload.debug as Record<string, unknown>;
-    expect(debug.promptSource).toBe("character_override");
+    expect(debug.promptSource).toBe("preset_or_default");
     expect(debug.prompt).toBe("Preset prompt");
+  });
+
+  it("marks promptSource as character_override when stored character override is used", async () => {
+    const res = await invokeManualSummarize({
+      characterId,
+      chatId,
+      start: 1,
+      end: 2,
+    });
+
+    expect(res.statusCode).toBe(200);
+    const payload = res.payload as Record<string, unknown>;
+    const debug = payload.debug as Record<string, unknown>;
+    expect(debug.promptSource).toBe("character_override");
+    expect(debug.prompt).toBe("Character prompt");
   });
 
   it("marks promptSource as preset_or_default when no overrides are present", async () => {

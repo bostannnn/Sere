@@ -214,7 +214,8 @@ describe("hypa modal embedded manual summarize runtime smoke", () => {
     await flushUi();
 
     expect(shared.globalFetchMock).toHaveBeenCalledTimes(1);
-    expect(shared.fetchCalls[0]?.body.chatId).toBe("chat-a");
+    const firstRequest = shared.globalFetchMock.mock.calls[0]?.[1] as { body?: { chatId?: string } } | undefined;
+    expect(firstRequest?.body?.chatId).toBe("chat-a");
 
     const chatSelectValueInput = target?.querySelector(
       ".ds-hypa-modal-chat-select [data-testid='bindable-field-value']",
@@ -419,5 +420,78 @@ describe("hypa modal embedded manual summarize runtime smoke", () => {
     expect(target?.textContent).not.toContain("Interval:");
     expect(target?.textContent).not.toContain("Last index:");
     expect(target?.textContent).not.toContain("Chat messages:");
+  });
+
+  it("keeps manual summarize writes scoped to request target when active chat changes mid-request", async () => {
+    DBState.db.characters[0].chats[0].hypaV3Data = {
+      summaries: [],
+      categories: [{ id: "", name: "Unclassified" }],
+      lastSelectedSummaries: [],
+    };
+    DBState.db.characters[0].chats[1].hypaV3Data = {
+      summaries: [],
+      categories: [{ id: "", name: "Unclassified" }],
+      lastSelectedSummaries: [],
+    };
+
+    let resolveFetch:
+      | ((value: { ok: boolean; data: Record<string, unknown> }) => void)
+      | null = null;
+    shared.globalFetchMock.mockImplementationOnce(async () =>
+      await new Promise((resolve) => {
+        resolveFetch = resolve;
+      })
+    );
+
+    app = mount(HypaV3Modal, {
+      target: target!,
+      props: { embedded: true },
+    });
+    await flushUi();
+
+    const summarizeButton = target?.querySelector(".ds-hypa-modal-manual-submit") as HTMLButtonElement | null;
+    expect(summarizeButton).not.toBeNull();
+    summarizeButton?.click();
+    await flushUi();
+
+    expect(shared.globalFetchMock).toHaveBeenCalledTimes(1);
+    const firstRequest = shared.globalFetchMock.mock.calls[0]?.[1] as { body?: { chatId?: string } } | undefined;
+    expect(firstRequest?.body?.chatId).toBe("chat-a");
+
+    DBState.db.characters[0].chatPage = 1;
+    await flushUi();
+
+    resolveFetch?.({
+      ok: true,
+      data: {
+        hypaV3Data: {
+          summaries: [{ text: "summary-for-chat-a", chatMemos: [], isImportant: false }],
+          categories: [{ id: "", name: "Unclassified" }],
+          lastSelectedSummaries: [],
+        },
+        debug: {
+          timestamp: Date.now(),
+          model: "test-model",
+          isResummarize: false,
+          prompt: "Prompt",
+          input: "Input",
+          formatted: [{ role: "user", content: "hello" }],
+          characterId: "char-embedded",
+          chatId: "chat-a",
+          start: 1,
+          end: 1,
+          source: "manual",
+          promptSource: "preset_or_default",
+        },
+      },
+    });
+    await flushUi();
+    await flushUi();
+
+    const chatAData = DBState.db.characters[0].chats[0].hypaV3Data as { summaries?: Array<{ text?: string }> };
+    const chatBData = DBState.db.characters[0].chats[1].hypaV3Data as { summaries?: Array<{ text?: string }>; lastManualDebug?: unknown };
+    expect(chatAData.summaries?.[0]?.text).toBe("summary-for-chat-a");
+    expect(chatBData.summaries?.length ?? 0).toBe(0);
+    expect(chatBData.lastManualDebug).toBeUndefined();
   });
 });

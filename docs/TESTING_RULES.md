@@ -222,6 +222,8 @@ What it gates:
 - Runtime chat sidebar host behavior (open/close controls, tab switching, overlay interaction).
 - Runtime right-sidebar host integration with real `SideChatList` and `CharConfig` composition (non-stub host-level parity gate).
 - Runtime lorebook sidebar tab behavior (`includeRulebookTab` composition contract).
+- Memory sidebar regressions in embedded mode (`Summary/Settings/Log`, prompt override wiring, scoped logs, manual summarize payload targeting).
+- Mobile memory layout contracts (equal-width top tabs + memory tab strip no horizontal overflow contract).
 
 ---
 
@@ -248,7 +250,7 @@ Every new server endpoint, pipeline function, or bug fix must ship with **both**
 **Run before every commit:**
 
 ```bash
-node scripts/test-memory-unit.cjs
+pnpm run test:server:unit
 ```
 
 ### 4b. Integration smoke tests (`scripts/test-server-*.js`)
@@ -311,6 +313,7 @@ The `/scripts/*` rule in `.gitignore` ignores all scripts by default. Add explic
 | File | Type | Coverage |
 |------|------|----------|
 | `scripts/test-memory-unit.cjs` | Unit | HypaV3 memory pipeline (7 suites, 97 assertions) |
+| `server/node/routes/hypav3_manual_routes.test.ts` | Unit (Vitest) | Manual summarize route contract (`promptOverride`, `promptSource`, scoped debug payload) |
 | `scripts/test-server-auth.js` | Smoke | Password auth — set, change, lockout |
 | `scripts/test-server-memory.js` | Smoke | HypaV3 trace endpoints + character/chat/settings CRUD |
 

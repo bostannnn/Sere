@@ -26,6 +26,7 @@ This checklist is for the right-sidebar Memory redesign and HypaV3 manual summar
 - Mark each case as `PASS`, `FAIL`, or `BLOCKED`.
 - For `FAIL`/`BLOCKED`, add one short note and a screenshot.
 - Validate in order, batch by batch. Do not proceed to next batch until current batch is accepted.
+- Keep `pnpm run check:ui-shell-smoke` green while validating; it now includes Memory sidebar runtime regressions and memory layout CSS contracts.
 
 ## Batch 1: Navigation and Layout
 - [ ] `TC-01` Desktop right sidebar shows exactly 3 top tabs: `Chat`, `Character`, `Memory`.

@@ -303,6 +303,7 @@ async function main() {
         assert(r.json?.debug?.start === start, `T1C: debug.start expected ${start}, got ${r.json?.debug?.start}`);
         assert(r.json?.debug?.end === end, `T1C: debug.end expected ${end}, got ${r.json?.debug?.end}`);
         assert(r.json?.debug?.source === 'manual', `T1C: debug.source expected 'manual', got '${r.json?.debug?.source}'`);
+        assert(r.json?.debug?.promptSource === 'request_override', `T1C: debug.promptSource expected 'request_override', got '${r.json?.debug?.promptSource}'`);
         assert(r.json?.debug?.prompt === requestPromptOverrideB, 'T1C: debug.prompt should match request override');
         assert(Array.isArray(r.json?.debug?.formatted) && r.json.debug.formatted.length > 0, 'T1C: debug.formatted should be non-empty array');
         console.log('  T1C PASS: manual-summarize returns scoped debug payload with resolved prompt');

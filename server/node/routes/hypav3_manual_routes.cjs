@@ -111,12 +111,14 @@ app.post('/data/memory/hypav3/manual-summarize', async (req, res) => {
         const endIndex = Math.max(startIndex, Math.min(end, maxCount));
         const slice = sourceMessages.slice(startIndex - 1, endIndex);
         const hypaSettings = resolveHypaV3Settings(settings, characterForRequest);
-        const characterPromptOverride = (character && typeof character === 'object' && character.hypaV3PromptOverride && typeof character.hypaV3PromptOverride === 'object')
-            ? character.hypaV3PromptOverride
+        const effectiveCharacterPromptOverride = (characterForRequest && typeof characterForRequest === 'object' && characterForRequest.hypaV3PromptOverride && typeof characterForRequest.hypaV3PromptOverride === 'object')
+            ? characterForRequest.hypaV3PromptOverride
             : null;
-        const promptSource = (promptOverride && promptOverride.summarizationPrompt.trim())
+        const requestPromptOverride = toStringOrEmpty(promptOverride?.summarizationPrompt).trim();
+        const effectiveCharacterPrompt = toStringOrEmpty(effectiveCharacterPromptOverride?.summarizationPrompt).trim();
+        const promptSource = requestPromptOverride
             ? 'request_override'
-            : ((toStringOrEmpty(characterPromptOverride?.summarizationPrompt).trim().length > 0)
+            : (effectiveCharacterPrompt.length > 0
                 ? 'character_override'
                 : 'preset_or_default');
         const summarizable = [];
