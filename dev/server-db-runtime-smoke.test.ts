@@ -1,4 +1,4 @@
-import { describe, expect, it, vi, beforeEach } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { fetchWithServerAuthMock, getDatabaseMock, setDatabaseMock } = vi.hoisted(() => ({
   fetchWithServerAuthMock: vi.fn(),
@@ -37,30 +37,60 @@ describe("server db runtime smoke", () => {
     setDatabaseMock.mockClear();
   });
 
-  it("reconciles and deletes removed server characters even when no character id is queued for save", async () => {
+  it("reconciles removed server characters through state command API", async () => {
+    let commandsRequest: {
+      clientMutationId?: string;
+      baseEventId?: number;
+      commands?: Array<{ type?: string; charId?: string }>;
+    } | null = null;
+
     fetchWithServerAuthMock.mockImplementation(async (input: RequestInfo | URL, init: RequestInit = {}) => {
       const url = typeof input === "string" ? input : input.toString();
       const method = (init.method ?? "GET").toUpperCase();
 
-      if (url === "/data/settings" && method === "PUT") {
-        return jsonResponse({ ok: true }, 200, { etag: "\"settings-etag\"" });
+      if (url === "/data/state/snapshot" && method === "GET") {
+        return jsonResponse({
+          serverTime: Date.now(),
+          lastEventId: 5,
+          settings: {},
+          characters: [
+            { chaId: "char-keep", chatPage: 0, chatFolders: [] },
+            { chaId: "char-removed", chatPage: 0, chatFolders: [] },
+          ],
+          chatsByCharacter: {
+            "char-keep": [],
+            "char-removed": [],
+          },
+          revisions: {
+            settings: 1,
+            characters: {
+              "char-keep": 1,
+              "char-removed": 1,
+            },
+            chats: {
+              "char-keep": {},
+              "char-removed": {},
+            },
+          },
+        });
       }
 
-      if (url === "/data/characters" && method === "GET") {
-        return jsonResponse([
-          { id: "char-keep" },
-          { id: "char-removed" },
-        ]);
-      }
-
-      if (url === "/data/characters/char-removed" && method === "GET") {
-        return jsonResponse({ character: { chaId: "char-removed" } }, 200, { etag: "\"char-removed-etag\"" });
-      }
-
-      if (url === "/data/characters/char-removed" && method === "DELETE") {
-        const ifMatch = new Headers(init.headers ?? {}).get("if-match");
-        expect(ifMatch).toBe("\"char-removed-etag\"");
-        return new Response(null, { status: 204 });
+      if (url === "/data/state/commands" && method === "POST") {
+        commandsRequest = JSON.parse(String(init.body ?? "{}"));
+        return jsonResponse({
+          ok: true,
+          lastEventId: 6,
+          applied: [
+            {
+              index: 0,
+              type: "character.delete",
+              resource: { type: "character", charId: "char-removed" },
+              revision: 0,
+              eventId: 6,
+            },
+          ],
+          conflicts: [],
+        });
       }
 
       throw new Error(`Unexpected request: ${method} ${url}`);
@@ -73,6 +103,8 @@ describe("server db runtime smoke", () => {
           {
             chaId: "char-keep",
             chats: [],
+            chatPage: 0,
+            chatFolders: [],
           },
         ],
       } as never,
@@ -82,11 +114,7 @@ describe("server db runtime smoke", () => {
       },
     );
 
-    const deleteRequests = fetchWithServerAuthMock.mock.calls.filter(([input, init]) => {
-      const url = typeof input === "string" ? input : input.toString();
-      const method = ((init as RequestInit | undefined)?.method ?? "GET").toUpperCase();
-      return url === "/data/characters/char-removed" && method === "DELETE";
-    });
-    expect(deleteRequests).toHaveLength(1);
+    const postedCommands = Array.isArray(commandsRequest?.commands) ? commandsRequest.commands : [];
+    expect(postedCommands.some((entry) => entry?.type === "character.delete" && entry?.charId === "char-removed")).toBe(true);
   });
 });

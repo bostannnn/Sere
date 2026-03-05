@@ -54,7 +54,34 @@ let streamAbort: AbortController | null = null;
 let streamStarted = false;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 let reconnectDelayMs = 700;
-const pendingMutationIds = new Set<string>();
+const pendingMutationIds = new Map<string, number>();
+const pendingMutationTtlMs = 2 * 60 * 1000;
+const pendingMutationMax = 1024;
+
+function prunePendingMutationIds(force = false) {
+    const now = Date.now();
+    for (const [mutationId, createdAt] of pendingMutationIds) {
+        if (force || (now - createdAt) >= pendingMutationTtlMs) {
+            pendingMutationIds.delete(mutationId);
+        }
+    }
+    while (pendingMutationIds.size > pendingMutationMax) {
+        const oldest = pendingMutationIds.keys().next().value;
+        if (!oldest) break;
+        pendingMutationIds.delete(oldest);
+    }
+}
+
+function markPendingMutation(mutationId: string) {
+    if (!mutationId) return;
+    pendingMutationIds.set(mutationId, Date.now());
+    prunePendingMutationIds(false);
+}
+
+function clearPendingMutation(mutationId: string) {
+    if (!mutationId) return;
+    pendingMutationIds.delete(mutationId);
+}
 
 function parseNumericCursor(value: unknown) {
     const parsed = Number(value);
@@ -101,6 +128,7 @@ export function stopServerStateEventStream() {
         streamAbort.abort();
         streamAbort = null;
     }
+    pendingMutationIds.clear();
 }
 
 export async function fetchServerStateSnapshot() {
@@ -121,9 +149,7 @@ export async function fetchServerStateSnapshot() {
 
 export async function enqueueCommand(request: StateCommandsRequest) {
     const mutationId = typeof request.clientMutationId === 'string' ? request.clientMutationId : '';
-    if (mutationId) {
-        pendingMutationIds.add(mutationId);
-    }
+    markPendingMutation(mutationId);
 
     const response = await fetchWithServerAuth('/data/state/commands', {
         method: 'POST',
@@ -153,8 +179,9 @@ export async function enqueueCommand(request: StateCommandsRequest) {
         // keep default payload shape
     }
     if (mutationId && (!response.ok || payload?.ok === false)) {
-        pendingMutationIds.delete(mutationId);
+        clearPendingMutation(mutationId);
     }
+    prunePendingMutationIds(false);
 
     updateCursor(payload?.lastEventId);
 
@@ -242,8 +269,9 @@ async function consumeEventStream(
         }
 
         const mutationId = typeof event.clientMutationId === 'string' ? event.clientMutationId : '';
+        prunePendingMutationIds(false);
         if (mutationId && pendingMutationIds.has(mutationId)) {
-            pendingMutationIds.delete(mutationId);
+            clearPendingMutation(mutationId);
             return;
         }
 
@@ -300,4 +328,17 @@ export function startServerStateEventStream(callbacks: {
     };
 
     void loop();
+}
+
+export function __debugPendingMutationCountForTests() {
+    prunePendingMutationIds(false);
+    return pendingMutationIds.size;
+}
+
+export function __debugResetServerStateClientForTests() {
+    stopServerStateEventStream();
+    lastEventIdCursor = 0;
+    applyingRemoteState = false;
+    reconnectDelayMs = 700;
+    pendingMutationIds.clear();
 }

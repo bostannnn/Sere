@@ -35,6 +35,8 @@ function registerSyncRoutes(arg = {}) {
         let closed = false;
         let pollTimer = null;
         let heartbeatTimer = null;
+        let flushInFlight = false;
+        let flushQueued = false;
 
         res.status(200);
         res.setHeader('Content-Type', 'text/event-stream');
@@ -45,7 +47,7 @@ function registerSyncRoutes(arg = {}) {
         const close = () => {
             if (closed) return;
             closed = true;
-            if (pollTimer) clearInterval(pollTimer);
+            if (pollTimer) clearTimeout(pollTimer);
             if (heartbeatTimer) clearInterval(heartbeatTimer);
         };
         req.on('aborted', close);
@@ -93,15 +95,43 @@ function registerSyncRoutes(arg = {}) {
             }
         };
 
-        await flush();
+        const runFlush = async () => {
+            if (closed) return;
+            if (flushInFlight) {
+                flushQueued = true;
+                return;
+            }
+            flushInFlight = true;
+            try {
+                do {
+                    flushQueued = false;
+                    await flush();
+                } while (flushQueued && !closed);
+            } finally {
+                flushInFlight = false;
+            }
+        };
+
+        const scheduleNextPoll = () => {
+            if (closed) return;
+            pollTimer = setTimeout(() => {
+                pollTimer = null;
+                void runFlush()
+                    .catch((error) => {
+                        console.error('[SyncRoutes] poll flush failed:', error);
+                    })
+                    .finally(() => {
+                        scheduleNextPoll();
+                    });
+            }, 1000);
+        };
+
+        await runFlush();
         heartbeatTimer = setInterval(() => {
             if (closed) return;
             res.write(`: heartbeat ${Date.now()}\n\n`);
         }, 15000);
-
-        pollTimer = setInterval(() => {
-            void flush();
-        }, 1000);
+        scheduleNextPoll();
     }));
 }
 
