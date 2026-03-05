@@ -206,6 +206,23 @@
 
     async function sendMain(continueResponse:boolean) {
         const selectedChar = $selectedCharID
+        if(selectedChar < 0){
+            return
+        }
+        const selectedCharacter = DBState.db.characters?.[selectedChar]
+        if(!selectedCharacter || !Array.isArray(selectedCharacter.chats) || selectedCharacter.chats.length === 0){
+            return
+        }
+        if(typeof selectedCharacter.chatPage !== 'number' || selectedCharacter.chatPage < 0){
+            selectedCharacter.chatPage = 0
+        }
+        if(selectedCharacter.chatPage >= selectedCharacter.chats.length){
+            selectedCharacter.chatPage = Math.max(0, selectedCharacter.chats.length - 1)
+        }
+        const activeChat = selectedCharacter.chats[selectedCharacter.chatPage]
+        if(!activeChat || !Array.isArray(activeChat.message)){
+            return
+        }
         if($isDoingChat){
             return
         }
@@ -214,7 +231,7 @@
             rerollid = -1
         }
 
-        let cha = DBState.db.characters[selectedChar].chats[DBState.db.characters[selectedChar].chatPage].message
+        let cha = activeChat.message
 
         if(messageInput.startsWith('/')){
             const commandProcessed = await processMultiCommand(messageInput)
