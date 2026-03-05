@@ -113,6 +113,7 @@ function buildHandlers(arg: {
     cleanSummaryOutput: (v: unknown) => String(v ?? ""),
     generateSummaryEmbedding: async () => null,
     persistChatDataToRaw: (_chatRaw: unknown, chat: unknown) => chat,
+    applyStateCommands: async () => ({ ok: true, lastEventId: 0, applied: [], conflicts: [] }),
   });
 
   return {

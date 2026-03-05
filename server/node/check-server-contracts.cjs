@@ -9,7 +9,6 @@ const { spawn } = require('child_process');
 const request = require('supertest');
 
 const PASSWORD = 'contract-test-password';
-const REDACTED_SECRET_VALUE = '[REDACTED_SECRET_STORED_ON_SERVER]';
 
 function sleep(ms) {
     return new Promise((resolve) => setTimeout(resolve, ms));
@@ -88,12 +87,6 @@ function stopChild(child) {
             }
         }, 2000).unref();
     });
-}
-
-function getAtPath(root, pathExpr) {
-    return String(pathExpr)
-        .split('.')
-        .reduce((acc, key) => (acc && typeof acc === 'object' ? acc[key] : undefined), root);
 }
 
 async function runContracts() {
@@ -215,143 +208,39 @@ async function runContracts() {
             .expect(401);
 
         await api
-            .get('/data/settings')
+            .get('/data/state/snapshot')
             .expect(401);
 
         for (let i = 0; i < 5; i++) {
             await api
-                .get('/data/settings')
+                .get('/data/state/snapshot')
                 .set('risu-auth', 'wrong-password')
                 .expect(401);
         }
 
-        const authSettings = await api
+        const authSnapshot = await api
+            .get('/data/state/snapshot')
+            .set('risu-auth', PASSWORD)
+            .expect(200);
+        if (!Number.isFinite(Number(authSnapshot.body?.lastEventId))) {
+            throw new Error(`Expected numeric lastEventId in snapshot, got ${JSON.stringify(authSnapshot.body)}`);
+        }
+        if (!Array.isArray(authSnapshot.body?.characters)) {
+            throw new Error(`Expected characters array in snapshot, got ${JSON.stringify(authSnapshot.body)}`);
+        }
+        if (!authSnapshot.body || typeof authSnapshot.body.settings !== 'object') {
+            throw new Error(`Expected settings object in snapshot, got ${JSON.stringify(authSnapshot.body)}`);
+        }
+
+        await api
             .get('/data/settings')
-            .set('risu-auth', PASSWORD);
-        if (![200, 404].includes(authSettings.status)) {
-            throw new Error(`Expected authenticated /data/settings to be 200 or 404, got ${authSettings.status}.`);
-        }
-        if (authSettings.status === 200) {
-            const authSettingsEtag = authSettings.headers.etag;
-            if (!authSettingsEtag) {
-                throw new Error('Expected ETag on authenticated /data/settings response.');
-            }
-
-            const updateWithSecrets = JSON.parse(JSON.stringify(authSettings.body || {}));
-            if (!updateWithSecrets.data || typeof updateWithSecrets.data !== 'object') {
-                updateWithSecrets.data = {};
-            }
-            if (!updateWithSecrets.data.novelai || typeof updateWithSecrets.data.novelai !== 'object') {
-                updateWithSecrets.data.novelai = {};
-            }
-            updateWithSecrets.data.openAIKey = 'sk-contract-secret';
-            updateWithSecrets.data.novelai.token = 'pst-contract-secret';
-            updateWithSecrets.data.elevenLabKey = '';
-
-            const putWithSecrets = await api
-                .put('/data/settings')
-                .set('risu-auth', PASSWORD)
-                .set('If-Match', authSettingsEtag)
-                .send(updateWithSecrets)
-                .expect(200);
-            const putWithSecretsEtag = putWithSecrets.headers.etag;
-            if (!putWithSecretsEtag) {
-                throw new Error('Expected ETag on PUT /data/settings response.');
-            }
-
-            if (getAtPath(putWithSecrets.body, 'data.openAIKey') !== REDACTED_SECRET_VALUE) {
-                throw new Error(
-                    'Expected openAIKey to be redacted in PUT response, ' +
-                    `got ${JSON.stringify(getAtPath(putWithSecrets.body, 'data.openAIKey'))}`
-                );
-            }
-            if (getAtPath(putWithSecrets.body, 'data.novelai.token') !== REDACTED_SECRET_VALUE) {
-                throw new Error(
-                    'Expected novelai.token to be redacted in PUT response, ' +
-                    `got ${JSON.stringify(getAtPath(putWithSecrets.body, 'data.novelai.token'))}`
-                );
-            }
-            if (getAtPath(putWithSecrets.body, 'data.elevenLabKey') !== '') {
-                throw new Error(
-                    'Expected empty elevenLabKey to stay empty in PUT response, ' +
-                    `got ${JSON.stringify(getAtPath(putWithSecrets.body, 'data.elevenLabKey'))}`
-                );
-            }
-
-            const persistedWithSecrets = JSON.parse(await fs.readFile(path.join(dataRoot, 'settings.json'), 'utf-8'));
-            if (getAtPath(persistedWithSecrets, 'data.openAIKey') !== 'sk-contract-secret') {
-                throw new Error('Expected persisted data.openAIKey to keep real secret value.');
-            }
-            if (getAtPath(persistedWithSecrets, 'data.novelai.token') !== 'pst-contract-secret') {
-                throw new Error('Expected persisted data.novelai.token to keep real secret value.');
-            }
-
-            const keepRedactedPayload = JSON.parse(JSON.stringify(putWithSecrets.body || {}));
-            keepRedactedPayload.data.voicevoxUrl = 'http://localhost:50021';
-            const putWithRedactedMarkers = await api
-                .put('/data/settings')
-                .set('risu-auth', PASSWORD)
-                .set('If-Match', putWithSecretsEtag)
-                .send(keepRedactedPayload)
-                .expect(200);
-            const putWithRedactedMarkersEtag = putWithRedactedMarkers.headers.etag;
-            if (!putWithRedactedMarkersEtag) {
-                throw new Error('Expected ETag on follow-up PUT /data/settings response.');
-            }
-
-            const persistedAfterMarkerPut = JSON.parse(await fs.readFile(path.join(dataRoot, 'settings.json'), 'utf-8'));
-            if (getAtPath(persistedAfterMarkerPut, 'data.openAIKey') !== 'sk-contract-secret') {
-                throw new Error('Expected redacted marker PUT to preserve existing openAIKey secret.');
-            }
-            if (getAtPath(persistedAfterMarkerPut, 'data.novelai.token') !== 'pst-contract-secret') {
-                throw new Error('Expected redacted marker PUT to preserve existing novelai.token secret.');
-            }
-
-            const clearSecretsPayload = JSON.parse(JSON.stringify(putWithRedactedMarkers.body || {}));
-            clearSecretsPayload.data.openAIKey = '';
-            if (!clearSecretsPayload.data.novelai || typeof clearSecretsPayload.data.novelai !== 'object') {
-                clearSecretsPayload.data.novelai = {};
-            }
-            clearSecretsPayload.data.novelai.token = '';
-            const putClearSecrets = await api
-                .put('/data/settings')
-                .set('risu-auth', PASSWORD)
-                .set('If-Match', putWithRedactedMarkersEtag)
-                .send(clearSecretsPayload)
-                .expect(200);
-            if (getAtPath(putClearSecrets.body, 'data.openAIKey') !== '') {
-                throw new Error('Expected clearing openAIKey to return empty string.');
-            }
-            if (getAtPath(putClearSecrets.body, 'data.novelai.token') !== '') {
-                throw new Error('Expected clearing novelai.token to return empty string.');
-            }
-
-            const legacyBody = JSON.parse(JSON.stringify(persistedAfterMarkerPut || {}));
-            if (!legacyBody.data || typeof legacyBody.data !== 'object') {
-                legacyBody.data = {};
-            }
-            if (!legacyBody.data.novelai || typeof legacyBody.data.novelai !== 'object') {
-                legacyBody.data.novelai = {};
-            }
-            legacyBody.data.openAIKey = '[REDACTED]';
-            legacyBody.data.novelai.token = REDACTED_SECRET_VALUE;
-            await fs.writeFile(path.join(dataRoot, 'settings.json'), JSON.stringify(legacyBody, null, 2), 'utf-8');
-
-            const getLegacyMarkers = await api
-                .get('/data/settings')
-                .set('risu-auth', PASSWORD)
-                .expect(200);
-            if (getAtPath(getLegacyMarkers.body, 'data.openAIKey') !== '') {
-                throw new Error(
-                    'Expected legacy [REDACTED] marker in persisted settings to normalize to empty string.'
-                );
-            }
-            if (getAtPath(getLegacyMarkers.body, 'data.novelai.token') !== '') {
-                throw new Error(
-                    'Expected legacy redacted marker in persisted settings to normalize to empty string.'
-                );
-            }
-        }
+            .set('risu-auth', PASSWORD)
+            .expect(404);
+        await api
+            .post('/data/characters')
+            .set('risu-auth', PASSWORD)
+            .send({ character: { name: 'legacy-route-probe' } })
+            .expect(404);
 
         const oauthMissingState = await api
             .get('/data/oauth/callback?code=test-code');
@@ -375,19 +264,19 @@ async function runContracts() {
         // Explicit auth attempts should consume lockout budget while passive stale
         // background requests should not.
         await api
-            .get('/data/settings')
+            .get('/data/state/snapshot')
             .set('risu-auth', 'wrong-password')
             .set('x-risu-client-id', 'lockout-probe')
             .set('x-risu-auth-attempt', '1')
             .expect(401);
         await api
-            .get('/data/settings')
+            .get('/data/state/snapshot')
             .set('risu-auth', 'wrong-password')
             .set('x-risu-client-id', 'lockout-probe')
             .set('x-risu-auth-attempt', '1')
             .expect(401);
         const lockedAttempt = await api
-            .get('/data/settings')
+            .get('/data/state/snapshot')
             .set('risu-auth', 'wrong-password')
             .set('x-risu-client-id', 'lockout-probe')
             .set('x-risu-auth-attempt', '1')
@@ -397,43 +286,58 @@ async function runContracts() {
         }
 
         const created = await api
-            .post('/data/characters')
+            .post('/data/state/commands')
             .set('risu-auth', PASSWORD)
-            .send({ character: { name: 'Contracts' } })
-            .expect(201);
-        const charId = created.body?.character?.chaId || created.body?.data?.chaId;
-        if (!charId) {
-            throw new Error(`Character creation did not return chaId. Body=${JSON.stringify(created.body)}`);
+            .send({
+                clientMutationId: 'contracts-create-char',
+                baseEventId: Number(authSnapshot.body?.lastEventId || 0),
+                commands: [
+                    {
+                        type: 'character.create',
+                        charId: 'contract-char',
+                        character: {
+                            chaId: 'contract-char',
+                            name: 'Contracts',
+                        },
+                    },
+                ],
+            })
+            .expect(200);
+        if (!created.body?.ok) {
+            throw new Error(`Expected command create to succeed, got ${JSON.stringify(created.body)}`);
         }
 
-        await api
-            .put(`/data/characters/${encodeURIComponent(charId)}`)
-            .set('risu-auth', PASSWORD)
-            .send({ character: { name: 'No If-Match' } })
-            .expect(412);
-
-        const fetched = await api
-            .get(`/data/characters/${encodeURIComponent(charId)}`)
+        const snapshotAfterCreate = await api
+            .get('/data/state/snapshot')
             .set('risu-auth', PASSWORD)
             .expect(200);
-        const etag = fetched.headers.etag;
-        if (!etag) {
-            throw new Error('Expected ETag on GET /data/characters/:id response.');
+        const hasContractChar = Array.isArray(snapshotAfterCreate.body?.characters)
+            && snapshotAfterCreate.body.characters.some((entry) => entry?.chaId === 'contract-char');
+        if (!hasContractChar) {
+            throw new Error(
+                `Expected contract-char in snapshot after command create, got ${JSON.stringify(snapshotAfterCreate.body?.characters)}`
+            );
         }
 
-        await api
-            .put(`/data/characters/${encodeURIComponent(charId)}`)
+        const staleBase = await api
+            .post('/data/state/commands')
             .set('risu-auth', PASSWORD)
-            .set('If-Match', etag)
-            .send({ character: { chaId: charId, name: 'Updated With ETag' } })
-            .expect(200);
-
-        await api
-            .put(`/data/characters/${encodeURIComponent(charId)}`)
-            .set('risu-auth', PASSWORD)
-            .set('If-Match', etag)
-            .send({ character: { chaId: charId, name: 'Stale ETag Update' } })
+            .send({
+                clientMutationId: 'contracts-stale-base',
+                baseEventId: Math.max(0, Number(created.body?.lastEventId || 0) - 1),
+                commands: [
+                    {
+                        type: 'settings.replace',
+                        settings: {
+                            contract: true,
+                        },
+                    },
+                ],
+            })
             .expect(409);
+        if (!Array.isArray(staleBase.body?.conflicts) || staleBase.body.conflicts[0]?.code !== 'STALE_BASE_EVENT') {
+            throw new Error(`Expected STALE_BASE_EVENT conflict, got ${JSON.stringify(staleBase.body)}`);
+        }
 
         const underLimitInvalidMode = await api
             .post('/data/llm/preview')

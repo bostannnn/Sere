@@ -8,7 +8,6 @@ function registerServerRoutes(arg = {}) {
         registerHypaV3ManualRoutes,
         registerHypaV3ResummaryRoutes,
         registerLLMRoutes,
-        registerStorageRoutes,
         registerContentRoutes,
         registerAuthRoutes,
         registerStateRoutes,
@@ -96,23 +95,6 @@ function registerServerRoutes(arg = {}) {
         sendJson: arg.sendJson,
         assembleLLMServerPrompt: arg.assembleLLMServerPrompt,
         readLLMExecutionLogs: arg.readLLMExecutionLogs,
-    });
-
-    registerStorageRoutes({
-        app: arg.app,
-        path: arg.path,
-        fs: arg.fs,
-        existsSync: arg.existsSync,
-        crypto: arg.crypto,
-        dataDirs: arg.dataDirs,
-        readJsonWithEtag: arg.readJsonWithEtag,
-        writeJsonWithEtag: arg.writeJsonWithEtag,
-        requireIfMatch: arg.requireIfMatch,
-        isIfMatchAny: arg.isIfMatchAny,
-        sendConflict: arg.sendConflict,
-        sendJson: arg.sendJson,
-        requireSafeSegment: arg.requireSafeSegment,
-        ensureDir: arg.ensureDir,
     });
 
     registerContentRoutes({

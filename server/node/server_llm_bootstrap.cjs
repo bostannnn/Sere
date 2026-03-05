@@ -31,6 +31,7 @@ function createServerLlmBootstrap(arg = {}) {
         getReqIdFromResponse,
         readJsonWithEtag,
         writeJsonWithEtag,
+        applyStateCommands,
         logLLMExecutionStart,
         logLLMExecutionEnd,
         toLLMErrorResponse,
@@ -84,6 +85,7 @@ function createServerLlmBootstrap(arg = {}) {
         applyPeriodicHypaV3Summary,
         generateSummaryEmbedding,
         buildServerMemoryMessages,
+        applyStateCommands,
     });
 
     const {
@@ -122,6 +124,7 @@ function createServerLlmBootstrap(arg = {}) {
         existsSync,
         readJsonWithEtag,
         writeJsonWithEtag,
+        applyStateCommands,
         isSafePathSegment,
         getReqIdFromResponse,
         parseLLMExecutionInput,

@@ -26,7 +26,6 @@ const { registerHypaV3TraceRoutes } = require('./routes/hypav3_trace_routes.cjs'
 const { registerHypaV3ManualRoutes } = require('./routes/hypav3_manual_routes.cjs');
 const { registerHypaV3ResummaryRoutes } = require('./routes/hypav3_resummary_routes.cjs');
 const { registerRagRoutes } = require('./routes/rag_routes.cjs');
-const { registerStorageRoutes } = require('./routes/storage_routes.cjs');
 const { registerContentRoutes } = require('./routes/content_routes.cjs');
 const { registerAuthRoutes } = require('./routes/auth_routes.cjs');
 const { registerStateRoutes } = require('./routes/state_routes.cjs');
@@ -208,6 +207,49 @@ const commandService = createCommandService({
     eventJournal,
 });
 
+function createInternalStateCommandApplier(arg = {}) {
+    const applyCommands = typeof arg.applyCommands === 'function'
+        ? arg.applyCommands
+        : null;
+    const readLastEventId = typeof arg.readLastEventId === 'function'
+        ? arg.readLastEventId
+        : (async () => 0);
+
+    if (!applyCommands) {
+        throw new Error('createInternalStateCommandApplier requires applyCommands');
+    }
+
+    return async function applyStateCommands(commands, source = 'internal') {
+        const commandList = Array.isArray(commands) ? commands : [];
+        if (commandList.length === 0) {
+            return {
+                ok: true,
+                lastEventId: await readLastEventId(),
+                applied: [],
+                conflicts: [],
+            };
+        }
+        const sourceLabel = String(source || 'internal').replace(/[^a-zA-Z0-9._-]/g, '-');
+        const clientMutationId = `srv-${sourceLabel}-${Date.now()}-${nodeCrypto.randomUUID()}`;
+        const result = await applyCommands({
+            clientMutationId,
+            commands: commandList,
+        });
+        if (!result?.ok) {
+            const error = new Error(`Internal state command failed (${sourceLabel})`);
+            error.code = 'INTERNAL_STATE_COMMAND_FAILED';
+            error.result = result;
+            throw error;
+        }
+        return result;
+    };
+}
+
+const applyStateCommands = createInternalStateCommandApplier({
+    applyCommands: commandService.applyCommands.bind(commandService),
+    readLastEventId: eventJournal.readLastEventId.bind(eventJournal),
+});
+
 // Server-first storage API
 installDataApiMiddleware();
 
@@ -258,6 +300,7 @@ const {
     getReqIdFromResponse,
     readJsonWithEtag,
     writeJsonWithEtag,
+    applyStateCommands,
     logLLMExecutionStart,
     logLLMExecutionEnd,
     toLLMErrorResponse,
@@ -351,6 +394,7 @@ registerServerRoutes({
     snapshotService,
     commandService,
     eventJournal,
+    applyStateCommands,
     getCachedRulebook,
     searchRulebooks,
     generateEmbeddings,
@@ -368,7 +412,6 @@ registerServerRoutes({
     registerHypaV3ManualRoutes,
     registerHypaV3ResummaryRoutes,
     registerLLMRoutes,
-    registerStorageRoutes,
     registerContentRoutes,
     registerAuthRoutes,
     registerStateRoutes,

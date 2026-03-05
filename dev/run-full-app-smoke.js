@@ -28,8 +28,8 @@ async function waitForServerReady(url, timeoutMs) {
   const startedAt = Date.now();
   while (Date.now() - startedAt < timeoutMs) {
     try {
-      const res = await fetch(`${url}/data/settings`, { method: 'GET' });
-      if (res.status === 200 || res.status === 404) {
+      const res = await fetch(`${url}/data/state/snapshot`, { method: 'GET' });
+      if (res.status === 200 || res.status === 401 || res.status === 403) {
         return;
       }
     } catch {
@@ -94,4 +94,3 @@ run().catch((error) => {
   console.error('[FullAppSmoke] FAILED', error.message);
   process.exit(1);
 });
-

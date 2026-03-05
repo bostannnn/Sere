@@ -16,6 +16,8 @@
         <span class="ds-mobile-header-title">{language.menu}</span>
     {:else if $selectedCharID !== -1}
         <button type="button" class="ds-mobile-header-icon-btn icon-btn icon-btn--md" title="Back" aria-label="Back" onclick={() => {
+            MobileSideBar.set(0)
+            MobileGUIStack.set(0)
             selectedCharID.set(-1)
         }}>
             <ArrowLeft size={18} />

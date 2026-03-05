@@ -26,6 +26,7 @@ function registerHypaV3ResummaryRoutes(arg = {}) {
         cleanSummaryOutput,
         generateSummaryEmbedding,
         persistChatDataToRaw,
+        applyStateCommands,
     } = arg;
 
     if (!app || typeof app.post !== 'function') {
@@ -33,6 +34,28 @@ function registerHypaV3ResummaryRoutes(arg = {}) {
     }
     if (typeof safeResolve !== 'function') {
         throw new Error('registerHypaV3ResummaryRoutes requires safeResolve.');
+    }
+
+    async function persistChatViaStateCommand(characterId, chatId, chat) {
+        if (typeof applyStateCommands !== 'function') {
+            throw new LLMHttpError(
+                500,
+                'STATE_COMMANDS_UNAVAILABLE',
+                'Internal state command service is unavailable for HypaV3 re-summarize apply.',
+            );
+        }
+        const nextChat = (chat && typeof chat === 'object') ? { ...chat } : {};
+        if (!toStringOrEmpty(nextChat.id)) {
+            nextChat.id = chatId;
+        }
+        await applyStateCommands([
+            {
+                type: 'chat.replace',
+                charId: characterId,
+                chatId,
+                chat: nextChat,
+            },
+        ], 'memory.hypav3.resummarize-apply');
     }
 
 app.post('/data/memory/hypav3/resummarize-preview', async (req, res) => {
@@ -342,7 +365,7 @@ app.post('/data/memory/hypav3/resummarize-apply', async (req, res) => {
         }
 
         chat.hypaV3Data = hypaData;
-        await fs.writeFile(chatPath, JSON.stringify(persistChatDataToRaw(chatRaw, chat), null, 2), 'utf-8');
+        await persistChatViaStateCommand(characterId, chatId, chat);
 
         const successPayload = {
             type: 'success',

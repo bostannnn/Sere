@@ -79,6 +79,36 @@ function createSnapshotService(arg = {}) {
         return chats;
     }
 
+    function applyStoredChatOrder(chatRows, character) {
+        if (!Array.isArray(chatRows) || chatRows.length <= 1) return Array.isArray(chatRows) ? chatRows : [];
+        const storedOrder = Array.isArray(character?.chatOrder)
+            ? character.chatOrder.filter((entry) => typeof entry === 'string' && entry.length > 0)
+            : [];
+        if (storedOrder.length === 0) return chatRows;
+
+        const byId = new Map();
+        for (const row of chatRows) {
+            byId.set(String(row?.id || ''), row);
+        }
+
+        const ordered = [];
+        const used = new Set();
+        for (const chatId of storedOrder) {
+            const row = byId.get(chatId);
+            if (!row || used.has(chatId)) continue;
+            ordered.push(row);
+            used.add(chatId);
+        }
+
+        for (const row of chatRows) {
+            const chatId = String(row?.id || '');
+            if (used.has(chatId)) continue;
+            ordered.push(row);
+            used.add(chatId);
+        }
+        return ordered;
+    }
+
     async function buildSnapshot() {
         const { settings, revision: settingsRevision } = await readSettings();
         const charIds = await listCharacterIds();
@@ -114,8 +144,15 @@ function createSnapshotService(arg = {}) {
             chatsByCharacter[charId] = [];
             revisions.chats[charId] = {};
             const chatRows = await readChatsForCharacter(charId);
-            for (const row of chatRows) {
-                chatsByCharacter[charId].push(row.chat);
+            const orderedChatRows = applyStoredChatOrder(chatRows, charResult.character);
+            for (const row of orderedChatRows) {
+                const chatPayload = (row?.chat && typeof row.chat === 'object')
+                    ? { ...row.chat }
+                    : {};
+                if (typeof chatPayload.id !== 'string' || chatPayload.id.length === 0) {
+                    chatPayload.id = row.id;
+                }
+                chatsByCharacter[charId].push(chatPayload);
                 revisions.chats[charId][row.id] = row.revision;
             }
         }

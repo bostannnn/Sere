@@ -56,13 +56,59 @@ for (const file of tsAndSvelteFiles) {
 }
 
 const serverFiles = collectFiles(serverRoot, (abs) => abs.endsWith('.cjs'));
+const authoritativeStateWriteAllowlist = new Set([
+  path.join(serverRoot, 'state', 'command_service.cjs'),
+  path.join(serverRoot, 'state', 'event_journal.cjs'),
+]);
+
 for (const file of serverFiles) {
   if (path.basename(file).startsWith('check-')) continue;
   const src = fs.readFileSync(file, 'utf-8');
   const hasLegacyImport = /require\s*\(\s*['"`]\.\/routes\/legacy_routes\.cjs['"`]\s*\)/.test(src);
   const hasLegacyRegister = /\bregisterLegacyRoutes\b/.test(src);
+  const hasStorageImport = /require\s*\(\s*['"`]\.\/routes\/storage_routes\.cjs['"`]\s*\)/.test(src);
+  const hasStorageRegister = /\bregisterStorageRoutes\b/.test(src);
   if (hasLegacyImport || hasLegacyRegister) {
     fail('AUTH-003', file, 'Found legacy route wiring. legacy_routes.cjs must stay removed.');
+  }
+  if (hasStorageImport || hasStorageRegister) {
+    fail('AUTH-004', file, 'Found storage route wiring. All state mutations must go through /data/state/commands.');
+  }
+
+  if (!authoritativeStateWriteAllowlist.has(file)) {
+    const writesStateByTrackedVar = /(?:const|let)\s+(?:settingsPath|charPath|chatPath)\b[\s\S]{0,4000}?(?:writeJsonWithEtag|fs\.(?:writeFile|writeFileSync|appendFile|appendFileSync|rm|rmSync))\s*\(\s*(?:settingsPath|charPath|chatPath)\b/s.test(src);
+    const writesStateByPathJoin = /(?:writeJsonWithEtag|fs\.(?:writeFile|writeFileSync|appendFile|appendFileSync|rm|rmSync))\s*\(\s*path\.join\([^)]*(?:settings\.json|character\.json|chats(?:\/|\\\\))/s.test(src);
+    if (writesStateByTrackedVar || writesStateByPathJoin) {
+      fail(
+        'AUTH-007',
+        file,
+        'Found direct state file mutation. Use commandService/applyStateCommands so writes are event-journaled.',
+      );
+    }
+  }
+}
+
+const routeFiles = collectFiles(path.join(serverRoot, 'routes'), (abs) => abs.endsWith('.cjs'));
+for (const file of routeFiles) {
+  if (path.basename(file).startsWith('check-')) continue;
+  const src = fs.readFileSync(file, 'utf-8');
+
+  // Legacy mutable endpoints must never reappear.
+  if (/\/data\/settings\b/.test(src) || /\/data\/characters(?:\b|\/)/.test(src) || /\/data\/storage\//.test(src)) {
+    fail(
+      'AUTH-005',
+      file,
+      'Found legacy storage endpoint route definition. Use /data/state/snapshot and /data/state/commands.',
+    );
+  }
+
+  const hasLegacyMutableHandler = /app\.(post|put|patch|delete)\s*\(\s*['"`]\/data\/(?:settings|characters(?:\b|\/))/.test(src);
+  if (hasLegacyMutableHandler) {
+    fail(
+      'AUTH-006',
+      file,
+      'Found mutable legacy /data storage handler. State writes must be command-gateway only.',
+    );
   }
 }
 

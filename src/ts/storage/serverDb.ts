@@ -41,6 +41,7 @@ let realtimeSyncStarted = false;
 let refreshInFlight = false;
 let refreshQueued = false;
 let refreshRetryTimer: ReturnType<typeof setTimeout> | null = null;
+let saveQueue: Promise<void> = Promise.resolve();
 
 function stableHash(value: unknown) {
     return JSON.stringify(value ?? null);
@@ -52,16 +53,38 @@ function stripCharacters(db: Database) {
     return snapshot;
 }
 
-function normalizeCharacter(raw: character | groupChat, chats: Chat[]) {
+function normalizeCharacter(raw: character | groupChat, chats: Chat[], preferredChatId = '') {
     const next = safeStructuredClone(raw) as character | groupChat;
-    next.chats = chats;
+    const normalizedChats = chats.map((entry) => {
+        const nextChat = safeStructuredClone(entry) as Chat;
+        if (typeof nextChat?.id !== 'string' || nextChat.id.length === 0) {
+            nextChat.id = uuidv4();
+        }
+        return nextChat;
+    });
+    next.chats = normalizedChats;
+    const chatOrder = normalizedChats
+        .map((entry) => (typeof entry?.id === 'string' ? entry.id : ''))
+        .filter((entry) => entry.length > 0);
+    (next as (character | groupChat) & { chatOrder?: string[] }).chatOrder = chatOrder;
     if (!next.chatFolders) next.chatFolders = [];
+    if (preferredChatId) {
+        const preferredIndex = normalizedChats.findIndex((entry) => entry?.id === preferredChatId);
+        if (preferredIndex >= 0) {
+            next.chatPage = preferredIndex;
+        }
+    }
     if (typeof next.chatPage !== 'number') next.chatPage = 0;
-    if (next.chatPage >= chats.length) next.chatPage = Math.max(0, chats.length - 1);
+    if (next.chatPage < 0) next.chatPage = 0;
+    if (next.chatPage >= normalizedChats.length) next.chatPage = Math.max(0, normalizedChats.length - 1);
     return next;
 }
 
-function normalizeCharacterList(characters: unknown, chatsByCharacter: Record<string, unknown[]>) {
+function normalizeCharacterList(
+    characters: unknown,
+    chatsByCharacter: Record<string, unknown[]>,
+    selectedChatByCharacter: Map<string, string>,
+) {
     if (!Array.isArray(characters)) return [] as (character | groupChat)[];
     const normalized: (character | groupChat)[] = [];
 
@@ -72,7 +95,8 @@ function normalizeCharacterList(characters: unknown, chatsByCharacter: Record<st
         if (!charId) continue;
         const chatRows = Array.isArray(chatsByCharacter?.[charId]) ? chatsByCharacter[charId] : [];
         const chats = chatRows.filter((entry) => entry && typeof entry === 'object') as Chat[];
-        normalized.push(normalizeCharacter(char, chats));
+        const preferredChatId = selectedChatByCharacter.get(charId) || '';
+        normalized.push(normalizeCharacter(char, chats, preferredChatId));
     }
 
     return normalized;
@@ -80,7 +104,14 @@ function normalizeCharacterList(characters: unknown, chatsByCharacter: Record<st
 
 function characterWithoutChats(char: character | groupChat) {
     const next = safeStructuredClone(char) as character | groupChat;
+    const chatOrder = Array.isArray(char?.chats)
+        ? char.chats
+            .map((entry) => (typeof entry?.id === 'string' ? entry.id : ''))
+            .filter((entry) => entry.length > 0)
+        : [];
+    (next as (character | groupChat) & { chatOrder?: string[] }).chatOrder = chatOrder;
     next.chats = [];
+    delete (next as character | groupChat & { chatPage?: number }).chatPage;
     return next;
 }
 
@@ -125,6 +156,20 @@ function setBaselineFromDatabase(db: Database) {
 }
 
 async function applySnapshotToDatabase(snapshot: StateSnapshot) {
+    const existingDb = getDatabase();
+    const selectedChatByCharacter = new Map<string, string>();
+    for (const existingChar of existingDb?.characters || []) {
+        const charId = typeof existingChar?.chaId === 'string' ? existingChar.chaId : '';
+        if (!charId) continue;
+        const chatPage = typeof existingChar?.chatPage === 'number' ? existingChar.chatPage : -1;
+        const activeChat = (Array.isArray(existingChar?.chats) && chatPage >= 0)
+            ? existingChar.chats[chatPage]
+            : null;
+        const activeChatId = typeof activeChat?.id === 'string' ? activeChat.id : '';
+        if (!activeChatId) continue;
+        selectedChatByCharacter.set(charId, activeChatId);
+    }
+
     const settings = snapshot?.settings && typeof snapshot.settings === 'object'
         ? snapshot.settings
         : {};
@@ -132,7 +177,7 @@ async function applySnapshotToDatabase(snapshot: StateSnapshot) {
         ? (snapshot.chatsByCharacter as Record<string, unknown[]>)
         : {};
 
-    const characters = normalizeCharacterList(snapshot?.characters, chatsByCharacter);
+    const characters = normalizeCharacterList(snapshot?.characters, chatsByCharacter, selectedChatByCharacter);
     const db = { characters } as Database;
     setDatabase(db);
     const merged = Object.assign(db, settings, { characters });
@@ -164,16 +209,12 @@ function buildCommands(db: Database, _selection: SaveSelection): StateCommand[] 
         const nextCharPayload = characterWithoutChats(char);
         const nextCharHash = stableHash(nextCharPayload);
         const currentCharHash = baseline.characterHashes.get(charId);
+        const isNewCharacter = !currentCharHash;
+        let hasChatStructureChange = false;
 
-        if (!currentCharHash) {
+        if (isNewCharacter) {
             commands.push({
                 type: 'character.create',
-                charId,
-                character: nextCharPayload,
-            });
-        } else if (currentCharHash !== nextCharHash) {
-            commands.push({
-                type: 'character.replace',
                 charId,
                 character: nextCharPayload,
             });
@@ -191,6 +232,7 @@ function buildCommands(db: Database, _selection: SaveSelection): StateCommand[] 
             const currentChatHash = serverChats.get(chatId);
 
             if (!currentChatHash) {
+                hasChatStructureChange = true;
                 commands.push({
                     type: 'chat.create',
                     charId,
@@ -209,10 +251,19 @@ function buildCommands(db: Database, _selection: SaveSelection): StateCommand[] 
 
         for (const serverChatId of serverChats.keys()) {
             if (localChatIds.has(serverChatId)) continue;
+            hasChatStructureChange = true;
             commands.push({
                 type: 'chat.delete',
                 charId,
                 chatId: serverChatId,
+            });
+        }
+
+        if (!isNewCharacter && (currentCharHash !== nextCharHash || hasChatStructureChange)) {
+            commands.push({
+                type: 'character.replace',
+                charId,
+                character: nextCharPayload,
             });
         }
     }
@@ -297,22 +348,22 @@ export async function loadServerDatabase() {
     return await applySnapshotToDatabase(snapshot);
 }
 
-export async function saveServerDatabase(db: Database, toSave: SaveSelection) {
+async function saveServerDatabaseOnce(toSave: SaveSelection) {
     if (!isNodeServer) return;
 
     if (!baseline.initialized) {
         await loadServerDatabase();
     }
 
-    const commands = buildCommands(db, toSave);
-    if (commands.length === 0) {
-        return;
-    }
-
     const maxRetries = 2;
     let lastError: Error | null = null;
 
     for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
+        const dbForAttempt = safeStructuredClone(getDatabase()) as Database;
+        const commands = buildCommands(dbForAttempt, toSave);
+        if (commands.length === 0) {
+            return;
+        }
         const mutationId = uuidv4();
         const response = await enqueueCommand({
             clientMutationId: mutationId,
@@ -321,7 +372,7 @@ export async function saveServerDatabase(db: Database, toSave: SaveSelection) {
         });
 
         if (response.ok) {
-            setBaselineFromDatabase(db);
+            setBaselineFromDatabase(dbForAttempt);
             setServerStateLastEventId(response.lastEventId);
             if (refreshQueued && !refreshInFlight) {
                 refreshQueued = false;
@@ -349,6 +400,17 @@ export async function saveServerDatabase(db: Database, toSave: SaveSelection) {
     if (lastError) {
         throw lastError;
     }
+}
+
+export async function saveServerDatabase(db: Database, toSave: SaveSelection) {
+    if (!isNodeServer) return;
+    void db;
+    const run = async () => {
+        await saveServerDatabaseOnce(toSave);
+    };
+    const queued = saveQueue.then(run, run);
+    saveQueue = queued.catch(() => {});
+    return queued;
 }
 
 export function startServerRealtimeSync() {

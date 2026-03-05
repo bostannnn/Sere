@@ -32,7 +32,12 @@ function createEventJournal(arg = {}) {
     async function readMeta() {
         await ensureInitialized();
         const raw = await fs.readFile(metaPath, 'utf-8');
-        const parsed = JSON.parse(raw);
+        let parsed = {};
+        try {
+            parsed = JSON.parse(raw);
+        } catch {
+            parsed = {};
+        }
         const nextEventId = Number.isFinite(Number(parsed?.nextEventId))
             ? Math.max(1, Number(parsed.nextEventId))
             : 1;
@@ -40,6 +45,41 @@ function createEventJournal(arg = {}) {
             nextEventId,
             updatedAt: Number.isFinite(Number(parsed?.updatedAt)) ? Number(parsed.updatedAt) : Date.now(),
         };
+    }
+
+    async function readLastEventIdFromLog() {
+        await ensureInitialized();
+        const raw = await fs.readFile(logPath, 'utf-8');
+        if (!raw.trim()) return 0;
+        const lines = raw.trimEnd().split('\n');
+        for (let i = lines.length - 1; i >= 0; i -= 1) {
+            const line = lines[i].trim();
+            if (!line) continue;
+            try {
+                const parsed = JSON.parse(line);
+                const id = Number(parsed?.id);
+                if (Number.isFinite(id) && id > 0) {
+                    return Math.floor(id);
+                }
+            } catch {
+                // Ignore malformed tail lines.
+            }
+        }
+        return 0;
+    }
+
+    async function reconcileMetaWithLog() {
+        const [meta, lastLogEventId] = await Promise.all([
+            readMeta(),
+            readLastEventIdFromLog(),
+        ]);
+        const reconciledNextEventId = Math.max(1, meta.nextEventId, lastLogEventId + 1);
+        if (reconciledNextEventId !== meta.nextEventId) {
+            return writeMeta({
+                nextEventId: reconciledNextEventId,
+            });
+        }
+        return meta;
     }
 
     async function writeMeta(meta) {
@@ -52,12 +92,12 @@ function createEventJournal(arg = {}) {
     }
 
     async function readLastEventId() {
-        const meta = await readMeta();
+        const meta = await reconcileMetaWithLog();
         return Math.max(0, meta.nextEventId - 1);
     }
 
     async function appendEvent(event) {
-        const meta = await readMeta();
+        const meta = await reconcileMetaWithLog();
         const eventId = meta.nextEventId;
         const payload = {
             id: eventId,
@@ -104,6 +144,7 @@ function createEventJournal(arg = {}) {
         appendEvent,
         readEventsSince,
         readLastEventId,
+        readLastEventIdFromLog,
     };
 }
 

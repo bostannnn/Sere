@@ -74,6 +74,77 @@ function createCommandService(arg = {}) {
         return path.join(dataDirs.characters || '', charId, 'chats', `${chatId}.json`);
     }
 
+    function normalizeChatOrder(order) {
+        if (!Array.isArray(order)) return [];
+        const seen = new Set();
+        const normalized = [];
+        for (const entry of order) {
+            if (typeof entry !== 'string' || entry.length === 0) continue;
+            if (seen.has(entry)) continue;
+            seen.add(entry);
+            normalized.push(entry);
+        }
+        return normalized;
+    }
+
+    async function mergeCharacterChatOrder(state, charId, incomingCharacter, existingCharacter) {
+        if (!incomingCharacter || typeof incomingCharacter !== 'object') return;
+        const incomingOrder = normalizeChatOrder(incomingCharacter.chatOrder);
+        const existingOrder = normalizeChatOrder(existingCharacter?.chatOrder);
+        const touchedChatIds = [];
+        const chatMap = state.chats.get(charId);
+        if (chatMap instanceof Map) {
+            for (const [chatId, chatState] of chatMap.entries()) {
+                if (!chatState || !chatState.exists || chatState.deleted) continue;
+                if (!isSafePathSegment(chatId)) continue;
+                touchedChatIds.push(chatId);
+            }
+        }
+        // Preserve command insertion order for touched chats; do not sort.
+
+        const merged = [];
+        const seen = new Set();
+        const appendUnique = (chatId) => {
+            if (typeof chatId !== 'string' || chatId.length === 0) return;
+            if (seen.has(chatId)) return;
+            seen.add(chatId);
+            merged.push(chatId);
+        };
+
+        // If caller omitted chatOrder, preserve existing server order exactly.
+        if (incomingOrder.length === 0) {
+            for (const chatId of existingOrder) {
+                appendUnique(chatId);
+            }
+            for (const chatId of touchedChatIds) {
+                appendUnique(chatId);
+            }
+            if (merged.length > 0) {
+                incomingCharacter.chatOrder = merged;
+            } else {
+                delete incomingCharacter.chatOrder;
+            }
+            return;
+        }
+
+        // Caller sent explicit order; keep it and only append known in-memory chats.
+        for (const chatId of incomingOrder) {
+            appendUnique(chatId);
+        }
+        for (const chatId of existingOrder) {
+            appendUnique(chatId);
+        }
+        for (const chatId of touchedChatIds) {
+            appendUnique(chatId);
+        }
+
+        if (merged.length > 0) {
+            incomingCharacter.chatOrder = merged;
+        } else {
+            delete incomingCharacter.chatOrder;
+        }
+    }
+
     async function readEnvelope(filePath) {
         if (!existsSync(filePath)) return null;
         const { json } = await readJsonWithEtag(filePath);
@@ -430,6 +501,7 @@ function createCommandService(arg = {}) {
         }
 
         character.chaId = charId;
+        await mergeCharacterChatOrder(state, charId, character, charState.character);
         charState.character = character;
         charState.touched = true;
         charState.workingRevision += 1;

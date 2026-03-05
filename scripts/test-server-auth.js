@@ -68,12 +68,12 @@ async function main() {
   });
   assert(setPassword.res.status === 200, `set password expected 200, got ${setPassword.res.status}`);
 
-  const unauthSettings = await request('/data/settings');
-  assert(unauthSettings.res.status === 401, `unauth settings expected 401, got ${unauthSettings.res.status}`);
+  const unauthSnapshot = await request('/data/state/snapshot');
+  assert(unauthSnapshot.res.status === 401, `unauth snapshot expected 401, got ${unauthSnapshot.res.status}`);
 
   // Passive background API calls with missing/stale token must not burn auth lockout budget.
   for (let i = 0; i < 20; i += 1) {
-    const probe = await request('/data/settings');
+    const probe = await request('/data/state/snapshot');
     assert(probe.res.status === 401, `unauth probe expected 401, got ${probe.res.status}`);
   }
   const passiveLockCheck = await status('');
@@ -82,11 +82,8 @@ async function main() {
     `passive unauthorized traffic should not trigger lockout (retryAfterMs=${passiveLockCheck.retryAfterMs})`
   );
 
-  const authSettings = await request('/data/settings', {}, token1);
-  assert(
-    authSettings.res.status === 200 || authSettings.res.status === 404,
-    `auth settings expected 200/404, got ${authSettings.res.status}`
-  );
+  const authSnapshot = await request('/data/state/snapshot', {}, token1);
+  assert(authSnapshot.res.status === 200, `auth snapshot expected 200, got ${authSnapshot.res.status}`);
 
   const token2 = await digestPassword(`smoke-pass-2-${runId}`, token1);
   const changePassword = await request(
@@ -106,14 +103,11 @@ async function main() {
   const newStatus = await status(token2);
   assert(newStatus.status === 'correct', `new token expected correct, got ${newStatus.status}`);
 
-  const oldTokenSettings = await request('/data/settings', {}, token1);
-  assert(oldTokenSettings.res.status === 401, `old token settings expected 401, got ${oldTokenSettings.res.status}`);
+  const oldTokenSnapshot = await request('/data/state/snapshot', {}, token1);
+  assert(oldTokenSnapshot.res.status === 401, `old token snapshot expected 401, got ${oldTokenSnapshot.res.status}`);
 
-  const newTokenSettings = await request('/data/settings', {}, token2);
-  assert(
-    newTokenSettings.res.status === 200 || newTokenSettings.res.status === 404,
-    `new token settings expected 200/404, got ${newTokenSettings.res.status}`
-  );
+  const newTokenSnapshot = await request('/data/state/snapshot', {}, token2);
+  assert(newTokenSnapshot.res.status === 200, `new token snapshot expected 200, got ${newTokenSnapshot.res.status}`);
 
   const expectedMaxFailures = Number.isFinite(Number(process.env.RISU_AUTH_MAX_FAILURES))
     ? Math.max(1, Number(process.env.RISU_AUTH_MAX_FAILURES))
