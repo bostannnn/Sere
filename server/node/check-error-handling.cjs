@@ -105,6 +105,10 @@ function findAllWithLines(src, re) {
     return results;
 }
 
+function escapeRegExp(value) {
+    return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 function extractCatchBody(src, catchOffset) {
     const start = src.indexOf('{', catchOffset);
     if (start === -1) return '';
@@ -314,8 +318,9 @@ for (const file of routeFiles) {
     const catches = findCatchBodies(file.src);
     for (const { paramName, body, offset } of catches) {
         if (!paramName) continue;
+        const escapedParamName = escapeRegExp(paramName);
         const rawStatusSendRe = new RegExp(
-            `res\\.status\\s*\\(\\s*5\\d\\d\\s*\\)\\.send\\s*\\(\\s*${paramName}\\s*\\)`,
+            `res\\.status\\s*\\(\\s*5\\d\\d\\s*\\)\\.send\\s*\\(\\s*${escapedParamName}\\s*\\)`,
             'g'
         );
         const hits = [...body.matchAll(rawStatusSendRe)];

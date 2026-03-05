@@ -27,7 +27,6 @@
     import { processMultiCommand } from 'src/ts/process/command';
     import { postChatFile } from 'src/ts/process/files/multisend';
     import { getInlayAsset } from 'src/ts/process/files/inlays';
-    import { ConnectionOpenStore } from 'src/ts/sync/multiuser';
     import { isNodeServer } from "src/ts/platform";
     import { saveServerDatabase } from "src/ts/storage/serverDb";
     import { resolveServerAuthToken } from "src/ts/storage/serverAuth";
@@ -242,7 +241,7 @@
                         cha.push({
                             role: 'user',
                             data: '*says nothing*',
-                            name: $ConnectionOpenStore ? DBState.db.username : null
+                            name: null
                         })
                         appendedUserMessage = true
                     }
@@ -261,7 +260,7 @@
                     role: 'user',
                     data: await processScript(char,messageInput,'editinput'),
                     time: Date.now(),
-                    name: $ConnectionOpenStore ? DBState.db.username : null
+                    name: null
                 })
                 appendedUserMessage = true
             }
@@ -270,7 +269,7 @@
                     role: 'user',
                     data: messageInput,
                     time: Date.now(),
-                    name: $ConnectionOpenStore ? DBState.db.username : null
+                    name: null
                 })
                 appendedUserMessage = true
             }

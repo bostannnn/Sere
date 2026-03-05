@@ -51,6 +51,9 @@ function createGenerateHelpers(arg = {}) {
     const buildServerMemoryMessages = typeof arg.buildServerMemoryMessages === 'function'
         ? arg.buildServerMemoryMessages
         : (async () => []);
+    const applyStateCommands = typeof arg.applyStateCommands === 'function'
+        ? arg.applyStateCommands
+        : null;
 
     const generateSupportedProviders = arg.generateSupportedProviders instanceof Set
         ? arg.generateSupportedProviders
@@ -228,6 +231,28 @@ function createGenerateHelpers(arg = {}) {
         };
     }
 
+    async function persistChatViaStateCommand(characterId, chatId, chat, source) {
+        if (typeof applyStateCommands !== 'function') {
+            throw new LLMHttpError(
+                500,
+                'STATE_COMMANDS_UNAVAILABLE',
+                'Internal state command service is unavailable for server-side chat persistence.'
+            );
+        }
+        const nextChat = (chat && typeof chat === 'object') ? { ...chat } : {};
+        if (!toStringOrEmpty(nextChat.id)) {
+            nextChat.id = chatId;
+        }
+        await applyStateCommands([
+            {
+                type: 'chat.replace',
+                charId: characterId,
+                chatId,
+                chat: nextChat,
+            },
+        ], source);
+    }
+
     async function buildGenerateExecutionPayload(rawBody, options = {}) {
         if (!rawBody || typeof rawBody !== 'object' || Array.isArray(rawBody)) {
             throw new LLMHttpError(400, 'INVALID_BODY', 'Request body must be a JSON object.');
@@ -295,6 +320,7 @@ function createGenerateHelpers(arg = {}) {
         const character = charRaw.character || charRaw.data || charRaw || {};
         const chat = chatRaw.chat || chatRaw.data || chatRaw || {};
 
+        let shouldPersistServerChat = false;
         if (existsSync(chatPath)) {
             try {
                 const periodicResult = await maybeRunServerPeriodicHypaV3Summarization({
@@ -312,12 +338,7 @@ function createGenerateHelpers(arg = {}) {
                     }
                 }
                 if (periodicResult.updated === true) {
-                    if (chatRaw.chat && typeof chatRaw.chat === 'object') {
-                        chatRaw.chat = chat;
-                    } else if (chatRaw.data && typeof chatRaw.data === 'object') {
-                        chatRaw.data = chat;
-                    }
-                    await fs.writeFile(chatPath, JSON.stringify(chatRaw, null, 2), 'utf-8');
+                    shouldPersistServerChat = true;
                 }
             } catch (periodicError) {
                 console.error('[HypaV3] Server periodic summarization failed:', periodicError);
@@ -338,13 +359,16 @@ function createGenerateHelpers(arg = {}) {
         // buildServerMemoryMessages may update chat.hypaV3Data.metrics (selection tracking).
         // Persist these back so similarity-based selection improves over time.
         if (existsSync(chatPath) && chat.hypaV3Data?.summaries?.length > 0) {
+            shouldPersistServerChat = true;
+        }
+        if (existsSync(chatPath) && shouldPersistServerChat) {
             try {
-                if (chatRaw.chat && typeof chatRaw.chat === 'object') {
-                    chatRaw.chat = chat;
-                } else if (chatRaw.data && typeof chatRaw.data === 'object') {
-                    chatRaw.data = chat;
-                }
-                await fs.writeFile(chatPath, JSON.stringify(chatRaw, null, 2), 'utf-8');
+                await persistChatViaStateCommand(
+                    characterId,
+                    chatId,
+                    chat,
+                    'llm.generate.hypav3',
+                );
             } catch (metricsWriteError) {
                 console.error('[HypaV3] Failed to persist memory selection metrics:', metricsWriteError);
             }

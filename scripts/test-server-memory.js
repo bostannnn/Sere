@@ -25,6 +25,8 @@ const testCharId = `test-mem-${runId}`;
 const testChatId = `test-chat-${runId}`;
 const characterPromptOverrideA = 'Character-level summarization prompt A';
 const requestPromptOverrideB = 'Request-level summarization prompt B';
+let eventCursor = 0;
+let mutationCounter = 0;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -46,24 +48,47 @@ async function req(urlPath, options = {}) {
   return { res, text, json, etag };
 }
 
-async function getSettings() {
-  const r = await req('/data/settings');
-  if (r.res.status === 404) return { json: null, etag: null };
-  assert(r.res.status === 200, `GET /data/settings expected 200 or 404, got ${r.res.status}: ${r.text}`);
-  return { json: r.json, etag: r.etag };
+async function getSnapshot() {
+  const r = await req('/data/state/snapshot');
+  assert(r.res.status === 200, `GET /data/state/snapshot expected 200, got ${r.res.status}: ${r.text}`);
+  eventCursor = Number.isFinite(Number(r.json?.lastEventId)) ? Number(r.json.lastEventId) : eventCursor;
+  return r.json || {};
 }
 
-async function putSettings(body, etag) {
-  // When settings don't exist yet (etag null), use a placeholder — the server
-  // skips ETag validation when the file is absent.
-  const ifMatch = etag || '"init"';
-  const r = await req('/data/settings', {
-    method: 'PUT',
-    headers: { 'content-type': 'application/json', 'if-match': ifMatch },
-    body: JSON.stringify(body),
+async function applyCommands(commands) {
+  mutationCounter += 1;
+  const r = await req('/data/state/commands', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      clientMutationId: `mem-smoke-${runId}-${mutationCounter}`,
+      baseEventId: eventCursor,
+      commands,
+    }),
   });
-  assert(r.res.status === 200, `PUT /data/settings expected 200, got ${r.res.status}: ${r.text}`);
-  return { json: r.json, etag: r.etag };
+  assert(
+    r.res.status === 200 || r.res.status === 409,
+    `POST /data/state/commands expected 200/409, got ${r.res.status}: ${r.text}`
+  );
+  eventCursor = Number.isFinite(Number(r.json?.lastEventId)) ? Number(r.json.lastEventId) : eventCursor;
+  return r;
+}
+
+async function getSettings() {
+  const snapshot = await getSnapshot();
+  return { json: snapshot.settings || {}, etag: null };
+}
+
+async function putSettings(body, _etag) {
+  const r = await applyCommands([
+    {
+      type: 'settings.replace',
+      settings: body || {},
+    },
+  ]);
+  assert(r.res.status === 200 && r.json?.ok === true, `settings.replace expected success, got ${r.res.status}: ${r.text}`);
+  const snapshot = await getSnapshot();
+  return { json: snapshot.settings || {}, etag: null };
 }
 
 // ---------------------------------------------------------------------------
@@ -157,9 +182,9 @@ async function main() {
 
   // Verify server is reachable
   try {
-    const ping = await req('/data/settings');
+    const ping = await req('/data/state/snapshot');
     assert(
-      ping.res.status === 200 || ping.res.status === 404,
+      ping.res.status === 200,
       `Unexpected server response: ${ping.res.status}`
     );
   } catch (err) {
@@ -181,24 +206,29 @@ async function main() {
 
     // Create test character (supaMemory:true is required for memory pipeline)
     {
-      const r = await req('/data/characters', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(testCharBody),
-      });
-      assert(r.res.status === 201, `Create character expected 201, got ${r.res.status}: ${r.text}`);
+      const r = await applyCommands([
+        {
+          type: 'character.create',
+          charId: testCharId,
+          character: testCharBody.character,
+        },
+      ]);
+      assert(r.res.status === 200 && r.json?.ok === true, `Create character command expected success, got ${r.res.status}: ${r.text}`);
       charCreated = true;
       console.log(`  Created character: ${testCharId}`);
     }
 
     // Create test chat with pre-seeded messages and summaries
     {
-      const r = await req(`/data/characters/${testCharId}/chats`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(testChatBody),
-      });
-      assert(r.res.status === 201, `Create chat expected 201, got ${r.res.status}: ${r.text}`);
+      const r = await applyCommands([
+        {
+          type: 'chat.create',
+          charId: testCharId,
+          chatId: testChatId,
+          chat: testChatBody.chat,
+        },
+      ]);
+      assert(r.res.status === 200 && r.json?.ok === true, `Create chat command expected success, got ${r.res.status}: ${r.text}`);
       console.log(`  Created chat: ${testChatId}`);
     }
 
@@ -357,11 +387,10 @@ async function main() {
     // into a single merged user message instead of two separate messages.
     {
       // Patch settings to Config B: {{slot}} template
-      const s = await getSettings();
       const overlay = makeTestSettings(origSettings, {
         summarizationPrompt: 'Summarize this roleplay scene: {{slot}}',
       });
-      await putSettings(overlay, s.etag);
+      await putSettings(overlay, null);
       console.log('  Patched settings → Config B ({{slot}} template)');
 
       const r = await req('/data/memory/hypav3/manual-summarize/trace', {
@@ -410,11 +439,10 @@ async function main() {
     // Regression guard for Bug 3: the gate check was missing from
     // planPeriodicHypaV3Summarization.
     {
-      const s = await getSettings();
       const overlay = makeTestSettings(origSettings, {
         periodicSummarizationEnabled: false,
       });
-      await putSettings(overlay, s.etag);
+      await putSettings(overlay, null);
       console.log('  Patched settings → Config C (periodicSummarizationEnabled=false)');
 
       const r = await req('/data/memory/hypav3/periodic-summarize/trace', {
@@ -484,12 +512,9 @@ async function main() {
 
     // Restore original settings
     try {
-      const { etag: freshEtag } = await getSettings();
-      if (freshEtag) {
-        const restoreBody = origSettings !== null ? origSettings : {};
-        await putSettings(restoreBody, freshEtag);
-        console.log(origSettings !== null ? '  Restored original settings' : '  Cleared test settings (none existed originally)');
-      }
+      const restoreBody = origSettings !== null ? origSettings : {};
+      await putSettings(restoreBody, null);
+      console.log(origSettings !== null ? '  Restored original settings' : '  Cleared test settings (none existed originally)');
     } catch (err) {
       console.warn(`  WARNING: Could not restore settings: ${err.message}`);
     }
@@ -497,17 +522,16 @@ async function main() {
     // Delete test character (recursively removes chats sub-directory too)
     if (charCreated) {
       try {
-        const charRead = await req(`/data/characters/${testCharId}`);
-        if (charRead.res.status === 200 && charRead.etag) {
-          const del = await req(`/data/characters/${testCharId}`, {
-            method: 'DELETE',
-            headers: { 'if-match': charRead.etag },
-          });
-          if (del.res.status === 204) {
-            console.log(`  Deleted test character: ${testCharId}`);
-          } else {
-            console.warn(`  WARNING: Delete character returned ${del.res.status}`);
-          }
+        const del = await applyCommands([
+          {
+            type: 'character.delete',
+            charId: testCharId,
+          },
+        ]);
+        if (del.res.status === 200 && del.json?.ok === true) {
+          console.log(`  Deleted test character: ${testCharId}`);
+        } else {
+          console.warn(`  WARNING: Delete character command returned ${del.res.status}`);
         }
       } catch (err) {
         console.warn(`  WARNING: Could not delete test character: ${err.message}`);

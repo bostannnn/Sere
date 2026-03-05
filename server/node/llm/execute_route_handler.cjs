@@ -7,12 +7,12 @@ function createExecuteRouteHandler(arg = {}) {
     const readJsonWithEtag = typeof arg.readJsonWithEtag === 'function'
         ? arg.readJsonWithEtag
         : (async () => ({ json: {}, etag: '' }));
-    const writeJsonWithEtag = typeof arg.writeJsonWithEtag === 'function'
-        ? arg.writeJsonWithEtag
-        : (async () => ({}));
     const isSafePathSegment = typeof arg.isSafePathSegment === 'function'
         ? arg.isSafePathSegment
         : (() => false);
+    const applyStateCommands = typeof arg.applyStateCommands === 'function'
+        ? arg.applyStateCommands
+        : null;
     const getReqIdFromResponse = typeof arg.getReqIdFromResponse === 'function'
         ? arg.getReqIdFromResponse
         : (() => '-');
@@ -123,8 +123,18 @@ function createExecuteRouteHandler(arg = {}) {
             }
 
             if (Object.keys(updates).length > 0) {
-                char.gameState = { ...(char.gameState || {}), ...updates };
-                await writeJsonWithEtag(charPath, charData);
+                const nextCharacter = (char && typeof char === 'object') ? { ...char } : {};
+                nextCharacter.gameState = { ...(nextCharacter.gameState || {}), ...updates };
+                if (typeof applyStateCommands !== 'function') {
+                    throw new Error('STATE_COMMANDS_UNAVAILABLE');
+                }
+                await applyStateCommands([
+                    {
+                        type: 'character.replace',
+                        charId,
+                        character: nextCharacter,
+                    },
+                ], 'llm.execute.game-state');
                 console.log(`[RAG-State] Server Autonomous Update for ${charId}:`, updates);
             }
         });

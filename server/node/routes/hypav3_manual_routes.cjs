@@ -25,6 +25,7 @@ function registerHypaV3ManualRoutes(arg = {}) {
         generateSummaryEmbedding,
         normalizeHypaV3DataForEdit,
         persistChatDataToRaw,
+        applyStateCommands,
         normalizePromptOverride,
         applyPromptOverride,
         resolveManualPromptSource,
@@ -42,6 +43,28 @@ function registerHypaV3ManualRoutes(arg = {}) {
         throw new Error(
             'registerHypaV3ManualRoutes requires normalizePromptOverride/applyPromptOverride/resolveManualPromptSource.'
         );
+    }
+
+    async function persistChatViaStateCommand(characterId, chatId, chat) {
+        if (typeof applyStateCommands !== 'function') {
+            throw new LLMHttpError(
+                500,
+                'STATE_COMMANDS_UNAVAILABLE',
+                'Internal state command service is unavailable for HypaV3 manual summarize.',
+            );
+        }
+        const nextChat = (chat && typeof chat === 'object') ? { ...chat } : {};
+        if (!toStringOrEmpty(nextChat.id)) {
+            nextChat.id = chatId;
+        }
+        await applyStateCommands([
+            {
+                type: 'chat.replace',
+                charId: characterId,
+                chatId,
+                chat: nextChat,
+            },
+        ], 'memory.hypav3.manual-summarize');
     }
 
     app.post('/data/memory/hypav3/manual-summarize', async (req, res) => {
@@ -163,7 +186,7 @@ function registerHypaV3ManualRoutes(arg = {}) {
                 ...(Array.isArray(summaryEmbedding) && summaryEmbedding.length > 0 ? { embedding: summaryEmbedding } : {}),
             });
             chat.hypaV3Data = hypaData;
-            await fs.writeFile(chatPath, JSON.stringify(persistChatDataToRaw(chatRaw, chat), null, 2), 'utf-8');
+            await persistChatViaStateCommand(characterId, chatId, chat);
 
             const debugPayload = {
                 timestamp: Date.now(),

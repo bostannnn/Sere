@@ -14,9 +14,7 @@
 
     import { exportChat, importChat, exportAllChats } from "src/ts/characters";
     import { alertChatOptions, alertConfirm, alertError, alertNormal, alertSelect, alertStore } from "src/ts/alert";
-    import { findCharacterbyId, sleep, sortableOptions } from "src/ts/util";
-    import { createMultiuserRoom } from "src/ts/sync/multiuser";
-    import { bookmarkListOpen } from "src/ts/stores.svelte";
+    import { findCharacterbyId, sleep, sortableOptions } from "src/ts/util";    import { bookmarkListOpen } from "src/ts/stores.svelte";
     import { language } from "src/lang";
     import Toggles from "./Toggles.svelte";
     import { changeChatTo, createChatCopyName } from "src/ts/globalApi.svelte";
@@ -150,18 +148,36 @@
             ;(event.currentTarget as HTMLElement).click()
         }
     }
+
+    function createNewChatName(chats: Chat[]) {
+        let maxSuffix = 0
+        for (const chat of chats) {
+            const name = typeof chat?.name === 'string' ? chat.name.trim() : ''
+            const match = /^New Chat\s+(\d+)$/i.exec(name)
+            if (!match) continue
+            const parsed = Number(match[1])
+            if (!Number.isFinite(parsed)) continue
+            if (parsed > maxSuffix) maxSuffix = parsed
+        }
+        return `New Chat ${maxSuffix + 1}`
+    }
 </script>
 <div class="side-chat-list-root">
     <Button className="side-new-chat-button" type="button" onclick={() => {
         const cha = chara
-        const len = chara.chats.length
         const chats = chara.chats
-        chats.unshift({
-            message:[], note:'', name:`New Chat ${len + 1}`, localLore:[], fmIndex: -1, id: v4()
-        })
+        const newChat: Chat = {
+            message: [],
+            note: '',
+            name: createNewChatName(chats),
+            localLore: [],
+            fmIndex: -1,
+            id: v4(),
+        }
+        chats.unshift(newChat)
         if(cha.type === 'group'){
             cha.characters.map((c) => {
-                chats[len].message.push({
+                newChat.message.push({
                     saying: c,
                     role: 'char',
                     data: findCharacterbyId(c).firstMessage
@@ -312,10 +328,6 @@
                                         }
                                         break
                                     }
-                                    case 2:{
-                                        changeChatTo(chara.chats.indexOf(chat))
-                                        createMultiuserRoom()
-                                    }
                                 }
                             }}>
                                 <MenuIcon size={18}/>
@@ -417,10 +429,6 @@
                                     }
                                 }
                                 break
-                            }
-                            case 2:{
-                                changeChatTo(i)
-                                createMultiuserRoom()
                             }
                         }
                     }}>

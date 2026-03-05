@@ -246,6 +246,7 @@ function buildHandler(): RegisteredHandler {
       }
       return { chat };
     },
+    applyStateCommands: async () => ({ ok: true, lastEventId: 0, applied: [], conflicts: [] }),
   });
 
   const handler = postHandlers.get("/data/memory/hypav3/manual-summarize");
@@ -341,6 +342,7 @@ async function invokeWithAuthBlocked(body: Record<string, unknown>) {
       }
       return { chat };
     },
+    applyStateCommands: async () => ({ ok: true, lastEventId: 0, applied: [], conflicts: [] }),
   });
 
   const handler = postHandlers.get("/data/memory/hypav3/manual-summarize");

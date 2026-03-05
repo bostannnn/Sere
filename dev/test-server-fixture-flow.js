@@ -11,6 +11,8 @@ const __dirname = path.dirname(__filename);
 const baseUrl = process.env.RISU_DATA_TEST_URL || 'http://localhost:6001';
 const allowWrites = process.env.RISU_STORAGE_TEST_ALLOW_WRITE === '1';
 const runId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+let eventCursor = 0;
+let mutationCounter = 0;
 
 const TINY_PNG_BASE64 =
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO6pR8QAAAAASUVORK5CYII=';
@@ -33,6 +35,29 @@ async function request(path, options = {}) {
     }
   }
   return { res, text, json };
+}
+
+async function getSnapshot() {
+  const snap = await request('/data/state/snapshot');
+  assert(snap.res.status === 200, `snapshot expected 200, got ${snap.res.status}`);
+  eventCursor = Number.isFinite(Number(snap.json?.lastEventId)) ? Number(snap.json.lastEventId) : eventCursor;
+  return snap.json || {};
+}
+
+async function applyCommands(commands) {
+  mutationCounter += 1;
+  const r = await request('/data/state/commands', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      clientMutationId: `fixture-${runId}-${mutationCounter}`,
+      baseEventId: eventCursor,
+      commands,
+    }),
+  });
+  assert(r.res.status === 200 || r.res.status === 409, `state commands expected 200/409, got ${r.res.status}`);
+  eventCursor = Number.isFinite(Number(r.json?.lastEventId)) ? Number(r.json.lastEventId) : eventCursor;
+  return r;
 }
 
 function loadCharacterFixture() {
@@ -66,66 +91,52 @@ async function uploadFixtureAsset() {
 }
 
 async function createFixtureCharacter(imagePath) {
-  const body = {
-    version: 1,
-    updatedAt: Date.now(),
-    character: makeCharacterSkeleton('', `Migration Smoke ${runId}`, imagePath),
-  };
-  const post = await request('/data/characters', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-  assert(post.res.status === 201, `fixture character create expected 201, got ${post.res.status}`);
-  const etag = post.res.headers.get('etag');
-  const id = post.json?.character?.chaId || post.json?.data?.chaId;
-  assert(id, 'fixture character id missing');
-  assert(etag, 'fixture character etag missing');
-  return { id, etag };
+  const charId = `fixture-char-${runId}`;
+  const character = makeCharacterSkeleton(charId, `Migration Smoke ${runId}`, imagePath);
+  const post = await applyCommands([{
+    type: 'character.create',
+    charId,
+    character,
+  }]);
+  assert(post.res.status === 200 && post.json?.ok === true, `fixture character create expected success, got ${post.res.status}`);
+  return { id: charId };
 }
 
 async function addFixtureChat(charId) {
-  const body = {
-    version: 1,
-    updatedAt: Date.now(),
+  const chatId = `fixture-chat-${runId}`;
+  const post = await applyCommands([{
+    type: 'chat.create',
+    charId,
+    chatId,
     chat: {
-      id: '',
+      id: chatId,
       name: `Fixture Chat ${runId}`,
       note: 'smoke',
       message: [{ role: 'user', data: 'hello fixture' }],
       localLore: [],
     },
-  };
-  const post = await request(`/data/characters/${charId}/chats`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-  assert(post.res.status === 201, `fixture chat create expected 201, got ${post.res.status}`);
+  }]);
+  assert(post.res.status === 200 && post.json?.ok === true, `fixture chat create expected success, got ${post.res.status}`);
 }
 
 async function verifyFixtureCharacter(charId) {
-  const get = await request(`/data/characters/${charId}`);
-  assert(get.res.ok, `fixture character get expected 200, got ${get.res.status}`);
-  const payload = get.json?.character || get.json?.data || get.json;
-  assert(payload?.image && String(payload.image).startsWith('assets/'), 'fixture image path missing');
+  const snapshot = await getSnapshot();
+  const characters = Array.isArray(snapshot.characters) ? snapshot.characters : [];
+  const target = characters.find((entry) => entry?.chaId === charId);
+  assert(target, 'fixture character not present in snapshot');
+  assert(target.image && String(target.image).startsWith('assets/'), 'fixture image path missing');
 
-  const chats = await request(`/data/characters/${charId}/chats`);
-  assert(chats.res.ok, `fixture chat list expected 200, got ${chats.res.status}`);
-  assert(Array.isArray(chats.json) && chats.json.length > 0, 'fixture chat list empty');
-
-  const list = await request('/data/characters');
-  assert(list.res.ok, `fixture character list expected 200, got ${list.res.status}`);
-  assert(Array.isArray(list.json), 'fixture character list payload invalid');
-  assert(list.json.some((item) => item?.id === charId), 'fixture character not present in list');
+  const chatsByCharacter = snapshot.chatsByCharacter || {};
+  const chats = Array.isArray(chatsByCharacter[charId]) ? chatsByCharacter[charId] : [];
+  assert(chats.length > 0, 'fixture chat list empty');
 }
 
-async function cleanupFixtureCharacter(charId, etag) {
-  const del = await request(`/data/characters/${charId}`, {
-    method: 'DELETE',
-    headers: { 'If-Match': etag },
-  });
-  assert(del.res.status === 204, `fixture character delete expected 204, got ${del.res.status}`);
+async function cleanupFixtureCharacter(charId) {
+  const del = await applyCommands([{
+    type: 'character.delete',
+    charId,
+  }]);
+  assert(del.res.status === 200 && del.json?.ok === true, `fixture character delete expected success, got ${del.res.status}`);
 }
 
 async function run() {
@@ -134,11 +145,12 @@ async function run() {
   }
 
   console.log('[FixtureSmoke] Starting:', baseUrl);
+  await getSnapshot();
   const assetPath = await uploadFixtureAsset();
-  const { id, etag } = await createFixtureCharacter(assetPath);
+  const { id } = await createFixtureCharacter(assetPath);
   await addFixtureChat(id);
   await verifyFixtureCharacter(id);
-  await cleanupFixtureCharacter(id, etag);
+  await cleanupFixtureCharacter(id);
   console.log('[FixtureSmoke] OK');
 }
 

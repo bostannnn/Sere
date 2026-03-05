@@ -9,10 +9,24 @@
     import { findCharacterbyId } from "../../ts/util";
     import TextInput from "../UI/GUI/TextInput.svelte";
     import { changeChatTo } from "src/ts/globalApi.svelte";
+    import { v4 } from "uuid";
 
     let editMode = $state(false)
     /** @type {{close?: any}} */
     const { close = () => {} } = $props();
+
+    function createNewChatName(chats) {
+        let maxSuffix = 0
+        for (const chat of chats) {
+            const name = typeof chat?.name === 'string' ? chat.name.trim() : ''
+            const match = /^New Chat\s+(\d+)$/i.exec(name)
+            if (!match) continue
+            const parsed = Number(match[1])
+            if (!Number.isFinite(parsed)) continue
+            if (parsed > maxSuffix) maxSuffix = parsed
+        }
+        return `New Chat ${maxSuffix + 1}`
+    }
 </script>
 
 <div class="ds-settings-modal-overlay">
@@ -88,14 +102,19 @@
         <div class="action-rail ds-ui-action-rail ds-chatlist-footer">
             <button type="button" class="ds-settings-icon-link icon-btn icon-btn--sm" onclick={() => {
                 const cha = DBState.db.characters[$selectedCharID]
-                const len = DBState.db.characters[$selectedCharID].chats.length
                 const chats = DBState.db.characters[$selectedCharID].chats
-                chats.unshift({
-                    message:[], note:'', name:`New Chat ${len + 1}`, localLore:[], fmIndex: -1
-                })
+                const newChat = {
+                    message: [],
+                    note: '',
+                    name: createNewChatName(chats),
+                    localLore: [],
+                    fmIndex: -1,
+                    id: v4(),
+                }
+                chats.unshift(newChat)
                 if(cha.type === 'group'){
                     cha.characters.map((c) => {
-                        chats[len].message.push({
+                        newChat.message.push({
                             saying: c,
                             role: 'char',
                             data: findCharacterbyId(c).firstMessage
@@ -103,7 +122,7 @@
                     })
                 }
                 DBState.db.characters[$selectedCharID].chats = chats
-                changeChatTo(len)
+                changeChatTo(0)
                 close()
             }} title="Add chat" aria-label="Add chat">
                 <PlusIcon/>

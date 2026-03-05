@@ -8,9 +8,10 @@ function registerServerRoutes(arg = {}) {
         registerHypaV3ManualRoutes,
         registerHypaV3ResummaryRoutes,
         registerLLMRoutes,
-        registerStorageRoutes,
         registerContentRoutes,
-        registerLegacyRoutes,
+        registerAuthRoutes,
+        registerStateRoutes,
+        registerSyncRoutes,
         registerRagRoutes,
     } = arg;
 
@@ -96,23 +97,6 @@ function registerServerRoutes(arg = {}) {
         readLLMExecutionLogs: arg.readLLMExecutionLogs,
     });
 
-    registerStorageRoutes({
-        app: arg.app,
-        path: arg.path,
-        fs: arg.fs,
-        existsSync: arg.existsSync,
-        crypto: arg.crypto,
-        dataDirs: arg.dataDirs,
-        readJsonWithEtag: arg.readJsonWithEtag,
-        writeJsonWithEtag: arg.writeJsonWithEtag,
-        requireIfMatch: arg.requireIfMatch,
-        isIfMatchAny: arg.isIfMatchAny,
-        sendConflict: arg.sendConflict,
-        sendJson: arg.sendJson,
-        requireSafeSegment: arg.requireSafeSegment,
-        ensureDir: arg.ensureDir,
-    });
-
     registerContentRoutes({
         app: arg.app,
         path: arg.path,
@@ -132,15 +116,10 @@ function registerServerRoutes(arg = {}) {
         isSafePathSegment: arg.isSafePathSegment,
     });
 
-    registerLegacyRoutes({
+    registerAuthRoutes({
         app: arg.app,
-        path: arg.path,
-        fs: arg.fs,
-        existsSync: arg.existsSync,
-        writeFileSync: arg.writeFileSync,
-        readFileSync: arg.readFileSync,
         crypto: arg.crypto,
-        openid: arg.openid,
+        sendJson: arg.sendJson,
         requirePasswordAuth: arg.requirePasswordAuth,
         hasServerPassword: arg.hasServerPassword,
         verifyPasswordToken: arg.verifyPasswordToken,
@@ -150,13 +129,22 @@ function registerServerRoutes(arg = {}) {
         clearAuthFailures: arg.clearAuthFailures,
         getPassword: arg.getPassword,
         setPassword: arg.setPassword,
-        setOAuthAccessToken: arg.setOAuthAccessToken,
-        sendJson: arg.sendJson,
-        oauthStateTtlMs: arg.oauthStateTtlMs,
+        writeFileSync: arg.writeFileSync,
+        passwordPath: arg.passwordPath,
         authCryptoRateLimitWindowMs: arg.authCryptoRateLimitWindowMs,
         authCryptoRateLimitMax: arg.authCryptoRateLimitMax,
-        passwordPath: arg.passwordPath,
-        savePath: arg.savePath,
+    });
+
+    registerStateRoutes({
+        app: arg.app,
+        sendJson: arg.sendJson,
+        snapshotService: arg.snapshotService,
+        commandService: arg.commandService,
+    });
+
+    registerSyncRoutes({
+        app: arg.app,
+        eventJournal: arg.eventJournal,
     });
 
     registerRagRoutes({

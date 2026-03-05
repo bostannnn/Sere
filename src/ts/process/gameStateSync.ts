@@ -69,11 +69,14 @@ export async function syncGameStateFromServer(charIndex: number) {
     const char = DBState.db.characters[charIndex];
     if (!char?.chaId) return;
     try {
-        const res = await fetchWithServerAuth(`/data/characters/${encodeURIComponent(char.chaId)}`);
+        const res = await fetchWithServerAuth('/data/state/snapshot', {
+            cache: 'no-store',
+        });
         if (!res.ok) return;
         const data = await res.json();
-        const serverChar = data.character || data.data || data;
-        if (serverChar.gameState && Object.keys(serverChar.gameState).length > 0) {
+        const serverCharacters = Array.isArray(data?.characters) ? data.characters : [];
+        const serverChar = serverCharacters.find((entry: { chaId?: string }) => entry?.chaId === char.chaId);
+        if (serverChar?.gameState && Object.keys(serverChar.gameState).length > 0) {
             DBState.db.characters[charIndex].gameState = serverChar.gameState;
         }
     } catch (error) {

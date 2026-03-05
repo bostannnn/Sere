@@ -151,6 +151,7 @@ function createHarness(arg: {
         readJsonWithEtag: vi.fn(async () => ({ json: {}, etag: "etag-1" })),
         writeJsonWithEtag: vi.fn(async () => ({})),
         isSafePathSegment: vi.fn(() => true),
+        applyStateCommands: vi.fn(async () => ({ ok: true, lastEventId: 0, applied: [], conflicts: [] })),
     });
 
     return {
