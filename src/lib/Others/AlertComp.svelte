@@ -20,7 +20,6 @@
     import TextAreaInput from "../UI/GUI/TextAreaInput.svelte";
     import ModuleChatMenu from "../Setting/Pages/Module/ModuleChatMenu.svelte";
     import { ColorSchemeTypeStore } from "src/ts/gui/colorscheme";
-    import Help from "./Help.svelte";
     import { getChatBranches } from "src/ts/gui/branches";
     import { getCurrentCharacter } from "src/ts/storage/database.svelte";
     import { translateStackTrace } from "../../ts/sourcemap";
@@ -611,26 +610,6 @@
                             <ChevronRightIcon />
                         </div>
                     </button>
-                    {#if DBState.db.useExperimental}
-                        <button
-                            type="button"
-                            class="alert-choice-button"
-                            title={language.createMultiuserRoom}
-                            aria-label={language.createMultiuserRoom}
-                            onclick={() => {
-                            alertStore.set({
-                                type: 'none',
-                                msg: '2'
-                            })
-                        }}>
-                            <div class="alert-choice-content">
-                                <span>{language.createMultiuserRoom} <Help key="experimental"/></span>
-                            </div>
-                            <div class="alert-choice-arrow">
-                                <ChevronRightIcon />
-                            </div>
-                        </button>
-                    {/if}
                     <button
                         type="button"
                         class="alert-choice-button"

@@ -18,7 +18,7 @@ import {
     checkCharOrder
 } from "./globalApi.svelte";
 import { isInStandaloneMode, isNodeServer } from "./platform";
-import { loadServerDatabase } from "./storage/serverDb";
+import { loadServerDatabase, startServerRealtimeSync } from "./storage/serverDb";
 const bootstrapLog = (..._args: unknown[]) => {};
 
 /**
@@ -33,6 +33,7 @@ export async function loadData() {
             }
             LoadingStatusState.text = "Loading Server Storage..."
             await loadServerDatabase()
+            startServerRealtimeSync()
             LoadingStatusState.text = "Checking Unnecessary Files..."
             try {
                 await cleanChunks()

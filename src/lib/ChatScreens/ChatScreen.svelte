@@ -4,7 +4,6 @@
     
     import { DBState } from 'src/ts/stores.svelte';
     import { CharEmotion, MobileGUI, selectedCharID } from "../../ts/stores.svelte";
-    import { ConnectionOpenStore } from "src/ts/sync/multiuser";
     import ResizeBox from './ResizeBox.svelte'
     import DefaultChatScreen from "./DefaultChatScreen.svelte";
     import defaultWallpaper from '../../etc/bg.jpg'
@@ -67,7 +66,6 @@
         $selectedCharID >= 0 &&
         !!currentCharacter &&
         !$MobileGUI &&
-        !$ConnectionOpenStore &&
         !openChatList &&
         !openModuleList
     )

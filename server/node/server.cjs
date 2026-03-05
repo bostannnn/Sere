@@ -9,7 +9,6 @@ const fs = require('fs/promises')
 const nodeCrypto = require('crypto')
 const {pipeline} = require('stream/promises')
 const https = require('https');
-const openid = require('openid-client');
 const {
     parseExecutionInput: parseLLMExecutionInput,
     assembleServerPrompt: assembleLLMServerPrompt,
@@ -29,7 +28,9 @@ const { registerHypaV3ResummaryRoutes } = require('./routes/hypav3_resummary_rou
 const { registerRagRoutes } = require('./routes/rag_routes.cjs');
 const { registerStorageRoutes } = require('./routes/storage_routes.cjs');
 const { registerContentRoutes } = require('./routes/content_routes.cjs');
-const { registerLegacyRoutes } = require('./routes/legacy_routes.cjs');
+const { registerAuthRoutes } = require('./routes/auth_routes.cjs');
+const { registerStateRoutes } = require('./routes/state_routes.cjs');
+const { registerSyncRoutes } = require('./routes/sync_routes.cjs');
 const { registerProxyRoutes } = require('./routes/proxy_routes.cjs');
 const { registerIntegrationRoutes } = require('./routes/integration_routes.cjs');
 const { registerSystemRoutes } = require('./routes/system_routes.cjs');
@@ -66,6 +67,10 @@ const { configureServerHttpApp } = require('./server_http_setup.cjs');
 const { registerServerRoutes } = require('./server_route_bootstrap.cjs');
 const { createServerLlmBootstrap } = require('./server_llm_bootstrap.cjs');
 const { createServerPaths } = require('./server_paths.cjs');
+const { createResourceLocks } = require('./state/resource_locks.cjs');
+const { createEventJournal } = require('./state/event_journal.cjs');
+const { createSnapshotService } = require('./state/snapshot_service.cjs');
+const { createCommandService } = require('./state/command_service.cjs');
 const {
     toStringOrEmpty,
     safeJsonClone,
@@ -83,9 +88,6 @@ const globalJsonLimit = process.env.RISU_HTTP_JSON_LIMIT || '20mb';
 const globalRawLimit = process.env.RISU_HTTP_RAW_LIMIT || '20mb';
 const globalTextLimit = process.env.RISU_HTTP_TEXT_LIMIT || '20mb';
 const ragIngestJsonLimit = process.env.RISU_RAG_INGEST_JSON_LIMIT || '500mb';
-const oauthStateTtlMs = Number.isFinite(Number(process.env.RISU_OAUTH_STATE_TTL_MS))
-    ? Number(process.env.RISU_OAUTH_STATE_TTL_MS)
-    : 10 * 60 * 1000;
 const authCryptoRateLimitWindowMs = Number.isFinite(Number(process.env.RISU_AUTH_CRYPTO_RATE_WINDOW_MS))
     ? Number(process.env.RISU_AUTH_CRYPTO_RATE_WINDOW_MS)
     : 60_000;
@@ -131,7 +133,6 @@ const {
     passwordPath,
     authCodePath,
     getOAuthAccessToken,
-    setOAuthAccessToken,
     getPassword,
     setPassword,
 } = createServerPasswordState({
@@ -180,6 +181,31 @@ const {
     sendJson,
     getDataResourceId,
     requirePasswordAuth,
+});
+
+const resourceLocks = createResourceLocks();
+const eventJournal = createEventJournal({
+    fs,
+    existsSync,
+    dataDirs,
+});
+const snapshotService = createSnapshotService({
+    fs,
+    existsSync,
+    dataDirs,
+    readJsonWithEtag,
+    eventJournal,
+});
+const commandService = createCommandService({
+    fs,
+    existsSync,
+    dataDirs,
+    readJsonWithEtag,
+    writeJsonWithEtag,
+    ensureDir,
+    isSafePathSegment,
+    resourceLocks,
+    eventJournal,
 });
 
 // Server-first storage API
@@ -310,7 +336,6 @@ registerServerRoutes({
     ensureDir,
     safeResolve,
     computeEtag,
-    openid,
     hasServerPassword,
     verifyPasswordToken,
     createPasswordRecord,
@@ -320,11 +345,12 @@ registerServerRoutes({
     getPassword,
     setPassword,
     getOAuthAccessToken,
-    setOAuthAccessToken,
-    oauthStateTtlMs,
     authCryptoRateLimitWindowMs,
     authCryptoRateLimitMax,
     passwordPath,
+    snapshotService,
+    commandService,
+    eventJournal,
     getCachedRulebook,
     searchRulebooks,
     generateEmbeddings,
@@ -344,7 +370,9 @@ registerServerRoutes({
     registerLLMRoutes,
     registerStorageRoutes,
     registerContentRoutes,
-    registerLegacyRoutes,
+    registerAuthRoutes,
+    registerStateRoutes,
+    registerSyncRoutes,
     registerRagRoutes,
 });
 

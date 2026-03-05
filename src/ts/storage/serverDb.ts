@@ -1,219 +1,55 @@
+import { v4 as uuidv4 } from 'uuid';
 import { getDatabase, setDatabase, type Database, type character, type groupChat, type Chat } from "./database.svelte";
 import { isNodeServer } from "../platform";
-import { fetchWithServerAuth } from "./serverAuth";
+import {
+    enqueueCommand,
+    fetchServerStateSnapshot,
+    getServerStateLastEventId,
+    setServerStateLastEventId,
+    startServerStateEventStream,
+    withApplyingServerSnapshot,
+    type StateSnapshot,
+    type StateCommand,
+} from "./serverStateClient";
 
 declare const safeStructuredClone: <T>(obj: T) => T;
 
-type Envelope<T> = {
-    version: number;
-    updatedAt: number;
-    data?: T;
-    character?: T;
-    chat?: T;
+const serverDbLog = (..._args: unknown[]) => {};
+
+type SaveSelection = {
+    character: string[];
+    chat: [string, string][];
 };
 
-type EtagRef = { value: string | null };
+type BaselineState = {
+    initialized: boolean;
+    settingsHash: string;
+    characterOrderSignature: string;
+    characterHashes: Map<string, string>;
+    chatHashes: Map<string, Map<string, string>>;
+};
 
-const settingsEtag: EtagRef = { value: null };
-const characterEtags = new Map<string, EtagRef>();
-const chatEtags = new Map<string, Map<string, EtagRef>>();
-const promptEtags = new Map<string, EtagRef>();
-const themeEtags = new Map<string, EtagRef>();
-const colorSchemeEtags = new Map<string, EtagRef>();
-let lastSettingsJson = '';
-let lastPromptTemplateJson = '';
-let lastThemeId = '';
-let lastColorSchemeJson = '';
-let lastCharacterIdSnapshot = '';
+const baseline: BaselineState = {
+    initialized: false,
+    settingsHash: '',
+    characterOrderSignature: '',
+    characterHashes: new Map(),
+    chatHashes: new Map(),
+};
 
-function getCharEtagRef(id: string) {
-    let ref = characterEtags.get(id);
-    if (!ref) {
-        ref = { value: null };
-        characterEtags.set(id, ref);
-    }
-    return ref;
-}
+let realtimeSyncStarted = false;
+let refreshInFlight = false;
+let refreshQueued = false;
+let refreshRetryTimer: ReturnType<typeof setTimeout> | null = null;
 
-function getChatEtagRef(charId: string, chatId: string) {
-    let charMap = chatEtags.get(charId);
-    if (!charMap) {
-        charMap = new Map<string, EtagRef>();
-        chatEtags.set(charId, charMap);
-    }
-    let ref = charMap.get(chatId);
-    if (!ref) {
-        ref = { value: null };
-        charMap.set(chatId, ref);
-    }
-    return ref;
-}
-
-function clearChatEtagRef(charId: string, chatId: string) {
-    const charMap = chatEtags.get(charId);
-    if (!charMap) return;
-    charMap.delete(chatId);
-    if (charMap.size === 0) {
-        chatEtags.delete(charId);
-    }
-}
-
-function getResourceEtagRef(map: Map<string, EtagRef>, id: string) {
-    let ref = map.get(id);
-    if (!ref) {
-        ref = { value: null };
-        map.set(id, ref);
-    }
-    return ref;
-}
-
-async function ensureEtag(url: string, etagRef: EtagRef) {
-    if (etagRef.value) return;
-    // Avoid eager GET preloads in server mode; we'll resolve ETag only if PUT returns 412.
-    // This prevents noisy expected 404s for resources that may not exist yet.
-    void url;
-}
-
-async function fetchJsonWithEtag<T>(url: string, etagRef?: EtagRef) {
-    const res = await fetchWithServerAuth(url, { cache: 'no-store' });
-    if (res.status === 404) {
-        return { status: 404 } as const;
-    }
-    if (res.status < 200 || res.status >= 300) {
-        throw new Error(`GET ${url} failed (${res.status})`);
-    }
-    const etag = res.headers.get('etag');
-    if (etagRef && etag) etagRef.value = etag;
-    const json = (await res.json()) as Envelope<T> | T;
-    return { status: 200 as const, json };
-}
-
-async function putJsonWithEtag<T>(url: string, body: Envelope<T>, etagRef?: EtagRef, attempt = 0) {
-    const ifMatch = etagRef?.value ?? '*';
-    const res = await fetchWithServerAuth(url, {
-        method: 'PUT',
-        headers: {
-            'content-type': 'application/json',
-            'if-match': ifMatch,
-        },
-        body: JSON.stringify(body),
-    });
-
-    if (res.status === 412 && ifMatch === '*' && attempt < 1) {
-        const current = await fetchJsonWithEtag<T>(url, etagRef);
-        if (current.status === 200 && etagRef?.value) {
-            return putJsonWithEtag(url, body, etagRef, attempt + 1);
-        }
-    }
-
-    if ((res.status === 409 || res.status === 412) && ifMatch !== '*' && attempt < 1) {
-        const current = await fetchJsonWithEtag<T>(url, etagRef);
-        if (current.status === 200 && etagRef?.value) {
-            return putJsonWithEtag(url, body, etagRef, attempt + 1);
-        }
-    }
-
-    if (res.status === 409 || res.status === 412) {
-        throw new Error(`ETAG_MISMATCH on ${url}`);
-    }
-    if (res.status < 200 || res.status >= 300) {
-        throw new Error(`PUT ${url} failed (${res.status})`);
-    }
-    const etag = res.headers.get('etag');
-    if (etagRef && etag) etagRef.value = etag;
-    return (await res.json()) as Envelope<T> | T;
-}
-
-async function deleteJsonWithEtag(url: string, etagRef?: EtagRef) {
-    if (etagRef && !etagRef.value) {
-        const current = await fetchJsonWithEtag<unknown>(url, etagRef);
-        if (current.status === 404) return;
-    }
-    const ifMatch = etagRef?.value;
-    if (!ifMatch) return;
-    const res = await fetchWithServerAuth(url, {
-        method: 'DELETE',
-        headers: {
-            'if-match': ifMatch,
-        },
-    });
-    if (res.status === 404 || res.status === 204) {
-        return;
-    }
-    if (res.status === 409) {
-        throw new Error(`ETAG_MISMATCH on ${url}`);
-    }
-    if (res.status === 412) {
-        const current = await fetchJsonWithEtag<unknown>(url, etagRef);
-        if (current.status === 404) return;
-        if (!etagRef?.value) {
-            throw new Error(`DELETE ${url} failed (412)`);
-        }
-        const retry = await fetchWithServerAuth(url, {
-            method: 'DELETE',
-            headers: {
-                'if-match': etagRef.value,
-            },
-        });
-        if (retry.status === 404 || retry.status === 204) return;
-        if (retry.status === 409) {
-            throw new Error(`ETAG_MISMATCH on ${url}`);
-        }
-        if (retry.status < 200 || retry.status >= 300) {
-            throw new Error(`DELETE ${url} failed (${retry.status})`);
-        }
-        return;
-    }
-    if (res.status < 200 || res.status >= 300) {
-        throw new Error(`DELETE ${url} failed (${res.status})`);
-    }
-}
-
-async function listServerChatIds(charId: string): Promise<string[]> {
-    const res = await fetchWithServerAuth(`/data/characters/${charId}/chats`, { cache: 'no-store' });
-    if (res.status === 404) return [];
-    if (res.status < 200 || res.status >= 300) {
-        throw new Error(`GET /data/characters/${charId}/chats failed (${res.status})`);
-    }
-    const list = await res.json() as { id?: string }[];
-    if (!Array.isArray(list)) return [];
-    return list
-        .map((item) => (typeof item?.id === 'string' ? item.id : ''))
-        .filter(Boolean);
-}
-
-async function listServerCharacterIds(): Promise<string[]> {
-    const res = await fetchWithServerAuth('/data/characters', { cache: 'no-store' });
-    if (res.status === 404) return [];
-    if (res.status < 200 || res.status >= 300) {
-        throw new Error(`GET /data/characters failed (${res.status})`);
-    }
-    const list = await res.json() as { id?: string }[];
-    if (!Array.isArray(list)) return [];
-    return list
-        .map((item) => (typeof item?.id === 'string' ? item.id : ''))
-        .filter(Boolean);
-}
-
-function getCharacterIdSnapshot(characters: (character | groupChat)[] | undefined) {
-    if (!characters || characters.length === 0) {
-        return '';
-    }
-    return characters
-        .map((item) => (typeof item?.chaId === 'string' ? item.chaId : ''))
-        .filter(Boolean)
-        .sort()
-        .join('\u001f');
+function stableHash(value: unknown) {
+    return JSON.stringify(value ?? null);
 }
 
 function stripCharacters(db: Database) {
     const snapshot = safeStructuredClone(db) as Database;
     delete snapshot.characters;
     return snapshot;
-}
-
-function getSettingsJson(db: Database) {
-    return JSON.stringify(stripCharacters(db));
 }
 
 function normalizeCharacter(raw: character | groupChat, chats: Chat[]) {
@@ -225,235 +61,322 @@ function normalizeCharacter(raw: character | groupChat, chats: Chat[]) {
     return next;
 }
 
+function normalizeCharacterList(characters: unknown, chatsByCharacter: Record<string, unknown[]>) {
+    if (!Array.isArray(characters)) return [] as (character | groupChat)[];
+    const normalized: (character | groupChat)[] = [];
+
+    for (const raw of characters) {
+        if (!raw || typeof raw !== 'object') continue;
+        const char = raw as character | groupChat;
+        const charId = typeof char?.chaId === 'string' ? char.chaId : '';
+        if (!charId) continue;
+        const chatRows = Array.isArray(chatsByCharacter?.[charId]) ? chatsByCharacter[charId] : [];
+        const chats = chatRows.filter((entry) => entry && typeof entry === 'object') as Chat[];
+        normalized.push(normalizeCharacter(char, chats));
+    }
+
+    return normalized;
+}
+
+function characterWithoutChats(char: character | groupChat) {
+    const next = safeStructuredClone(char) as character | groupChat;
+    next.chats = [];
+    return next;
+}
+
+function getCharacterOrderSignature(characters: (character | groupChat)[]) {
+    return characters
+        .map((entry) => (typeof entry?.chaId === 'string' ? entry.chaId : ''))
+        .filter(Boolean)
+        .join('\u001f');
+}
+
+function resetBaseline() {
+    baseline.initialized = false;
+    baseline.settingsHash = '';
+    baseline.characterOrderSignature = '';
+    baseline.characterHashes = new Map();
+    baseline.chatHashes = new Map();
+}
+
+function setBaselineFromDatabase(db: Database) {
+    const settings = stripCharacters(db);
+    const characterHashes = new Map<string, string>();
+    const chatHashes = new Map<string, Map<string, string>>();
+
+    for (const char of db.characters || []) {
+        const charId = typeof char?.chaId === 'string' ? char.chaId : '';
+        if (!charId) continue;
+        characterHashes.set(charId, stableHash(characterWithoutChats(char)));
+        const chatsForChar = new Map<string, string>();
+        for (const chat of char.chats || []) {
+            const chatId = typeof chat?.id === 'string' ? chat.id : '';
+            if (!chatId) continue;
+            chatsForChar.set(chatId, stableHash(chat));
+        }
+        chatHashes.set(charId, chatsForChar);
+    }
+
+    baseline.initialized = true;
+    baseline.settingsHash = stableHash(settings);
+    baseline.characterOrderSignature = getCharacterOrderSignature(db.characters || []);
+    baseline.characterHashes = characterHashes;
+    baseline.chatHashes = chatHashes;
+}
+
+async function applySnapshotToDatabase(snapshot: StateSnapshot) {
+    const settings = snapshot?.settings && typeof snapshot.settings === 'object'
+        ? snapshot.settings
+        : {};
+    const chatsByCharacter = snapshot?.chatsByCharacter && typeof snapshot.chatsByCharacter === 'object'
+        ? (snapshot.chatsByCharacter as Record<string, unknown[]>)
+        : {};
+
+    const characters = normalizeCharacterList(snapshot?.characters, chatsByCharacter);
+    const db = { characters } as Database;
+    setDatabase(db);
+    const merged = Object.assign(db, settings, { characters });
+    setDatabase(merged);
+    setBaselineFromDatabase(merged);
+    setServerStateLastEventId(Number(snapshot?.lastEventId || 0));
+    return merged;
+}
+
+function buildCommands(db: Database, _selection: SaveSelection): StateCommand[] {
+    const commands: StateCommand[] = [];
+    const nextSettings = stripCharacters(db);
+    const nextSettingsHash = stableHash(nextSettings);
+
+    if (nextSettingsHash !== baseline.settingsHash) {
+        commands.push({
+            type: 'settings.replace',
+            settings: nextSettings,
+        });
+    }
+
+    const localChars = (db.characters || []).filter((entry): entry is character | groupChat => (
+        !!entry && typeof entry === 'object' && typeof entry.chaId === 'string' && entry.chaId.length > 0
+    ));
+    const localCharIds = new Set(localChars.map((entry) => entry.chaId));
+
+    for (const char of localChars) {
+        const charId = char.chaId;
+        const nextCharPayload = characterWithoutChats(char);
+        const nextCharHash = stableHash(nextCharPayload);
+        const currentCharHash = baseline.characterHashes.get(charId);
+
+        if (!currentCharHash) {
+            commands.push({
+                type: 'character.create',
+                charId,
+                character: nextCharPayload,
+            });
+        } else if (currentCharHash !== nextCharHash) {
+            commands.push({
+                type: 'character.replace',
+                charId,
+                character: nextCharPayload,
+            });
+        }
+
+        const serverChats = baseline.chatHashes.get(charId) || new Map<string, string>();
+        const localChats = (char.chats || []).filter((chat): chat is Chat => (
+            !!chat && typeof chat === 'object' && typeof chat.id === 'string' && chat.id.length > 0
+        ));
+        const localChatIds = new Set(localChats.map((chat) => chat.id));
+
+        for (const chat of localChats) {
+            const chatId = chat.id;
+            const nextChatHash = stableHash(chat);
+            const currentChatHash = serverChats.get(chatId);
+
+            if (!currentChatHash) {
+                commands.push({
+                    type: 'chat.create',
+                    charId,
+                    chatId,
+                    chat: safeStructuredClone(chat),
+                });
+            } else if (currentChatHash !== nextChatHash) {
+                commands.push({
+                    type: 'chat.replace',
+                    charId,
+                    chatId,
+                    chat: safeStructuredClone(chat),
+                });
+            }
+        }
+
+        for (const serverChatId of serverChats.keys()) {
+            if (localChatIds.has(serverChatId)) continue;
+            commands.push({
+                type: 'chat.delete',
+                charId,
+                chatId: serverChatId,
+            });
+        }
+    }
+
+    for (const serverCharId of baseline.characterHashes.keys()) {
+        if (localCharIds.has(serverCharId)) continue;
+        commands.push({
+            type: 'character.delete',
+            charId: serverCharId,
+        });
+    }
+
+    const nextOrderSignature = getCharacterOrderSignature(localChars);
+    if (nextOrderSignature !== baseline.characterOrderSignature) {
+        commands.push({
+            type: 'character.order.replace',
+            order: localChars.map((entry) => entry.chaId),
+        });
+    }
+
+    return commands;
+}
+
+function hasLocalUnflushedChanges() {
+    if (!baseline.initialized) return false;
+    try {
+        const db = getDatabase();
+        const pending = buildCommands(db, {
+            character: [],
+            chat: [],
+        });
+        return pending.length > 0;
+    } catch {
+        return false;
+    }
+}
+
+function scheduleRefreshRetry() {
+    if (refreshRetryTimer) return;
+    refreshRetryTimer = setTimeout(() => {
+        refreshRetryTimer = null;
+        void refreshFromServerSnapshot();
+    }, 220);
+}
+
+async function refreshFromServerSnapshot() {
+    if (!isNodeServer) return;
+
+    if (hasLocalUnflushedChanges()) {
+        refreshQueued = true;
+        scheduleRefreshRetry();
+        return;
+    }
+
+    if (refreshInFlight) {
+        refreshQueued = true;
+        return;
+    }
+
+    refreshInFlight = true;
+    try {
+        do {
+            refreshQueued = false;
+            await withApplyingServerSnapshot(async () => {
+                const snapshot = await fetchServerStateSnapshot();
+                await applySnapshotToDatabase(snapshot);
+            });
+        } while (refreshQueued);
+    } catch (error) {
+        serverDbLog('[ServerDB] Failed to refresh snapshot', error);
+    } finally {
+        refreshInFlight = false;
+    }
+}
+
 export async function loadServerDatabase() {
     if (!isNodeServer) {
         throw new Error('loadServerDatabase called outside node server');
     }
 
-    const settingsRes = await fetchJsonWithEtag<Database>('/data/settings', settingsEtag);
-    const settingsData = settingsRes.status === 200
-        ? ((settingsRes.json as Envelope<Database>).data ?? (settingsRes.json as Partial<Database>))
-        : {};
-
-    const charsRes = await fetchWithServerAuth('/data/characters', { cache: 'no-store' });
-    if (charsRes.status < 200 || charsRes.status >= 300) {
-        throw new Error(`GET /data/characters failed (${charsRes.status})`);
-    }
-    const charsList = (await charsRes.json()) as { id: string }[];
-    const characters: (character | groupChat)[] = [];
-
-    for (const item of charsList) {
-        const charId = item.id;
-        const charEtag = getCharEtagRef(charId);
-        const charRes = await fetchJsonWithEtag<character | groupChat>(`/data/characters/${charId}`, charEtag);
-        if (charRes.status !== 200) continue;
-        const charEnvelope = charRes.json as Envelope<character | groupChat>;
-        const charData = (charEnvelope.character ?? charEnvelope.data ?? charEnvelope) as character | groupChat;
-
-        const chatListRes = await fetchWithServerAuth(`/data/characters/${charId}/chats`, { cache: 'no-store' });
-        const chatList = chatListRes.status >= 200 && chatListRes.status < 300
-            ? ((await chatListRes.json()) as { id: string }[])
-            : [];
-        const chats: Chat[] = [];
-        for (const chatItem of chatList) {
-            const chatId = chatItem.id;
-            const chatEtag = getChatEtagRef(charId, chatId);
-            const chatRes = await fetchJsonWithEtag<Chat>(`/data/characters/${charId}/chats/${chatId}`, chatEtag);
-            if (chatRes.status !== 200) continue;
-            const chatEnvelope = chatRes.json as Envelope<Chat>;
-            const chatData = (chatEnvelope.chat ?? chatEnvelope.data ?? chatEnvelope) as Chat;
-            chats.push(chatData);
-        }
-
-        characters.push(normalizeCharacter(charData, chats));
-    }
-
-    const db = { characters } as Database;
-    setDatabase(db);
-    const merged = Object.assign(db, settingsData, { characters });
-    setDatabase(merged);
-    lastSettingsJson = getSettingsJson(merged);
-
-    if (merged.promptTemplate && merged.promptTemplate.length > 0) {
-        lastPromptTemplateJson = JSON.stringify(merged.promptTemplate);
-    }
-
-    if (merged.colorScheme) {
-        lastColorSchemeJson = JSON.stringify(merged.colorScheme);
-    }
-
-    if (merged.theme) {
-        lastThemeId = merged.theme;
-    }
-
-    lastCharacterIdSnapshot = getCharacterIdSnapshot(merged.characters);
-
-    return merged;
+    const snapshot = await fetchServerStateSnapshot();
+    return await applySnapshotToDatabase(snapshot);
 }
 
-export async function saveServerDatabase(db: Database, toSave: { character: string[]; chat: [string, string][] }) {
+export async function saveServerDatabase(db: Database, toSave: SaveSelection) {
     if (!isNodeServer) return;
 
-    const settingsJson = getSettingsJson(db);
-    if (settingsJson !== lastSettingsJson) {
-        const settingsPayload = JSON.parse(settingsJson);
-        await putJsonWithEtag('/data/settings', {
-            version: 1,
-            updatedAt: Date.now(),
-            data: settingsPayload,
-        }, settingsEtag);
-        lastSettingsJson = settingsJson;
+    if (!baseline.initialized) {
+        await loadServerDatabase();
     }
 
-    if (db.promptTemplate && db.promptTemplate.length > 0) {
-        const promptId = 'default';
-        const promptJson = JSON.stringify(db.promptTemplate);
-        if (promptJson !== lastPromptTemplateJson) {
-            lastPromptTemplateJson = promptJson;
-            const promptEtag = getResourceEtagRef(promptEtags, promptId);
-            await ensureEtag(`/data/prompts/${promptId}`, promptEtag);
-            await putJsonWithEtag(`/data/prompts/${promptId}`, {
-                version: 1,
-                updatedAt: Date.now(),
-                data: {
-                    id: promptId,
-                    items: safeStructuredClone(db.promptTemplate),
-                },
-            }, promptEtag);
-        }
+    const commands = buildCommands(db, toSave);
+    if (commands.length === 0) {
+        return;
     }
 
-    if (db.colorScheme) {
-        const schemeId = db.colorSchemeName || 'default';
-        const schemeJson = JSON.stringify(db.colorScheme);
-        if (schemeJson !== lastColorSchemeJson) {
-            lastColorSchemeJson = schemeJson;
-            const schemeEtag = getResourceEtagRef(colorSchemeEtags, schemeId);
-            await ensureEtag(`/data/color_schemes/${schemeId}`, schemeEtag);
-            await putJsonWithEtag(`/data/color_schemes/${schemeId}`, {
-                version: 1,
-                updatedAt: Date.now(),
-                data: safeStructuredClone(db.colorScheme),
-            }, schemeEtag);
-        }
-    }
+    const maxRetries = 2;
+    let lastError: Error | null = null;
 
-    if (db.theme) {
-        const themeId = db.theme;
-        if (themeId !== lastThemeId) {
-            lastThemeId = themeId;
-            const themeEtag = getResourceEtagRef(themeEtags, themeId);
-            await ensureEtag(`/data/themes/${themeId}`, themeEtag);
-            await putJsonWithEtag(`/data/themes/${themeId}`, {
-                version: 1,
-                updatedAt: Date.now(),
-                data: { id: themeId, name: themeId },
-            }, themeEtag);
-        }
-    }
+    for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
+        const mutationId = uuidv4();
+        const response = await enqueueCommand({
+            clientMutationId: mutationId,
+            baseEventId: getServerStateLastEventId(),
+            commands,
+        });
 
-    const localCharacters = db.characters || [];
-    const localCharacterIds = new Set<string>(
-        localCharacters
-            .map((char) => (typeof char?.chaId === 'string' ? char.chaId : ''))
-            .filter(Boolean),
-    );
-    const localCharacterIdSnapshot = [...localCharacterIds].sort().join('\u001f');
-
-    if (localCharacterIdSnapshot !== lastCharacterIdSnapshot) {
-        const serverCharacterIds = await listServerCharacterIds();
-        for (const serverCharId of serverCharacterIds) {
-            if (localCharacterIds.has(serverCharId)) continue;
-            const charEtag = getCharEtagRef(serverCharId);
-            await deleteJsonWithEtag(`/data/characters/${serverCharId}`, charEtag);
-            characterEtags.delete(serverCharId);
-            chatEtags.delete(serverCharId);
-        }
-        lastCharacterIdSnapshot = localCharacterIdSnapshot;
-    }
-
-    const charsToSave = new Set(toSave.character || []);
-    const chatsToSave = new Map<string, Set<string>>();
-    for (const [charId, chatId] of toSave.chat || []) {
-        if (!chatsToSave.has(charId)) chatsToSave.set(charId, new Set());
-        chatsToSave.get(charId)!.add(chatId);
-    }
-
-    for (const char of localCharacters) {
-        const charId = char.chaId;
-        if (!charId) continue;
-        const shouldSaveChar = charsToSave.has(charId);
-        const localChats = (char.chats || []).filter((chat): chat is typeof chat & { id: string } => (
-            typeof chat?.id === 'string' && chat.id.length > 0
-        ));
-        const localChatIds = new Set(localChats.map((chat) => chat.id));
-
-        if (shouldSaveChar) {
-            const charPayload = safeStructuredClone(char) as character | groupChat;
-            charPayload.chats = [];
-            const charEtag = getCharEtagRef(charId);
-            await putJsonWithEtag(`/data/characters/${charId}`, {
-                version: 1,
-                updatedAt: Date.now(),
-                character: charPayload,
-            }, charEtag);
-
-            const serverChatIds = await listServerChatIds(charId);
-            const serverChatIdSet = new Set(serverChatIds);
-
-            // Delete orphan chat files that were removed in UI.
-            for (const serverChatId of serverChatIds) {
-                if (localChatIds.has(serverChatId)) continue;
-                const chatEtag = getChatEtagRef(charId, serverChatId);
-                await deleteJsonWithEtag(`/data/characters/${charId}/chats/${serverChatId}`, chatEtag);
-                clearChatEtagRef(charId, serverChatId);
+        if (response.ok) {
+            setBaselineFromDatabase(db);
+            setServerStateLastEventId(response.lastEventId);
+            if (refreshQueued && !refreshInFlight) {
+                refreshQueued = false;
+                void refreshFromServerSnapshot();
             }
-
-            // Ensure chat files exist for all local chats (e.g. newly created chats).
-            for (const chat of localChats) {
-                if (serverChatIdSet.has(chat.id)) continue;
-                const chatEtag = getChatEtagRef(charId, chat.id);
-                await putJsonWithEtag(`/data/characters/${charId}/chats/${chat.id}`, {
-                    version: 1,
-                    updatedAt: Date.now(),
-                    chat: safeStructuredClone(chat),
-                }, chatEtag);
-            }
+            return;
         }
 
-        const chatIds = chatsToSave.get(charId);
-        if (!chatIds || chatIds.size === 0) continue;
-        for (const chat of char.chats || []) {
-            if (!chat.id || !chatIds.has(chat.id)) continue;
-            const chatEtag = getChatEtagRef(charId, chat.id);
-            await putJsonWithEtag(`/data/characters/${charId}/chats/${chat.id}`, {
-                version: 1,
-                updatedAt: Date.now(),
-                chat: safeStructuredClone(chat),
-            }, chatEtag);
+        const staleBase = Array.isArray(response.conflicts)
+            ? response.conflicts.some((entry) => (
+                !!entry
+                && typeof entry === 'object'
+                && (entry as { code?: unknown }).code === 'STALE_BASE_EVENT'
+            ))
+            : false;
+
+        if (!staleBase || attempt >= maxRetries) {
+            lastError = new Error(`POST /data/state/commands rejected with conflicts: ${JSON.stringify(response.conflicts || [])}`);
+            break;
         }
+
+        await refreshFromServerSnapshot();
+    }
+
+    if (lastError) {
+        throw lastError;
     }
 }
 
-export function updateCharacterEtag(charId: string, etag: string) {
-    const ref = getCharEtagRef(charId);
-    ref.value = etag;
+export function startServerRealtimeSync() {
+    if (!isNodeServer || realtimeSyncStarted) return;
+    realtimeSyncStarted = true;
+
+    startServerStateEventStream({
+        onRemoteEvent: async () => {
+            await refreshFromServerSnapshot();
+        },
+        onGap: async () => {
+            await refreshFromServerSnapshot();
+        },
+    });
+}
+
+export function resetServerBaseline() {
+    resetBaseline();
+}
+
+export function updateCharacterEtag(_charId: string, _etag: string) {
+    // Legacy no-op in server-authoritative mode.
 }
 
 export async function exportServerStorage() {
     const db = getDatabase();
-    const characterIds: string[] = [];
-    const chatIds: [string, string][] = [];
-    for (const char of db.characters || []) {
-        if (!char?.chaId) continue;
-        characterIds.push(char.chaId);
-        for (const chat of char.chats || []) {
-            if (!chat?.id) continue;
-            chatIds.push([char.chaId, chat.id]);
-        }
-    }
     await saveServerDatabase(db, {
-        character: characterIds,
-        chat: chatIds,
+        character: [],
+        chat: [],
     });
 }

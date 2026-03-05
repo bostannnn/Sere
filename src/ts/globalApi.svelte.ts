@@ -11,7 +11,6 @@ import { sleep } from "./util"
 import { convertFileSrc, invoke } from "src/ts/tauriCompat/api-core"
 import { v4 as uuidv4, v4 } from 'uuid';
 import { appDataDir, join } from "src/ts/tauriCompat/api-path";
-import { get } from "svelte/store";
 import { open } from 'src/ts/tauriCompat/plugin-shell'
 import { setDatabase, type Database, getDatabase, appVer, getCurrentCharacter } from "./storage/database.svelte";
 import { selectedCharID, DBState, selIdState, ReloadGUIPointer } from "./stores.svelte";
@@ -24,11 +23,11 @@ import { save } from "src/ts/tauriCompat/plugin-dialog";
 import { listen } from 'src/ts/tauriCompat/api-event'
 import { language } from "src/lang";
 import { fetch as TauriHTTPFetch } from 'src/ts/tauriCompat/plugin-http';
-import { isDoingChat } from "./process/index.svelte";
 import { isTauri, isNodeServer } from "./platform";
 import { saveServerDatabase } from "./storage/serverDb";
 import { loadServerAsset, saveServerAsset } from "./storage/serverStorage";
 import { fetchWithServerAuth, getServerAuthClientId, resolveServerAuthToken } from "./storage/serverAuth";
+import { isApplyingServerSnapshot } from "./storage/serverStateClient";
 
 export const forageStorage = new AutoStorage()
 
@@ -353,9 +352,6 @@ export async function loadAsset(id: string) {
 export const saving = $state({
     state: false
 })
-let serverSaveCooldownUntil = 0
-let serverSaveQueued: toSaveType | null = null
-
 /**
  * Saves the current state of the database.
  * 
@@ -421,6 +417,117 @@ export async function saveDb() {
                 })
             }
         }
+    }
+
+    if (isNodeServer) {
+        const SERVER_AUTOSAVE_ALERT_COOLDOWN_MS = 8000
+        let lastServerAutosaveAlertAt = 0
+        let consecutiveServerSaveFailures = 0
+        let saveTimer: ReturnType<typeof setTimeout> | null = null
+        let saveQueued = false
+        let saveInFlight = false
+        let initialized = false
+
+        const getServerSaveRetryDelayMs = (failureCount: number): number => {
+            if (failureCount <= 1) return 400
+            if (failureCount === 2) return 800
+            if (failureCount === 3) return 1200
+            if (failureCount === 4) return 1800
+            return 2500
+        }
+
+        const extractHttpStatusFromError = (error: unknown): number | null => {
+            const message = `${(error as Error | undefined)?.message ?? error ?? ''}`
+            const match = message.match(/\((\d{3})\)/)
+            if(!match){
+                return null
+            }
+            return parseInt(match[1])
+        }
+
+        const notifyServerAutosaveFailure = (error: unknown) => {
+            const now = Date.now()
+            if((now - lastServerAutosaveAlertAt) < SERVER_AUTOSAVE_ALERT_COOLDOWN_MS){
+                return
+            }
+            lastServerAutosaveAlertAt = now
+            const status = extractHttpStatusFromError(error)
+            let message = 'Live save failed. Recent changes may be lost after refresh.'
+            if(status === 429){
+                message = 'Live save blocked by authentication rate-limit. Recent changes may be lost.'
+            } else if(status === 401 || status === 403){
+                message = 'Live save requires re-authentication. Recent changes may be lost.'
+            }
+            alertError(message)
+        }
+
+        const flushServerSave = async () => {
+            if (saveInFlight || !saveQueued) return
+            if (isApplyingServerSnapshot()) {
+                if (saveTimer) {
+                    clearTimeout(saveTimer)
+                }
+                saveTimer = setTimeout(() => {
+                    void flushServerSave()
+                }, 120)
+                return
+            }
+            saveInFlight = true
+            saveQueued = false
+            saving.state = true
+            try {
+                await saveServerDatabase(getDatabase(), {
+                    character: [],
+                    chat: [],
+                })
+                consecutiveServerSaveFailures = 0
+            } catch (error) {
+                consecutiveServerSaveFailures += 1
+                const retryDelay = getServerSaveRetryDelayMs(consecutiveServerSaveFailures)
+                if (consecutiveServerSaveFailures >= 5) {
+                    notifyServerAutosaveFailure(error)
+                    consecutiveServerSaveFailures = 0
+                }
+                saveQueued = true
+                setTimeout(() => {
+                    void flushServerSave()
+                }, retryDelay)
+            } finally {
+                saving.state = false
+                saveInFlight = false
+            }
+            if (saveQueued) {
+                if (saveTimer) {
+                    clearTimeout(saveTimer)
+                }
+                saveTimer = setTimeout(() => {
+                    void flushServerSave()
+                }, 250)
+            }
+        }
+
+        const scheduleServerSave = () => {
+            saveQueued = true
+            if (saveTimer) {
+                clearTimeout(saveTimer)
+            }
+            saveTimer = setTimeout(() => {
+                void flushServerSave()
+            }, 250)
+        }
+
+        $effect.root(() => {
+            $effect(() => {
+                $state.snapshot(DBState.db)
+                if (!initialized) {
+                    initialized = true
+                    return
+                }
+                scheduleServerSave()
+            })
+        })
+
+        return
     }
 
     const changeTracker: toSaveType = {
@@ -516,7 +623,6 @@ export async function saveDb() {
     let savetrys = 0
     await sleep(1000)
     while (true) {
-        let pendingServerSave: toSaveType | null = null
         if (!changed) {
             await sleep(500)
             continue
@@ -525,63 +631,6 @@ export async function saveDb() {
         saving.state = true
         changed = false
         try {
-            if (isNodeServer) {
-                // Pause auto-saves during active LLM generation to avoid race conditions 
-                // with server-side game state updates.
-                if (get(isDoingChat)) {
-                    saving.state = false
-                    changed = true // Re-queue for next tick
-                    await sleep(1000)
-                    continue
-                }
-
-                const toSave = safeStructuredClone(changeTracker)
-                if (toSave.character.length > 1) {
-                    toSave.character = [toSave.character[0]]
-                }
-                if (toSave.chat.length > 1) {
-                    toSave.chat = [toSave.chat[0]]
-                }
-                changeTracker.character = changeTracker.character.length === 0 ? [] : [changeTracker.character[0]]
-                changeTracker.chat = changeTracker.chat.length === 0 ? [] : [changeTracker.chat[0]]
-                changeTracker.botPreset = false
-                changeTracker.modules = false
-                if (gotChannel) {
-                    await sleep(1000)
-                    continue
-                }
-                if (channel) {
-                    channel.postMessage(sessionID)
-                }
-                const now = Date.now()
-                if (now < serverSaveCooldownUntil) {
-                    serverSaveQueued = toSave
-                    saving.state = false
-                    await sleep(serverSaveCooldownUntil - now)
-                    changed = true
-                    continue
-                }
-                const finalSave = serverSaveQueued ?? toSave
-                serverSaveQueued = null
-                try {
-                    pendingServerSave = finalSave
-                    await saveServerDatabase(getDatabase(), finalSave)
-                } catch (error) {
-                    if (String(error).includes('ETAG_MISMATCH')) {
-                        changed = true; // Re-trigger save to use fresh ETag logic in putJsonWithEtag
-                        await sleep(500);
-                    } else {
-                        throw error
-                    }
-                }
-                serverSaveCooldownUntil = Date.now() + 1200
-                consecutiveServerSaveFailures = 0
-                savetrys = 0
-                await sleep(500)
-                saving.state = false
-                continue
-            }
-
             if (requiresFullEncoderReload.state) {
                 encoder = new RisuSaveEncoder()
                 await encoder.init(getDatabase(), {
@@ -637,23 +686,6 @@ export async function saveDb() {
             savetrys = 0
             await sleep(500)
         } catch (error) {
-            if (isNodeServer) {
-                if (pendingServerSave) {
-                    serverSaveQueued = pendingServerSave
-                }
-                changed = true
-                consecutiveServerSaveFailures += 1
-                const retryDelayMs = getServerSaveRetryDelayMs(consecutiveServerSaveFailures)
-                serverSaveCooldownUntil = Date.now() + retryDelayMs
-
-                if (consecutiveServerSaveFailures >= 5) {
-                    notifyServerAutosaveFailure(error)
-                    consecutiveServerSaveFailures = 0
-                }
-                saving.state = false
-                await sleep(500)
-                continue
-            }
             savetrys += 1
             if (savetrys > 4) {
                 alertError(error)

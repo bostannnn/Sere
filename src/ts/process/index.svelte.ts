@@ -20,8 +20,7 @@ import { HypaProcesser } from "./memory/hypamemory";
 import { additionalInformations } from "./embedding/addinfo";
 import { getInlayAsset } from "./files/inlays";
 import { getGenerationModelString } from "./models/modelString";
-import { connectionOpen, peerRevertChat, peerSafeCheck, peerSync } from "../sync/multiuser";
-import { saveServerDatabase, updateCharacterEtag } from "../storage/serverDb";
+import { saveServerDatabase } from "../storage/serverDb";
 import { resolveServerAuthToken } from "../storage/serverAuth";
 import { runInlayScreen } from "./inlayScreen";
 import { addRerolls } from "./prereroll";
@@ -198,19 +197,6 @@ export async function sendChat(chatProcessIndex = -1,arg:{
         else{
             changeToPreset(findId, true)
         }
-    }
-
-    if(connectionOpen){
-        chatProcessStage.set(4)
-        const peerSafe = await peerSafeCheck()
-        if(!peerSafe){
-            peerRevertChat()
-            isDoingChat.set(false)
-            throwError(language.otherUserRequesting)
-            return false
-        }
-        await peerSync()
-        chatProcessStage.set(0)
     }
 
     DBState.db.statics.messages += 1
@@ -1785,8 +1771,7 @@ export async function sendChat(chatProcessIndex = -1,arg:{
                 DBState.db.characters[selectedChar].chats[selectedChat].isStreaming = false
                 DBState.db.characters[selectedChar].reloadKeys += 1
                 
-                if (isNodeServer && lastResponseChunk["__newCharEtag"]) {
-                    updateCharacterEtag(currentChar.chaId, lastResponseChunk["__newCharEtag"]);
+                if (isNodeServer) {
                     await syncGameStateFromServer(selectedChar);
                 }
                 break
@@ -1891,9 +1876,7 @@ export async function sendChat(chatProcessIndex = -1,arg:{
         DBState.db.characters[selectedChar].chats[selectedChat] = runCurrentChatFunction(DBState.db.characters[selectedChar].chats[selectedChat])
         currentChat = DBState.db.characters[selectedChar].chats[selectedChat]        
 
-        const requestWithEtag = req as { newCharEtag?: string };
-        if (isNodeServer && requestWithEtag.newCharEtag) {
-            updateCharacterEtag(currentChar.chaId, requestWithEtag.newCharEtag);
+        if (isNodeServer) {
             await syncGameStateFromServer(selectedChar);
         }
         if(!abortSignal.aborted){
@@ -1997,8 +1980,6 @@ export async function sendChat(chatProcessIndex = -1,arg:{
             }
         } catch {}
     }
-
-    peerSync()
 
     // 3. Update Game State from finalized AI response (if not manually editing and not on server)
     if (result && !arg.preview && !arg.previewPrompt && !get(stateEditorActive) && !isNodeServer) {

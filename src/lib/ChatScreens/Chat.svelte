@@ -9,7 +9,6 @@
     import { runTrigger } from 'src/ts/process/triggers'
     import { sayTTS } from "src/ts/process/tts"
     import { DBState, ReloadChatPointer, CurrentTriggerIdStore, SizeStore } from 'src/ts/stores.svelte'
-    import { ConnectionOpenStore } from "src/ts/sync/multiuser"
     import { capitalize, getUserIcon, getUserName, sleep } from "src/ts/util"
     import { v4 as uuidv4, v4 } from 'uuid'
     import { language } from "../../lang"
@@ -677,8 +676,7 @@
             {/if}
         </button>
     {/if}
-    {#if !$ConnectionOpenStore}
-        <button
+    <button
             type="button"
             class="ds-chat-icon-action"
             class:icon-btn={!showNames}
@@ -696,7 +694,6 @@
                 <span class="ds-chat-icon-label">{language.remove}</span>
             {/if}
         </button>
-    {/if}
 {/if}
 {/snippet}
 

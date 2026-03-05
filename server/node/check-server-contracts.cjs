@@ -354,16 +354,22 @@ async function runContracts() {
         }
 
         const oauthMissingState = await api
-            .get('/data/oauth/callback?code=test-code')
-            .expect(400);
-        if (oauthMissingState.body?.error !== 'code and state are required') {
-            throw new Error(`Expected missing oauth state 400, got ${JSON.stringify(oauthMissingState.body)}`);
-        }
-        const oauthUnknownState = await api
-            .get('/data/oauth/callback?code=test-code&state=unknown-state')
-            .expect(400);
-        if (oauthUnknownState.body?.error !== 'invalid or expired oauth state') {
-            throw new Error(`Expected invalid oauth state rejection, got ${JSON.stringify(oauthUnknownState.body)}`);
+            .get('/data/oauth/callback?code=test-code');
+        if (oauthMissingState.status !== 404) {
+            if (oauthMissingState.status !== 400) {
+                throw new Error(
+                    `Expected oauth callback to be 400 (when enabled) or 404 (when disabled), got ${oauthMissingState.status}.`
+                );
+            }
+            if (oauthMissingState.body?.error !== 'code and state are required') {
+                throw new Error(`Expected missing oauth state 400, got ${JSON.stringify(oauthMissingState.body)}`);
+            }
+            const oauthUnknownState = await api
+                .get('/data/oauth/callback?code=test-code&state=unknown-state')
+                .expect(400);
+            if (oauthUnknownState.body?.error !== 'invalid or expired oauth state') {
+                throw new Error(`Expected invalid oauth state rejection, got ${JSON.stringify(oauthUnknownState.body)}`);
+            }
         }
 
         // Explicit auth attempts should consume lockout budget while passive stale

@@ -148,6 +148,7 @@ const SKIP_FILES = new Set([
     'check-server-deps.cjs',
     'check-error-handling.cjs',
     'check-server-contracts.cjs',
+    'check-server-authoritative.cjs',
     'checker_utils.cjs',
 ]);
 
