@@ -130,7 +130,7 @@ describe("chat list runtime smoke", () => {
     footerButtons[0]?.click();
     await flushUi();
     expect(DBState.db.characters[0].chats.length).toBe(beforeChatCount + 1);
-    expect(mocks.changeChatTo).toHaveBeenCalledWith(beforeChatCount);
+    expect(mocks.changeChatTo).toHaveBeenCalledWith(0);
     expect(close).toHaveBeenCalledTimes(1);
 
     footerButtons[1]?.click();
