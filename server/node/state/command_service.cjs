@@ -92,11 +92,15 @@ function createCommandService(arg = {}) {
         const incomingOrder = normalizeChatOrder(incomingCharacter.chatOrder);
         const existingOrder = normalizeChatOrder(existingCharacter?.chatOrder);
         const touchedChatIds = [];
+        const deletedChatIds = new Set();
         const chatMap = state.chats.get(charId);
         if (chatMap instanceof Map) {
             for (const [chatId, chatState] of chatMap.entries()) {
-                if (!chatState || !chatState.exists || chatState.deleted) continue;
                 if (!isSafePathSegment(chatId)) continue;
+                if (!chatState || !chatState.exists || chatState.deleted) {
+                    deletedChatIds.add(chatId);
+                    continue;
+                }
                 touchedChatIds.push(chatId);
             }
         }
@@ -106,6 +110,7 @@ function createCommandService(arg = {}) {
         const seen = new Set();
         const appendUnique = (chatId) => {
             if (typeof chatId !== 'string' || chatId.length === 0) return;
+            if (deletedChatIds.has(chatId)) return;
             if (seen.has(chatId)) return;
             seen.add(chatId);
             merged.push(chatId);
@@ -129,9 +134,6 @@ function createCommandService(arg = {}) {
 
         // Caller sent explicit order; keep it and only append known in-memory chats.
         for (const chatId of incomingOrder) {
-            appendUnique(chatId);
-        }
-        for (const chatId of existingOrder) {
             appendUnique(chatId);
         }
         for (const chatId of touchedChatIds) {

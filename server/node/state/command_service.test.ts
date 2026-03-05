@@ -166,4 +166,110 @@ describe("command service", () => {
     };
     expect(persistedCharacterEnvelope?.character?.chatOrder).toEqual(["chat-b", "chat-a"]);
   });
+
+  it("does not reintroduce deleted chats into chatOrder when replacing character", async () => {
+    const files = new Map<string, unknown>([
+      [
+        "/tmp/risu-test/characters/char-a/character.json",
+        {
+          revision: 3,
+          character: {
+            chaId: "char-a",
+            name: "A",
+            chatOrder: ["chat-a", "chat-b"],
+          },
+        },
+      ],
+      [
+        "/tmp/risu-test/characters/char-a/chats/chat-a.json",
+        {
+          revision: 1,
+          chat: { id: "chat-a", name: "A" },
+        },
+      ],
+      [
+        "/tmp/risu-test/characters/char-a/chats/chat-b.json",
+        {
+          revision: 1,
+          chat: { id: "chat-b", name: "B" },
+        },
+      ],
+    ]);
+
+    const directories = new Set<string>([
+      "/tmp/risu-test/characters",
+      "/tmp/risu-test/characters/char-a",
+      "/tmp/risu-test/characters/char-a/chats",
+    ]);
+
+    const writeJsonWithEtag = vi.fn(async (filePath: string, payload: unknown) => {
+      files.set(filePath, payload);
+      return {};
+    });
+
+    const fsRm = vi.fn(async (filePath: string) => {
+      files.delete(filePath);
+    });
+
+    const service = createCommandService({
+      fs: {
+        rm: fsRm,
+        readdir: vi.fn(async (dirPath: string, _opts?: unknown) => {
+          if (dirPath !== "/tmp/risu-test/characters/char-a/chats") return [];
+          return [
+            { name: "chat-a.json", isFile: () => true },
+            { name: "chat-b.json", isFile: () => true },
+          ];
+        }),
+      },
+      existsSync: (filePath: string) => files.has(filePath) || directories.has(filePath),
+      dataDirs: {
+        root: "/tmp/risu-test",
+        characters: "/tmp/risu-test/characters",
+      },
+      readJsonWithEtag: vi.fn(async (filePath: string) => ({
+        json: files.get(filePath) || {},
+      })),
+      writeJsonWithEtag,
+      ensureDir: vi.fn(async () => {}),
+      isSafePathSegment: (value: string) => /^[a-zA-Z0-9._-]+$/.test(value),
+      resourceLocks: {
+        withKey: async (_key: string, task: () => Promise<unknown>) => await task(),
+      },
+      eventJournal: {
+        readLastEventId: async () => 0,
+        appendEvent: vi.fn(async (event: Record<string, unknown>) => ({
+          id: 1,
+          ...event,
+        })),
+      },
+    });
+
+    const result = await service.applyCommands({
+      clientMutationId: "delete-and-replace-order",
+      commands: [
+        {
+          type: "chat.delete",
+          charId: "char-a",
+          chatId: "chat-b",
+        },
+        {
+          type: "character.replace",
+          charId: "char-a",
+          character: {
+            chaId: "char-a",
+            name: "A renamed",
+            chatOrder: ["chat-a"],
+          },
+        },
+      ],
+    });
+
+    expect(result.ok).toBe(true);
+    const persistedCharacterEnvelope = files.get("/tmp/risu-test/characters/char-a/character.json") as {
+      character?: { chatOrder?: string[] };
+    };
+    expect(persistedCharacterEnvelope?.character?.chatOrder).toEqual(["chat-a"]);
+    expect(fsRm).toHaveBeenCalledWith("/tmp/risu-test/characters/char-a/chats/chat-b.json", { force: true });
+  });
 });
