@@ -115,7 +115,7 @@ describe("command service", () => {
     const service = createCommandService({
       fs: {
         rm: vi.fn(async () => {}),
-        readdir: vi.fn(async (dirPath: string, _opts?: unknown) => {
+        readdir: vi.fn(async (dirPath: string) => {
           if (dirPath !== "/tmp/risu-test/characters/char-a/chats") return [];
           return [
             { name: "chat-a.json", isFile: () => true },
@@ -214,7 +214,7 @@ describe("command service", () => {
     const service = createCommandService({
       fs: {
         rm: fsRm,
-        readdir: vi.fn(async (dirPath: string, _opts?: unknown) => {
+        readdir: vi.fn(async (dirPath: string) => {
           if (dirPath !== "/tmp/risu-test/characters/char-a/chats") return [];
           return [
             { name: "chat-a.json", isFile: () => true },

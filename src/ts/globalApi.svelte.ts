@@ -363,42 +363,6 @@ export const requiresFullEncoderReload = $state({
 export async function saveDb() {
     let changed = false
     let gotChannel = false
-    const SERVER_AUTOSAVE_ALERT_COOLDOWN_MS = 8000
-    let lastServerAutosaveAlertAt = 0
-    let consecutiveServerSaveFailures = 0
-
-    const getServerSaveRetryDelayMs = (failureCount: number): number => {
-        if (failureCount <= 1) return 2000
-        if (failureCount === 2) return 4000
-        if (failureCount === 3) return 6000
-        if (failureCount === 4) return 8000
-        return 10000
-    }
-
-    const extractHttpStatusFromError = (error: unknown): number | null => {
-        const message = `${(error as Error | undefined)?.message ?? error ?? ''}`
-        const match = message.match(/\((\d{3})\)/)
-        if(!match){
-            return null
-        }
-        return parseInt(match[1])
-    }
-
-    const notifyServerAutosaveFailure = (error: unknown) => {
-        const now = Date.now()
-        if((now - lastServerAutosaveAlertAt) < SERVER_AUTOSAVE_ALERT_COOLDOWN_MS){
-            return
-        }
-        lastServerAutosaveAlertAt = now
-        const status = extractHttpStatusFromError(error)
-        let message = 'Background save failed. Recent changes may be lost after refresh.'
-        if(status === 429){
-            message = 'Background save blocked by authentication rate-limit. Recent changes may be lost.'
-        } else if(status === 401 || status === 403){
-            message = 'Background save requires re-authentication. Recent changes may be lost.'
-        }
-        alertError(message)
-    }
 
     const sessionID = v4()
     let channel: BroadcastChannel

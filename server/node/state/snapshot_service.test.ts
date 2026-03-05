@@ -66,8 +66,9 @@ describe("snapshot service", () => {
       });
 
       const snapshot = await snapshotService.buildSnapshot();
-      const chats = Array.isArray(snapshot.chatsByCharacter?.[charId]) ? snapshot.chatsByCharacter[charId] : [];
-      const ids = chats.map((entry: any) => entry?.id).filter((id: unknown) => typeof id === "string");
+      const chatsUnknown = Array.isArray(snapshot.chatsByCharacter?.[charId]) ? snapshot.chatsByCharacter[charId] : [];
+      const chats = chatsUnknown as Array<{ id?: unknown; name?: unknown }>;
+      const ids = chats.map((entry) => entry?.id).filter((id): id is string => typeof id === "string");
 
       expect(ids).toEqual(["chat-b", "chat-a", "chat-c"]);
       expect(chats[2]?.id).toBe("chat-c");

@@ -25,7 +25,6 @@ function registerHypaV3ResummaryRoutes(arg = {}) {
         executeHypaSummaryFromMessages,
         cleanSummaryOutput,
         generateSummaryEmbedding,
-        persistChatDataToRaw,
         applyStateCommands,
     } = arg;
 

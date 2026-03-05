@@ -24,7 +24,6 @@ function registerHypaV3ManualRoutes(arg = {}) {
         executeHypaSummaryFromMessages,
         generateSummaryEmbedding,
         normalizeHypaV3DataForEdit,
-        persistChatDataToRaw,
         applyStateCommands,
         normalizePromptOverride,
         applyPromptOverride,
