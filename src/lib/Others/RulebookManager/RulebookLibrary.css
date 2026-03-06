@@ -649,22 +649,6 @@
         }
     }
 
-    .rag-dashboard-shell-mobile .rag-content-area-shell {
-        padding: var(--ds-space-3);
-    }
-
-    @media (max-width: 48rem) {
-        .rag-dashboard-shell-mobile .rag-content-area-shell {
-            padding: var(--ds-space-3);
-        }
-    }
-
-    @media (max-width: 23rem) {
-        .rag-dashboard-shell-mobile .rag-content-area.is-grid {
-            grid-template-columns: minmax(0, 1fr);
-        }
-    }
-
     .rag-empty-state {
         display: flex;
         flex-direction: column;
@@ -972,7 +956,7 @@
         }
     }
 
-    @media (max-width: 36rem) {
+    @media (max-width: 48rem) {
         .rag-toolbar-right {
             width: 100%;
             justify-content: space-between;
@@ -981,6 +965,40 @@
 
         .rag-content-area.is-grid {
             grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: var(--ds-space-2);
+        }
+
+        .rag-content-area.is-grid .rag-book-card {
+            border-radius: 1.05rem;
+        }
+
+        .rag-content-area.is-grid .rag-book-card-main {
+            aspect-ratio: 4 / 5;
+            padding: 0.45rem;
+        }
+
+        .rag-content-area.is-grid .rag-book-icon,
+        .rag-content-area.is-grid .rag-book-details {
+            inset: 0.45rem;
+            border-radius: calc(1.05rem - 0.45rem);
+        }
+
+        .rag-content-area.is-grid .rag-book-details {
+            padding: 0.7rem 0.7rem 0.6rem;
+        }
+
+        .rag-content-area.is-grid .rag-book-name {
+            font-size: 1.03rem;
+        }
+
+        .rag-content-area.is-grid .rag-book-preview {
+            -webkit-line-clamp: 1;
+            line-clamp: 1;
+            min-height: 1.35em;
+        }
+
+        .rag-dashboard-shell-mobile .rag-content-area-shell {
+            padding: var(--ds-space-3);
         }
 
         .rag-staging-header {
