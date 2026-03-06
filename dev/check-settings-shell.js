@@ -16,6 +16,12 @@ function ensureIncludes(content, file, pattern, failures) {
   }
 }
 
+function ensureExcludes(content, file, pattern, failures) {
+  if (content.includes(pattern)) {
+    failures.push(`[settings-shell] Forbidden pattern present in ${file}: ${pattern}`);
+  }
+}
+
 const failures = [];
 
 const settingsShellFile = path.join(ROOT, "src/lib/Setting/Settings.svelte");
@@ -45,22 +51,10 @@ ensureIncludes(
   "if ($SettingsMenuIndex === index) {",
   failures,
 );
-ensureIncludes(
+ensureExcludes(
   shellContent,
   settingsShellFile,
-  "function closeSettingsPanel()",
-  failures,
-);
-ensureIncludes(
-  shellContent,
-  settingsShellFile,
-  "settingsOpen.set(false);",
-  failures,
-);
-ensureIncludes(
-  shellContent,
-  settingsShellFile,
-  "$SettingsMenuIndex = -1;",
+  "ds-settings-panel-close-button",
   failures,
 );
 ensureIncludes(

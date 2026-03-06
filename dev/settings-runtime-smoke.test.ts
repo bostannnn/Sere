@@ -5,12 +5,10 @@ import { get } from "svelte/store";
 vi.mock(import("src/ts/stores.svelte"), async () => {
   const { writable } = await import("svelte/store");
   return {
-    DBState: { db: { settingsCloseButtonSize: 24 } },
     MobileGUI: writable(false),
     SettingsMenuIndex: writable(1),
     SizeStore: writable({ w: 1280, h: 900 }),
     additionalSettingsMenu: [],
-    settingsOpen: writable(true),
   };
 });
 
@@ -90,12 +88,10 @@ vi.mock(import("src/lib/Others/PluginDefinedIcon.svelte"), async () => ({
 
 import Settings from "src/lib/Setting/Settings.svelte";
 import {
-  DBState,
   MobileGUI,
   SettingsMenuIndex,
   SizeStore,
   additionalSettingsMenu,
-  settingsOpen,
 } from "src/ts/stores.svelte";
 
 const NAV_SHELL_SELECTOR = ".ds-settings-nav-shell.ds-settings-nav-panel";
@@ -163,19 +159,9 @@ function assertNavButtonSemantics(context: string) {
   ).toBe(true);
 }
 
-function assertDesktopCloseButtonPrimitive(context: string) {
-  const closeButton = document.querySelector(
-    ".ds-settings-panel-close-button",
-  ) as HTMLButtonElement | null;
-  expect(closeButton, `${context}: missing close button`).not.toBeNull();
-  expect(
-    closeButton?.classList.contains("icon-btn"),
-    `${context}: close button missing icon-btn`,
-  ).toBe(true);
-  expect(
-    closeButton?.classList.contains("icon-btn--sm"),
-    `${context}: close button missing icon-btn--sm`,
-  ).toBe(true);
+function assertDesktopCloseButtonAbsent(context: string) {
+  const closeButton = document.querySelector(".ds-settings-panel-close-button");
+  expect(closeButton, `${context}: close button should be absent`).toBeNull();
 }
 
 async function pressNavKey(
@@ -251,10 +237,8 @@ describe("settings runtime smoke", () => {
     window.addEventListener("error", onError);
     window.addEventListener("unhandledrejection", onUnhandledRejection);
 
-    DBState.db = { settingsCloseButtonSize: 24 };
     additionalSettingsMenu.length = 0;
     MobileGUI.set(false);
-    settingsOpen.set(true);
     SizeStore.set({ w: 1280, h: 900 });
     SettingsMenuIndex.set(1);
 
@@ -275,7 +259,7 @@ describe("settings runtime smoke", () => {
 
   it("clicks every top-level settings nav item twice without blank content", async () => {
     await assertSettingsContentVisible("initial render");
-    assertDesktopCloseButtonPrimitive("desktop nav run");
+    assertDesktopCloseButtonAbsent("desktop nav run");
     assertNavButtonSemantics("desktop nav run");
     expect(navButtonLabels()).toEqual([
       "Chat Bot",

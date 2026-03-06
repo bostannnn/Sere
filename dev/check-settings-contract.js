@@ -26,8 +26,8 @@ const checks = [
       "title={language.comfyCommander}",
       "title={language.logs}",
       "type=\"button\"",
-      "ds-settings-panel-close-button ds-settings-icon-action ds-settings-icon-action-compact icon-btn icon-btn--sm",
     ],
+    forbiddenPatterns: ["ds-settings-panel-close-button"],
   },
   {
     file: path.join(ROOT, "src/lib/Setting/Pages/BotSettings.svelte"),
@@ -207,6 +207,12 @@ for (const check of checks) {
     if (!content.includes(pattern)) {
       failed = true;
       console.error(`[settings-contract] Missing pattern in ${check.file}: ${pattern}`);
+    }
+  }
+  for (const pattern of check.forbiddenPatterns ?? []) {
+    if (content.includes(pattern)) {
+      failed = true;
+      console.error(`[settings-contract] Forbidden pattern present in ${check.file}: ${pattern}`);
     }
   }
 }

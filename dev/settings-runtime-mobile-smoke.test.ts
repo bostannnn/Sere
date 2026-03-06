@@ -4,12 +4,10 @@ import { mount, tick, unmount } from "svelte";
 vi.mock(import("src/ts/stores.svelte"), async () => {
   const { writable } = await import("svelte/store");
   return {
-    DBState: { db: { settingsCloseButtonSize: 24 } },
     MobileGUI: writable(true),
     SettingsMenuIndex: writable(-1),
     SizeStore: writable({ w: 390, h: 844 }),
     additionalSettingsMenu: [],
-    settingsOpen: writable(false),
   };
 });
 
@@ -89,12 +87,10 @@ vi.mock(import("src/lib/Others/PluginDefinedIcon.svelte"), async () => ({
 
 import Settings from "src/lib/Setting/Settings.svelte";
 import {
-  DBState,
   MobileGUI,
   SettingsMenuIndex,
   SizeStore,
   additionalSettingsMenu,
-  settingsOpen,
 } from "src/ts/stores.svelte";
 
 const NAV_SHELL_SELECTOR =
@@ -224,10 +220,8 @@ describe("settings runtime mobile smoke", () => {
     window.addEventListener("error", onError);
     window.addEventListener("unhandledrejection", onUnhandledRejection);
 
-    DBState.db = { settingsCloseButtonSize: 24 };
     additionalSettingsMenu.length = 0;
     MobileGUI.set(true);
-    settingsOpen.set(false);
     SizeStore.set({ w: 390, h: 844 });
     SettingsMenuIndex.set(-1);
 
