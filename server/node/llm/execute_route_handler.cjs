@@ -61,6 +61,32 @@ function createExecuteRouteHandler(arg = {}) {
         ? arg.sendJson
         : (() => {});
     const gameStateWriteQueue = new Map();
+    const THOUGHT_BLOCK_REGEX = /<Thoughts>[\s\S]*?<\/Thoughts>\s*/gi;
+    const THINK_BLOCK_REGEX = /<think>[\s\S]*?<\/think>\s*/gi;
+
+    function stripHiddenReasoningBlocks(text) {
+        if (typeof text !== 'string') {
+            return '';
+        }
+        return text
+            .replace(THOUGHT_BLOCK_REGEX, '')
+            .replace(THINK_BLOCK_REGEX, '')
+            .trim();
+    }
+
+    function assertVisibleModelOutput(mode, text) {
+        if (mode !== 'model') {
+            return;
+        }
+        const visible = stripHiddenReasoningBlocks(text);
+        if (!visible) {
+            throw new LLMHttpError(
+                502,
+                'EMPTY_VISIBLE_OUTPUT',
+                'Model returned no visible content (empty or reasoning-only output).'
+            );
+        }
+    }
 
     async function enqueueGameStateWrite(characterId, task) {
         const prev = gameStateWriteQueue.get(characterId) || Promise.resolve();
@@ -330,6 +356,8 @@ function createExecuteRouteHandler(arg = {}) {
                         anthropicThinkingOpen = false;
                     }
 
+                    assertVisibleModelOutput(normalized.mode, fullText);
+
                     const durationMs = Date.now() - startedAt;
                     logLLMExecutionEnd({
                         reqId,
@@ -388,8 +416,16 @@ function createExecuteRouteHandler(arg = {}) {
                 } catch (err) {
                     const disconnected = clientDisconnected || err?.code === 'CLIENT_DISCONNECTED';
                     const durationMs = Date.now() - startedAt;
-                    const status = disconnected ? 499 : 500;
-                    const errorCode = disconnected ? 'CLIENT_DISCONNECTED' : 'STREAM_ERROR';
+                    const status = disconnected
+                        ? 499
+                        : (err instanceof LLMHttpError && Number.isFinite(Number(err.status))
+                            ? Number(err.status)
+                            : 500);
+                    const errorCode = disconnected
+                        ? 'CLIENT_DISCONNECTED'
+                        : (err instanceof LLMHttpError && typeof err.code === 'string' && err.code
+                            ? err.code
+                            : 'STREAM_ERROR');
                     if (!disconnected) {
                         console.error('[LLMAPI] Stream error:', err);
                     }
@@ -438,7 +474,12 @@ function createExecuteRouteHandler(arg = {}) {
                     });
                     if (!disconnected && !res.writableEnded && !res.destroyed) {
                         try {
-                            await writeSSEEvent({ type: 'error', message: String(err) });
+                            await writeSSEEvent({
+                                type: 'fail',
+                                status,
+                                error: errorCode,
+                                message: String(err),
+                            });
                         } catch {}
                     }
                 } finally {
@@ -478,6 +519,7 @@ function createExecuteRouteHandler(arg = {}) {
                 typeof executionResult?.result === 'string'
                     ? executionResult.result
                     : (typeof result === 'string' ? result : '');
+            assertVisibleModelOutput(normalized.mode, responseText);
             let sanitizedResponseText = sanitizeOutputByMode(normalized.mode, responseText);
             if (normalized.mode === 'emotion' && !sanitizedResponseText) {
                 sanitizedResponseText = 'neutral';

@@ -69,6 +69,30 @@ function createGenerateHelpers(arg = {}) {
         return '';
     }
 
+    async function readJsonFileWithRetry(filePath, retries = 3) {
+        let lastError = null;
+        for (let attempt = 0; attempt <= retries; attempt += 1) {
+            try {
+                const raw = await fs.readFile(filePath, 'utf-8');
+                return JSON.parse(raw);
+            } catch (error) {
+                lastError = error;
+                const message = String(error?.message || '');
+                const likelyTransientParseError =
+                    error instanceof SyntaxError
+                    && (
+                        message.includes('Unexpected end of JSON input')
+                        || message.includes('Unexpected token')
+                    );
+                if (!likelyTransientParseError || attempt >= retries) {
+                    throw error;
+                }
+                await new Promise((resolve) => setTimeout(resolve, 20 * (attempt + 1)));
+            }
+        }
+        throw lastError;
+    }
+
     async function executeInternalLLMTextCompletion(payload = {}) {
         const provider = toStringOrEmpty(payload.provider);
         const model = toStringOrEmpty(payload.model);
@@ -281,8 +305,7 @@ function createGenerateHelpers(arg = {}) {
         if (!existsSync(settingsPath)) {
             throw new LLMHttpError(404, 'SETTINGS_NOT_FOUND', 'Server settings are not initialized.');
         }
-        const settingsRaw = await fs.readFile(settingsPath, 'utf-8');
-        const settingsParsed = JSON.parse(settingsRaw);
+        const settingsParsed = await readJsonFileWithRetry(settingsPath);
         const settings = (settingsParsed && typeof settingsParsed === 'object' && settingsParsed.data && typeof settingsParsed.data === 'object')
             ? settingsParsed.data
             : settingsParsed;
@@ -313,9 +336,9 @@ function createGenerateHelpers(arg = {}) {
         }
         const chatPath = path.join(dataDirs.characters, characterId, 'chats', `${chatId}.json`);
 
-        const charRaw = JSON.parse(await fs.readFile(charPath, 'utf-8'));
+        const charRaw = await readJsonFileWithRetry(charPath);
         const chatRaw = existsSync(chatPath)
-            ? JSON.parse(await fs.readFile(chatPath, 'utf-8'))
+            ? await readJsonFileWithRetry(chatPath)
             : { chat: { message: [] } };
         const character = charRaw.character || charRaw.data || charRaw || {};
         const chat = chatRaw.chat || chatRaw.data || chatRaw || {};

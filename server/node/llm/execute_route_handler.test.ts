@@ -307,4 +307,80 @@ describe("execute_route_handler streaming safety", () => {
         expect(res.writableEnded).toBe(true);
         expect(harness.sendJson).not.toHaveBeenCalled();
     });
+
+    it("fails streaming model response when output is reasoning-only", async () => {
+        const encoder = new TextEncoder();
+        const req = new MockReq();
+        const res = new MockRes();
+        let readCalls = 0;
+        const { stream } = createStreamFromRead(async () => {
+            readCalls += 1;
+            if (readCalls === 1) {
+                return {
+                    done: false,
+                    value: encoder.encode('data: {"choices":[{"delta":{"content":"<Thoughts>hidden</Thoughts>"}}]}\n\n'),
+                };
+            }
+            return { done: true };
+        });
+        const harness = createHarness({
+            executeLLM: async () => stream,
+        });
+
+        await harness.handleLLMExecutePost(req, res, {}, "execute");
+
+        const lastAudit = harness.appendLLMAudit.mock.calls.at(-1)?.[0];
+        expect(lastAudit?.status).toBe(502);
+        expect(lastAudit?.ok).toBe(false);
+        expect(lastAudit?.error?.error).toBe("EMPTY_VISIBLE_OUTPUT");
+
+        const frames = toSSEDataFrames(res.text())
+            .map((frame) => {
+                try {
+                    return JSON.parse(frame);
+                } catch {
+                    return null;
+                }
+            })
+            .filter(Boolean);
+        const errorFrame = frames.find((frame: Record<string, unknown>) => frame.type === "fail");
+        expect(errorFrame).toBeTruthy();
+        expect(String((errorFrame as Record<string, unknown>).message || "")).toContain("no visible content");
+        expect((errorFrame as Record<string, unknown>).error).toBe("EMPTY_VISIBLE_OUTPUT");
+        expect((errorFrame as Record<string, unknown>).status).toBe(502);
+        expect(frames.find((frame: Record<string, unknown>) => frame.type === "done")).toBeUndefined();
+    });
+});
+
+describe("execute_route_handler visible output guard", () => {
+    it("fails non-stream model response when output is reasoning-only", async () => {
+        const req = new MockReq();
+        const res = new MockRes();
+        const harness = createHarness({
+            normalized: {
+                endpoint: "execute",
+                mode: "model",
+                provider: "openrouter",
+                characterId: "",
+                chatId: "",
+                requestedStreaming: false,
+                streaming: false,
+                request: {},
+            },
+            executeLLM: async () => ({
+                type: "success",
+                result: "<Thoughts>\ninternal only\n</Thoughts>\n",
+            }),
+        });
+
+        await harness.handleLLMExecutePost(req, res, {}, "execute");
+
+        expect(harness.sendJson).toHaveBeenCalledTimes(1);
+        const status = harness.sendJson.mock.calls[0]?.[1];
+        const payload = harness.sendJson.mock.calls[0]?.[2];
+        expect(status).toBe(500);
+        expect(payload?.message || "").toContain("no visible content");
+        const lastAudit = harness.appendLLMAudit.mock.calls.at(-1)?.[0];
+        expect(lastAudit?.ok).toBe(false);
+    });
 });

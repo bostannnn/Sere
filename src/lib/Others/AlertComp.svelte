@@ -8,13 +8,12 @@
     import { ChevronRightIcon, User } from '@lucide/svelte';
     import { isCharacterHasAssets } from 'src/ts/characterCards';
     import TextInput from '../UI/GUI/TextInput.svelte';
-    import { aiLawApplies, openURL } from 'src/ts/globalApi.svelte';
+    import { aiLawApplies, getFetchData, getServerLLMLogs, openURL, type ServerLLMLogEntry } from 'src/ts/globalApi.svelte';
     import Button from '../UI/GUI/Button.svelte';
     import { XIcon } from "@lucide/svelte";
     import SelectInput from "../UI/GUI/SelectInput.svelte";
     import OptionInput from "../UI/GUI/OptionInput.svelte";
     import { language } from 'src/lang';
-    import { getFetchData } from 'src/ts/globalApi.svelte';
     import { alertStore, selectedCharID } from "src/ts/stores.svelte";
     import { tokenize } from "src/ts/tokenizer";
     import TextAreaInput from "../UI/GUI/TextAreaInput.svelte";
@@ -24,6 +23,7 @@
     import { getCurrentCharacter } from "src/ts/storage/database.svelte";
     import { translateStackTrace } from "../../ts/sourcemap";
     import RequestLogsViewer from "./RequestLogsViewer.svelte";
+    import { isNodeServer } from "src/ts/platform";
 
     let showDetails = $state(false);
     let translatedStackTrace = $state('');
@@ -95,6 +95,261 @@
         } catch {
             return data
         }
+    }
+
+    type RequestDataPayload = {
+        source: "client" | "server"
+        url: string
+        body: string
+        response: string
+    }
+
+    const requestDataCache: Record<string, Promise<RequestDataPayload | null>> = {};
+
+    function parseMaybeJson(value: unknown): unknown {
+        if (typeof value !== "string") {
+            return value;
+        }
+        try {
+            return JSON.parse(value);
+        } catch {
+            return value;
+        }
+    }
+
+    function stringifyPretty(value: unknown): string {
+        try {
+            if (typeof value === "string") {
+                return beautifyJSON(value);
+            }
+            return JSON.stringify(value ?? null, null, 2);
+        } catch {
+            return String(value);
+        }
+    }
+
+    function getCurrentChatState() {
+        if ($selectedCharID === -1) {
+            return null;
+        }
+        const character = DBState.db.characters[$selectedCharID];
+        if (!character) {
+            return null;
+        }
+        const chat = character.chats[character.chatPage];
+        if (!chat) {
+            return null;
+        }
+        return chat;
+    }
+
+    function getLastUserMessageContent(messages: unknown[], startIndex: number): string {
+        for (let idx = startIndex; idx >= 0; idx--) {
+            const msg = messages[idx] as { role?: unknown, data?: unknown } | undefined;
+            if (msg?.role === "user" && typeof msg.data === "string" && msg.data.trim()) {
+                return msg.data.trim();
+            }
+        }
+        return "";
+    }
+
+    function extractRequestMessages(requestPayload: unknown): unknown[] {
+        const request = parseMaybeJson(requestPayload);
+        if (!request || typeof request !== "object") {
+            return [];
+        }
+        const root = request as Record<string, unknown>;
+        const nested = (root.request && typeof root.request === "object")
+            ? root.request as Record<string, unknown>
+            : root;
+
+        if (Array.isArray(nested.messages)) {
+            return nested.messages;
+        }
+
+        const requestBody = (nested.requestBody && typeof nested.requestBody === "object")
+            ? nested.requestBody as Record<string, unknown>
+            : null;
+        if (requestBody && Array.isArray(requestBody.messages)) {
+            return requestBody.messages;
+        }
+
+        return [];
+    }
+
+    function extractLastUserMessageFromDurableLog(log: ServerLLMLogEntry): string {
+        const messages = extractRequestMessages(log.request);
+        for (let idx = messages.length - 1; idx >= 0; idx--) {
+            const msg = messages[idx] as { role?: unknown, content?: unknown } | undefined;
+            if (msg?.role !== "user") {
+                continue;
+            }
+            if (typeof msg.content === "string" && msg.content.trim()) {
+                return msg.content.trim();
+            }
+            if (Array.isArray(msg.content)) {
+                const joined = msg.content
+                    .map((part) => {
+                        if (typeof part === "string") return part;
+                        if (part && typeof part === "object" && typeof (part as { text?: unknown }).text === "string") {
+                            return (part as { text: string }).text;
+                        }
+                        return "";
+                    })
+                    .filter(Boolean)
+                    .join("\n")
+                    .trim();
+                if (joined) {
+                    return joined;
+                }
+            }
+        }
+        return "";
+    }
+
+    function extractModelFromDurableLog(log: ServerLLMLogEntry): string {
+        const request = parseMaybeJson(log.request);
+        if (!request || typeof request !== "object") {
+            return "";
+        }
+        const root = request as Record<string, unknown>;
+        const nested = (root.request && typeof root.request === "object")
+            ? root.request as Record<string, unknown>
+            : root;
+
+        if (typeof nested.model === "string" && nested.model.trim()) {
+            return nested.model.trim();
+        }
+        const requestBody = (nested.requestBody && typeof nested.requestBody === "object")
+            ? nested.requestBody as Record<string, unknown>
+            : null;
+        if (requestBody && typeof requestBody.model === "string" && requestBody.model.trim()) {
+            return requestBody.model.trim();
+        }
+        return "";
+    }
+
+    function pickBestDurableLog(
+        logs: ServerLLMLogEntry[],
+        targetTimeMs: number,
+        targetUserMessage: string,
+        targetModel = ""
+    ): ServerLLMLogEntry | null {
+        let best: ServerLLMLogEntry | null = null;
+        let bestScore = Number.POSITIVE_INFINITY;
+
+        for (const log of logs) {
+            if (log?.endpoint !== "generate") {
+                continue;
+            }
+            if (typeof log.mode === "string" && log.mode && log.mode !== "model") {
+                continue;
+            }
+
+            const ts = Date.parse(String(log.timestamp || ""));
+            let score = Number.isFinite(ts) ? Math.abs(ts - targetTimeMs) : 1_000_000_000;
+            if (Number.isFinite(ts)) {
+                const delta = ts - targetTimeMs;
+                // Message time is set when generation starts; matching durable log should be shortly after.
+                if (delta < -2_000) {
+                    score += 120_000 + Math.abs(delta);
+                } else if (delta > 180_000) {
+                    score += delta;
+                }
+            }
+
+            const lastUser = extractLastUserMessageFromDurableLog(log);
+            if (targetUserMessage && lastUser === targetUserMessage) {
+                score -= 60_000;
+            } else if (targetUserMessage && lastUser) {
+                score += 60_000;
+            }
+
+            const logModel = extractModelFromDurableLog(log);
+            if (targetModel && logModel === targetModel) {
+                score -= 25_000;
+            } else if (targetModel && logModel) {
+                score += 25_000;
+            }
+
+            if (score < bestScore) {
+                best = log;
+                bestScore = score;
+            }
+        }
+
+        return best;
+    }
+
+    async function loadRequestData(
+        generationId: string,
+        info: { idx: number, genInfo?: { model?: string } } | null
+    ): Promise<RequestDataPayload | null> {
+        const cacheKey = `${generationId}::${$selectedCharID}::${info?.idx ?? -1}`;
+        const cached = requestDataCache[cacheKey];
+        if (cached) {
+            return cached;
+        }
+
+        const pending = (async () => {
+            const clientLog = getFetchData(generationId);
+            if (clientLog) {
+                return {
+                    source: "client" as const,
+                    url: clientLog.url,
+                    body: stringifyPretty(clientLog.body),
+                    response: stringifyPretty(clientLog.response),
+                };
+            }
+
+            if (!isNodeServer || !info) {
+                return null;
+            }
+
+            const chat = getCurrentChatState();
+            if (!chat || !Array.isArray(chat.message) || !chat.id) {
+                return null;
+            }
+
+            const message = chat.message[info.idx] as { time?: unknown } | undefined;
+            const targetTimeMs = Number.isFinite(Number(message?.time)) ? Number(message?.time) : Date.now();
+            const targetUserMessage = getLastUserMessageContent(chat.message, info.idx - 1);
+            const targetModel = typeof info.genInfo?.model === "string" ? info.genInfo.model : "";
+
+            const logs = await getServerLLMLogs({ limit: 200, chatId: chat.id });
+            if (!Array.isArray(logs) || logs.length === 0) {
+                return null;
+            }
+
+            const best = pickBestDurableLog(logs, targetTimeMs, targetUserMessage, targetModel);
+            if (!best) {
+                return null;
+            }
+
+            const path = (typeof best.path === "string" && best.path) ? best.path : "/data/llm/generate";
+            const meta = {
+                source: "durable_server_log",
+                requestId: best.requestId ?? null,
+                timestamp: best.timestamp ?? null,
+                status: best.status ?? null,
+                ok: best.ok ?? null,
+                durationMs: best.durationMs ?? null,
+            };
+
+            return {
+                source: "server" as const,
+                url: `${path} [req:${best.requestId ?? "-"}]`,
+                body: stringifyPretty(parseMaybeJson(best.request)),
+                response: stringifyPretty({
+                    meta,
+                    response: parseMaybeJson(best.response),
+                    error: parseMaybeJson(best.error),
+                }),
+            };
+        })();
+
+        requestDataCache[cacheKey] = pending;
+        return pending;
     }
 </script>
 
@@ -398,17 +653,19 @@
                 </div>
                 {/if}
                 {#if generationInfoMenuIndex === 2}
-                    {#await getFetchData($alertStore.msg) then data} 
+                    {#await loadRequestData($alertStore.msg, $alertGenerationInfoStore) then data} 
                         {#if !data}
                             <span class="alert-body-message-lg">{language.errors.requestLogRemoved}</span>
                             <span class="alert-body-submessage">{language.errors.requestLogRemovedDesc}</span>
                         {:else}
+                            <h1 class="alert-section-title">Log Source</h1>
+                            <code class="alert-code-block alert-prewrap">{data.source === "client" ? "Client request log (in-memory)" : "Server durable log fallback"}</code>
                             <h1 class="alert-section-title">URL</h1>
                             <code class="alert-code-block alert-prewrap">{data.url}</code>
                             <h1 class="alert-section-title">Request Body</h1>
-                            <code class="alert-code-block alert-prewrap">{beautifyJSON(data.body)}</code>
+                            <code class="alert-code-block alert-prewrap">{data.body}</code>
                             <h1 class="alert-section-title">Response</h1>
-                            <code class="alert-code-block alert-prewrap">{beautifyJSON(data.response)}</code>
+                            <code class="alert-code-block alert-prewrap">{data.response}</code>
                         {/if}
                     {/await}
                 {/if}

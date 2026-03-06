@@ -144,15 +144,18 @@ export async function sendChat(chatProcessIndex = -1,arg:{
         return data.trim()
     }
 
-    function throwError(error:string){
-
-        if(DBState.db.inlayErrorResponse){
-            if(DBState.db.characters[selectedChar].chats[selectedChatIndex()].message[DBState.db.characters[selectedChar].chats[selectedChatIndex()].message.length - 1].role === 'char'){
-                DBState.db.characters[selectedChar].chats[selectedChatIndex()].message[DBState.db.characters[selectedChar].chats[selectedChatIndex()].message.length - 1].data += `\n\`\`\`risuerror\n${error}\n\`\`\``
+    function throwError(error:string, opts:{ forceInlay?:boolean, separateMessage?:boolean } = {}){
+        const shouldInlay = opts.forceInlay || DBState.db.inlayErrorResponse
+        if(shouldInlay){
+            const chatMessages = DBState.db.characters[selectedChar].chats[selectedChatIndex()].message
+            const lastMessage = chatMessages[chatMessages.length - 1]
+            const canAppendToLast = !opts.separateMessage && lastMessage?.role === 'char'
+            if(canAppendToLast){
+                chatMessages[chatMessages.length - 1].data += `\n\`\`\`risuerror\n${error}\n\`\`\``
             }
             else{
 
-                DBState.db.characters[selectedChar].chats[selectedChatIndex()].message.push({
+                chatMessages.push({
                     role: 'char',
                     data: `\`\`\`risuerror\n${error}\n\`\`\``,
                     saying: currentChar.chaId,
@@ -166,6 +169,33 @@ export async function sendChat(chatProcessIndex = -1,arg:{
 
         alertError(error)
         return
+    }
+
+    function formatGenerationFailureMessage(rawError: string, errorCode = '', statusText = ''): string {
+        const error = String(rawError || '').trim() || 'Unknown generation error';
+        const status = String(statusText || '').trim();
+        const code = String(errorCode || '').trim();
+
+        if (code === 'EMPTY_VISIBLE_OUTPUT' || error.includes('EMPTY_VISIBLE_OUTPUT')) {
+            return 'Model returned only hidden reasoning and no visible answer. Please try another model or adjust reasoning settings.';
+        }
+
+        if (status === '429' || /\b429\b/.test(error)) {
+            return `Rate limit (429): ${error}`;
+        }
+
+        if (
+            error.includes('Unexpected end of JSON input')
+            || error.includes('Unexpected token')
+        ) {
+            return 'Server hit a transient data-read error while preparing prompt context. Please retry once.';
+        }
+
+        if (status && !error.includes(`(${status})`) && !error.includes(` ${status}`)) {
+            return `${error} (HTTP ${status})`;
+        }
+
+        return error;
     }
 
     function notifyAuxFailure(task: string, error: string) {
@@ -1741,7 +1771,10 @@ export async function sendChat(chatProcessIndex = -1,arg:{
         return false
     }
     if(req.type === 'fail'){
-        throwError(req.result)
+        throwError(formatGenerationFailureMessage(req.result), {
+            forceInlay: true,
+            separateMessage: true
+        })
         return false
     }
     else if(req.type === 'streaming'){
@@ -1807,6 +1840,40 @@ export async function sendChat(chatProcessIndex = -1,arg:{
             const readed = (await reader.read())
             if(readed.value){
                 lastResponseChunk = readed.value
+                const streamError = typeof lastResponseChunk.__error === 'string'
+                    ? lastResponseChunk.__error.trim()
+                    : ''
+                if (streamError) {
+                    const streamStatus = typeof lastResponseChunk.__status === 'string'
+                        ? lastResponseChunk.__status.trim()
+                        : ''
+                    const streamCode = typeof lastResponseChunk.__errorCode === 'string'
+                        ? lastResponseChunk.__errorCode.trim()
+                        : ''
+
+                    const failedTarget = ensureGenerationMessage(false)
+                    if (failedTarget.activeChat) {
+                        failedTarget.activeChat.isStreaming = false
+                    }
+                    if (!arg.continue && failedTarget.activeChat) {
+                        const failedMsgIndex = failedTarget.activeChat.message.findIndex((entry) => entry?.chatId === generationId)
+                        if (failedMsgIndex >= 0) {
+                            const failedMsg = failedTarget.activeChat.message[failedMsgIndex]
+                            if ((failedMsg?.data ?? '').trim() === '') {
+                                failedTarget.activeChat.message.splice(failedMsgIndex, 1)
+                            }
+                        }
+                    }
+                    DBState.db.characters[selectedChar].reloadKeys += 1
+                    throwError(formatGenerationFailureMessage(streamError, streamCode, streamStatus), {
+                        forceInlay: true,
+                        separateMessage: true
+                    })
+                    try {
+                        await reader.cancel()
+                    } catch {}
+                    return false
+                }
                 const textEntries = Object.entries(lastResponseChunk).filter(([key, value]) => {
                     return !key.startsWith('__') && typeof value === 'string'
                 })

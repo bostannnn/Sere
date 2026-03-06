@@ -1679,6 +1679,25 @@ function getTranStream(arg:RequestDataArgumentExtended):TransformStream<Uint8Arr
                                     if (parsed.type === 'chunk') {
                                         if(!readed["0"]) readed["0"] = "";
                                         readed["0"] += (parsed.text || "");
+                                        continue;
+                                    } else if (parsed.type === 'fail' || parsed.type === 'error') {
+                                        const errorMessage = typeof parsed.message === 'string' && parsed.message.trim()
+                                            ? parsed.message.trim()
+                                            : (typeof parsed.error === 'string' && parsed.error.trim()
+                                                ? parsed.error.trim()
+                                                : 'Server execution failed');
+                                        readed["__error"] = errorMessage;
+                                        if (typeof parsed.error === 'string' && parsed.error.trim()) {
+                                            readed["__errorCode"] = parsed.error.trim();
+                                        }
+                                        if (typeof parsed.code === 'string' && parsed.code.trim()) {
+                                            readed["__errorCode"] = parsed.code.trim();
+                                        }
+                                        if (Number.isFinite(Number(parsed.status))) {
+                                            readed["__status"] = String(Number(parsed.status));
+                                        }
+                                        control.enqueue(readed);
+                                        return;
                                     } else if (parsed.type === 'done') {
                                         if (parsed.newCharEtag) {
                                             readed["__newCharEtag"] = parsed.newCharEtag;
@@ -1805,9 +1824,21 @@ function wrapToolStream(
                 let { value } = readResult
 
                 let content = value?.['0'] || ''
+                const metaEntries = Object.entries(value ?? {}).filter(([key, val]) => key.startsWith('__') && typeof val === 'string') as [string, string][]
+                const hasErrorMeta = metaEntries.some(([key]) => key === '__error')
                 if(done){
                     value = lastValue ?? {'0': ''}
                     content = value?.['0'] || ''
+                    const doneMetaEntries = Object.entries(value ?? {}).filter(([key, val]) => key.startsWith('__') && typeof val === 'string') as [string, string][]
+                    const doneHasErrorMeta = doneMetaEntries.some(([key]) => key === '__error')
+                    if (doneHasErrorMeta) {
+                        const failedOut: StreamResponseChunk = {};
+                        for (const [metaKey, metaValue] of doneMetaEntries) {
+                            failedOut[metaKey] = metaValue;
+                        }
+                        controller.enqueue(failedOut);
+                        return controller.close();
+                    }
                     
                     const toolCalls = Object.values(JSON.parse(value?.['__tool_calls'] || '{}') || {}) as OpenAIToolCall[]; 
                     if(toolCalls && toolCalls.length > 0){
@@ -1926,10 +1957,24 @@ function wrapToolStream(
                     }
                     return controller.close()
                 }
+
+                if (hasErrorMeta) {
+                    const failedOut: StreamResponseChunk = {};
+                    for (const [metaKey, metaValue] of metaEntries) {
+                        failedOut[metaKey] = metaValue;
+                    }
+                    controller.enqueue(failedOut);
+                    return controller.close();
+                }
                 
                 lastValue = value
-                
-                controller.enqueue({"0": (prefix ? prefix + '\n\n' : '') + content})
+
+                const outChunk: StreamResponseChunk = {}
+                for (const [metaKey, metaValue] of metaEntries) {
+                    outChunk[metaKey] = metaValue
+                }
+                outChunk["0"] = (prefix ? prefix + '\n\n' : '') + content
+                controller.enqueue(outChunk)
             }
         }
     })
