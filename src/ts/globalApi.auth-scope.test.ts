@@ -194,4 +194,16 @@ describe("globalApi auth scope", () => {
     expect(secondHeaders["risu-auth"]).toBeUndefined();
     expect(secondHeaders["x-risu-client-id"]).toBeUndefined();
   });
+
+  it("globalFetch does not forward local auth headers for absolute non-local /data-like URLs", async () => {
+    const { globalFetch } = await import("src/ts/globalApi.svelte");
+
+    await globalFetch("https://example.com/data/settings", { method: "GET" });
+
+    const proxyHeaders = (shared.fetchMock.mock.calls[0]?.[1] as RequestInit | undefined)?.headers as Record<string, string>;
+    const forwardedHeaders = JSON.parse(decodeURIComponent(proxyHeaders["risu-header"] ?? "{}")) as Record<string, string>;
+
+    expect(forwardedHeaders["risu-auth"]).toBeUndefined();
+    expect(forwardedHeaders["x-risu-client-id"]).toBeUndefined();
+  });
 });

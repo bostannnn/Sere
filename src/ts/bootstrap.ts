@@ -37,12 +37,6 @@ export async function loadData() {
             LoadingStatusState.text = "Loading Server Storage..."
             await loadServerDatabase()
             startServerRealtimeSync()
-            LoadingStatusState.text = "Checking Unnecessary Files..."
-            try {
-                await cleanChunks()
-            } catch (error) {
-                bootstrapLog(error)
-            }
             LoadingStatusState.text = "Loading Plugins..."
             try {
                 await loadPlugins()
@@ -332,8 +326,8 @@ async function checkNewFormat(): Promise<void> {
     if (db.mainPrompt === oldMainPrompt) {
         db.mainPrompt = defaultMainPrompt;
     }
-    if (db.mainPrompt === oldJailbreak) {
-        db.mainPrompt = defaultJailbreak;
+    if (db.jailbreak === oldJailbreak) {
+        db.jailbreak = defaultJailbreak;
     }
     for (let i = 0; i < db.characters.length; i++) {
         const trashTime = db.characters[i].trashTime;
@@ -346,15 +340,6 @@ async function checkNewFormat(): Promise<void> {
     setDatabase(db);
     checkCharOrder();
 }
-
-/**
- * Purges chunks of data that are not needed.
- */
-async function cleanChunks() {
-    // Server-only mode stores assets/chats on server-side filesystem.
-    return
-}
-
 
 /**
  * Assigns unique IDs to characters and chats.
