@@ -198,12 +198,13 @@ ensureIncludes(appShellContent, appShellFile, "clearTransientOverlays()", failur
 ensureIncludes(appShellContent, appShellFile, "let lastWorkspace = $state<AppRoute[\"workspace\"]>(resolveWorkspace())", failures);
 
 ensureIncludes(appShellContent, appShellFile, "const rightSidebarToggleKey = \"risu:desktop-char-config-open\"", failures);
-ensureIncludes(appShellContent, appShellFile, "let uiShellRightSidebarTab = $state<\"chat\" | \"character\" | \"memory\">(\"chat\")", failures);
+ensureIncludes(appShellContent, appShellFile, "let uiShellRightSidebarTab = $state<RightSidebarTab>(\"chat\")", failures);
 ensureIncludes(appShellContent, appShellFile, "let uiShellRightSidebarVisible = $state(readRightSidebarDefault())", failures);
 ensureIncludes(appShellContent, appShellFile, "const chatRightSidebarPanelId = \"chat-right-sidebar-drawer\";", failures);
 ensureIncludes(appShellContent, appShellFile, "const libraryRightSidebarPanelId = \"rulebook-right-sidebar-drawer\";", failures);
 ensureIncludes(appShellContent, appShellFile, "const rightSidebarPanelId = $derived.by(() => {", failures);
-ensureIncludes(appShellContent, appShellFile, "workspace === \"chats\" && uiShellRightSidebarOpen && uiShellRightSidebarVisible", failures);
+ensureIncludes(appShellContent, appShellFile, "if (workspace === \"chats\") {", failures);
+ensureIncludes(appShellContent, appShellFile, "} else if (uiShellRightSidebarOpen && uiShellRightSidebarVisible) {", failures);
 ensureIncludes(appShellContent, appShellFile, "if (uiShellRightSidebarTab === \"character\") {", failures);
 ensureIncludes(appShellContent, appShellFile, "} else if (uiShellRightSidebarTab === \"memory\") {", failures);
 ensureIncludes(appShellContent, appShellFile, "inspector = \"memory\";", failures);
@@ -227,6 +228,12 @@ ensureIncludes(appShellContent, appShellFile, "overflowItems={additionalHamburge
 ensureIncludes(appShellContent, appShellFile, "bind:overflowOpen={topbarOverflowOpen}", failures);
 ensureIncludes(appContent, appFile, "import AppShellV2 from './lib/UI/AppShellV2.svelte';", failures);
 ensureIncludes(appContent, appFile, "<AppShellV2 />", failures);
+ensureNotIncludes(
+  appContent,
+  appFile,
+  "{:else if $uiShellV2Enabled && $MobileGUI && $selectedCharID !== -1}",
+  failures,
+);
 ensureNotIncludes(appContent, appFile, "import AppShellTopbar from './lib/UI/AppShellTopbar.svelte';", failures);
 ensureNotIncludes(appContent, appFile, "import AppShellStage from './lib/UI/AppShellStage.svelte';", failures);
 ensureIncludes(appShellContent, appShellFile, "import AppShellTopbar from \"./AppShellTopbar.svelte\";", failures);
@@ -246,6 +253,17 @@ ensureIncludes(appShellContent, appShellFile, "onShowActiveCharacters={showActiv
 ensureIncludes(appShellContent, appShellFile, "onShowTrashCharacters={showTrashCharacters}", failures);
 ensureIncludes(appShellContent, appShellFile, "onAddCharacter={() => {", failures);
 ensureIncludes(appShellContent, appShellFile, "characterDirectoryShowTrash={characterDirectoryShowTrash}", failures);
+ensureIncludes(appShellContent, appShellFile, "const isMobileShell = $derived($MobileGUI);", failures);
+ensureIncludes(appShellContent, appShellFile, "const isMobileChatWorkspace = $derived(isMobileShell && resolvedAppRoute.workspace === \"chats\");", failures);
+ensureIncludes(appShellContent, appShellFile, "const isMobileSettingsSubpage = $derived(", failures);
+ensureIncludes(appShellContent, appShellFile, "const isMobileLibraryWorkspace = $derived(isMobileShell && resolvedAppRoute.workspace === \"library\");", failures);
+ensureIncludes(appShellContent, appShellFile, "const showBottomPrimaryNav = $derived.by(() => {", failures);
+ensureIncludes(appShellContent, appShellFile, "showTopbarBack={showTopbarBack}", failures);
+ensureIncludes(appShellContent, appShellFile, "showMobileMenuAction={isMobileChatWorkspace && !mobileChatPanelOpen}", failures);
+ensureIncludes(appShellContent, appShellFile, "mobileLibraryFilterVisible={mobileLibraryFilterVisible}", failures);
+ensureIncludes(appShellContent, appShellFile, "onOpenSystemSelector={openLibrarySystemSelector}", failures);
+ensureIncludes(appShellContent, appShellFile, "onOpenEditionSelector={openLibraryEditionSelector}", failures);
+ensureIncludes(appShellContent, appShellFile, "onResetLibraryFilters={resetLibraryFilters}", failures);
 ensureNotIncludes(appContent, appFile, "<header class=\"ds-app-v2-topbar\">", failures);
 ensureNotIncludes(appContent, appFile, "<div class=\"ds-app-v2-stage\">", failures);
 
@@ -289,6 +307,13 @@ ensureIncludes(topbarContent, topbarFile, "class=\"ds-app-v2-topbar-btn ds-app-v
 ensureIncludes(topbarContent, topbarFile, "class=\"ds-app-v2-topbar-search control-field\"", failures);
 ensureIncludes(topbarContent, topbarFile, "class:active={!characterDirectoryShowTrash}", failures);
 ensureIncludes(topbarContent, topbarFile, "class:active={characterDirectoryShowTrash}", failures);
+ensureIncludes(topbarContent, topbarFile, "mobileLibraryFilterVisible = false", failures);
+ensureIncludes(topbarContent, topbarFile, "mobileLibrarySystemLabel = \"All\"", failures);
+ensureIncludes(topbarContent, topbarFile, "mobileLibraryEditionLabel = \"All\"", failures);
+ensureIncludes(topbarContent, topbarFile, "mobileLibraryCanReset = false", failures);
+ensureIncludes(topbarContent, topbarFile, "data-testid=\"topbar-library-mobile-system\"", failures);
+ensureIncludes(topbarContent, topbarFile, "data-testid=\"topbar-library-mobile-edition\"", failures);
+ensureIncludes(topbarContent, topbarFile, "data-testid=\"topbar-library-mobile-reset\"", failures);
 ensureIncludes(topbarContent, topbarFile, ".ds-app-v2-topbar-btn:focus-visible,", failures);
 
 ensureIncludes(stageContent, stageFile, "workspace === \"characters\"", failures);
@@ -584,6 +609,12 @@ ensureIncludes(rulebookLibraryContent, rulebookLibraryFile, "class=\"rag-staging
 ensureIncludes(rulebookLibraryContent, rulebookLibraryFile, "class=\"rag-staging-list list-shell\"", failures);
 ensureIncludes(rulebookLibraryContent, rulebookLibraryFile, "class=\"rag-staging-item panel-shell\"", failures);
 ensureIncludes(rulebookLibraryContent, rulebookLibraryFile, "class=\"rag-status-card panel-shell\"", failures);
+ensureIncludes(rulebookLibraryContent, rulebookLibraryFile, "isMobileShell = false", failures);
+ensureIncludes(rulebookLibraryContent, rulebookLibraryFile, "setSystemFilter: selectSystem", failures);
+ensureIncludes(rulebookLibraryContent, rulebookLibraryFile, "setEditionFilter: selectEdition", failures);
+ensureIncludes(rulebookLibraryContent, rulebookLibraryFile, "clearFilters,", failures);
+ensureIncludes(rulebookLibraryContent, rulebookLibraryFile, "getFilterSnapshot,", failures);
+ensureIncludes(rulebookLibraryContent, rulebookLibraryFile, "{#if useShellChrome && !isMobileShell}", failures);
 ensureIncludes(mobileHeaderContent, mobileHeaderFile, "class=\"ds-mobile-header-icon-btn icon-btn icon-btn--md\"", failures);
 ensureIncludes(mobileHeaderContent, mobileHeaderFile, "class=\"ds-mobile-header-actions action-rail\"", failures);
 ensureIncludes(mobileHeaderContent, mobileHeaderFile, "title=\"Back\" aria-label=\"Back\"", failures);

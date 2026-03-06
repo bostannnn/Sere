@@ -228,7 +228,18 @@ describe("rulebook library runtime smoke", () => {
       },
     ];
 
-    let shellActions: { selectFiles: () => Promise<void> } | null = null;
+    let shellActions: {
+      selectFiles: () => Promise<void>;
+      setSystemFilter: (system: string) => void;
+      setEditionFilter: (system: string, edition: string) => void;
+      clearFilters: () => void;
+      getFilterSnapshot: () => {
+        systems: string[];
+        editionsBySystem: Record<string, string[]>;
+        selectedSystem: string;
+        selectedEdition: string;
+      };
+    } | null = null;
     const target = document.createElement("div");
     document.body.appendChild(target);
     app = mount(RulebookLibrary, {
@@ -237,7 +248,7 @@ describe("rulebook library runtime smoke", () => {
         useShellChrome: true,
         rightSidebarOpen: true,
         rightSidebarTab: "library",
-        registerShellActions: (actions: { selectFiles: () => Promise<void> } | null) => {
+        registerShellActions: (actions) => {
           shellActions = actions;
         },
       },
@@ -272,6 +283,83 @@ describe("rulebook library runtime smoke", () => {
     expect(shellActions).not.toBeNull();
     await shellActions!.selectFiles();
     expect(mocks.selectMultipleFile).toHaveBeenCalledTimes(1);
+  });
+
+  it("supports mobile shell filter actions and disables drawer-only desktop affordances", async () => {
+    mocks.rulebooks = [
+      {
+        id: "rb-1",
+        name: "Vampire Core",
+        thumbnail: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4////fwAJ+wP9xWJ5+wAAAABJRU5ErkJggg==",
+        chunkCount: 12,
+        metadata: { system: "VtM", edition: "5e" },
+      },
+      {
+        id: "rb-2",
+        name: "D&D Core",
+        chunkCount: 8,
+        metadata: { system: "DnD", edition: "2024" },
+      },
+    ];
+
+    let shellActions: {
+      selectFiles: () => Promise<void>;
+      setSystemFilter: (system: string) => void;
+      setEditionFilter: (system: string, edition: string) => void;
+      clearFilters: () => void;
+      getFilterSnapshot: () => {
+        systems: string[];
+        editionsBySystem: Record<string, string[]>;
+        selectedSystem: string;
+        selectedEdition: string;
+      };
+    } | null = null;
+
+    const target = document.createElement("div");
+    document.body.appendChild(target);
+    app = mount(RulebookLibrary, {
+      target,
+      props: {
+        useShellChrome: true,
+        isMobileShell: true,
+        viewMode: "grid",
+        registerShellActions: (actions) => {
+          shellActions = actions;
+        },
+      },
+    });
+    await flushUi();
+
+    expect(target.querySelector('[data-testid="rulebook-right-sidebar-drawer"]')).toBeNull();
+    expect(target.querySelector(".rag-content-area.is-grid")).not.toBeNull();
+
+    const thumb = target.querySelector(".rag-book-thumb") as Element | null;
+    expect(thumb).not.toBeNull();
+    expect(thumb?.getAttribute("draggable")).toBe("false");
+
+    expect(shellActions).not.toBeNull();
+    const initial = shellActions!.getFilterSnapshot();
+    expect(initial.selectedSystem).toBe("All");
+    expect(initial.selectedEdition).toBe("All");
+    expect(initial.systems.length).toBeGreaterThan(0);
+
+    shellActions!.setSystemFilter("VtM");
+    await flushUi();
+    const systemFiltered = shellActions!.getFilterSnapshot();
+    expect(systemFiltered.selectedSystem).toBe("VtM");
+    expect(systemFiltered.selectedEdition).toBe("All");
+
+    shellActions!.setEditionFilter("VtM", "5e");
+    await flushUi();
+    const editionFiltered = shellActions!.getFilterSnapshot();
+    expect(editionFiltered.selectedSystem).toBe("VtM");
+    expect(editionFiltered.selectedEdition).toBe("5e");
+
+    shellActions!.clearFilters();
+    await flushUi();
+    const reset = shellActions!.getFilterSnapshot();
+    expect(reset.selectedSystem).toBe("All");
+    expect(reset.selectedEdition).toBe("All");
   });
 
   it("shows loading state on initial render and avoids empty-state flash", async () => {

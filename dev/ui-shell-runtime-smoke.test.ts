@@ -59,6 +59,7 @@ vi.mock(import("src/ts/stores.svelte"), async () => {
 
   const popupStore = { children: null };
   const LoadingStatusState = { text: "" };
+  const selIdState = { selId: -1 };
 
   return {
     settingsOpen,
@@ -81,6 +82,7 @@ vi.mock(import("src/ts/stores.svelte"), async () => {
     additionalHamburgerMenu,
     hypaV3ModalOpen,
     hypaV3ProgressStore,
+    selIdState,
   };
 });
 
@@ -149,6 +151,7 @@ vi.mock(import("src/ts/process/modules"), () => ({
 }));
 vi.mock(import("src/ts/alert"), () => ({
   alertNormal: () => {},
+  alertSelect: async () => "-1",
 }));
 vi.mock(import("src/lang"), () => ({
   language: {
@@ -313,7 +316,7 @@ describe("ui shell runtime smoke", () => {
     expect(document.querySelector(".ds-app-mobile-shell")).toBeNull();
   });
 
-  it("uses legacy mobile chat shell on mobile chats even when ui shell v2 is enabled", async () => {
+  it("keeps ShellV2 active for mobile chats when ui shell v2 is enabled", async () => {
     MobileGUI.set(true);
     uiShellV2Enabled.set(true);
     settingsOpen.set(false);
@@ -321,8 +324,28 @@ describe("ui shell runtime smoke", () => {
     selectedCharID.set(0);
     await flushUi();
 
-    expect(document.querySelector(".ds-app-mobile-shell")).not.toBeNull();
-    expect(document.querySelector(".ds-app-v2-topbar")).toBeNull();
+    expect(document.querySelector(".ds-app-mobile-shell")).toBeNull();
+    expect(document.querySelector(".ds-app-v2-topbar")).not.toBeNull();
+    expect(document.querySelector('[data-testid="app-chat-screen-stub"]')).not.toBeNull();
+  });
+
+  it("uses chat-style mobile back button in topbar and returns to home", async () => {
+    MobileGUI.set(true);
+    uiShellV2Enabled.set(true);
+    settingsOpen.set(false);
+    openRulebookManager.set(false);
+    selectedCharID.set(0);
+    await flushUi();
+
+    const backBtn = document.querySelector('[data-testid="topbar-mobile-back-to-menu"]') as HTMLButtonElement | null;
+    expect(backBtn).not.toBeNull();
+    expect(backBtn?.getAttribute("title")).toBe("Back");
+    expect(backBtn?.getAttribute("aria-label")).toBe("Back");
+
+    backBtn?.click();
+    await flushUi();
+    expect(get(selectedCharID)).toBe(-1);
+    expect(document.querySelector('[data-testid="app-home-grid-stub"]')).not.toBeNull();
   });
 
   it("shows mobile settings back button in title bar for settings subpages", async () => {
@@ -341,6 +364,20 @@ describe("ui shell runtime smoke", () => {
     backBtn?.click();
     await flushUi();
     expect(get(SettingsMenuIndex)).toBe(-1);
+  });
+
+  it("renders mobile rulebook filter controls in topbar and hides desktop drawer toggle", async () => {
+    MobileGUI.set(true);
+    uiShellV2Enabled.set(true);
+    settingsOpen.set(false);
+    openRulebookManager.set(true);
+    selectedCharID.set(-1);
+    await flushUi();
+
+    expect(document.querySelector('[data-testid="topbar-library-mobile-system"]')).not.toBeNull();
+    expect(document.querySelector('[data-testid="topbar-library-mobile-edition"]')).not.toBeNull();
+    expect(document.querySelector('[data-testid="topbar-library-mobile-reset"]')).not.toBeNull();
+    expect(document.getElementById("workspaceSidebarBtn")).toBeNull();
   });
 
   it("renders home grid in characters workspace and syncs topbar search binding", async () => {
