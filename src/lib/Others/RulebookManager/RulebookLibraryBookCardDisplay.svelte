@@ -46,7 +46,7 @@
 >
     <div class="rag-book-icon">
         {#if book.thumbnail}
-            <img src={book.thumbnail} alt="Cover" class="rag-book-thumb" />
+            <img src={book.thumbnail} alt="Cover" class="rag-book-thumb" draggable="false" />
         {:else}
             <BookIcon size={32} />
         {/if}

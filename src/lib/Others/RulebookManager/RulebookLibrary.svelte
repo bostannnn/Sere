@@ -35,21 +35,38 @@
         priority?: number;
     };
 
+    type LibraryFilterSnapshot = {
+        systems: string[];
+        editionsBySystem: Record<string, string[]>;
+        selectedSystem: string;
+        selectedEdition: string;
+    };
+
+    type LibraryShellActions = {
+        selectFiles: () => Promise<void>;
+        setSystemFilter: (system: string) => void;
+        setEditionFilter: (system: string, edition: string) => void;
+        clearFilters: () => void;
+        getFilterSnapshot: () => LibraryFilterSnapshot;
+    };
+
     interface Props {
         shellSearchQuery?: string;
         onClose?: () => void;
         useShellChrome?: boolean;
+        isMobileShell?: boolean;
         rightSidebarOpen?: boolean;
         rightSidebarTab?: "library" | "settings";
         viewMode?: "grid" | "list";
         onRightSidebarTabChange?: (tab: "library" | "settings") => void;
-        registerShellActions?: (actions: { selectFiles: () => Promise<void> } | null) => void;
+        registerShellActions?: (actions: LibraryShellActions | null) => void;
     }
 
     let {
         shellSearchQuery = $bindable(""),
         onClose = () => openRulebookManager.set(false),
         useShellChrome = false,
+        isMobileShell = false,
         rightSidebarOpen = $bindable(true),
         rightSidebarTab = $bindable("library"),
         viewMode = $bindable("grid"),
@@ -90,11 +107,13 @@
             ? window.matchMedia("(prefers-reduced-motion: reduce)").matches
             : false
     );
+    let coarsePointer = $state(
+        typeof window !== "undefined"
+            ? window.matchMedia("(hover: none), (pointer: coarse)").matches
+            : false
+    );
 
     onMount(() => {
-        if (useShellChrome) {
-            registerShellActions({ selectFiles });
-        }
         void refreshLibrary();
         if (typeof window === "undefined") {
             return () => {
@@ -104,15 +123,21 @@
         document.addEventListener("pointerdown", handleDocumentPointerDown);
         document.addEventListener("keydown", handleDocumentKeydown);
         const motionMq = window.matchMedia("(prefers-reduced-motion: reduce)");
+        const coarsePointerMq = window.matchMedia("(hover: none), (pointer: coarse)");
         const handleMotionChange = (event: MediaQueryListEvent) => {
             reducedMotion = event.matches;
         };
+        const handlePointerModeChange = (event: MediaQueryListEvent) => {
+            coarsePointer = event.matches;
+        };
         motionMq.addEventListener("change", handleMotionChange);
+        coarsePointerMq.addEventListener("change", handlePointerModeChange);
         return () => {
             registerShellActions(null);
             document.removeEventListener("pointerdown", handleDocumentPointerDown);
             document.removeEventListener("keydown", handleDocumentKeydown);
             motionMq.removeEventListener("change", handleMotionChange);
+            coarsePointerMq.removeEventListener("change", handlePointerModeChange);
         };
     });
 
@@ -164,19 +189,69 @@
     }
 
     function selectSystem(system: string) {
+        if (system === "All") {
+            clearFilters();
+            return;
+        }
         selectedSystemFilter = system;
-        selectedEditionFilter = 'All'; // Reset edition when system changes
+        selectedEditionFilter = "All";
+        expandedSystems.add(system);
+        expandedSystems = new SvelteSet(expandedSystems);
     }
 
     function selectEdition(system: string, edition: string) {
+        if (edition === "All") {
+            selectedSystemFilter = system === "All" ? "All" : system;
+            selectedEditionFilter = "All";
+            return;
+        }
         selectedSystemFilter = system;
         selectedEditionFilter = edition;
+        expandedSystems.add(system);
+        expandedSystems = new SvelteSet(expandedSystems);
     }
 
     function clearFilters() {
         selectedSystemFilter = 'All';
         selectedEditionFilter = 'All';
     }
+
+    function getEditionsBySystem() {
+        const editionsBySystem: Record<string, string[]> = {};
+        for (const [system, editions] of systemTree()) {
+            editionsBySystem[system] = Array.from(editions).sort((a, b) => a.localeCompare(b));
+        }
+        return editionsBySystem;
+    }
+
+    function getFilterSnapshot(): LibraryFilterSnapshot {
+        return {
+            systems: systemTree().map(([system]) => system),
+            editionsBySystem: getEditionsBySystem(),
+            selectedSystem: selectedSystemFilter,
+            selectedEdition: selectedEditionFilter,
+        };
+    }
+
+    $effect(() => {
+        if (!useShellChrome) {
+            registerShellActions(null);
+            return;
+        }
+
+        // Re-register when filter state changes so shell topbar labels stay in sync.
+        selectedSystemFilter;
+        selectedEditionFilter;
+        systemTree();
+
+        registerShellActions({
+            selectFiles,
+            setSystemFilter: selectSystem,
+            setEditionFilter: selectEdition,
+            clearFilters,
+            getFilterSnapshot,
+        });
+    });
 
     async function selectFiles() {
         const files = await selectMultipleFile(['txt', 'md', 'pdf']);
@@ -328,6 +403,9 @@
     });
 
     function updateRulebookCardTilt(event: PointerEvent) {
+        if (coarsePointer) {
+            return;
+        }
         cardTiltController.onPointerMove(event);
     }
 
@@ -337,7 +415,11 @@
 
 </script>
 
-<div class="rag-dashboard" class:rag-dashboard-shell={useShellChrome}>
+<div
+    class="rag-dashboard"
+    class:rag-dashboard-shell={useShellChrome}
+    class:rag-dashboard-shell-mobile={useShellChrome && isMobileShell}
+>
     {#if !useShellChrome}
         <RulebookLibraryLegacyHeader bind:shellSearchQuery={shellSearchQuery} onClose={onClose} />
     {/if}
@@ -430,7 +512,7 @@
         </main>
     </div>
 
-    {#if useShellChrome}
+    {#if useShellChrome && !isMobileShell}
         <RulebookLibraryRightDrawer
             rightSidebarOpen={rightSidebarOpen}
             bind:rightSidebarTab={rightSidebarTab}

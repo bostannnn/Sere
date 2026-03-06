@@ -16,6 +16,10 @@
         min-height: 0;
     }
 
+    .rag-dashboard-shell-mobile {
+        overscroll-behavior-x: contain;
+    }
+
     .rag-dashboard-header {
         height: 64px;
         display: flex;
@@ -283,6 +287,10 @@
         width: 100%;
         height: 100%;
         object-fit: cover;
+        -webkit-user-drag: none;
+        user-select: none;
+        -webkit-touch-callout: none;
+        pointer-events: none;
     }
 
     .rag-book-details {
@@ -570,6 +578,68 @@
 
         .rag-content-area.is-grid .rag-book-icon::after {
             display: none;
+        }
+    }
+
+    @media (hover: none), (pointer: coarse) {
+        .rag-content-area.is-grid .rag-book-card {
+            will-change: auto;
+            transform: none !important;
+        }
+
+        .rag-content-area.is-grid .rag-book-card:hover {
+            transform: none !important;
+        }
+
+        .rag-content-area.is-grid .rag-book-icon::after {
+            display: none;
+        }
+
+        .rag-content-area.is-grid .rag-book-actions.action-rail .rag-book-menu-trigger,
+        .rag-content-area.is-grid .rag-book-actions.action-rail .rag-book-action-btn,
+        .rag-content-area.is-grid .rag-book-pin-wrap button {
+            opacity: 1;
+            transform: none;
+        }
+    }
+
+    @media (max-width: 48rem) {
+        .rag-dashboard-shell-mobile .rag-content-area-shell {
+            padding: var(--ds-space-3);
+        }
+
+        .rag-dashboard-shell-mobile .rag-content-area.is-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: var(--ds-space-2);
+        }
+
+        .rag-dashboard-shell-mobile .rag-content-area.is-grid .rag-book-card {
+            border-radius: 1.05rem;
+        }
+
+        .rag-dashboard-shell-mobile .rag-content-area.is-grid .rag-book-card-main {
+            aspect-ratio: 4 / 5;
+            padding: 0.45rem;
+        }
+
+        .rag-dashboard-shell-mobile .rag-content-area.is-grid .rag-book-icon,
+        .rag-dashboard-shell-mobile .rag-content-area.is-grid .rag-book-details {
+            inset: 0.45rem;
+            border-radius: calc(1.05rem - 0.45rem);
+        }
+
+        .rag-dashboard-shell-mobile .rag-content-area.is-grid .rag-book-details {
+            padding: 0.7rem 0.7rem 0.6rem;
+        }
+
+        .rag-dashboard-shell-mobile .rag-content-area.is-grid .rag-book-name {
+            font-size: 1.03rem;
+        }
+    }
+
+    @media (max-width: 23rem) {
+        .rag-dashboard-shell-mobile .rag-content-area.is-grid {
+            grid-template-columns: minmax(0, 1fr);
         }
     }
 
