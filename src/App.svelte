@@ -30,11 +30,7 @@
     import MobileFooter from './lib/Mobile/MobileFooter.svelte';
     import CustomGUISettingMenu from './lib/Setting/Pages/CustomGUISettingMenu.svelte';
     import { checkCharOrder } from './ts/globalApi.svelte';
-    import { isNodeServer, isTauri } from './ts/platform';
     import { ArrowUpIcon, GlobeIcon, PlusIcon } from '@lucide/svelte';
-    const appLog = (..._args: unknown[]) => {};
-    
-    appLog('App Startup', { isNodeServer, isTauri, origin: window.location.origin, hostname: window.location.hostname });
     import { hypaV3ProgressStore, openRulebookManager } from "./ts/stores.svelte";
     import RulebookLibrary from './lib/Others/RulebookManager/RulebookLibrary.svelte';
     import HypaV3Progress from './lib/Others/HypaV3Progress.svelte';

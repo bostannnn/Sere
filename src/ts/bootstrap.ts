@@ -8,7 +8,7 @@ import { defaultJailbreak, defaultMainPrompt, oldJailbreak, oldMainPrompt } from
 import { updateAnimationSpeed } from "./gui/animation";
 import { updateColorScheme, updateTextThemeAndCSS } from "./gui/colorscheme";
 import { language } from "src/lang";
-import { startObserveDom } from "./observer.svelte";
+import { startObserveDom, stopObserveDom } from "./observer.svelte";
 import { updateGuisize } from "./gui/guisize";
 import { updateLorebooks } from "./characters";
 import { moduleUpdate } from "./process/modules";
@@ -19,6 +19,10 @@ import {
 import { isInStandaloneMode, isNodeServer } from "./platform";
 import { loadServerDatabase, startServerRealtimeSync } from "./storage/serverDb";
 const bootstrapLog = (..._args: unknown[]) => {};
+let errorHandlingInstalled = false
+let installedErrorHandler: ((event: ErrorEvent) => void) | null = null
+let installedRejectHandler: ((event: PromiseRejectionEvent) => void) | null = null
+let domObserverInstalled = false
 
 /**
  * Loads the application data.
@@ -69,7 +73,10 @@ export async function loadData() {
             MobileGUI.set(shouldUseMobileLayout)
             loadedStore.set(true)
             selectedCharID.set(-1)
-            startObserveDom()
+            if (!domObserverInstalled) {
+                startObserveDom()
+                domObserverInstalled = true
+            }
             assignIds()
             saveDb()
             moduleUpdate()
@@ -103,6 +110,9 @@ export function installTouchHardening() {
  * Updates the error handling by adding custom handlers for errors and unhandled promise rejections.
  */
 function updateErrorHandling() {
+    if (errorHandlingInstalled) {
+        return
+    }
     const isIgnorableBrowserNoise = (message: string) => {
         const normalized = (message || '').trim();
         if (!normalized) return false;
@@ -165,6 +175,28 @@ function updateErrorHandling() {
     };
     window.addEventListener('error', errorHandler);
     window.addEventListener('unhandledrejection', rejectHandler);
+    installedErrorHandler = errorHandler
+    installedRejectHandler = rejectHandler
+    errorHandlingInstalled = true
+}
+
+function clearErrorHandling() {
+    if (!errorHandlingInstalled || !installedErrorHandler || !installedRejectHandler) {
+        return
+    }
+    window.removeEventListener('error', installedErrorHandler)
+    window.removeEventListener('unhandledrejection', installedRejectHandler)
+    installedErrorHandler = null
+    installedRejectHandler = null
+    errorHandlingInstalled = false
+}
+
+if (import.meta.hot) {
+    import.meta.hot.dispose(() => {
+        clearErrorHandling()
+        stopObserveDom()
+        domObserverInstalled = false
+    })
 }
 
 /**

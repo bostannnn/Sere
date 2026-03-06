@@ -1,7 +1,9 @@
-import { sleep } from "./util";
 import { globalFetch } from "./globalApi.svelte";
 
 let bgmElement:HTMLAudioElement|null = null;
+let domObserveStarted = false;
+let domObserveInterval: ReturnType<typeof setInterval> | null = null;
+let domMutationObserver: MutationObserver | null = null;
 
 async function safeCopyToClipboard(text: string) {
     try {
@@ -96,21 +98,42 @@ function nodeObserve(node:HTMLElement){
     }
 }
 
-export async function startObserveDom(){
-    //For codeblock we are using MutationObserver since it doesn't appear well
-    const _observer = new MutationObserver((mutations) => {
+export function startObserveDom(){
+    if (domObserveStarted || typeof document === 'undefined') {
+        return
+    }
+    domObserveStarted = true
+
+    const scanNodes = () => {
+        document.querySelectorAll('[x-hl-lang], [risu-ctrl]').forEach(nodeObserve)
+    }
+
+    // For codeblock controls and risu-ctrl nodes, scan incremental insertions plus periodic fallback.
+    domMutationObserver = new MutationObserver((mutations) => {
         mutations.forEach((mutation) => {
             mutation.addedNodes.forEach((node) => {
                 if(node instanceof HTMLElement){
-                    nodeObserve(node);
+                    nodeObserve(node)
                 }
             })
         })
     })
+    domMutationObserver.observe(document.documentElement, { childList: true, subtree: true })
 
-    while(true){
-        document.querySelectorAll('[x-hl-lang], [risu-ctrl]').forEach(nodeObserve);
-        await sleep(100);
+    scanNodes()
+    domObserveInterval = setInterval(scanNodes, 250)
+}
+
+export function stopObserveDom() {
+    if (!domObserveStarted) {
+        return
+    }
+    domObserveStarted = false
+    domMutationObserver?.disconnect()
+    domMutationObserver = null
+    if (domObserveInterval) {
+        clearInterval(domObserveInterval)
+        domObserveInterval = null
     }
 }
 
@@ -185,6 +208,7 @@ function claudeObserver(){
 
 if (typeof window !== 'undefined') {
     window.addEventListener('beforeunload', () => {
+        stopObserveDom();
         stopClaudeObserver();
     });
 }

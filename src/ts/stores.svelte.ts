@@ -165,8 +165,13 @@ export const selIdState = $state({
     selId: -1
 })
 
+let storesRuntimeInitialized = false
+let customCssUnsubscribe: (() => void) | null = null
 
-CustomCSSStore.subscribe((css) => {
+function applyCustomCss(css: string) {
+    if (typeof document === 'undefined') {
+        return
+    }
     const q = document.querySelector('#customcss')
     if(q){
         q.textContent = css
@@ -177,7 +182,28 @@ CustomCSSStore.subscribe((css) => {
         s.textContent = css
         document.body.appendChild(s)
     }
-})
+}
+
+export function initStoresRuntime() {
+    if (storesRuntimeInitialized || typeof window === 'undefined') {
+        return
+    }
+    storesRuntimeInitialized = true
+    attachWindowSizeListener()
+    if (!customCssUnsubscribe) {
+        customCssUnsubscribe = CustomCSSStore.subscribe(applyCustomCss)
+    }
+}
+
+export function disposeStoresRuntime() {
+    if (!storesRuntimeInitialized) {
+        return
+    }
+    storesRuntimeInitialized = false
+    detachWindowSizeListener()
+    customCssUnsubscribe?.()
+    customCssUnsubscribe = null
+}
 
 export function createSimpleCharacter(char:character|groupChat){
     if((!char) || char.type === 'group'){
@@ -199,7 +225,13 @@ export function createSimpleCharacter(char:character|groupChat){
 }
 
 // Preserve pre-shell-v2 behavior: initialize viewport stores as soon as the module loads.
-attachWindowSizeListener()
+initStoresRuntime()
+
+if (import.meta.hot) {
+    import.meta.hot.dispose(() => {
+        disposeStoresRuntime()
+    })
+}
 
 export const DBState = $state({
     db: {} as unknown as Database

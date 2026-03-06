@@ -7,9 +7,11 @@ import { initHotkey, initMobileGesture } from "./ts/hotkey";
 import { preLoadCheck } from "./preload";
 import { mount } from "svelte";
 import { hydrateBootColorScheme } from "./ts/gui/colorscheme";
+import { initStoresRuntime } from "./ts/stores.svelte";
 
 preLoadCheck()
 hydrateBootColorScheme()
+initStoresRuntime()
 const target = document.getElementById("app");
 if (!target) throw new Error("Could not find element with id 'app'");
 const app = mount(App, {

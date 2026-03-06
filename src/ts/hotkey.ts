@@ -8,7 +8,18 @@ import { defaultHotkeys } from "./defaulthotkeys"
 import { isDoingChat, previewBody, sendChat } from "./process/index.svelte"
 import { isEditableTouchTarget, shouldPreventHorizontalSwipe } from "./mobileGestureGuard"
 
+const HOTKEY_INIT_FLAG = "__risu_hotkey_init__"
+
 export function initHotkey(){
+    if (typeof window === 'undefined') {
+        return
+    }
+    const w = window as Window & { __risu_hotkey_init__?: boolean }
+    if (w[HOTKEY_INIT_FLAG]) {
+        return
+    }
+    w[HOTKEY_INIT_FLAG] = true
+
     document.addEventListener('keydown', async (ev) => {
         const activeElement = document.activeElement as HTMLElement | null
         if(
@@ -324,6 +335,14 @@ export function initHotkey(){
             }
         }
     }, true)
+}
+
+export function resetHotkeyInitForTests() {
+    if (typeof window === 'undefined') {
+        return
+    }
+    const w = window as Window & { __risu_hotkey_init__?: boolean }
+    delete w[HOTKEY_INIT_FLAG]
 }
 
 async function quickMenu(){

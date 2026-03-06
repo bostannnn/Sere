@@ -22,7 +22,6 @@ import { AutoStorage } from "./storage/autoStorage";
 import { save } from "src/ts/tauriCompat/plugin-dialog";
 import { listen } from 'src/ts/tauriCompat/api-event'
 import { language } from "src/lang";
-import { fetch as TauriHTTPFetch } from 'src/ts/tauriCompat/plugin-http';
 import { isTauri, isNodeServer } from "./platform";
 import { saveServerDatabase } from "./storage/serverDb";
 import { loadServerAsset, saveServerAsset } from "./storage/serverStorage";
@@ -98,12 +97,8 @@ export async function downloadFile(name: string, dat: Uint8Array | ArrayBuffer |
     }
 }
 
-const fileCache: {
-    origin: string[], res: (Uint8Array | 'loading' | 'done')[]
-} = {
-    origin: [],
-    res: []
-}
+type FileCacheValue = Uint8Array | 'loading' | 'done'
+const fileCache = new Map<string, FileCacheValue>()
 
 const pathCache: { [key: string]: string } = {}
 
@@ -154,28 +149,26 @@ export async function getFileSrc(loc: string) {
     }
     if (isNodeServer && loc.startsWith('assets')) {
         try {
-            let ind = fileCache.origin.indexOf(loc)
-            if (ind === -1) {
-                ind = fileCache.origin.length
-                fileCache.origin.push(loc)
-                fileCache.res.push('loading')
+            let cached = fileCache.get(loc)
+            if (!cached) {
+                fileCache.set(loc, 'loading')
                 const f = await loadServerAsset(loc)
-                fileCache.res[ind] = f
+                fileCache.set(loc, f)
                 return `data:${getMimeFromAssetPath(loc)};base64,${Buffer.from(f).toString('base64')}`
             }
-            const f = fileCache.res[ind]
-            if (f === 'loading') {
-                while (fileCache.res[ind] === 'loading') {
+            if (cached === 'loading') {
+                while (fileCache.get(loc) === 'loading') {
                     await sleep(10)
                 }
-                const loaded = fileCache.res[ind]
+                const loaded = fileCache.get(loc)
                 if (loaded instanceof Uint8Array) {
                     return `data:${getMimeFromAssetPath(loc)};base64,${Buffer.from(loaded).toString('base64')}`
                 }
                 return ''
             }
-            if (f instanceof Uint8Array) {
-                return `data:${getMimeFromAssetPath(loc)};base64,${Buffer.from(f).toString('base64')}`
+            cached = fileCache.get(loc)
+            if (cached instanceof Uint8Array) {
+                return `data:${getMimeFromAssetPath(loc)};base64,${Buffer.from(cached).toString('base64')}`
             }
             return ''
         } catch (error) {
@@ -189,15 +182,13 @@ export async function getFileSrc(loc: string) {
     try {
         if (usingSw) {
             const encoded = Buffer.from(loc, 'utf-8').toString('hex')
-            let ind = fileCache.origin.indexOf(loc)
-            if (ind === -1) {
-                ind = fileCache.origin.length
-                fileCache.origin.push(loc)
-                fileCache.res.push('loading')
+            const cached = fileCache.get(loc)
+            if (!cached) {
+                fileCache.set(loc, 'loading')
                 try {
                     const hasCache: boolean = (await (await fetch("/sw/check/" + encoded)).json()).able
                     if (hasCache) {
-                        fileCache.res[ind] = 'done'
+                        fileCache.set(loc, 'done')
                         return "/sw/img/" + encoded
                     }
                     else {
@@ -206,7 +197,7 @@ export async function getFileSrc(loc: string) {
                             method: "POST",
                             body: f as BodyInit
                         })
-                        fileCache.res[ind] = 'done'
+                        fileCache.set(loc, 'done')
                         await sleep(10)
                     }
                     return "/sw/img/" + encoded
@@ -215,9 +206,8 @@ export async function getFileSrc(loc: string) {
                 }
             }
             else {
-                const f = fileCache.res[ind]
-                if (f === 'loading') {
-                    while (fileCache.res[ind] === 'loading') {
+                if (cached === 'loading') {
+                    while (fileCache.get(loc) === 'loading') {
                         await sleep(10)
                     }
                 }
@@ -225,24 +215,29 @@ export async function getFileSrc(loc: string) {
             }
         }
         else {
-            let ind = fileCache.origin.indexOf(loc)
-            if (ind === -1) {
-                ind = fileCache.origin.length
-                fileCache.origin.push(loc)
-                fileCache.res.push('loading')
+            let cached = fileCache.get(loc)
+            if (!cached) {
+                fileCache.set(loc, 'loading')
                 const f: Uint8Array = await forageStorage.getItem(loc) as unknown as Uint8Array
-                fileCache.res[ind] = f
+                fileCache.set(loc, f)
                 return `data:image/png;base64,${Buffer.from(f).toString('base64')}`
             }
             else {
-                const f = fileCache.res[ind]
-                if (f === 'loading') {
-                    while (fileCache.res[ind] === 'loading') {
+                if (cached === 'loading') {
+                    while (fileCache.get(loc) === 'loading') {
                         await sleep(10)
                     }
-                    return `data:image/png;base64,${Buffer.from(fileCache.res[ind]).toString('base64')}`
+                    const loaded = fileCache.get(loc)
+                    if (loaded instanceof Uint8Array) {
+                        return `data:image/png;base64,${Buffer.from(loaded).toString('base64')}`
+                    }
+                    return ''
                 }
-                return `data:image/png;base64,${Buffer.from(f).toString('base64')}`
+                cached = fileCache.get(loc)
+                if (cached instanceof Uint8Array) {
+                    return `data:image/png;base64,${Buffer.from(cached).toString('base64')}`
+                }
+                return ''
             }
         }
     } catch (error) {
@@ -480,10 +475,53 @@ export async function saveDb() {
             }, 250)
         }
 
+        let saveTrackingReady = false
+        queueMicrotask(() => {
+            saveTrackingReady = true
+        })
+
         $effect.root(() => {
             $effect(() => {
-                $state.snapshot(DBState.db)
-                if (!initialized) {
+                for (const key in DBState.db) {
+                    if (key !== 'characters') {
+                        $state.snapshot(DBState.db[key as keyof typeof DBState.db])
+                    }
+                }
+                if (!saveTrackingReady || !initialized) {
+                    initialized = true
+                    return
+                }
+                scheduleServerSave()
+            })
+
+            $effect(() => {
+                const characters = DBState?.db?.characters ?? []
+                $state.snapshot(characters.length)
+                for (const char of characters) {
+                    if (!char || typeof char !== 'object') continue
+                    for (const key in char) {
+                        if (key !== 'chats') {
+                            $state.snapshot(char[key as keyof typeof char])
+                        }
+                    }
+                    $state.snapshot(char.chats?.length ?? 0)
+                }
+                if (!saveTrackingReady || !initialized) {
+                    initialized = true
+                    return
+                }
+                scheduleServerSave()
+            })
+
+            $effect(() => {
+                const selectedChar = DBState?.db?.characters?.[selIdState.selId]
+                const selectedChat = selectedChar?.chats?.[selectedChar?.chatPage ?? 0]
+                if (selectedChat) {
+                    $state.snapshot(selectedChat)
+                } else if (selectedChar?.chats) {
+                    $state.snapshot(selectedChar.chats.length)
+                }
+                if (!saveTrackingReady || !initialized) {
                     initialized = true
                     return
                 }
@@ -724,6 +762,14 @@ export function getFetchData(id: string) {
 }
 
 const knownHostes = ["localhost", "127.0.0.1", "0.0.0.0"];
+const allowLegacyNonServerRuntime = typeof import.meta !== 'undefined' && import.meta.env?.MODE === 'test'
+
+function resolveRuntimeProxyUrl() {
+    if (allowLegacyNonServerRuntime && !isTauri && !isNodeServer) {
+        return `${hubURL}/data/proxy`
+    }
+    return '/data/proxy'
+}
 
 /**
  * Interface representing the arguments for the global fetch function.
@@ -764,6 +810,52 @@ interface GlobalFetchResult {
     data: any;
     headers: { [key: string]: string };
     status: number;
+}
+
+type RequestRouteMeta = {
+    requestUrl: URL
+    isLocalRequest: boolean
+    isLocalDataRequest: boolean
+}
+
+function resolveRequestRouteMeta(url: string): RequestRouteMeta {
+    let requestUrl: URL
+    try {
+        requestUrl = new URL(url)
+    } catch {
+        requestUrl = new URL(url, window.location.origin)
+    }
+    const isLocalRequest = url.startsWith('/') || requestUrl.origin === window.location.origin
+    const isLocalDataRequest = isLocalRequest && requestUrl.pathname.startsWith('/data/')
+    return { requestUrl, isLocalRequest, isLocalDataRequest }
+}
+
+async function appendLocalServerAuthHeaders(
+    headers: Record<string, string>,
+    routeMeta: RequestRouteMeta
+): Promise<Record<string, string>> {
+    if (!routeMeta.isLocalDataRequest) {
+        return headers
+    }
+
+    let nextHeaders = headers
+    const hasRisuAuthHeader = Object.keys(nextHeaders).some((k) => k.toLowerCase() === 'risu-auth')
+    if (!hasRisuAuthHeader) {
+        const auth = await resolveProxyAuth()
+        if (auth) {
+            nextHeaders = { ...nextHeaders, 'risu-auth': auth }
+        }
+    }
+
+    const hasClientIdHeader = Object.keys(nextHeaders).some((k) => k.toLowerCase() === 'x-risu-client-id')
+    if (!hasClientIdHeader) {
+        const clientId = getServerAuthClientId()
+        if (clientId) {
+            nextHeaders = { ...nextHeaders, 'x-risu-client-id': clientId }
+        }
+    }
+
+    return nextHeaders
 }
 
 const SENSITIVE_LOG_KEY_REGEX = /(authorization|api[-_]?key|x-api-key|token|secret|password|proxy_password|risu-auth|openrouterkey|proxykey|x-risu-tk)/i;
@@ -882,31 +974,13 @@ export async function globalFetch(url: string, arg: GlobalFetchArgs = {}): Promi
         const db = getDatabase();
         if (arg.abortSignal?.aborted) { return { ok: false, data: 'aborted', headers: {}, status: 400 }; }
 
-        let requestUrl: URL;
-        try {
-            requestUrl = new URL(url);
-        } catch {
-            requestUrl = new URL(url, window.location.origin);
-        }
-        const urlHost = requestUrl.hostname;
-        const isLocalRequest = url.startsWith('/') || requestUrl.origin === window.location.origin;
-        
-        // Add risu-auth header when available for authenticated local requests
-        const auth = await resolveProxyAuth();
-        if (isLocalRequest && auth) {
-            arg.headers = { ...arg.headers, "risu-auth": auth };
-        }
-        if (isLocalRequest) {
-            const clientId = getServerAuthClientId();
-            if (clientId) {
-                arg.headers = { ...arg.headers, "x-risu-client-id": clientId };
-            }
-        }
+        const routeMeta = resolveRequestRouteMeta(url)
+        arg.headers = await appendLocalServerAuthHeaders(arg.headers ?? {}, routeMeta)
 
-        const forcePlainFetch = isLocalRequest || db.usePlainFetch || arg.plainFetchForce;
+        const forcePlainFetch = routeMeta.isLocalRequest || db.usePlainFetch || arg.plainFetchForce;
         const shouldBypassProxy = forcePlainFetch && !arg.plainFetchDeforce;
 
-        if (knownHostes.includes(urlHost) && db.usePlainFetch) {
+        if (knownHostes.includes(routeMeta.requestUrl.hostname) && db.usePlainFetch) {
             return { ok: false, headers: {}, status: 400, data: 'Direct local fetch is disabled in server-only mode. Use the server proxy.' };
         }
 
@@ -1028,56 +1102,6 @@ async function fetchWithPlainFetch(url: string, arg: GlobalFetchArgs): Promise<G
 }
 
 /**
- * Performs a fetch request using userscript provided fetch.
- * 
- * @param {string} url - The URL to fetch.
- * @param {GlobalFetchArgs} arg - The arguments for the fetch request.
- * @returns {Promise<GlobalFetchResult>} - The result of the fetch request.
- */
-async function _fetchWithUSFetch(url: string, arg: GlobalFetchArgs): Promise<GlobalFetchResult> {
-    try {
-        const headers = { 'Content-Type': 'application/json', ...arg.headers };
-        const response = await userScriptFetch(url, { body: JSON.stringify(arg.body), headers, method: arg.method ?? "POST", signal: arg.abortSignal });
-        let data: unknown;
-        if (arg.rawResponse) {
-            data = new Uint8Array(await response.arrayBuffer());
-        } else {
-            const text = await response.text();
-            try {
-                data = JSON.parse(text);
-            } catch {
-                data = text;
-            }
-        }
-        const ok = response.ok && response.status >= 200 && response.status < 300;
-        addFetchLogInGlobalFetch(data, ok, url, arg, response.status);
-        return { ok, data, headers: Object.fromEntries(response.headers), status: response.status };
-    } catch (error) {
-        return { ok: false, data: `${error}`, headers: {}, status: 400 };
-    }
-}
-
-/**
- * Performs a fetch request using Tauri.
- * 
- * @param {string} url - The URL to fetch.
- * @param {GlobalFetchArgs} arg - The arguments for the fetch request.
- * @returns {Promise<GlobalFetchResult>} - The result of the fetch request.
- */
-async function _fetchWithTauri(url: string, arg: GlobalFetchArgs): Promise<GlobalFetchResult> {
-    try {
-        const headers = { 'Content-Type': 'application/json', ...arg.headers };
-        const response = await TauriHTTPFetch(new URL(url), { body: JSON.stringify(arg.body), headers, method: arg.method ?? "POST", signal: arg.abortSignal });
-        const data = arg.rawResponse ? new Uint8Array(await response.arrayBuffer()) : await response.json();
-        const ok = response.status >= 200 && response.status < 300;
-        addFetchLogInGlobalFetch(data, ok, url, arg, response.status);
-        return { ok, data, headers: Object.fromEntries(response.headers), status: response.status };
-    } catch (error) {
-        return { ok: false, data: `${error}`, headers: {}, status: 400 };
-    }
-}
-
-/**
  * Performs a fetch request using a proxy.
  * 
  * @param {string} url - The URL to fetch.
@@ -1086,7 +1110,7 @@ async function _fetchWithTauri(url: string, arg: GlobalFetchArgs): Promise<Globa
  */
 async function fetchWithProxy(url: string, arg: GlobalFetchArgs): Promise<GlobalFetchResult> {
     try {
-        const proxyUrl = !isTauri && !isNodeServer ? `${hubURL}/data/proxy` : `/data/proxy`;
+        const proxyUrl = resolveRuntimeProxyUrl()
         arg.headers = arg.headers ?? {};
         arg.headers["Content-Type"] ??= arg.body instanceof URLSearchParams ? "application/x-www-form-urlencoded" : "application/json";
         const headers = {
@@ -1806,28 +1830,8 @@ export async function fetchNative(url: string, arg: {
 
     let headers = arg.headers ?? {}
 
-    // Add risu-auth for local server endpoints when available.
-    let requestUrl: URL;
-    try {
-        requestUrl = new URL(url);
-    } catch {
-        requestUrl = new URL(url, window.location.origin);
-    }
-    const isLocalRequest = url.startsWith('/') || requestUrl.origin === window.location.origin;
-    const hasRisuAuthHeader = Object.keys(headers).some((k) => k.toLowerCase() === 'risu-auth');
-    const hasClientIdHeader = Object.keys(headers).some((k) => k.toLowerCase() === 'x-risu-client-id');
-    if (isLocalRequest && !hasRisuAuthHeader) {
-        const auth = await resolveProxyAuth();
-        if (auth) {
-            headers = { ...headers, "risu-auth": auth };
-        }
-    }
-    if (isLocalRequest && !hasClientIdHeader) {
-        const clientId = getServerAuthClientId();
-        if (clientId) {
-            headers = { ...headers, "x-risu-client-id": clientId };
-        }
-    }
+    const routeMeta = resolveRequestRouteMeta(url)
+    headers = await appendLocalServerAuthHeaders(headers, routeMeta)
     let realBody: Uint8Array
 
     if (arg.method === 'GET' || arg.method === 'DELETE') {
@@ -1847,7 +1851,7 @@ export async function fetchNative(url: string, arg: {
     }
 
     const db = getDatabase()
-    const throughProxy = (!isTauri) && (!isNodeServer) && (!db.usePlainFetch)
+    const throughProxy = allowLegacyNonServerRuntime && (!isTauri) && (!isNodeServer) && (!db.usePlainFetch)
     const fetchLogIndex = addFetchLog({
         body: new TextDecoder().decode(realBody),
         headers: arg.headers,
@@ -1963,7 +1967,7 @@ export async function fetchNative(url: string, arg: {
     else if (throughProxy) {
         const auth = await resolveProxyAuth();
         const clientId = getServerAuthClientId();
-        const proxyUrl = !isTauri && !isNodeServer ? `${hubURL}/data/proxy` : `/data/proxy`;
+        const proxyUrl = resolveRuntimeProxyUrl()
 
         const r = await fetch(proxyUrl, {
             body: realBody as BodyInit,
