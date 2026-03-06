@@ -1,7 +1,5 @@
-const { existsSync } = require('fs');
-const fs = require('fs/promises');
-const path = require('path');
 const { LLMHttpError } = require('./errors.cjs');
+const { loadServerSettings } = require('./settings_cache.cjs');
 
 function safeClone(value) {
     if (value === null || value === undefined) return value;
@@ -10,19 +8,6 @@ function safeClone(value) {
     } catch {
         return value;
     }
-}
-
-async function loadSettings(dataRoot) {
-    const settingsPath = path.join(dataRoot, 'settings.json');
-    if (!existsSync(settingsPath)) {
-        throw new LLMHttpError(404, 'SETTINGS_NOT_FOUND', 'Server settings are not initialized.');
-    }
-    const raw = await fs.readFile(settingsPath, 'utf-8');
-    const parsed = JSON.parse(raw);
-    if (parsed && typeof parsed === 'object' && parsed.data && typeof parsed.data === 'object') {
-        return parsed.data;
-    }
-    return parsed;
 }
 
 function getRequestPayload(input) {
@@ -98,7 +83,7 @@ function buildExecutionRequest(input, settings) {
 }
 
 async function previewOllamaExecution(input, ctx = {}) {
-    const settings = await loadSettings(ctx.dataRoot);
+    const settings = await loadServerSettings(ctx.dataRoot);
     const built = buildExecutionRequest(input, settings);
     return {
         url: built.url,
@@ -115,7 +100,7 @@ function buildOpenAIDataLine(text) {
 }
 
 async function executeOllama(input, ctx = {}) {
-    const settings = await loadSettings(ctx.dataRoot);
+    const settings = await loadServerSettings(ctx.dataRoot);
     const built = buildExecutionRequest(input, settings);
 
     const upstream = await fetch(built.url, {

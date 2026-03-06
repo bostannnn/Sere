@@ -99,6 +99,11 @@ function createStreamFromRead(readImpl: () => Promise<{ done: boolean; value?: U
 function createHarness(arg: {
     normalized?: NormalizedInput;
     executeLLM?: () => Promise<unknown>;
+    toLLMErrorResponse?: (error: unknown, ctx: { requestId: string; endpoint: string; durationMs: number }) => {
+        status: number;
+        code: string;
+        payload: Record<string, unknown>;
+    };
 }) {
     const normalized: NormalizedInput = arg.normalized ?? {
         endpoint: "execute",
@@ -138,19 +143,28 @@ function createHarness(arg: {
         appendGenerateTraceAudit,
         buildExecutionAuditRequest: vi.fn((_endpoint, body) => body),
         sanitizeOutputByMode: vi.fn((_mode, text) => text),
-        toLLMErrorResponse: vi.fn((error) => ({
-            status: 500,
-            code: "INTERNAL_ERROR",
+        toLLMErrorResponse: vi.fn(arg.toLLMErrorResponse ?? ((error, ctx) => ({
+            status: Number.isFinite(Number((error as { status?: unknown })?.status))
+                ? Number((error as { status?: unknown }).status)
+                : 500,
+            code: typeof (error as { code?: unknown })?.code === "string" && (error as { code?: string }).code
+                ? String((error as { code?: string }).code)
+                : "INTERNAL_ERROR",
             payload: {
-                error: "INTERNAL_ERROR",
-                message: String(error?.message || error),
+                error: typeof (error as { code?: unknown })?.code === "string" && (error as { code?: string }).code
+                    ? String((error as { code?: string }).code)
+                    : "INTERNAL_ERROR",
+                message: String((error as { message?: unknown })?.message || error),
+                requestId: ctx.requestId,
+                endpoint: ctx.endpoint,
+                durationMs: ctx.durationMs,
             },
-        })),
+        }))),
         sendSSE,
         sendJson,
         existsSync: vi.fn(() => false),
         readJsonWithEtag: vi.fn(async () => ({ json: {}, etag: "etag-1" })),
-        writeJsonWithEtag: vi.fn(async () => ({})),
+        readStateLastEventId: vi.fn(async () => 0),
         isSafePathSegment: vi.fn(() => true),
         applyStateCommands: vi.fn(async () => ({ ok: true, lastEventId: 0, applied: [], conflicts: [] })),
     });
@@ -278,6 +292,34 @@ describe("execute_route_handler streaming safety", () => {
         expect(audit?.ok).toBe(true);
     });
 
+    it("parses CRLF-framed SSE blocks from upstream streams", async () => {
+        const encoder = new TextEncoder();
+        const req = new MockReq();
+        const res = new MockRes();
+        let readCalls = 0;
+        const { stream } = createStreamFromRead(async () => {
+            readCalls += 1;
+            if (readCalls === 1) {
+                return {
+                    done: false,
+                    value: encoder.encode('data: {"choices":[{"delta":{"content":"Hi"}}]}\r\n\r\ndata: [DONE]\r\n\r\n'),
+                };
+            }
+            return { done: true };
+        });
+        const harness = createHarness({
+            executeLLM: async () => stream,
+        });
+
+        await harness.handleLLMExecutePost(req, res, {}, "execute");
+
+        const frames = toSSEDataFrames(res.text())
+            .filter((entry) => entry !== "[DONE]")
+            .map((entry) => JSON.parse(entry));
+        expect(frames.some((payload: Record<string, unknown>) => payload.type === "chunk" && payload.text === "Hi")).toBe(true);
+        expect(frames.some((payload: Record<string, unknown>) => payload.type === "done")).toBe(true);
+    });
+
     it("uses cleanup path for fallback SSE responses", async () => {
         const req = new MockReq();
         const res = new MockRes((chunk) => {
@@ -349,6 +391,9 @@ describe("execute_route_handler streaming safety", () => {
         expect(String((errorFrame as Record<string, unknown>).message || "")).toContain("no visible content");
         expect((errorFrame as Record<string, unknown>).error).toBe("EMPTY_VISIBLE_OUTPUT");
         expect((errorFrame as Record<string, unknown>).status).toBe(502);
+        expect((errorFrame as Record<string, unknown>).requestId).toBe("req-test");
+        expect((errorFrame as Record<string, unknown>).endpoint).toBe("execute");
+        expect(typeof (errorFrame as Record<string, unknown>).durationMs).toBe("number");
         expect(frames.find((frame: Record<string, unknown>) => frame.type === "done")).toBeUndefined();
     });
 });
@@ -379,7 +424,7 @@ describe("execute_route_handler visible output guard", () => {
         expect(harness.sendJson).toHaveBeenCalledTimes(1);
         const status = harness.sendJson.mock.calls[0]?.[1];
         const payload = harness.sendJson.mock.calls[0]?.[2];
-        expect(status).toBe(500);
+        expect(status).toBe(502);
         expect(payload?.message || "").toContain("no visible content");
         const lastAudit = harness.appendLLMAudit.mock.calls.at(-1)?.[0];
         expect(lastAudit?.ok).toBe(false);

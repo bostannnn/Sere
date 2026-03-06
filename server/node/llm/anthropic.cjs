@@ -1,7 +1,5 @@
-const { existsSync } = require('fs');
-const fs = require('fs/promises');
-const path = require('path');
 const { LLMHttpError } = require('./errors.cjs');
+const { loadServerSettings } = require('./settings_cache.cjs');
 
 const ANTHROPIC_MESSAGES_URL = 'https://api.anthropic.com/v1/messages';
 
@@ -12,19 +10,6 @@ function safeClone(value) {
     } catch {
         return value;
     }
-}
-
-async function loadSettings(dataRoot) {
-    const settingsPath = path.join(dataRoot, 'settings.json');
-    if (!existsSync(settingsPath)) {
-        throw new LLMHttpError(404, 'SETTINGS_NOT_FOUND', 'Server settings are not initialized.');
-    }
-    const raw = await fs.readFile(settingsPath, 'utf-8');
-    const parsed = JSON.parse(raw);
-    if (parsed && typeof parsed === 'object' && parsed.data && typeof parsed.data === 'object') {
-        return parsed.data;
-    }
-    return parsed;
 }
 
 function getRequestPayload(input) {
@@ -132,7 +117,7 @@ function sanitizeHeaders(headers) {
 }
 
 async function previewAnthropicExecution(input, ctx = {}) {
-    const settings = await loadSettings(ctx.dataRoot);
+    const settings = await loadServerSettings(ctx.dataRoot);
     const built = buildExecutionRequest(input, settings, { requireKey: false });
     return {
         url: built.url,
@@ -145,7 +130,7 @@ async function previewAnthropicExecution(input, ctx = {}) {
 }
 
 async function executeAnthropic(input, ctx = {}) {
-    const settings = await loadSettings(ctx.dataRoot);
+    const settings = await loadServerSettings(ctx.dataRoot);
     const built = buildExecutionRequest(input, settings);
 
     const upstream = await fetch(built.url, {

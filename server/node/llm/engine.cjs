@@ -112,19 +112,32 @@ async function assembleServerPrompt(input, ctx) {
     }
     if (!input.characterId) return;
 
-    const charPath = path.join(ctx.dataRoot, 'characters', input.characterId, 'character.json');
-    if (!existsSync(charPath)) return;
+    const preloadedContext = (input?.request && typeof input.request === 'object')
+        ? input.request.__serverContext
+        : null;
 
-    const charDataRaw = await fs.readFile(charPath, 'utf-8');
-    const charData = JSON.parse(charDataRaw);
-    const char = charData.character || charData.data || charData;
+    let char = null;
+    if (preloadedContext && typeof preloadedContext === 'object' && preloadedContext.character && typeof preloadedContext.character === 'object') {
+        char = preloadedContext.character;
+    } else {
+        const charPath = path.join(ctx.dataRoot, 'characters', input.characterId, 'character.json');
+        if (!existsSync(charPath)) return;
+        const charDataRaw = await fs.readFile(charPath, 'utf-8');
+        const charData = JSON.parse(charDataRaw);
+        char = charData.character || charData.data || charData;
+    }
 
-    const settingsPath = path.join(ctx.dataRoot, 'settings.json');
-    const settingsRaw = await fs.readFile(settingsPath, 'utf-8');
-    const settingsParsed = JSON.parse(settingsRaw);
-    const settings = (settingsParsed && typeof settingsParsed === 'object' && settingsParsed.data && typeof settingsParsed.data === 'object')
-        ? settingsParsed.data
-        : settingsParsed;
+    let settings = null;
+    if (preloadedContext && typeof preloadedContext === 'object' && preloadedContext.settings && typeof preloadedContext.settings === 'object') {
+        settings = preloadedContext.settings;
+    } else {
+        const settingsPath = path.join(ctx.dataRoot, 'settings.json');
+        const settingsRaw = await fs.readFile(settingsPath, 'utf-8');
+        const settingsParsed = JSON.parse(settingsRaw);
+        settings = (settingsParsed && typeof settingsParsed === 'object' && settingsParsed.data && typeof settingsParsed.data === 'object')
+            ? settingsParsed.data
+            : settingsParsed;
+    }
 
     let rulesContext = "";
     let gameStateContext = "";

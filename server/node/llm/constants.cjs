@@ -1,5 +1,3 @@
-const MIGRATED_PROVIDERS = new Set(['openrouter', 'openai', 'deepseek', 'anthropic', 'google', 'ollama', 'kobold', 'novelai']);
-
 // Streaming transport policy (server-side execution layer, not model capability).
 // - native: provider path supports streaming through current server adapter.
 // - error: requests with streaming=true should fail explicitly.
@@ -73,7 +71,6 @@ function getStreamingPolicy(provider) {
 }
 
 module.exports = {
-    MIGRATED_PROVIDERS,
     ALLOWED_MODES,
     normalizeProvider,
     STREAMING_PROVIDER_POLICY,
