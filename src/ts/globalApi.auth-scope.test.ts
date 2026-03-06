@@ -168,7 +168,7 @@ describe("globalApi auth scope", () => {
   it("globalFetch adds risu-auth only for local /data routes", async () => {
     const { globalFetch } = await import("src/ts/globalApi.svelte");
 
-    await globalFetch("/data/settings", { method: "GET" });
+    await globalFetch("/data/state/snapshot", { method: "GET" });
     await globalFetch("/settings", { method: "GET" });
 
     const firstHeaders = (shared.fetchMock.mock.calls[0]?.[1] as RequestInit | undefined)?.headers as Record<string, string>;
@@ -198,7 +198,7 @@ describe("globalApi auth scope", () => {
   it("globalFetch does not forward local auth headers for absolute non-local /data-like URLs", async () => {
     const { globalFetch } = await import("src/ts/globalApi.svelte");
 
-    await globalFetch("https://example.com/data/settings", { method: "GET" });
+    await globalFetch("https://example.com/data/state/snapshot", { method: "GET" });
 
     const proxyHeaders = (shared.fetchMock.mock.calls[0]?.[1] as RequestInit | undefined)?.headers as Record<string, string>;
     const forwardedHeaders = JSON.parse(decodeURIComponent(proxyHeaders["risu-header"] ?? "{}")) as Record<string, string>;

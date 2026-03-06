@@ -116,7 +116,7 @@ describe("globalFetch in server mode with usePlainFetch=true", () => {
   it("globalFetch does not hard-fail local /data routes when usePlainFetch is true in server mode", async () => {
     const { globalFetch } = await import("src/ts/globalApi.svelte");
 
-    const result = await globalFetch("/data/settings", { method: "GET" });
+    const result = await globalFetch("/data/state/snapshot", { method: "GET" });
 
     expect(result.ok).toBe(true);
     expect(result.data).toEqual({ ok: true });
