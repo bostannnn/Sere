@@ -69,6 +69,80 @@ function createGenerateHelpers(arg = {}) {
         return '';
     }
 
+    function toPromptMessageRows(promptMessages) {
+        if (!Array.isArray(promptMessages)) return [];
+        return promptMessages
+            .map((entry) => {
+                if (!entry || typeof entry !== 'object') return null;
+                const role = toStringOrEmpty(entry.role) || 'user';
+                const content = toStringOrEmpty(entry.content);
+                if (!content) return null;
+                return { role, content };
+            })
+            .filter(Boolean);
+    }
+
+    function resolvePromptTextFromRows(rows) {
+        if (!Array.isArray(rows) || rows.length === 0) return '';
+        const system = rows.find((row) => row.role === 'system' && toStringOrEmpty(row.content));
+        if (system) return toStringOrEmpty(system.content);
+        if (rows.length === 1) return toStringOrEmpty(rows[0].content);
+        return '';
+    }
+
+    function buildPeriodicDebugLog(arg = {}) {
+        const chat = arg.chat && typeof arg.chat === 'object' ? arg.chat : {};
+        const plan = arg.plan && typeof arg.plan === 'object' ? arg.plan : {};
+        const providerModel = toStringOrEmpty(arg.model) || '-';
+        const summaryText = typeof arg.summaryText === 'string' ? arg.summaryText : '';
+        const promptRows = toPromptMessageRows(plan.promptMessages);
+        const inputText = Array.isArray(plan.summarizable)
+            ? plan.summarizable
+                .map((msg) => {
+                    if (!msg || typeof msg !== 'object') return '';
+                    const role = toStringOrEmpty(msg.role) || 'user';
+                    const content = toStringOrEmpty(msg.content);
+                    if (!content) return '';
+                    return `${role}: ${content}`;
+                })
+                .filter(Boolean)
+                .join('\n')
+            : '';
+        const totalChats = Array.isArray(chat?.message) ? chat.message.length : 0;
+        const previousLastIndex = Number.isFinite(Number(plan?.hypaData?.lastSummarizedMessageIndex))
+            ? Number(plan.hypaData.lastSummarizedMessageIndex)
+            : 0;
+        const chunkEndIndex = Number.isFinite(Number(plan?.chunkEndIndex))
+            ? Number(plan.chunkEndIndex)
+            : previousLastIndex;
+        const interval = Math.max(1, chunkEndIndex - previousLastIndex);
+        const newMessages = Math.max(0, totalChats - previousLastIndex);
+
+        return {
+            timestamp: Date.now(),
+            model: providerModel,
+            isResummarize: false,
+            prompt: resolvePromptTextFromRows(promptRows),
+            input: inputText,
+            formatted: promptRows,
+            rawResponse: summaryText || undefined,
+            characterId: toStringOrEmpty(arg.characterId),
+            chatId: toStringOrEmpty(arg.chatId),
+            start: Math.max(1, previousLastIndex + 1),
+            end: Math.max(previousLastIndex + 1, chunkEndIndex),
+            source: 'periodic',
+            promptSource: 'preset_or_default',
+            periodic: {
+                totalChats,
+                lastIndex: previousLastIndex,
+                newMessages,
+                interval,
+                toSummarizeCount: Array.isArray(plan.summarizable) ? plan.summarizable.length : 0,
+                chatName: toStringOrEmpty(chat?.name),
+            },
+        };
+    }
+
     async function readJsonFileWithRetry(filePath, retries = 3) {
         let lastError = null;
         for (let attempt = 0; attempt <= retries; attempt += 1) {
@@ -240,6 +314,18 @@ function createGenerateHelpers(arg = {}) {
             summaryText,
             summaryEmbedding,
         });
+
+        if (applyResult?.hypaV3Data && typeof applyResult.hypaV3Data === 'object') {
+            applyResult.hypaV3Data.lastPeriodicDebug = buildPeriodicDebugLog({
+                chat,
+                plan,
+                model,
+                summaryText,
+                characterId,
+                chatId,
+            });
+            chat.hypaV3Data = applyResult.hypaV3Data;
+        }
 
         return {
             updated: applyResult.updated === true,

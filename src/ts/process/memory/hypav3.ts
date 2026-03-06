@@ -50,23 +50,35 @@ export interface HypaV3Settings {
   alwaysToggleOn: boolean;
 }
 
+export interface SummarizeDebugLog {
+  timestamp: number;
+  model: string;
+  isResummarize: boolean;
+  prompt: string;
+  input: string;
+  formatted: { role: string; content: string }[];
+  rawResponse?: string;
+  characterId?: string;
+  chatId?: string;
+  start?: number;
+  end?: number;
+  source?: "manual" | "periodic";
+  promptSource?: "request_override" | "character_override" | "preset_or_default";
+  periodic?: {
+    totalChats: number;
+    lastIndex: number;
+    newMessages: number;
+    interval: number;
+    toSummarizeCount: number;
+    skippedReason?: string;
+    chatName?: string;
+  };
+}
+
 interface HypaV3Data {
   summaries: Summary[];
-  lastManualDebug?: {
-    timestamp: number;
-    model: string;
-    isResummarize: boolean;
-    prompt: string;
-    input: string;
-    formatted: { role: string; content: string }[];
-    rawResponse?: string;
-    characterId?: string;
-    chatId?: string;
-    start?: number;
-    end?: number;
-    source?: "manual";
-    promptSource?: "request_override" | "character_override" | "preset_or_default";
-  };
+  lastManualDebug?: SummarizeDebugLog;
+  lastPeriodicDebug?: SummarizeDebugLog;
   categories?: { id: string; name: string }[];
   lastSelectedSummaries?: number[]; // legacy
   lastSummarizedMessageIndex?: number;
@@ -2008,7 +2020,7 @@ export function createHypaV3Preset(
     memoryTokensRatio: 0.2,
     extraSummarizationRatio: 0,
     maxChatsPerSummary: 6,
-    periodicSummarizationEnabled: false,
+    periodicSummarizationEnabled: true,
     periodicSummarizationInterval: 10,
     recentMemoryRatio: 0.4,
     similarMemoryRatio: 0.4,

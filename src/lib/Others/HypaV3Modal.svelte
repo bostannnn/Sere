@@ -1,10 +1,10 @@
 <script lang="ts">
-  import { untrack } from "svelte";
   import { SvelteSet } from "svelte/reactivity";
   import { ChevronUpIcon, ChevronDownIcon } from "@lucide/svelte";
   import { 
     type SerializableHypaV3Data,
     type SerializableSummary, 
+    type SummarizeDebugLog,
   } from "src/ts/process/memory/hypav3";
   import { alertNormalWait, alertToast } from "src/ts/alert";
   import { DBState, selectedCharID, hypaV3ModalOpen } from "src/ts/stores.svelte";
@@ -41,30 +41,7 @@
     embedded?: boolean;
   }
 
-  interface ManualSummarizeDebug {
-    timestamp: number;
-    model: string;
-    isResummarize: boolean;
-    prompt: string;
-    input: string;
-    formatted: { role: string; content: string }[];
-    rawResponse?: string;
-    periodic?: {
-      totalChats: number;
-      lastIndex: number;
-      newMessages: number;
-      interval: number;
-      toSummarizeCount: number;
-      skippedReason?: string;
-      chatName?: string;
-    };
-    characterId?: string;
-    chatId?: string;
-    start?: number;
-    end?: number;
-    source?: "manual";
-    promptSource?: "request_override" | "character_override" | "preset_or_default";
-  }
+  type ManualSummarizeDebug = SummarizeDebugLog;
 
   interface ManualSummarizeTarget {
     characterId: string;
@@ -180,7 +157,14 @@
     }
     return manualDebug as ManualSummarizeDebug;
   });
-  const logDebug = $derived(activeChatManualDebug ?? scopedHypaV3Debug);
+  const activeChatPeriodicDebug = $derived.by(() => {
+    const periodicDebug = activeChat?.hypaV3Data?.lastPeriodicDebug;
+    if (!periodicDebug || typeof periodicDebug !== "object") {
+      return null;
+    }
+    return periodicDebug as ManualSummarizeDebug;
+  });
+  const logDebug = $derived(activeChatPeriodicDebug ?? activeChatManualDebug ?? scopedHypaV3Debug);
   const selectMemoryWorkspaceTab = (tab: MemoryWorkspaceTab) => {
     memoryWorkspaceTab = tab;
     uiState.dropdownOpen = false;
@@ -199,31 +183,28 @@
   };
 
   $effect.pre(() => {
-    void hypaV3Data?.summaries?.length;
     void filterSelected;
+    void activeChatId;
+    const chat = chatList[effectiveChatIndex];
+    if (!chat) {
+      hypaV3Data = emptyHypaV3Data;
+      return;
+    }
 
-    untrack(() => {
-      const chat = chatList[effectiveChatIndex];
-      if (!chat) {
-        hypaV3Data = emptyHypaV3Data;
-        return;
-      }
+    chat.hypaV3Data ??= {
+      summaries: [],
+      categories: [{ id: "", name: language.hypaV3Modal.unclassified }],
+      lastSelectedSummaries: [],
+    };
+    chat.hypaV3Data.categories ??= [{ id: "", name: language.hypaV3Modal.unclassified }];
+    chat.hypaV3Data.lastSelectedSummaries ??= [];
 
-      chat.hypaV3Data ??= {
-        summaries: [],
-        categories: [{ id: "", name: language.hypaV3Modal.unclassified }],
-        lastSelectedSummaries: [],
-      };
-      chat.hypaV3Data.categories ??= [{ id: "", name: language.hypaV3Modal.unclassified }];
-      chat.hypaV3Data.lastSelectedSummaries ??= [];
+    hypaV3Data = chat.hypaV3Data;
 
-      hypaV3Data = chat.hypaV3Data;
+    expandedMessageState = null;
+    searchState = null;
 
-      expandedMessageState = null;
-      searchState = null;
-      
-      uiState.collapsedSummaries = new Set(hypaV3Data.summaries.map((_, index) => index));
-    });
+    uiState.collapsedSummaries = new Set(hypaV3Data.summaries.map((_, index) => index));
   });
 
   function persistHypaV3Data() {
@@ -1297,7 +1278,7 @@
                 </div>
                 <div class="ds-hypa-modal-debug-body">
                   <div>Model: <span class="ds-hypa-modal-debug-value">{logDebug.model}</span></div>
-                  <div>Mode: <span class="ds-hypa-modal-debug-value">{logDebug.isResummarize ? "Resummarize" : "Summarize"}</span></div>
+                  <div>Mode: <span class="ds-hypa-modal-debug-value">{logDebug.source === "periodic" ? "Periodic Summarize" : (logDebug.isResummarize ? "Resummarize" : "Summarize")}</span></div>
                   <div>Time: <span class="ds-hypa-modal-debug-value">{new Date(logDebug.timestamp).toLocaleString()}</span></div>
                   {#if logDebug.promptSource}
                     <div>Prompt source: <span class="ds-hypa-modal-debug-value">{logDebug.promptSource}</span></div>

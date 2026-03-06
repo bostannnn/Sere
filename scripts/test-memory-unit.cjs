@@ -107,7 +107,7 @@ async function suiteResolveSettings() {
     assert(custom.periodicSummarizationInterval === 5,    'preset: overrides interval');
     assert(custom.summarizationPrompt === 'custom-prompt','preset: overrides summarizationPrompt');
     assert(custom.summarizationModel === 'subModel',      'preset: summarizationModel always forced to subModel');
-    assert(custom.periodicSummarizationEnabled === false, 'preset: overrides periodicSummarizationEnabled');
+    assert(custom.periodicSummarizationEnabled === true, 'preset: periodicSummarizationEnabled is forced on');
 
     // Null/missing presets → defaults
     const nullPresets = resolveHypaV3Settings({ hypaV3Presets: null });
@@ -173,15 +173,15 @@ async function suiteGating() {
         assert(r.reason === 'hypav3_disabled_in_settings',      'reason: hypav3_disabled_in_settings');
     }
 
-    // Gate 3: periodicSummarizationEnabled:false — the bug that was fixed
+    // Gate 3: legacy periodicSummarizationEnabled:false should no longer block auto-summary
     {
         const r = planPeriodicHypaV3Summarization({
             character: { supaMemory: true },
             chat: { message: makeMessages(20) },
             settings: withPreset({ periodicSummarizationEnabled: false }),
         });
-        assert(r.shouldRun === false,                           'periodicSummarizationEnabled false → shouldRun false');
-        assert(r.reason === 'periodic_summarization_disabled',  'reason: periodic_summarization_disabled (bug 3 fix)');
+        assert(r.shouldRun === true,                            'legacy periodicSummarizationEnabled false → shouldRun true');
+        assert(r.reason === 'ready',                            'reason: ready');
     }
 
     // Gate 4: interval = 0 → invalid

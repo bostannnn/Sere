@@ -21,6 +21,7 @@ import { additionalInformations } from "./embedding/addinfo";
 import { getInlayAsset } from "./files/inlays";
 import { getGenerationModelString } from "./models/modelString";
 import { saveServerDatabase } from "../storage/serverDb";
+import { fetchServerStateSnapshot } from "../storage/serverStateClient";
 import { resolveServerAuthToken } from "../storage/serverAuth";
 import { runInlayScreen } from "./inlayScreen";
 import { addRerolls } from "./prereroll";
@@ -35,6 +36,7 @@ import { rulebookStorage } from "./rag/storage";
 import { convertInlineImagesToInlays } from "./inlineInlays";
 import { syncGameStateFromServer, updateGameStateFromMessage } from "./gameStateSync";
 import { ensureGenerationMessageTarget } from "./generationMessageTarget";
+import { extractServerChatHypaV3Data, shouldAdoptServerHypaV3Data } from "./hypaSync";
 import type { RagResult, RulebookMetadata } from "./rag/types";
 const processLog = (..._args: unknown[]) => {};
 
@@ -255,6 +257,7 @@ export async function sendChat(chatProcessIndex = -1,arg:{
     }
     let lastSnapshotSyncAlertAt = 0
     let snapshotSyncAuthRetryInFlight = false
+    let attemptedServerHypaMerge = false
 
     function extractHttpStatusFromError(error: unknown): number | null {
         const message = `${(error as Error | undefined)?.message ?? error ?? ''}`
@@ -289,6 +292,25 @@ export async function sendChat(chatProcessIndex = -1,arg:{
         const activeChar = DBState.db.characters[selectedChar];
         const activeChat = activeChar?.chats?.[selectedChatIndex()];
         if (!activeChar?.chaId || !activeChat?.id) return;
+        if (
+            !attemptedServerHypaMerge
+            && DBState.db.hypaV3 === true
+            && activeChar?.supaMemory === true
+        ) {
+            attemptedServerHypaMerge = true
+            try {
+                const snapshot = await fetchServerStateSnapshot()
+                const serverHypaData = extractServerChatHypaV3Data(snapshot, activeChar.chaId, activeChat.id)
+                if (shouldAdoptServerHypaV3Data(activeChat.hypaV3Data, serverHypaData)) {
+                    const cloned = JSON.parse(JSON.stringify(serverHypaData))
+                    activeChat.hypaV3Data = cloned
+                    DBState.db.characters[selectedChar].chats[selectedChatIndex()].hypaV3Data = cloned
+                    DBState.db.characters[selectedChar].chats = [...DBState.db.characters[selectedChar].chats]
+                }
+            } catch (mergeError) {
+                processLog('[Sync] Failed to merge server HypaV3 snapshot before save:', mergeError)
+            }
+        }
         let lastError: unknown = null
         for(let attempt = 0; attempt < SNAPSHOT_SYNC_MAX_ATTEMPTS; attempt++){
             try {

@@ -753,6 +753,10 @@ export function setDatabase(data:Database){
                 preset.settings || {}
             )
         )
+        for (const preset of data.hypaV3Presets) {
+            // Periodic summarization is interval-driven; keep it enabled for migrated presets.
+            preset.settings.periodicSummarizationEnabled = true
+        }
     }
     data.hypaV3PresetId ??= 0
     // Long-term memory migration: keep runtime on HypaV3 only.
@@ -1323,7 +1327,7 @@ export interface Database{
         chatId?:string
         start?:number
         end?:number
-        source?:"manual"
+        source?:"manual"|"periodic"
         promptSource?:"request_override"|"character_override"|"preset_or_default"
         periodic?:{
             totalChats:number

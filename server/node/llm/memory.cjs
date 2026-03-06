@@ -162,6 +162,9 @@ function resolveHypaV3Settings(settings, character = null) {
     }
     // Current product direction: HypaV3 summaries run on auxiliary model only.
     resolved.summarizationModel = 'subModel';
+    // Product behavior: periodic summarization is controlled by interval only.
+    // Keep this enabled to avoid legacy presets silently disabling auto-summary.
+    resolved.periodicSummarizationEnabled = true;
     const characterOverride = normalizeCharacterPromptOverride(character);
     if (characterOverride.summarizationPrompt.trim()) {
         resolved.summarizationPrompt = characterOverride.summarizationPrompt;
