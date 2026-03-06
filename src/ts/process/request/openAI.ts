@@ -7,7 +7,7 @@ import { LLMFlags, LLMFormat } from "src/ts/model/modellist"
 import { strongBan, tokenizeNum } from "src/ts/tokenizer"
 import { getFreeOpenRouterModel } from "src/ts/model/openrouter"
 import { addFetchLog, fetchNative, globalFetch, textifyReadableStream } from "src/ts/globalApi.svelte"
-import { isTauri, isNodeServer } from "src/ts/platform"
+import { isNodeServer, isTauri } from "src/ts/platform"
 import type { OpenAIChatFull } from "../index.svelte"
 import { extractJSON, getOpenAIJSONSchema } from "../templates/jsonSchema"
 import { applyChatTemplate } from "../templates/chatTemplate"
@@ -99,19 +99,13 @@ async function requestServerExecution(
     arg: RequestDataArgumentExtended,
     body: Record<string, any>,
     opts: {
-        provider: 'openrouter' | 'openai' | 'deepseek' | 'mistral' | 'reverse_proxy' | 'custom'
+        provider: 'openrouter' | 'openai' | 'deepseek'
         providerLabel: string
         keyMissingCode: string
-        proxyRequest?: {
-            url: string
-            method?: string
-            headers?: Record<string, string>
-        }
-        customModelId?: string
     }
 ): Promise<requestDataResponse> {
-    const generateProviders = new Set(['openrouter', 'openai', 'deepseek', 'mistral', 'reverse_proxy', 'custom']);
-    const rawGenerateProviders = new Set(['openrouter', 'openai', 'deepseek', 'mistral']);
+    const generateProviders = new Set(['openrouter', 'openai', 'deepseek']);
+    const rawGenerateProviders = new Set(['openrouter', 'openai', 'deepseek']);
     const requestMode = String(arg.mode ?? 'model');
     const hasServerAssemblyContext = !!(arg.currentChar?.chaId) && !!arg.chatId;
     const canUseGenerateEndpoint = requestMode === 'model';
@@ -237,8 +231,6 @@ async function requestServerExecution(
                     ? Number(requestBodyForServer.max_tokens ?? requestBodyForServer.max_completion_tokens)
                     : undefined,
                 tools: Array.isArray(requestBodyForServer.tools) ? requestBodyForServer.tools : undefined,
-                proxyRequest: opts.proxyRequest,
-                customModelId: opts.customModelId,
             },
         };
 
@@ -441,55 +433,24 @@ async function requestDeepSeekServerExecution(arg: RequestDataArgumentExtended, 
     });
 }
 
-async function requestMistralServerExecution(arg: RequestDataArgumentExtended, body: Record<string, any>): Promise<requestDataResponse> {
-    return await requestServerExecution(arg, body, {
-        provider: 'mistral',
-        providerLabel: 'Mistral',
-        keyMissingCode: 'MISTRAL_KEY_MISSING',
-    });
-}
-
-async function requestReverseProxyServerExecution(
-    arg: RequestDataArgumentExtended,
-    body: Record<string, any>,
-    url: string,
-    headers: Record<string, string>
-): Promise<requestDataResponse> {
-    const forwardedHeaders: Record<string, string> = {};
-    for (const [key, value] of Object.entries(headers || {})) {
-        if (key.toLowerCase() === 'authorization') continue;
-        forwardedHeaders[key] = value;
-    }
-    return await requestServerExecution(arg, body, {
-        provider: 'reverse_proxy',
-        providerLabel: 'Reverse proxy',
-        keyMissingCode: 'REVERSE_PROXY_KEY_MISSING',
-        proxyRequest: {
-            url,
-            method: 'POST',
-            headers: forwardedHeaders,
-        },
-    });
-}
-
-async function requestCustomServerExecution(
-    arg: RequestDataArgumentExtended,
-    body: Record<string, any>,
-    customModelId: string
-): Promise<requestDataResponse> {
-    return await requestServerExecution(arg, body, {
-        provider: 'custom',
-        providerLabel: 'Custom model',
-        keyMissingCode: 'CUSTOM_MODEL_KEY_MISSING',
-        customModelId,
-    });
-}
-
 export async function requestOpenAI(arg:RequestDataArgumentExtended):Promise<requestDataResponse>{
     let formatedChat:OpenAIChatExtra[] = []
     const formated = arg.formated
     const db = getDatabase()
     const aiModel = arg.aiModel
+
+    if (
+        aiModel?.startsWith('mistral') ||
+        aiModel === 'open-mistral-nemo' ||
+        aiModel === 'reverse_proxy' ||
+        aiModel?.startsWith('xcustom:::')
+    ) {
+        return {
+            type: 'fail',
+            noRetry: true,
+            result: `${language.errors.httpError}Provider has been removed: ${aiModel}.`,
+        }
+    }
 
     const processToolCalls = async (text:string, originalMessage:any) => {
         // Split text by tool_call tags and process each segment
@@ -740,7 +701,11 @@ export async function requestOpenAI(arg:RequestDataArgumentExtended):Promise<req
         } as const
 
         if (isNodeServer) {
-            return await requestMistralServerExecution(arg, targs.body)
+            return {
+                type: 'fail',
+                noRetry: true,
+                result: `${language.errors.httpError}Provider has been removed: ${aiModel}.`,
+            }
         }
 
         if(arg.previewBody){
@@ -1006,11 +971,12 @@ export async function requestOpenAI(arg:RequestDataArgumentExtended):Promise<req
     if (isNodeServer && aiModel.startsWith('deepseek')) {
         return await requestDeepSeekServerExecution(arg, body)
     }
-    if (isNodeServer && aiModel === 'reverse_proxy') {
-        return await requestReverseProxyServerExecution(arg, body, replacerURL, headers)
-    }
-    if (isNodeServer && aiModel.startsWith('xcustom:::')) {
-        return await requestCustomServerExecution(arg, body, aiModel)
+    if (isNodeServer && (aiModel === 'reverse_proxy' || aiModel.startsWith('xcustom:::'))) {
+        return {
+            type: 'fail',
+            noRetry: true,
+            result: `${language.errors.httpError}Provider has been removed: ${aiModel}.`,
+        }
     }
 
     if(arg.useStreaming){

@@ -1,6 +1,6 @@
 
 import type { SettingItem } from './types';
-import { isNodeServer, isTauri } from '../platform';
+import { isNodeServer } from '../platform';
 
 export const advancedSettingsItems: SettingItem[] = [
     { type: 'header', id: 'adv.header', labelKey: 'advancedSettings', options: { level: 'h2' }, classes: 'ds-settings-renderer-no-margin-bottom' },
@@ -81,7 +81,7 @@ export const advancedSettingsItems: SettingItem[] = [
     // Request Location (Non-Node/Tauri)
     {
         id: 'adv.reqLoc', type: 'select', labelKey: 'requestLocation', bindKey: 'requestLocation',
-        condition: () => !isNodeServer && !isTauri,
+        condition: () => !isNodeServer,
         options: {
             selectOptions: [
                 { value: '', label: 'Default' },
@@ -133,11 +133,11 @@ export const advancedSettingsItems: SettingItem[] = [
     // Node/Tauri Specific
     {
         id: 'adv.promptInfo', type: 'check', labelKey: 'promptInfoInsideChat', bindKey: 'promptInfoInsideChat',
-        condition: () => isNodeServer || isTauri, helpKey: 'promptInfoInsideChatDesc', classes: 'ds-settings-renderer-offset-md'
+        condition: () => isNodeServer, helpKey: 'promptInfoInsideChatDesc', classes: 'ds-settings-renderer-offset-md'
     },
     {
         id: 'adv.promptTextInfo', type: 'check', labelKey: 'promptTextInfoInsideChat', bindKey: 'promptTextInfoInsideChat',
-        condition: (ctx) => (isNodeServer || isTauri) && ctx.db.promptInfoInsideChat, classes: 'ds-settings-renderer-offset-md'
+        condition: (ctx) => isNodeServer && ctx.db.promptInfoInsideChat, classes: 'ds-settings-renderer-offset-md'
     },
     {
         type: 'custom', id: 'adv.serverPassword', componentId: 'ServerPasswordSettings',

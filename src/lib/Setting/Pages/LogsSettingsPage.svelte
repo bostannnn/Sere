@@ -3,7 +3,7 @@
     import Button from "src/lib/UI/GUI/Button.svelte";
     import { alertMd, alertNormal, alertRequestLogs } from "src/ts/alert";
     import { downloadFile } from "src/ts/globalApi.svelte";
-    import { isNodeServer, isTauri } from "src/ts/platform";
+    import { isNodeServer } from "src/ts/platform";
     import { exportServerStorage } from "src/ts/storage/serverDb";
     import { getDatabase } from "src/ts/storage/database.svelte";
     import { DBState } from "src/ts/stores.svelte";
@@ -102,7 +102,6 @@
 
                 //@ts-expect-error meta is not defined in Database type, added for settings export report
                 db.meta = {
-                    isTauri: isTauri,
                     isNodeServer: isNodeServer,
                     protocol: location.protocol,
                 };

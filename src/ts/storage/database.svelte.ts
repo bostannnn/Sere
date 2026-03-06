@@ -15,7 +15,7 @@ import type { PromptItem, PromptSettings } from '../process/prompt';
 import type { OobaChatCompletionRequestParams } from '../model/ooba';
 import { type HypaV3Settings, type HypaV3Preset, type SerializableHypaV3Data, createHypaV3Preset } from '../process/memory/hypav3'
 import { DEFAULT_EMOTION_PROMPT } from '../process/emotion/defaultPrompt';
-import { isTauri, isNodeServer } from "src/ts/platform"
+import { isNodeServer } from "src/ts/platform"
 const dbStorageLog = (..._args: unknown[]) => {};
 
 //APP_VERSION_POINT is to locate the app version in the database file for version bumping
@@ -843,7 +843,7 @@ export function setDatabase(data:Database){
     data.newMessageButtonStyle ??= 'bottom-center'
     data.echoMessage ??= "Echo Message"
     data.echoDelay ??= 0
-    if(!isNodeServer && !isTauri){
+    if(!isNodeServer){
         //this is intended to forcely reduce the size of the database in web
         data.promptInfoInsideChat = false
     }

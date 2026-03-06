@@ -6,7 +6,7 @@
     import { downloadFile } from "src/ts/globalApi.svelte";
     import { exportServerStorage } from "src/ts/storage/serverDb";
     import { getDatabase } from "src/ts/storage/database.svelte";
-    import { isNodeServer, isTauri } from "src/ts/platform";
+    import { isNodeServer } from "src/ts/platform";
 
     const copyToClipboardSafe = async (text: string) => {
         try {
@@ -100,7 +100,6 @@
 
                 //@ts-expect-error meta is not defined in Database type, added for settings export report
                 db.meta = {
-                    isTauri: isTauri,
                     isNodeServer: isNodeServer,
                     protocol: location.protocol
                 }
