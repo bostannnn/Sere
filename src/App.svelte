@@ -177,12 +177,6 @@
         </div>
     {:else if $CustomGUISettingMenuStore}
         <CustomGUISettingMenu />
-    {:else if $uiShellV2Enabled && $MobileGUI && $selectedCharID !== -1}
-        <div class="ds-app-mobile-shell">
-            <MobileHeader />
-            <MobileBody />
-            <MobileFooter />
-        </div>
     {:else if $uiShellV2Enabled}
         <AppShellV2 />
     {:else if $MobileGUI}

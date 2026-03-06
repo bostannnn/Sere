@@ -1,10 +1,26 @@
 <script lang="ts">
     import ChatScreen from "../ChatScreens/ChatScreen.svelte";
+    import ChatRightSidebarHost from "../ChatScreens/ChatRightSidebarHost.svelte";
     import Settings from "../Setting/Settings.svelte";
     import RulebookLibrary from "../Others/RulebookManager/RulebookLibrary.svelte";
     import HomeCharacterDirectory from "./HomeCharacterDirectory.svelte";
 
     type Workspace = "home" | "characters" | "chats" | "library" | "playground" | "settings";
+
+    type LibraryFilterSnapshot = {
+        systems: string[];
+        editionsBySystem: Record<string, string[]>;
+        selectedSystem: string;
+        selectedEdition: string;
+    };
+
+    type LibraryShellActions = {
+        selectFiles: () => Promise<void>;
+        setSystemFilter: (system: string) => void;
+        setEditionFilter: (system: string, edition: string) => void;
+        clearFilters: () => void;
+        getFilterSnapshot: () => LibraryFilterSnapshot;
+    };
 
     interface Props {
         workspace: Workspace;
@@ -17,8 +33,11 @@
         librarySidebarTab?: "library" | "settings";
         libraryViewMode?: "grid" | "list";
         onLibrarySidebarTabChange?: (tab: "library" | "settings") => void;
-        onRegisterLibraryShellActions?: (actions: { selectFiles: () => Promise<void> } | null) => void;
+        onRegisterLibraryShellActions?: (actions: LibraryShellActions | null) => void;
         onOpenHome?: () => void;
+        isMobileShell?: boolean;
+        isMobileChatWorkspace?: boolean;
+        mobileChatPanelOpen?: boolean;
     }
 
     let {
@@ -34,6 +53,9 @@
         onLibrarySidebarTabChange = () => {},
         onRegisterLibraryShellActions = () => {},
         onOpenHome = () => {},
+        isMobileShell = false,
+        isMobileChatWorkspace = false,
+        mobileChatPanelOpen = $bindable(false),
     }: Props = $props();
 
     let hasMountedLibraryWorkspace = $state(false);
@@ -59,13 +81,24 @@
         </div>
     {:else if workspace !== "library"}
         <div class="ds-app-v2-stage-view">
-            {#key workspace}
-                <ChatScreen
-                    bind:rightSidebarOpen={rightSidebarOpen}
-                    bind:rightSidebarTab={rightSidebarTab}
-                    bind:rightSidebarVisible={rightSidebarVisible}
-                />
-            {/key}
+            {#if isMobileChatWorkspace && mobileChatPanelOpen}
+                <div class="ds-app-v2-stage-mobile-chat-panel">
+                    <ChatRightSidebarHost
+                        rightSidebarTab={rightSidebarTab}
+                        onSelectTab={(nextTab) => {
+                            rightSidebarTab = nextTab;
+                        }}
+                    />
+                </div>
+            {:else}
+                {#key workspace}
+                    <ChatScreen
+                        bind:rightSidebarOpen={rightSidebarOpen}
+                        bind:rightSidebarTab={rightSidebarTab}
+                        bind:rightSidebarVisible={rightSidebarVisible}
+                    />
+                {/key}
+            {/if}
         </div>
     {/if}
 
@@ -80,6 +113,7 @@
                 bind:rightSidebarTab={librarySidebarTab}
                 bind:viewMode={libraryViewMode}
                 useShellChrome={true}
+                isMobileShell={isMobileShell}
                 registerShellActions={onRegisterLibraryShellActions}
                 onRightSidebarTabChange={onLibrarySidebarTabChange}
                 onClose={onOpenHome}
@@ -114,6 +148,21 @@
 
     .ds-app-v2-stage-view-hidden {
         display: none;
+    }
+
+    .ds-app-v2-stage-mobile-chat-panel {
+        width: 100%;
+        height: 100%;
+        min-height: 0;
+        min-width: 0;
+        overflow: hidden;
+    }
+
+    .ds-app-v2-stage-mobile-chat-panel :global(.ds-chat-right-pane) {
+        width: 100%;
+        height: 100%;
+        border: none;
+        border-radius: 0;
     }
 
     .ds-app-v2-stage-view :global(.rag-dashboard) {

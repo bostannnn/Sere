@@ -15,13 +15,33 @@
         openRulebookManager,
         type AppRoute,
     } from "src/ts/stores.svelte";
+    import { alertSelect } from "src/ts/alert";
     import { addCharacter } from "src/ts/characters";
     import AppShellTopbar from "./AppShellTopbar.svelte";
     import AppShellStage from "./AppShellStage.svelte";
 
+    type RightSidebarTab = "chat" | "character" | "memory";
+
+    type LibraryFilterSnapshot = {
+        systems: string[];
+        editionsBySystem: Record<string, string[]>;
+        selectedSystem: string;
+        selectedEdition: string;
+    };
+
+    type LibraryShellActions = {
+        selectFiles: () => Promise<void>;
+        setSystemFilter: (system: string) => void;
+        setEditionFilter: (system: string, edition: string) => void;
+        clearFilters: () => void;
+        getFilterSnapshot: () => LibraryFilterSnapshot;
+    };
+
     let topbarOverflowOpen = $state(false);
-    let uiShellRightSidebarTab = $state<"chat" | "character" | "memory">("chat");
+    let uiShellRightSidebarTab = $state<RightSidebarTab>("chat");
     let librarySidebarTab = $state<"library" | "settings">("library");
+    let mobileChatPanelOpen = $state(false);
+
     const rightSidebarToggleKey = "risu:desktop-char-config-open";
     const librarySidebarToggleKey = "risu:desktop-library-sidebar-open";
     const librarySidebarTabKey = "risu:desktop-library-sidebar-tab";
@@ -69,7 +89,7 @@
     let librarySidebarOpen = $state(readLibrarySidebarDefault());
     librarySidebarTab = readLibrarySidebarTabDefault();
     let libraryViewMode = $state<"grid" | "list">("grid");
-    let libraryShellActions = $state<{ selectFiles: () => Promise<void> } | null>(null);
+    let libraryShellActions = $state<LibraryShellActions | null>(null);
     let shellSearch = $state("");
     let characterDirectoryShowTrash = $state(false);
 
@@ -123,18 +143,33 @@
 
     const resolvedAppRoute = $derived.by((): AppRoute => {
         const workspace = resolveWorkspace();
+        const isMobileShell = $MobileGUI;
         let inspector: AppRoute["inspector"] = "none";
-        if (workspace === "chats" && uiShellRightSidebarOpen && uiShellRightSidebarVisible) {
-            if (uiShellRightSidebarTab === "character") {
-                inspector = "character";
-            } else if (uiShellRightSidebarTab === "memory") {
-                inspector = "memory";
-            } else {
-                inspector = "chat";
+
+        if (workspace === "chats") {
+            if (isMobileShell) {
+                if (mobileChatPanelOpen) {
+                    if (uiShellRightSidebarTab === "character") {
+                        inspector = "character";
+                    } else if (uiShellRightSidebarTab === "memory") {
+                        inspector = "memory";
+                    } else {
+                        inspector = "chat";
+                    }
+                }
+            } else if (uiShellRightSidebarOpen && uiShellRightSidebarVisible) {
+                if (uiShellRightSidebarTab === "character") {
+                    inspector = "character";
+                } else if (uiShellRightSidebarTab === "memory") {
+                    inspector = "memory";
+                } else {
+                    inspector = "chat";
+                }
             }
-        } else if (workspace === "library" && librarySidebarOpen) {
+        } else if (workspace === "library" && !isMobileShell && librarySidebarOpen) {
             inspector = "details";
         }
+
         return {
             workspace,
             selectedCharacterId: resolveSelectedCharacterId(),
@@ -143,12 +178,20 @@
         };
     });
 
-    const showShellSearch = $derived.by(() => {
-        return resolvedAppRoute.workspace === "characters" || resolvedAppRoute.workspace === "library";
-    });
+    const isMobileShell = $derived($MobileGUI);
+    const isMobileChatWorkspace = $derived(isMobileShell && resolvedAppRoute.workspace === "chats");
+    const isMobileSettingsSubpage = $derived(
+        isMobileShell
+            && resolvedAppRoute.workspace === "settings"
+            && $SettingsMenuIndex !== -1,
+    );
+    const isMobileLibraryWorkspace = $derived(isMobileShell && resolvedAppRoute.workspace === "library");
 
-    const useBottomPrimaryNav = $derived.by(() => {
-        if (!$MobileGUI) {
+    const showBottomPrimaryNav = $derived.by(() => {
+        if (!isMobileShell) {
+            return false;
+        }
+        if (isMobileChatWorkspace || isMobileSettingsSubpage) {
             return false;
         }
         return resolvedAppRoute.workspace === "characters"
@@ -157,11 +200,115 @@
             || resolvedAppRoute.workspace === "playground";
     });
 
-    const mobileSettingsSubmenuOpen = $derived.by(() => {
-        return $MobileGUI
-            && resolvedAppRoute.workspace === "settings"
-            && $SettingsMenuIndex !== -1;
+    const showTopbarBack = $derived.by(() => {
+        return isMobileChatWorkspace || isMobileSettingsSubpage;
     });
+
+    const mobileTopbarVariant = $derived.by(() => {
+        if (!isMobileShell) {
+            return "desktop" as const;
+        }
+        if (isMobileChatWorkspace) {
+            return "mobile-chat" as const;
+        }
+        if (isMobileSettingsSubpage) {
+            return "mobile-settings-subpage" as const;
+        }
+        if (isMobileLibraryWorkspace) {
+            return "mobile-library" as const;
+        }
+        return "mobile-root" as const;
+    });
+
+    const showShellSearch = $derived.by(() => {
+        if (isMobileShell && isMobileChatWorkspace) {
+            return false;
+        }
+        return resolvedAppRoute.workspace === "characters" || resolvedAppRoute.workspace === "library";
+    });
+
+    const showRightSidebarToggle = $derived.by(() => {
+        if (isMobileShell) {
+            return false;
+        }
+        return resolvedAppRoute.workspace === "chats" || resolvedAppRoute.workspace === "library";
+    });
+
+    const showCharacterDirectoryControls = $derived.by(() => {
+        return resolvedAppRoute.workspace === "characters";
+    });
+
+    const showLibraryControls = $derived.by(() => {
+        return resolvedAppRoute.workspace === "library" && !isMobileShell;
+    });
+
+    const rightSidebarOpenForWorkspace = $derived.by(() => {
+        if (resolvedAppRoute.workspace === "library") {
+            return librarySidebarOpen;
+        }
+        return uiShellRightSidebarOpen;
+    });
+
+    const rightSidebarPanelId = $derived.by(() => {
+        if (resolvedAppRoute.workspace === "library") {
+            return libraryRightSidebarPanelId;
+        }
+        return chatRightSidebarPanelId;
+    });
+
+    const selectedCharacterName = $derived.by(() => {
+        if ($selectedCharID < 0) {
+            return "Chat";
+        }
+        return DBState.db.characters?.[$selectedCharID]?.name ?? "Chat";
+    });
+
+    const mobileTopbarTitle = $derived.by(() => {
+        if (isMobileSettingsSubpage) {
+            return "Settings";
+        }
+        if (isMobileChatWorkspace) {
+            return mobileChatPanelOpen ? "Menu" : selectedCharacterName;
+        }
+        if (isMobileLibraryWorkspace) {
+            return "Rulebooks";
+        }
+        return "Risuai";
+    });
+
+    const libraryFilterSnapshot = $derived.by<LibraryFilterSnapshot>(() => {
+        if (!libraryShellActions) {
+            return {
+                systems: [],
+                editionsBySystem: {},
+                selectedSystem: "All",
+                selectedEdition: "All",
+            };
+        }
+        return libraryShellActions.getFilterSnapshot();
+    });
+
+    const mobileLibraryFilterVisible = $derived.by(() => {
+        return isMobileLibraryWorkspace && libraryShellActions !== null;
+    });
+
+    const mobileLibrarySystemLabel = $derived.by(() => {
+        return libraryFilterSnapshot.selectedSystem || "All";
+    });
+
+    const mobileLibraryEditionLabel = $derived.by(() => {
+        return libraryFilterSnapshot.selectedEdition || "All";
+    });
+
+    const mobileLibraryCanReset = $derived.by(() => {
+        return libraryFilterSnapshot.selectedSystem !== "All" || libraryFilterSnapshot.selectedEdition !== "All";
+    });
+
+    function clearTransientOverlays() {
+        $openPresetList = false;
+        $openPersonaList = false;
+        $bookmarkListOpen = false;
+    }
 
     function openHomeFromTopbar() {
         clearTransientOverlays();
@@ -169,6 +316,7 @@
         $openRulebookManager = false;
         PlaygroundStore.set(0);
         selectedCharID.set(-1);
+        mobileChatPanelOpen = false;
         topbarOverflowOpen = false;
     }
 
@@ -178,6 +326,7 @@
         openRulebookManager.set(false);
         PlaygroundStore.set(1);
         selectedCharID.set(-1);
+        mobileChatPanelOpen = false;
         topbarOverflowOpen = false;
     }
 
@@ -187,6 +336,7 @@
         openRulebookManager.set(true);
         PlaygroundStore.set(0);
         selectedCharID.set(-1);
+        mobileChatPanelOpen = false;
         topbarOverflowOpen = false;
     }
 
@@ -196,10 +346,36 @@
         settingsOpen.set(true);
         PlaygroundStore.set(0);
         selectedCharID.set(-1);
+        mobileChatPanelOpen = false;
         topbarOverflowOpen = false;
     }
 
+    function handleTopbarBack() {
+        if (isMobileSettingsSubpage) {
+            SettingsMenuIndex.set(-1);
+            return;
+        }
+
+        if (isMobileChatWorkspace) {
+            if (mobileChatPanelOpen) {
+                mobileChatPanelOpen = false;
+                return;
+            }
+            openHomeFromTopbar();
+        }
+    }
+
+    function openMobileChatMenu() {
+        if (!isMobileChatWorkspace) {
+            return;
+        }
+        mobileChatPanelOpen = true;
+    }
+
     function toggleRightSidebar() {
+        if (isMobileShell) {
+            return;
+        }
         if (resolvedAppRoute.workspace === "library") {
             librarySidebarOpen = !librarySidebarOpen;
             if (typeof window !== "undefined") {
@@ -232,59 +408,6 @@
             && left.inspector === right.inspector;
     }
 
-    function clearTransientOverlays() {
-        $openPresetList = false;
-        $openPersonaList = false;
-        $bookmarkListOpen = false;
-    }
-
-    const showRightSidebarToggle = $derived.by(() => {
-        return resolvedAppRoute.workspace === "chats" || resolvedAppRoute.workspace === "library";
-    });
-
-    const showCharacterDirectoryControls = $derived.by(() => {
-        return resolvedAppRoute.workspace === "characters";
-    });
-
-    const showLibraryControls = $derived.by(() => {
-        return resolvedAppRoute.workspace === "library";
-    });
-
-    const rightSidebarOpenForWorkspace = $derived.by(() => {
-        if (resolvedAppRoute.workspace === "library") {
-            return librarySidebarOpen;
-        }
-        return uiShellRightSidebarOpen;
-    });
-
-    const rightSidebarPanelId = $derived.by(() => {
-        if (resolvedAppRoute.workspace === "library") {
-            return libraryRightSidebarPanelId;
-        }
-        return chatRightSidebarPanelId;
-    });
-
-    let lastWorkspace = $state<AppRoute["workspace"]>(resolveWorkspace());
-
-    $effect(() => {
-        const nextRoute = resolvedAppRoute;
-        if (!isSameRoute($appRouteStore, nextRoute)) {
-            appRouteStore.set(nextRoute);
-        }
-
-        if (nextRoute.workspace === lastWorkspace) {
-            return;
-        }
-
-        lastWorkspace = nextRoute.workspace;
-
-        if (nextRoute.workspace !== "characters") {
-            characterDirectoryShowTrash = false;
-        }
-
-        clearTransientOverlays();
-    });
-
     function closeActiveShellOverlay() {
         if ($openPresetList) {
             $openPresetList = false;
@@ -301,12 +424,86 @@
         return false;
     }
 
+    async function openLibrarySystemSelector() {
+        if (!libraryShellActions) {
+            return;
+        }
+        const snapshot = libraryShellActions.getFilterSnapshot();
+        const options = ["All", ...snapshot.systems];
+        const selected = await alertSelect(options);
+        const index = Number.parseInt(selected, 10);
+        if (!Number.isInteger(index) || index < 0 || index >= options.length) {
+            return;
+        }
+        const system = options[index] ?? "All";
+        libraryShellActions.setSystemFilter(system);
+    }
+
+    async function openLibraryEditionSelector() {
+        if (!libraryShellActions) {
+            return;
+        }
+
+        const snapshot = libraryShellActions.getFilterSnapshot();
+        type EditionOption = { label: string; system: string; edition: string };
+        const editionOptions: EditionOption[] = [{ label: "All", system: snapshot.selectedSystem, edition: "All" }];
+
+        if (snapshot.selectedSystem === "All") {
+            for (const system of snapshot.systems) {
+                const editions = snapshot.editionsBySystem[system] ?? [];
+                for (const edition of editions) {
+                    editionOptions.push({
+                        label: `${system}: ${edition}`,
+                        system,
+                        edition,
+                    });
+                }
+            }
+        } else {
+            const editions = snapshot.editionsBySystem[snapshot.selectedSystem] ?? [];
+            for (const edition of editions) {
+                editionOptions.push({
+                    label: edition,
+                    system: snapshot.selectedSystem,
+                    edition,
+                });
+            }
+        }
+
+        if (editionOptions.length === 1) {
+            return;
+        }
+
+        const selected = await alertSelect(editionOptions.map((option) => option.label));
+        const index = Number.parseInt(selected, 10);
+        if (!Number.isInteger(index) || index < 0 || index >= editionOptions.length) {
+            return;
+        }
+
+        const option = editionOptions[index];
+        if (!option) {
+            return;
+        }
+
+        libraryShellActions.setEditionFilter(option.system, option.edition);
+    }
+
+    function resetLibraryFilters() {
+        libraryShellActions?.clearFilters();
+    }
+
     function handleShellKeydown(event: KeyboardEvent) {
         if (event.key !== "Escape") {
             return;
         }
 
         if (closeActiveShellOverlay()) {
+            event.preventDefault();
+            return;
+        }
+
+        if (showTopbarBack) {
+            handleTopbarBack();
             event.preventDefault();
             return;
         }
@@ -333,6 +530,31 @@
         }
     }
 
+    let lastWorkspace = $state<AppRoute["workspace"]>(resolveWorkspace());
+
+    $effect(() => {
+        const nextRoute = resolvedAppRoute;
+        if (!isSameRoute($appRouteStore, nextRoute)) {
+            appRouteStore.set(nextRoute);
+        }
+
+        if (nextRoute.workspace === lastWorkspace) {
+            return;
+        }
+
+        lastWorkspace = nextRoute.workspace;
+
+        if (nextRoute.workspace !== "characters") {
+            characterDirectoryShowTrash = false;
+        }
+
+        if (nextRoute.workspace !== "chats") {
+            mobileChatPanelOpen = false;
+        }
+
+        clearTransientOverlays();
+    });
+
     onMount(() => {
         window.addEventListener("keydown", handleShellKeydown, true);
         return () => {
@@ -341,18 +563,20 @@
     });
 </script>
 
-<div class="ds-app-v2-shell" data-mobile-bottom-nav={useBottomPrimaryNav ? "1" : "0"}>
+<div class="ds-app-v2-shell" data-mobile-bottom-nav={showBottomPrimaryNav ? "1" : "0"}>
     <AppShellTopbar
         workspace={resolvedAppRoute.workspace}
         onOpenHome={openHomeFromTopbar}
         onOpenPlayground={openPlaygroundFromTopbar}
         onOpenRulebooks={openRulebooksFromTopbar}
         onOpenSettings={openSettingsFromTopbar}
-        primaryNavPlacement={useBottomPrimaryNav ? "bottom" : "top"}
-        mobileBackToMenuVisible={mobileSettingsSubmenuOpen}
-        onMobileBackToMenu={() => {
-            SettingsMenuIndex.set(-1);
-        }}
+        primaryNavPlacement={showBottomPrimaryNav ? "bottom" : "top"}
+        mobileVariant={mobileTopbarVariant}
+        mobileTitle={mobileTopbarTitle}
+        showTopbarBack={showTopbarBack}
+        onTopbarBack={handleTopbarBack}
+        showMobileMenuAction={isMobileChatWorkspace && !mobileChatPanelOpen}
+        onMobileMenuAction={openMobileChatMenu}
         overflowItems={additionalHamburgerMenu}
         bind:overflowOpen={topbarOverflowOpen}
         showShellSearch={showShellSearch}
@@ -379,6 +603,13 @@
         onAddCharacter={() => {
             void addCharacterFromTopbar();
         }}
+        mobileLibraryFilterVisible={mobileLibraryFilterVisible}
+        mobileLibrarySystemLabel={mobileLibrarySystemLabel}
+        mobileLibraryEditionLabel={mobileLibraryEditionLabel}
+        mobileLibraryCanReset={mobileLibraryCanReset}
+        onOpenSystemSelector={openLibrarySystemSelector}
+        onOpenEditionSelector={openLibraryEditionSelector}
+        onResetLibraryFilters={resetLibraryFilters}
     />
     <AppShellStage
         workspace={resolvedAppRoute.workspace}
@@ -400,6 +631,9 @@
             libraryShellActions = actions;
         }}
         onOpenHome={openHomeFromTopbar}
+        isMobileShell={isMobileShell}
+        isMobileChatWorkspace={isMobileChatWorkspace}
+        bind:mobileChatPanelOpen
     />
 </div>
 
