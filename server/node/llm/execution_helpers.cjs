@@ -49,10 +49,6 @@ function createExecutionHelpers(arg = {}) {
             provider = normalizeProvider(explicitProvider, explicitModel || selectedModelId);
         } else if (selectedModelId === 'openrouter') {
             provider = 'openrouter';
-        } else if (selectedModelId === 'reverse_proxy') {
-            provider = 'reverse_proxy';
-        } else if (selectedModelId.startsWith('xcustom:::')) {
-            provider = 'custom';
         } else {
             provider = normalizeProvider('', selectedModelId);
         }

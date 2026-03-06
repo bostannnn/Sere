@@ -589,6 +589,36 @@ function convertOpenAIMessagesToGoogleContents(messages) {
     return body;
 }
 
+function buildPlainTextPromptFromMessages(messages) {
+    if (!Array.isArray(messages) || messages.length === 0) {
+        return '';
+    }
+    return messages
+        .map((message) => {
+            if (!message || typeof message !== 'object') return '';
+            const role = toStringOrEmpty(message.role) || 'user';
+            const content = extractTextFromMessageContent(message.content);
+            if (!content) return '';
+            return `${role}: ${content}`;
+        })
+        .filter(Boolean)
+        .join('\n\n')
+        .trim();
+}
+
+function normalizeNovelAIModelName(model) {
+    const raw = toStringOrEmpty(model);
+    if (!raw) return 'clio-v1';
+    const normalized = raw.toLowerCase();
+    if (normalized === 'novelai_kayra' || normalized === 'kayra' || normalized === 'kayra-v1') {
+        return 'kayra-v1';
+    }
+    if (normalized === 'novelai' || normalized === 'novelai_clio' || normalized === 'clio' || normalized === 'clio-v1') {
+        return 'clio-v1';
+    }
+    return raw;
+}
+
 function buildGenerateProviderRequest(provider, model, messages, maxTokens, streaming, baseRequestBody = {}) {
     const templateBody = safeJsonClone(
         (baseRequestBody && typeof baseRequestBody === 'object') ? baseRequestBody : {},
@@ -610,6 +640,34 @@ function buildGenerateProviderRequest(provider, model, messages, maxTokens, stre
         if (Number.isFinite(Number(maxTokens))) {
             requestBody.generation_config.maxOutputTokens = Number(maxTokens);
         }
+        return {
+            model,
+            messages,
+            maxTokens,
+            requestBody,
+        };
+    }
+
+    if (provider === 'novelai') {
+        const requestBody = (templateBody && typeof templateBody === 'object') ? templateBody : {};
+        requestBody.model = normalizeNovelAIModelName(model || requestBody.model);
+        requestBody.input = buildPlainTextPromptFromMessages(messages);
+        requestBody.stream = false;
+        return {
+            model,
+            messages,
+            maxTokens,
+            requestBody,
+        };
+    }
+
+    if (provider === 'kobold') {
+        const requestBody = (templateBody && typeof templateBody === 'object') ? templateBody : {};
+        requestBody.prompt = buildPlainTextPromptFromMessages(messages);
+        if (Number.isFinite(Number(maxTokens)) && !Number.isFinite(Number(requestBody.max_length))) {
+            requestBody.max_length = Number(maxTokens);
+        }
+        requestBody.stream = false;
         return {
             model,
             messages,

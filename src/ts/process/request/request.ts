@@ -1,7 +1,7 @@
 import { Ollama } from 'ollama/dist/browser.mjs';
 import { language } from "../../../lang";
 import { fetchNative, globalFetch, textifyReadableStream } from "../../globalApi.svelte";
-import { getModelInfo, LLMFlags, LLMFormat, type LLMModel } from "../../model/modellist";
+import { getModelInfo, LLMFlags, LLMFormat, LLMProvider, type LLMModel } from "../../model/modellist";
 import { risuChatParser, risuEscape, risuUnescape } from "../../parser.svelte";
 import { pluginProcess, pluginV2 } from "../../plugins/plugins.svelte";
 import { getCurrentCharacter, getCurrentChat, getDatabase, type character } from "../../storage/database.svelte";
@@ -11,7 +11,6 @@ import type { MultiModal, OpenAIChat } from "../index.svelte";
 import { getTools } from "../mcp/mcp";
 import type { MCPTool } from "../mcp/mcplib";
 import { NovelAIBadWordIds, stringlizeNAIChat } from "../models/nai";
-import { OobaParams } from "../prompt";
 import { getStopStrings, stringlizeAINChat, unstringlizeAIN, unstringlizeChat } from "../stringlize";
 import { applyChatTemplate } from "../templates/chatTemplate";
 import { runTransformers } from "../transformers";
@@ -95,7 +94,7 @@ type ParameterMap = {
     [key in Parameter]?: string;
 };
 
-const SERVER_NON_STREAMING_PROVIDERS = new Set(['novelai', 'ooba', 'kobold', 'cohere', 'horde']);
+const SERVER_NON_STREAMING_PROVIDERS = new Set(['novelai', 'kobold']);
 const llmRequestLog = (..._args: unknown[]) => {};
 type GenericObject = Record<string, unknown>;
 type ServerGenerateResponse = {
@@ -110,6 +109,87 @@ const getServerGenerateResponse = (raw: unknown): ServerGenerateResponse => {
     }
     return {};
 };
+
+function isRemovedProviderModel(aiModel?: string): boolean {
+    if (!aiModel) return false
+    return (
+        aiModel === 'ooba' ||
+        aiModel === 'mancer' ||
+        aiModel.startsWith('cohere-') ||
+        aiModel === 'horde' ||
+        aiModel.startsWith('horde:::') ||
+        aiModel === 'reverse_proxy' ||
+        aiModel.startsWith('xcustom:::') ||
+        aiModel.startsWith('mistral-') ||
+        aiModel === 'open-mistral-nemo'
+    );
+}
+
+function isCanonicalServerRuntimeModel(aiModel?: string, modelInfo?: LLMModel): boolean {
+    if (!aiModel) return false
+    const normalized = aiModel.trim().toLowerCase()
+    if (!normalized) return false
+
+    if (modelInfo) {
+        if (
+            modelInfo.format === LLMFormat.OpenAIResponseAPI ||
+            modelInfo.format === LLMFormat.OpenAILegacyInstruct ||
+            modelInfo.format === LLMFormat.AWSBedrockClaude ||
+            modelInfo.format === LLMFormat.VertexAIGemini ||
+            modelInfo.format === LLMFormat.NovelList ||
+            modelInfo.format === LLMFormat.WebLLM ||
+            modelInfo.format === LLMFormat.Plugin ||
+            modelInfo.format === LLMFormat.Echo ||
+            modelInfo.format === LLMFormat.Cohere ||
+            modelInfo.format === LLMFormat.Horde ||
+            modelInfo.format === LLMFormat.Ooba ||
+            modelInfo.format === LLMFormat.OobaLegacy ||
+            modelInfo.format === LLMFormat.Mistral
+        ) {
+            return false
+        }
+    }
+
+    if (
+        normalized === 'openrouter' ||
+        normalized === 'kobold' ||
+        normalized === 'ollama-hosted' ||
+        normalized === 'novelai' ||
+        normalized === 'novelai_kayra'
+    ) {
+        return true
+    }
+
+    if (
+        normalized.startsWith('gpt') ||
+        normalized.startsWith('chatgpt') ||
+        normalized.startsWith('o1') ||
+        normalized.startsWith('o3') ||
+        normalized.startsWith('o4') ||
+        normalized.startsWith('deepseek') ||
+        normalized.startsWith('claude') ||
+        normalized.startsWith('gemini') ||
+        normalized.startsWith('google')
+    ) {
+        return true
+    }
+
+    if (!modelInfo) return false
+    if (modelInfo.provider === LLMProvider.OpenAI && modelInfo.format === LLMFormat.OpenAICompatible) return true
+    if (modelInfo.provider === LLMProvider.DeepSeek && modelInfo.format === LLMFormat.OpenAICompatible) return true
+    if (
+        modelInfo.provider === LLMProvider.Anthropic &&
+        (modelInfo.format === LLMFormat.Anthropic || modelInfo.format === LLMFormat.AnthropicLegacy)
+    ) return true
+    if (modelInfo.provider === LLMProvider.GoogleCloud && modelInfo.format === LLMFormat.GoogleCloud) return true
+    if (
+        modelInfo.format === LLMFormat.Kobold ||
+        modelInfo.format === LLMFormat.Ollama ||
+        modelInfo.format === LLMFormat.NovelAI
+    ) return true
+
+    return false
+}
 
 function resolveServerStreaming(provider: string, requested: boolean) {
     if (!isNodeServer || !requested) return requested;
@@ -608,17 +688,6 @@ export async function requestChatDataMain(arg:requestDataArgument, model:ModelMo
     targ.modelInfo = getModelInfo(targ.aiModel)
     targ.mode = model
     targ.extractJson = arg.extractJson ?? db.extractJson
-    if(targ.aiModel === 'reverse_proxy'){
-        targ.modelInfo.internalID = db.customProxyRequestModel
-        targ.modelInfo.format = db.customAPIFormat
-        targ.customURL = db.forceReplaceUrl
-        targ.key = db.proxyKey
-    }
-    if(targ.aiModel.startsWith('xcustom:::')){
-        const found = db.customModels.find(m => m.id === targ.aiModel)
-        targ.customURL = found?.url
-        targ.key = found?.key
-    }
 
     if(db.seperateModelsForAxModels && !arg.staticModel){
         if(db.seperateModels[model]){
@@ -631,20 +700,28 @@ export async function requestChatDataMain(arg:requestDataArgument, model:ModelMo
 
     targ.formated = reformater(targ.formated, targ.modelInfo)
 
+    if (isRemovedProviderModel(targ.aiModel)) {
+        return {
+            type: 'fail',
+            noRetry: true,
+            result: `${language.errors.httpError}Provider has been removed: ${targ.aiModel}`,
+        }
+    }
+    if (!isCanonicalServerRuntimeModel(targ.aiModel, targ.modelInfo)) {
+        return {
+            type: 'fail',
+            noRetry: true,
+            result: `${language.errors.httpError}Provider is not supported in server-first runtime: ${targ.aiModel}`,
+        }
+    }
+
     switch(format){
         case LLMFormat.OpenAICompatible:
-        case LLMFormat.Mistral:
             return requestOpenAI(targ)
         case LLMFormat.OpenAILegacyInstruct:
             return requestOpenAILegacyInstruct(targ)
         case LLMFormat.NovelAI:
             return requestNovelAI(targ)
-        case LLMFormat.OobaLegacy:
-            return requestOobaLegacy(targ)
-        case LLMFormat.Plugin:
-            return requestPlugin(targ)
-        case LLMFormat.Ooba:
-            return requestOoba(targ)
         case LLMFormat.VertexAIGemini:
         case LLMFormat.GoogleCloud:
             return requestGoogleCloudVertex(targ)
@@ -654,14 +731,10 @@ export async function requestChatDataMain(arg:requestDataArgument, model:ModelMo
             return requestNovelList(targ)
         case LLMFormat.Ollama:
             return requestOllama(targ)
-        case LLMFormat.Cohere:
-            return requestCohere(targ)
         case LLMFormat.Anthropic:
         case LLMFormat.AnthropicLegacy:
         case LLMFormat.AWSBedrockClaude:
             return requestClaude(targ)
-        case LLMFormat.Horde:
-            return requestHorde(targ)
         case LLMFormat.WebLLM:
             return requestWebLLM(targ)
         case LLMFormat.OpenAIResponseAPI:
@@ -787,7 +860,7 @@ async function requestNovelAI(arg:RequestDataArgumentExtended):Promise<requestDa
         } : undefined,
         request: {
             requestBody: body,
-            model: aiModel,
+            model: body.model,
             maxTokens: arg.maxTokens,
             prompt,
         },
@@ -866,373 +939,6 @@ async function requestNovelAI(arg:RequestDataArgumentExtended):Promise<requestDa
     return {
         type: "success",
         result: unstringlizeChat(da.data.output, formated, currentChar?.name ?? '')
-    }
-}
-
-async function requestOobaLegacy(arg:RequestDataArgumentExtended):Promise<requestDataResponse> {
-    const formated = arg.formated
-    const db = getDatabase()
-    const aiModel = arg.aiModel
-    const maxTokens = arg.maxTokens
-    const currentChar = getCurrentCharacter()
-    const useStreaming = arg.useStreaming
-    const abortSignal = arg.abortSignal
-    const streamUrl = db.textgenWebUIStreamURL.replace(/\/api.*/, "/api/v1/stream")
-    const blockingUrl = db.textgenWebUIBlockingURL.replace(/\/api.*/, "/api/v1/generate")
-    let bodyTemplate:Record<string, unknown> = {}
-    const prompt = applyChatTemplate(formated)
-    let stopStrings = getStopStrings(false)
-    if(db.localStopStrings){
-        stopStrings = db.localStopStrings.map((v) => {
-            return risuChatParser(v.replace(/\\n/g, "\n"))
-        })
-    }
-
-    bodyTemplate = {
-        'max_new_tokens': db.maxResponse,
-        'do_sample': db.ooba.do_sample,
-        'temperature': (db.temperature / 100),
-        'top_p': db.ooba.top_p,
-        'typical_p': db.ooba.typical_p,
-        'repetition_penalty': db.ooba.repetition_penalty,
-        'encoder_repetition_penalty': db.ooba.encoder_repetition_penalty,
-        'top_k': db.ooba.top_k,
-        'min_length': db.ooba.min_length,
-        'no_repeat_ngram_size': db.ooba.no_repeat_ngram_size,
-        'num_beams': db.ooba.num_beams,
-        'penalty_alpha': db.ooba.penalty_alpha,
-        'length_penalty': db.ooba.length_penalty,
-        'early_stopping': false,
-        'truncation_length': maxTokens,
-        'ban_eos_token': db.ooba.ban_eos_token,
-        'stopping_strings': stopStrings,
-        'seed': -1,
-        add_bos_token: db.ooba.add_bos_token,
-        topP: db.top_p,
-        prompt: prompt
-    }
-
-    const headers = (aiModel === 'textgen_webui') ? {} : {
-        'X-API-KEY': db.mancerHeader
-    }
-
-    if(arg.previewBody){
-        return {
-            type: 'success',
-            result: JSON.stringify({
-                url: blockingUrl,
-                body: bodyTemplate,
-                headers: headers
-            })      
-        }
-    }
-
-    if(useStreaming){
-        const oobaboogaSocket = new WebSocket(streamUrl);
-        const statusCode = await new Promise((resolve) => {
-            oobaboogaSocket.onopen = () => resolve(0)
-            oobaboogaSocket.onerror = () => resolve(1001)
-            oobaboogaSocket.onclose = ({ code }) => resolve(code)
-        })
-        if(abortSignal?.aborted || statusCode !== 0) {
-            oobaboogaSocket.close()
-            return ({
-                type: "fail",
-                result: abortSignal?.reason || `WebSocket connection failed to '${streamUrl}' failed!`,
-            })
-        }
-
-        const close = () => {
-            oobaboogaSocket.close()
-        }
-        const stream = new ReadableStream({
-            start(controller){
-                let readed = "";
-                oobaboogaSocket.onmessage = (event) => {
-                    const json = JSON.parse(event.data);
-                    if (json.event === "stream_end") {
-                        close()
-                        controller.close()
-                        return
-                    }
-                    if (json.event !== "text_stream") return
-                    readed += json.text
-                    controller.enqueue(readed)
-                };
-                oobaboogaSocket.send(JSON.stringify(bodyTemplate));
-            },
-            cancel(){
-                close()
-            }
-        })
-        oobaboogaSocket.onerror = close
-        oobaboogaSocket.onclose = close
-        abortSignal?.addEventListener("abort", close)
-
-        return {
-            type: 'streaming',
-            result: stream
-        }
-    }
-
-    const res = await globalFetch(blockingUrl, {
-        body: bodyTemplate,
-        headers: headers,
-        abortSignal,
-        chatId: arg.chatId
-    })
-    
-    const dataPayload = (typeof res.data === 'object' && res.data !== null)
-        ? (res.data as { results?: Array<{ text?: string }> })
-        : null
-    if(res.ok){
-        try {
-            const result:string = dataPayload?.results?.[0]?.text ?? ''
-
-            return {
-                type: 'success',
-                result: unstringlizeChat(result, formated, currentChar?.name ?? '')
-            }
-        } catch (error) {                    
-            return {
-                type: 'fail',
-                result: (language.errors.httpError + `${error}`)
-            }
-        }
-    }
-    else{
-        return {
-            type: 'fail',
-            result: (language.errors.httpError + `${JSON.stringify(res.data)}`)
-        }
-    }
-}
-
-async function requestOoba(arg:RequestDataArgumentExtended):Promise<requestDataResponse> {
-    const formated = arg.formated
-    const db = getDatabase()
-    const maxTokens = arg.maxTokens
-    const temperature = arg.temperature
-    const prompt = applyChatTemplate(formated)
-    let stopStrings = getStopStrings(false)
-    if(db.localStopStrings){
-        stopStrings = db.localStopStrings.map((v) => {
-            return risuChatParser(v.replace(/\\n/g, "\n"))
-        })
-    }
-    const bodyTemplate:Record<string, unknown> = {
-        'prompt': prompt,
-        presence_penalty: arg.PresensePenalty || (db.PresensePenalty / 100),
-        frequency_penalty: arg.frequencyPenalty || (db.frequencyPenalty / 100),
-        logit_bias: {},
-        max_tokens: maxTokens,
-        stop: stopStrings,
-        temperature: temperature,
-        top_p: db.top_p,
-    }
-
-    const url = new URL(db.textgenWebUIBlockingURL)
-    url.pathname = "/v1/completions"
-    const urlStr = url.toString()
-
-    const OobaBodyTemplate = db.reverseProxyOobaArgs
-    const keys = Object.keys(OobaBodyTemplate)
-    for(const key of keys){
-        if(OobaBodyTemplate[key] !== undefined && OobaBodyTemplate[key] !== null && OobaParams.includes(key)){
-            bodyTemplate[key] = OobaBodyTemplate[key]
-        }
-        else if(bodyTemplate[key]){
-            delete bodyTemplate[key]
-        }
-    }
-
-    const effectiveStreaming = resolveServerStreaming('ooba', !!arg.useStreaming)
-
-    const makeServerPayload = () => ({
-        useClientAssembledRequest: true,
-        mode: arg.mode ?? 'model',
-        provider: 'ooba',
-        characterId: arg.currentChar?.chaId ?? '',
-        chatId: arg.chatId ?? '',
-        continue: !!arg.continue,
-        streaming: effectiveStreaming,
-        ragSettings: arg.currentChar?.ragSettings ? {
-            enabled: arg.currentChar.ragSettings.enabled === true,
-            enabledRulebooks: Array.isArray(arg.currentChar.ragSettings.enabledRulebooks) ? arg.currentChar.ragSettings.enabledRulebooks : [],
-        } : undefined,
-        globalRagSettings: db.globalRagSettings ? {
-            topK: db.globalRagSettings.topK,
-            minScore: db.globalRagSettings.minScore,
-            budget: db.globalRagSettings.budget,
-            model: db.globalRagSettings.model,
-        } : undefined,
-        request: {
-            requestBody: {
-                ...bodyTemplate,
-                ooba_url: db.textgenWebUIBlockingURL,
-            },
-            prompt,
-        },
-    })
-
-    if (isNodeServer) {
-        if (arg.previewBody) {
-            const previewRes = await globalFetch('/data/llm/preview', {
-                method: 'POST',
-                body: makeServerPayload(),
-                abortSignal: arg.abortSignal,
-                chatId: arg.chatId,
-            })
-            if (!previewRes.ok) {
-                return {
-                    type: 'fail',
-                    result: typeof previewRes.data === 'string' ? previewRes.data : JSON.stringify(previewRes.data),
-                }
-            }
-            return {
-                type: 'success',
-                result: JSON.stringify(previewRes.data, null, 2),
-            }
-        }
-        const serverRes = await globalFetch('/data/llm/generate', {
-            method: 'POST',
-            body: makeServerPayload(),
-            abortSignal: arg.abortSignal,
-            chatId: arg.chatId,
-        })
-        const rawData = serverRes.data as unknown
-        const data = getServerGenerateResponse(rawData)
-        if (!serverRes.ok) {
-            return {
-                type: 'fail',
-                result: typeof rawData === 'string' ? rawData : JSON.stringify(rawData),
-                noRetry: true,
-            }
-        }
-        if (data?.type === 'success' && typeof data?.result === 'string') {
-            return {
-                type: 'success',
-                result: data.result,
-                newCharEtag: data.newCharEtag,
-            }
-        }
-        return {
-            type: 'fail',
-            result: typeof rawData === 'string' ? rawData : JSON.stringify(rawData),
-            noRetry: true,
-        }
-    }
-
-    if(arg.previewBody){
-        return {
-            type: 'success',
-            result: JSON.stringify({
-                url: urlStr,
-                body: bodyTemplate,
-                headers: {}
-            })      
-        }
-    }
-
-    const response = await globalFetch(urlStr, {
-        body: bodyTemplate,
-        chatId: arg.chatId,
-        abortSignal: arg.abortSignal
-    })
-
-    if(!response.ok){
-        return {
-            type: 'fail',
-            result: (language.errors.httpError + `${JSON.stringify(response.data)}`)
-        }
-    }
-    const text:string = response.data.choices[0].text
-    return {
-        type: 'success',
-        result: text.replace(/##\n/g, '')
-    }
-    
-}
-
-async function requestPlugin(arg:RequestDataArgumentExtended):Promise<requestDataResponse> {
-    const db = getDatabase()
-    try {
-        const formated = arg.formated
-        const maxTokens = arg.maxTokens
-        const bias = arg.biasString
-        const v2Function = pluginV2.providers.get(db.currentPluginProvider)
-
-        if(arg.previewBody){
-            return {
-                type: 'success',
-                result: JSON.stringify({
-                    error: "Plugin is not supported in preview mode"
-                })
-            }
-        }
-    
-        const d = v2Function ? (await v2Function(applyParameters({
-            prompt_chat: formated,
-            mode: arg.mode,
-            bias: [],
-            max_tokens: maxTokens,
-        }, [
-            'frequency_penalty','min_p','presence_penalty','repetition_penalty','top_k','top_p','temperature'
-        ], {}, arg.mode) as unknown as Parameters<NonNullable<typeof v2Function>>[0], arg.abortSignal)) : await pluginProcess({
-            bias: bias,
-            prompt_chat: formated,
-            temperature: (db.temperature / 100),
-            max_tokens: maxTokens,
-            presence_penalty: (db.PresensePenalty / 100),
-            frequency_penalty: (db.frequencyPenalty / 100)
-        })
-    
-        if(!d){
-            return {
-                type: 'fail',
-                result: (language.errors.unknownModel),
-                model: 'custom'
-            }
-        }
-        else if(!d.success){
-            return {
-                type: 'fail',
-                result: d.content instanceof ReadableStream ? await (new Response(d.content)).text() : d.content,
-                model: 'custom'
-            }
-        }
-        else if(d.content instanceof ReadableStream){
-    
-            let fullText = ''
-            const piper = new TransformStream<string, StreamResponseChunk>(  {
-                transform(chunk, control) {
-                    fullText += chunk
-                    control.enqueue({
-                        "0": fullText
-                    })
-                }
-            })
-    
-            return {
-                type: 'streaming',
-                result: d.content.pipeThrough(piper),
-                model: 'custom'
-            }
-        }
-        else{
-            return {
-                type: 'success',
-                result: d.content,
-                model: 'custom'
-            }
-        }   
-    } catch (error) {
-        llmRequestLog(error)
-        return {
-            type: 'fail',
-            result: `Plugin Error from ${db.currentPluginProvider}: ` + JSON.stringify(error),
-            model: 'custom'
-        }
     }
 }
 
@@ -1669,408 +1375,6 @@ async function requestOllama(arg:RequestDataArgumentExtended):Promise<requestDat
     }
 }
 
-async function requestCohere(arg:RequestDataArgumentExtended):Promise<requestDataResponse> {
-    const formated = arg.formated
-    const db = getDatabase()
-    const aiModel = arg.aiModel
-
-    let lastChatPrompt = ''
-    let preamble = ''
-
-    let lastChat = formated[formated.length-1]
-    if(lastChat.role === 'user'){
-        lastChatPrompt = lastChat.content
-        formated.pop()
-    }
-    else{
-        while(lastChat.role !== 'user'){
-            lastChat = formated.pop()
-            if(!lastChat){
-                return {
-                    type: 'fail',
-                    result: 'Cohere requires a user message to generate a response'
-                }
-            }
-            lastChatPrompt = (lastChat.role === 'user' ? '' : `${lastChat.role}: `) + '\n' + lastChat.content + lastChatPrompt
-        }
-    }
-
-    const firstChat = formated[0]
-    if(firstChat.role === 'system'){
-        preamble = firstChat.content
-        formated.shift()
-    }
-
-    //reformat chat
-
-    const body = applyParameters({
-        message: lastChatPrompt,
-        chat_history: formated.map((v) => {
-            if(v.role === 'assistant'){
-                return {
-                    role: 'CHATBOT',
-                    message: v.content
-                }
-            }
-            if(v.role === 'system'){
-                return {
-                    role: 'SYSTEM',
-                    message: v.content
-                }
-            }
-            if(v.role === 'user'){
-                return {
-                    role: 'USER',
-                    message: v.content
-                }
-            }
-            return null
-        }).filter((v) => v !== null).filter((v) => {
-            return v.message
-        }),
-    }, [
-        'temperature', 'top_k', 'top_p', 'presence_penalty', 'frequency_penalty'
-    ], {
-        'top_k': 'k',
-        'top_p': 'p',
-    }, arg.mode) as {
-        chat_history: Array<{ role: string; message: string }>
-        preamble?: string
-        message?: string
-        safety_mode?: string
-        [key: string]: unknown
-    }
-
-    if(aiModel !== 'cohere-command-r-03-2024' && aiModel !== 'cohere-command-r-plus-04-2024'){
-        body.safety_mode = "NONE"
-    }
-    
-    if(preamble){
-        if(body.chat_history.length > 0){
-            body.preamble = preamble
-        }
-        else{
-            body.message = `system: ${preamble}`
-        }
-    }
-
-    llmRequestLog(body)
-
-    const effectiveStreaming = resolveServerStreaming('cohere', !!arg.useStreaming)
-
-    const makeServerPayload = () => ({
-        useClientAssembledRequest: true,
-        mode: arg.mode ?? 'model',
-        provider: 'cohere',
-        characterId: arg.currentChar?.chaId ?? '',
-        chatId: arg.chatId ?? '',
-        continue: !!arg.continue,
-        streaming: effectiveStreaming,
-        ragSettings: arg.currentChar?.ragSettings ? {
-            enabled: arg.currentChar.ragSettings.enabled === true,
-            enabledRulebooks: Array.isArray(arg.currentChar.ragSettings.enabledRulebooks) ? arg.currentChar.ragSettings.enabledRulebooks : [],
-        } : undefined,
-        globalRagSettings: db.globalRagSettings ? {
-            topK: db.globalRagSettings.topK,
-            minScore: db.globalRagSettings.minScore,
-            budget: db.globalRagSettings.budget,
-            model: db.globalRagSettings.model,
-        } : undefined,
-        request: {
-            requestBody: {
-                ...body,
-                model: aiModel,
-            },
-            model: aiModel,
-            maxTokens: arg.maxTokens,
-            prompt: lastChatPrompt,
-        }
-    })
-
-    if (isNodeServer) {
-        if (arg.previewBody) {
-            const previewRes = await globalFetch('/data/llm/preview', {
-                method: 'POST',
-                body: makeServerPayload(),
-                abortSignal: arg.abortSignal,
-                chatId: arg.chatId,
-            })
-            if (!previewRes.ok) {
-                return {
-                    type: 'fail',
-                    result: JSON.stringify(previewRes.data),
-                }
-            }
-            return {
-                type: 'success',
-                result: JSON.stringify(previewRes.data, null, 2),
-            }
-        }
-
-        const serverRes = await globalFetch('/data/llm/generate', {
-            method: 'POST',
-            body: makeServerPayload(),
-            abortSignal: arg.abortSignal,
-            chatId: arg.chatId,
-        })
-        const rawData = serverRes.data as unknown
-        const data = getServerGenerateResponse(rawData)
-        if (!serverRes.ok) {
-            const errCode = String(data?.error || '')
-            if (errCode === 'COHERE_KEY_MISSING') {
-                return {
-                    type: 'fail',
-                    noRetry: true,
-                    result: `${language.errors.httpError}Cohere key is missing in server settings.`,
-                }
-            }
-            return {
-                type: 'fail',
-                result: JSON.stringify(rawData),
-            }
-        }
-
-        if (data?.type === 'success' && typeof data?.result === 'string') {
-            return {
-                type: 'success',
-                result: data.result,
-                newCharEtag: data.newCharEtag,
-            }
-        }
-
-        return {
-            type: 'fail',
-            result: JSON.stringify(rawData),
-        }
-    }
-
-    if(arg.previewBody){
-        return {
-            type: 'success',
-            result: JSON.stringify({
-                url: arg.customURL ?? 'https://api.cohere.com/v1/chat',
-                body: body,
-                headers: {
-                    "Authorization": "Bearer " + (arg.key ?? db.cohereAPIKey),
-                    "Content-Type": "application/json"
-                }
-            })
-        }
-    }
-
-    const res = await globalFetch(arg.customURL ?? 'https://api.cohere.com/v1/chat', {
-        method: "POST",
-        headers: {
-            "Authorization": "Bearer " + (arg.key ?? db.cohereAPIKey),
-            "Content-Type": "application/json"
-        },
-        body: body,
-        abortSignal: arg.abortSignal
-    })
-
-    if(!res.ok){
-        return {
-            type: 'fail',
-            result: JSON.stringify(res.data)
-        }
-    }
-
-    const result = res?.data?.text
-    if(!result){
-        return {
-            type: 'fail',
-            result: JSON.stringify(res.data)
-        }
-    }
-
-    return {
-        type: 'success',
-        result: result
-    }
- 
-}
-
-
-async function requestHorde(arg:RequestDataArgumentExtended):Promise<requestDataResponse> {
-    const formated = arg.formated
-    const db = getDatabase()
-    const aiModel = arg.aiModel
-    const currentChar = getCurrentCharacter()
-    const abortSignal = arg.abortSignal
-
-    if(arg.previewBody && !isNodeServer){
-        return {
-            type: 'success',
-            result: JSON.stringify({
-                error: "Preview body is not supported for Horde"
-            })
-        }
-    }
-
-    const prompt = applyChatTemplate(formated)
-
-    const realModel = aiModel.split(":::")[1]
-
-    const argument = {
-        "prompt": prompt,
-        "params": {
-            "n": 1,
-            "max_context_length": db.maxContext + 100,
-            "max_length": db.maxResponse,
-            "singleline": false,
-            "temperature": db.temperature / 100,
-            "top_k": db.top_k,
-            "top_p": db.top_p,
-        },
-        "trusted_workers": false,
-        "workerslow_workers": true,
-        "_blacklist": false,
-        "dry_run": false,
-        "models": [realModel, realModel.trim(), ' ' + realModel, realModel + ' ']
-    }
-
-    if(realModel === 'auto'){
-        delete argument.models
-    }
-
-    const effectiveStreaming = resolveServerStreaming('horde', !!arg.useStreaming)
-
-    const makeServerPayload = () => ({
-        useClientAssembledRequest: true,
-        mode: arg.mode ?? 'model',
-        provider: 'horde',
-        characterId: arg.currentChar?.chaId ?? '',
-        chatId: arg.chatId ?? '',
-        continue: !!arg.continue,
-        streaming: effectiveStreaming,
-        ragSettings: arg.currentChar?.ragSettings ? {
-            enabled: arg.currentChar.ragSettings.enabled === true,
-            enabledRulebooks: Array.isArray(arg.currentChar.ragSettings.enabledRulebooks) ? arg.currentChar.ragSettings.enabledRulebooks : [],
-        } : undefined,
-        globalRagSettings: db.globalRagSettings ? {
-            topK: db.globalRagSettings.topK,
-            minScore: db.globalRagSettings.minScore,
-            budget: db.globalRagSettings.budget,
-            model: db.globalRagSettings.model,
-        } : undefined,
-        request: {
-            requestBody: argument,
-            model: aiModel,
-            prompt,
-        },
-    })
-
-    if (isNodeServer) {
-        if (arg.previewBody) {
-            const previewRes = await globalFetch('/data/llm/preview', {
-                method: 'POST',
-                body: makeServerPayload(),
-                abortSignal: arg.abortSignal,
-                chatId: arg.chatId,
-            })
-            if (!previewRes.ok) {
-                return {
-                    type: 'fail',
-                    result: typeof previewRes.data === 'string' ? previewRes.data : JSON.stringify(previewRes.data),
-                }
-            }
-            return {
-                type: 'success',
-                result: JSON.stringify(previewRes.data, null, 2),
-            }
-        }
-
-        const serverRes = await globalFetch('/data/llm/generate', {
-            method: 'POST',
-            body: makeServerPayload(),
-            abortSignal: arg.abortSignal,
-            chatId: arg.chatId,
-        })
-        const rawData = serverRes.data as unknown
-        const data = getServerGenerateResponse(rawData)
-        if (!serverRes.ok) {
-            return {
-                type: 'fail',
-                result: typeof rawData === 'string' ? rawData : JSON.stringify(rawData),
-                noRetry: true
-            }
-        }
-        if (data?.type === 'success' && typeof data?.result === 'string') {
-            return {
-                type: 'success',
-                result: unstringlizeChat(data.result, formated, currentChar?.name ?? ''),
-                newCharEtag: data.newCharEtag,
-            }
-        }
-        return {
-            type: 'fail',
-            result: typeof rawData === 'string' ? rawData : JSON.stringify(rawData),
-            noRetry: true
-        }
-    }
-
-    let apiKey = '0000000000'
-    if(db.hordeConfig.apiKey.length > 2){
-        apiKey = db.hordeConfig.apiKey
-    }
-
-    const da = await fetch("https://stablehorde.net/api/v2/generate/text/async", {
-        body: JSON.stringify(argument),
-        method: "POST",
-        headers: {
-            "content-type": "application/json",
-            "apikey": apiKey
-        },
-        signal: abortSignal
-    })
-
-    if(da.status !== 202){
-        return {
-            type: "fail",
-            result: await da.text()
-        }
-    }
-
-    const json:{
-        id:string,
-        kudos:number,
-        message:string
-    } = await da.json()
-
-    let warnMessage = ""
-    if(json.message){
-        warnMessage = "with " + json.message
-    }
-
-    while(true){
-        await sleep(2000)
-        const data = await (await fetch("https://stablehorde.net/api/v2/generate/text/status/" + json.id)).json()
-        if(!data.is_possible){
-            fetch("https://stablehorde.net/api/v2/generate/text/status/" + json.id, {
-                method: "DELETE"
-            })
-            return {
-                type: 'fail',
-                result: "Response not possible" + warnMessage,
-                noRetry: true
-            }
-        }
-        if(data.done && Array.isArray(data.generations) && data.generations.length > 0){
-            const generations:{text:string}[] = data.generations
-            if(generations && generations.length > 0){
-                return {
-                    type: "success",
-                    result: unstringlizeChat(generations[0].text, formated, currentChar?.name ?? '')
-                }
-            }
-            return {
-                type: 'fail',
-                result: "No Generations when done",
-                noRetry: true
-            }
-        }
-    }
-}
 
 async function requestWebLLM(arg:RequestDataArgumentExtended):Promise<requestDataResponse> {
     const formated = arg.formated

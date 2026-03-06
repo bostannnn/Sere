@@ -339,27 +339,10 @@ async function requestAnthropicServerExecution(arg: RequestDataArgumentExtended,
 export async function requestClaude(arg:RequestDataArgumentExtended):Promise<requestDataResponse> {
     const formated = arg.formated
     const db = getDatabase()
-    const aiModel = arg.aiModel
     const useStreaming = arg.useStreaming
     let replacerURL = arg.customURL ?? ('https://api.anthropic.com/v1/messages')
-    const apiKey = arg.key || ((aiModel === 'reverse_proxy') ? db.proxyKey : db.claudeAPIKey)
+    const apiKey = arg.key || db.claudeAPIKey
     const maxTokens = arg.maxTokens
-    if(aiModel === 'reverse_proxy' && db.autofillRequestUrl){
-        if(replacerURL.endsWith('v1')){
-            replacerURL += '/messages'
-        }
-        else if(replacerURL.endsWith('v1/')){
-            replacerURL += 'messages'
-        }
-        else if(!(replacerURL.endsWith('messages') || replacerURL.endsWith('messages/'))){
-            if(replacerURL.endsWith('/')){
-                replacerURL += 'v1/messages'
-            }
-            else{
-                replacerURL += '/v1/messages'
-            }
-        }
-    }
 
     const claudeChat: Claude3Chat[] = []
     let systemPrompt:string = ''
@@ -584,18 +567,7 @@ export async function requestClaude(arg:RequestDataArgumentExtended):Promise<req
         }
     }
 
-    let finalChat:Claude3ExtendedChat[] = claudeChat
-
-    if(aiModel === 'reverse_proxy'){
-        finalChat = claudeChat.map((v) => {
-            if(v.content.length > 0 && v.content[0].type === 'text'){
-                return {
-                    role: v.role,
-                    content: v.content[0].text
-                }
-            }
-        })
-    }
+    const finalChat:Claude3ExtendedChat[] = claudeChat
 
     anthropicLog(arg.modelInfo.parameters)
     const body = applyParameters({
@@ -624,7 +596,7 @@ export async function requestClaude(arg:RequestDataArgumentExtended):Promise<req
 
     const bedrock = arg.modelInfo.format === LLMFormat.AWSBedrockClaude
 
-    if(bedrock && aiModel !== 'reverse_proxy'){
+    if(bedrock){
         function getCredentialParts(key:string) {
             const [accessKeyId, secretAccessKey, region] = key.split(":");
           
@@ -799,7 +771,6 @@ export async function requestClaude(arg:RequestDataArgumentExtended):Promise<req
     const useServerAnthropic =
         isNodeServer &&
         !bedrock &&
-        aiModel !== 'reverse_proxy' &&
         !(arg.tools && arg.tools.length > 0);
 
     if (useServerAnthropic) {

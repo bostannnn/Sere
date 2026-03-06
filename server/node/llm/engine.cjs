@@ -5,15 +5,9 @@ const { previewOpenAIExecution, executeOpenAI } = require('./openai.cjs');
 const { previewDeepSeekExecution, executeDeepSeek } = require('./deepseek.cjs');
 const { previewAnthropicExecution, executeAnthropic } = require('./anthropic.cjs');
 const { previewGoogleExecution, executeGoogle } = require('./google.cjs');
-const { previewMistralExecution, executeMistral } = require('./mistral.cjs');
-const { previewCohereExecution, executeCohere } = require('./cohere.cjs');
 const { previewOllamaExecution, executeOllama } = require('./ollama.cjs');
 const { previewKoboldExecution, executeKobold } = require('./kobold.cjs');
 const { previewNovelAIExecution, executeNovelAI } = require('./novelai.cjs');
-const { previewHordeExecution, executeHorde } = require('./horde.cjs');
-const { previewOobaExecution, executeOoba } = require('./ooba.cjs');
-const { previewReverseProxyExecution, executeReverseProxy } = require('./reverse_proxy.cjs');
-const { previewCustomExecution, executeCustom } = require('./custom.cjs');
 const { searchRulebooks } = require('../rag/engine.cjs');
 const path = require('path');
 const { existsSync } = require('fs');
@@ -324,12 +318,6 @@ async function previewExecution(input, ctx = {}) {
     if (input.provider === 'google') {
         return await previewGoogleExecution(input, ctx);
     }
-    if (input.provider === 'mistral') {
-        return await previewMistralExecution(input, ctx);
-    }
-    if (input.provider === 'cohere') {
-        return await previewCohereExecution(input, ctx);
-    }
     if (input.provider === 'ollama') {
         return await previewOllamaExecution(input, ctx);
     }
@@ -338,18 +326,6 @@ async function previewExecution(input, ctx = {}) {
     }
     if (input.provider === 'novelai') {
         return await previewNovelAIExecution(input, ctx);
-    }
-    if (input.provider === 'horde') {
-        return await previewHordeExecution(input, ctx);
-    }
-    if (input.provider === 'ooba') {
-        return await previewOobaExecution(input, ctx);
-    }
-    if (input.provider === 'reverse_proxy') {
-        return await previewReverseProxyExecution(input, ctx);
-    }
-    if (input.provider === 'custom') {
-        return await previewCustomExecution(input, ctx);
     }
     throw new LLMHttpError(409, 'PROVIDER_NOT_MIGRATED', `Provider not migrated: ${input.provider}`);
 }
@@ -371,12 +347,6 @@ async function execute(input, ctx = {}) {
     if (input.provider === 'google') {
         return await executeGoogle(input, ctx);
     }
-    if (input.provider === 'mistral') {
-        return await executeMistral(input, ctx);
-    }
-    if (input.provider === 'cohere') {
-        return await executeCohere(input, ctx);
-    }
     if (input.provider === 'ollama') {
         return await executeOllama(input, ctx);
     }
@@ -385,18 +355,6 @@ async function execute(input, ctx = {}) {
     }
     if (input.provider === 'novelai') {
         return await executeNovelAI(input, ctx);
-    }
-    if (input.provider === 'horde') {
-        return await executeHorde(input, ctx);
-    }
-    if (input.provider === 'ooba') {
-        return await executeOoba(input, ctx);
-    }
-    if (input.provider === 'reverse_proxy') {
-        return await executeReverseProxy(input, ctx);
-    }
-    if (input.provider === 'custom') {
-        return await executeCustom(input, ctx);
     }
     throw new LLMHttpError(409, 'PROVIDER_NOT_MIGRATED', `Provider not migrated: ${input.provider}`);
 }

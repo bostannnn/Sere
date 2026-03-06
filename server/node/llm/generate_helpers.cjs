@@ -57,7 +57,7 @@ function createGenerateHelpers(arg = {}) {
 
     const generateSupportedProviders = arg.generateSupportedProviders instanceof Set
         ? arg.generateSupportedProviders
-        : new Set(['openrouter', 'openai', 'deepseek', 'anthropic', 'google', 'mistral']);
+        : new Set(['openrouter', 'openai', 'deepseek', 'anthropic', 'google', 'ollama', 'kobold', 'novelai']);
 
     function extractExecutionResultText(result) {
         if (typeof result === 'string') {

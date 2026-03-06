@@ -40,6 +40,19 @@ function resolveNovelAIUrl(model) {
     return 'https://api.novelai.net/ai/generate';
 }
 
+function normalizeNovelAIModelName(model) {
+    const raw = typeof model === 'string' ? model.trim() : '';
+    if (!raw) return 'clio-v1';
+    const normalized = raw.toLowerCase();
+    if (normalized === 'novelai_kayra' || normalized === 'kayra' || normalized === 'kayra-v1') {
+        return 'kayra-v1';
+    }
+    if (normalized === 'novelai' || normalized === 'novelai_clio' || normalized === 'clio' || normalized === 'clio-v1') {
+        return 'clio-v1';
+    }
+    return raw;
+}
+
 function buildExecutionRequest(input, settings, arg = {}) {
     const requireKey = arg.requireKey !== false;
     const payload = getRequestPayload(input);
@@ -48,9 +61,7 @@ function buildExecutionRequest(input, settings, arg = {}) {
     if (typeof requestBody.input !== 'string' || !requestBody.input.trim()) {
         throw new LLMHttpError(400, 'INVALID_PROMPT', 'NovelAI request requires a non-empty input.');
     }
-    if (typeof requestBody.model !== 'string' || !requestBody.model.trim()) {
-        requestBody.model = 'clio-v1';
-    }
+    requestBody.model = normalizeNovelAIModelName(requestBody.model);
     if (!requestBody.parameters || typeof requestBody.parameters !== 'object') {
         throw new LLMHttpError(400, 'INVALID_BODY', 'NovelAI request requires parameters object.');
     }
