@@ -35,6 +35,7 @@
   import OptionInput from "src/lib/UI/GUI/OptionInput.svelte";
   import TextAreaInput from "src/lib/UI/GUI/TextAreaInput.svelte";
   import SettingsSubTabs from "src/lib/Setting/SettingsSubTabs.svelte";
+  import { pickLatestSummarizeDebug } from "src/ts/process/hypaSync";
   const hypaV3ModalLog = (..._args: unknown[]) => {};
 
   interface Props {
@@ -164,7 +165,13 @@
     }
     return periodicDebug as ManualSummarizeDebug;
   });
-  const logDebug = $derived(activeChatPeriodicDebug ?? activeChatManualDebug ?? scopedHypaV3Debug);
+  const logDebug = $derived.by(() =>
+    pickLatestSummarizeDebug(
+      activeChatPeriodicDebug,
+      activeChatManualDebug,
+      scopedHypaV3Debug,
+    )
+  );
   const selectMemoryWorkspaceTab = (tab: MemoryWorkspaceTab) => {
     memoryWorkspaceTab = tab;
     uiState.dropdownOpen = false;

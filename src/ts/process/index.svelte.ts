@@ -36,7 +36,7 @@ import { rulebookStorage } from "./rag/storage";
 import { convertInlineImagesToInlays } from "./inlineInlays";
 import { syncGameStateFromServer, updateGameStateFromMessage } from "./gameStateSync";
 import { ensureGenerationMessageTarget } from "./generationMessageTarget";
-import { extractServerChatHypaV3Data, shouldAdoptServerHypaV3Data } from "./hypaSync";
+import { tryServerHypaMerge } from "./hypaSync";
 import type { RagResult, RulebookMetadata } from "./rag/types";
 const processLog = (..._args: unknown[]) => {};
 
@@ -297,18 +297,27 @@ export async function sendChat(chatProcessIndex = -1,arg:{
             && DBState.db.hypaV3 === true
             && activeChar?.supaMemory === true
         ) {
-            attemptedServerHypaMerge = true
-            try {
-                const snapshot = await fetchServerStateSnapshot()
-                const serverHypaData = extractServerChatHypaV3Data(snapshot, activeChar.chaId, activeChat.id)
-                if (shouldAdoptServerHypaV3Data(activeChat.hypaV3Data, serverHypaData)) {
-                    const cloned = JSON.parse(JSON.stringify(serverHypaData))
+            const mergeResult = await tryServerHypaMerge({
+                attempted: attemptedServerHypaMerge,
+                enabled: true,
+                charId: activeChar.chaId,
+                chatId: activeChat.id,
+                localData: activeChat.hypaV3Data,
+                fetchSnapshot: fetchServerStateSnapshot,
+            })
+            attemptedServerHypaMerge = mergeResult.attempted
+            if (mergeResult.error) {
+                processLog('[Sync] Failed to fetch server HypaV3 snapshot before save:', mergeResult.error)
+            }
+            if (mergeResult.merged && mergeResult.data) {
+                try {
+                    const cloned = JSON.parse(JSON.stringify(mergeResult.data))
                     activeChat.hypaV3Data = cloned
                     DBState.db.characters[selectedChar].chats[selectedChatIndex()].hypaV3Data = cloned
                     DBState.db.characters[selectedChar].chats = [...DBState.db.characters[selectedChar].chats]
+                } catch (mergeError) {
+                    processLog('[Sync] Failed to apply merged server HypaV3 snapshot:', mergeError)
                 }
-            } catch (mergeError) {
-                processLog('[Sync] Failed to merge server HypaV3 snapshot before save:', mergeError)
             }
         }
         let lastError: unknown = null
