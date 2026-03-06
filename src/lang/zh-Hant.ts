@@ -544,7 +544,6 @@ export const languageChineseTraditional = {
     "firstMessage": "初始訊息",
     "description": "描述",
     "note": "說明",
-    "jailbreakToggle": "使用越獄提示詞",
     "charIcon": "角色頭像",
     "characterDisplay": "角色展示",
     "viewScreen": "額外角色畫面",

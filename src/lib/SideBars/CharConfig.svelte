@@ -1555,24 +1555,6 @@
         <span class="char-config-label">{language.systemPrompt} <Help key="systemPrompt"/></span>
         <TextAreaInput highlight margin="both" autocomplete="off" bind:value={DBState.db.characters[$selectedCharID]!.systemPrompt}></TextAreaInput>
 
-        {#if DBState.db.hypaV3}
-            <span class="char-config-label">Hypa V3 Summarization Prompt Override</span>
-            <TextAreaInput
-                margin="both"
-                autocomplete="off"
-                placeholder="Leave empty to use global Hypa preset summarization prompt."
-                bind:value={editorCharacter!.hypaV3PromptOverride.summarizationPrompt}
-            ></TextAreaInput>
-
-            <span class="char-config-label">Hypa V3 Re-summarization Prompt Override</span>
-            <TextAreaInput
-                margin="both"
-                autocomplete="off"
-                placeholder="Leave empty to use global Hypa preset re-summarization prompt."
-                bind:value={editorCharacter!.hypaV3PromptOverride.reSummarizationPrompt}
-            ></TextAreaInput>
-        {/if}
-
         <span class="char-config-label">{language.additionalText} <Help key="additionalText" /></span>
         <TextAreaInput highlight margin="both" autocomplete="off" bind:value={DBState.db.characters[$selectedCharID]!.additionalText}></TextAreaInput>
 

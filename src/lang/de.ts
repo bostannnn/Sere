@@ -544,7 +544,6 @@ export const languageGerman = {
     "firstMessage": "Erste Nachricht",
     "description": "Beschreibung",
     "note": "Hinweis",
-    "jailbreakToggle": "Jailbreak umschalten",
     "charIcon": "Charaktericon",
     "characterDisplay": "Charakteranzeige",
     "viewScreen": "Zusätzlicher Charakterbildschirm",

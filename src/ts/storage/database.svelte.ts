@@ -329,9 +329,6 @@ export function setDatabase(data:Database){
     if(checkNullish(data.aiModel)){
         data.aiModel = 'gemini-3-flash-preview'
     }
-    if(checkNullish(data.jailbreakToggle)){
-        data.jailbreakToggle = false
-    }
     if(checkNullish(data.formatingOrder)){
         data.formatingOrder = ['main','description', 'personaPrompt','chats','lastChat','jailbreak','lorebook', 'rulebookRag', 'globalNote', 'authorNote']
     }
@@ -942,7 +939,6 @@ export interface Database{
     PresensePenalty: number
     formatingOrder: FormatingOrderItem[]
     aiModel: string
-    jailbreakToggle:boolean
     loreBookDepth: number
     loreBookToken: number,
     cipherChat: boolean,

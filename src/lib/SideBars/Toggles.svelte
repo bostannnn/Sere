@@ -3,7 +3,6 @@
     import { getModuleToggles } from "src/ts/process/modules";
     import { DBState, MobileGUI } from "src/ts/stores.svelte";
     import { parseToggleSyntax, type sidebarToggle, type sidebarToggleGroup } from "src/ts/util";
-    import { language } from "src/lang";
     import type { character, groupChat } from "src/ts/storage/database.svelte";
     import Accordion from '../UI/Accordion.svelte'
     import CheckInput from "../UI/GUI/CheckInput.svelte";
@@ -17,7 +16,7 @@
         noContainer?: boolean
     }
 
-    let { chara, noContainer }: Props = $props();
+    let { chara: _chara, noContainer }: Props = $props();
 
     const getToggleValue = (key: string) => {
         return DBState.db.globalChatVariables[`toggle_${key}`] ?? ''
@@ -114,52 +113,10 @@
 
 {#if !noContainer && groupedToggles.length > 4}
     <div class="sidebar-toggle-scroll-shell list-shell">
-        <div class="sidebar-toggle-row action-rail" class:sidebar-toggle-row-end={$MobileGUI}>
-            <CheckInput
-                check={DBState.db.jailbreakToggle}
-                name={language.jailbreakToggle}
-                reverse
-                onChange={(check) => {
-                    DBState.db.jailbreakToggle = check
-                }}
-            />
-        </div>
         {@render toggles(groupedToggles, true)}
-        {#if DBState.db.hypaV3}
-            <div class="sidebar-toggle-row action-rail" class:sidebar-toggle-row-end={$MobileGUI}>
-                <CheckInput
-                    check={chara.supaMemory}
-                    reverse
-                    name={language.ToggleHypaMemory}
-                    onChange={(check) => {
-                        chara.supaMemory = check
-                    }}
-                />
-            </div>
-        {/if}
     </div>
 {:else}
-    <div class="sidebar-toggle-row action-rail">
-        <CheckInput
-            check={DBState.db.jailbreakToggle}
-            name={language.jailbreakToggle}
-            onChange={(check) => {
-                DBState.db.jailbreakToggle = check
-            }}
-        />
-    </div>
     {@render toggles(groupedToggles)}
-    {#if DBState.db.hypaV3}
-        <div class="sidebar-toggle-row action-rail">
-            <CheckInput
-                check={chara.supaMemory}
-                name={language.ToggleHypaMemory}
-                onChange={(check) => {
-                    chara.supaMemory = check
-                }}
-            />
-        </div>
-    {/if}
 {/if}
 
 <style>

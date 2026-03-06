@@ -545,7 +545,6 @@ export const languageKorean = {
     "firstMessage": "첫 메시지",
     "description": "설명",
     "note": "메모",
-    "jailbreakToggle": "탈옥 토글",
     "charIcon": "캐릭터 아이콘",
     "characterDisplay": "캐릭터 디스플레이",
     "viewScreen": "추가적 캐릭터 스크린",

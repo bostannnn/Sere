@@ -323,9 +323,6 @@ async function buildMessagesFromPromptTemplate(character, chat, settings, arg = 
             case 'plain':
             case 'jailbreak':
             case 'cot': {
-                if (cardType === 'jailbreak' && settings?.jailbreakToggle !== true) {
-                    continue;
-                }
                 if (cardType === 'cot' && settings?.chainOfThought !== true) {
                     continue;
                 }

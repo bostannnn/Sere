@@ -544,7 +544,6 @@ export const languageSpanish = {
     "firstMessage": "Primer Mensaje",
     "description": "Descripción",
     "note": "Nota",
-    "jailbreakToggle": "Alternar Jailbreak",
     "charIcon": "Icono del Personaje",
     "characterDisplay": "Pantalla del Personaje",
     "viewScreen": "Pantalla Adicional del Personaje",

@@ -18,7 +18,6 @@ vi.mock(import("src/ts/stores.svelte"), async () => {
       db: {
         customPromptTemplateToggle: "",
         globalChatVariables: {},
-        jailbreakToggle: false,
         hypaV3: false,
       },
     },
@@ -37,7 +36,6 @@ vi.mock(import("src/ts/util"), () => ({
 
 vi.mock(import("src/lang"), () => ({
   language: {
-    jailbreakToggle: "Jailbreak toggle",
     ToggleHypaMemory: "Hypa memory",
   },
 }));

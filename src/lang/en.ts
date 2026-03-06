@@ -641,7 +641,6 @@ export const languageEnglish = {
     firstMessage: "First Message",
     description: "Description",
     note: "Note",
-    jailbreakToggle: "Toggle Jailbreak",
     charIcon: "Character Icon",
     characterDisplay: "Character Display",
     viewScreen: "Additional Character Screen",

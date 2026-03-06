@@ -544,7 +544,6 @@ export const languageVietnamese = {
     "firstMessage": "tin nhắn đầu tiên",
     "description": "Sự miêu tả",
     "note": "Ghi chú",
-    "jailbreakToggle": "Chuyển đổi Bẻ khóa",
     "charIcon": "Biểu tượng nhân vật",
     "characterDisplay": "Hiển thị ký tự",
     "viewScreen": "Màn hình nhân vật bổ sung",

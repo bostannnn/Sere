@@ -33,6 +33,7 @@
   } from "./HypaV3Modal/utils";
   import SelectInput from "src/lib/UI/GUI/SelectInput.svelte";
   import OptionInput from "src/lib/UI/GUI/OptionInput.svelte";
+  import CheckInput from "src/lib/UI/GUI/CheckInput.svelte";
   import TextAreaInput from "src/lib/UI/GUI/TextAreaInput.svelte";
   import SettingsSubTabs from "src/lib/Setting/SettingsSubTabs.svelte";
   import { pickLatestSummarizeDebug } from "src/ts/process/hypaSync";
@@ -1239,6 +1240,17 @@
             id="hypa-memory-panel-settings"
             aria-label="Settings panel"
           >
+            {#if currentChar && DBState.db.hypaV3}
+              <div class="ds-hypa-modal-prompt-override panel-shell">
+                <CheckInput
+                  name={language.ToggleHypaMemory}
+                  check={currentChar.supaMemory ?? false}
+                  onChange={(check) => {
+                    currentChar.supaMemory = check;
+                  }}
+                />
+              </div>
+            {/if}
             {#if promptOverrideCharacter}
               <div class="ds-hypa-modal-prompt-override panel-shell">
                 <div class="ds-hypa-modal-prompt-override-title">Per-character memory prompt override</div>

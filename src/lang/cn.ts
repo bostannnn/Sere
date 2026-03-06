@@ -544,7 +544,6 @@ export const languageChinese = {
     "firstMessage": "初始消息",
     "description": "描述",
     "note": "说明",
-    "jailbreakToggle": "使用越狱提示词",
     "charIcon": "角色头像",
     "characterDisplay": "角色演示",
     "viewScreen": "额外角色画面",

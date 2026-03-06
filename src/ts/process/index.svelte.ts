@@ -546,9 +546,7 @@ export async function sendChat(chatProcessIndex = -1,arg:{
 
         unformated.main.push(...formatPrompt(risuChatParser(mainp + ((DBState.db.additionalPrompt === '' || (!DBState.db.promptPreprocess)) ? '' : `\n${DBState.db.additionalPrompt}`), {chara: currentChar})))
     
-        if(DBState.db.jailbreakToggle){
-            unformated.jailbreak.push(...formatPrompt(risuChatParser(DBState.db.jailbreak, {chara: currentChar})))
-        }
+        unformated.jailbreak.push(...formatPrompt(risuChatParser(DBState.db.jailbreak, {chara: currentChar})))
     
         unformated.globalNote.push(...formatPrompt(risuChatParser(currentChar.replaceGlobalNote?.replaceAll('{{original}}', DBState.db.globalNote) || DBState.db.globalNote, {chara:currentChar})))
     }
@@ -786,9 +784,6 @@ export async function sendChat(chatProcessIndex = -1,arg:{
                 case 'plain':
                 case 'jailbreak':
                 case 'cot':{
-                    if((!DBState.db.jailbreakToggle) && (card.type === 'jailbreak')){
-                        continue
-                    }
                     if((!DBState.db.chainOfThought) && (card.type === 'cot')){
                         continue
                     }
@@ -1517,9 +1512,6 @@ export async function sendChat(chatProcessIndex = -1,arg:{
                 case 'plain':
                 case 'jailbreak':
                 case 'cot':{
-                    if((!DBState.db.jailbreakToggle) && (card.type === 'jailbreak')){
-                        continue
-                    }
                     if((!DBState.db.chainOfThought) && (card.type === 'cot')){
                         continue
                     }

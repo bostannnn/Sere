@@ -679,11 +679,10 @@ export function registerCBS(arg:CBSRegisterArg) {
     registerFunction({
         name: 'jbtoggled',
         callback: (_str, _matcherArg, _args, _vars) => {
-            const db = getDatabase()
-            return db.jailbreakToggle ? '1' : '0'
+            return '1'
         },
         alias: [],
-        description: 'Returns "1" if the jailbreak prompt is currently enabled/toggled on, "0" if disabled. Reflects the global jailbreak toggle state.\n\nUsage:: {{jbtoggled}}',
+        description: 'Returns "1". The jailbreak toggle has been removed and jailbreak prompt cards are always active.\n\nUsage:: {{jbtoggled}}',
     });
 
     registerFunction({
