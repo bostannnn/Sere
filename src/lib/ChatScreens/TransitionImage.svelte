@@ -1,9 +1,11 @@
 <script lang="ts">
+    import { onDestroy } from "svelte";
     let currentSrc:string[] = $state([])
     let oldSrc:string[] = $state([]);
     let showOldImage = $state(false);
     let styleType:string = $state('normal')
     let oldStyleType:string = $state('normal')
+    let oldImageCleanupTimer: ReturnType<typeof setTimeout> | null = null;
 
     interface Props {
         src?: string[]|Promise<string[]>;
@@ -33,6 +35,13 @@
                 currentSrc = resultSrc
                 styleType = styl
                 showOldImage = true;
+                if (oldImageCleanupTimer) {
+                    clearTimeout(oldImageCleanupTimer);
+                }
+                // Safety net: animationend may be skipped under certain runtime conditions.
+                oldImageCleanupTimer = setTimeout(() => {
+                    handleTransitionEnd();
+                }, 650);
             }
         }
     }
@@ -41,13 +50,22 @@
         if (showOldImage) {
             showOldImage = false;
         }
+        if (oldImageCleanupTimer) {
+            clearTimeout(oldImageCleanupTimer);
+            oldImageCleanupTimer = null;
+        }
     }
 
     $effect(() => {
         processSrc(src)
     });
 
-
+    onDestroy(() => {
+        if (oldImageCleanupTimer) {
+            clearTimeout(oldImageCleanupTimer);
+            oldImageCleanupTimer = null;
+        }
+    });
 
 </script>
 

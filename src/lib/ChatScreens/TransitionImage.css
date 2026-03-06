@@ -14,11 +14,14 @@
 }
 
 .old-image {
-  animation: fadeOutFromNone 0.5s ease-out;
+  animation: fadeOutFromNone 0.5s ease-out forwards;
+  will-change: opacity;
+  pointer-events: none;
 }
 
 .new-image {
   animation: fadeInFromNone 0.5s ease-out;
+  will-change: opacity;
 }
 
 .img-waifu {
