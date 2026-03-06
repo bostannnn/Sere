@@ -287,6 +287,12 @@ function createExecuteRouteHandler(arg = {}) {
             const allowReasoningOnlyOutput = shouldAllowReasoningOnlyOutput(normalized);
             const treatOpenRouterReasoningAsContent = allowReasoningOnlyOutput && isDeepSeekV32SpecialeModel(normalized.model);
             const auditEndpointForRequest = endpointName === 'generate' ? 'generate' : normalized.endpoint;
+            const traceAuditEndpoint = normalized.endpoint === 'generate'
+                ? 'generate_trace'
+                : `${normalized.endpoint}_trace`;
+            const traceAuditPath = normalized.endpoint === 'generate'
+                ? '/data/llm/generate/trace'
+                : (req?.originalUrl || `/data/llm/${normalized.endpoint}`);
             logLLMExecutionStart({
                 reqId,
                 endpoint: normalized.endpoint,
@@ -561,6 +567,8 @@ function createExecuteRouteHandler(arg = {}) {
                         req,
                         reqId,
                         normalized,
+                        endpoint: traceAuditEndpoint,
+                        path: traceAuditPath,
                         durationMs,
                         status: 200,
                         ok: true,
@@ -626,6 +634,8 @@ function createExecuteRouteHandler(arg = {}) {
                         req,
                         reqId,
                         normalized,
+                        endpoint: traceAuditEndpoint,
+                        path: traceAuditPath,
                         durationMs,
                         status,
                         ok: false,
@@ -733,6 +743,8 @@ function createExecuteRouteHandler(arg = {}) {
                 req,
                 reqId,
                 normalized,
+                endpoint: traceAuditEndpoint,
+                path: traceAuditPath,
                 durationMs,
                 status: 200,
                 ok: true,
@@ -810,6 +822,12 @@ function createExecuteRouteHandler(arg = {}) {
             const durationMs = Date.now() - startedAt;
             const endpoint = normalized?.endpoint || endpointName;
             const auditEndpointForRequest = endpointName === 'generate' ? 'generate' : endpoint;
+            const traceAuditEndpoint = endpoint === 'generate'
+                ? 'generate_trace'
+                : `${endpoint}_trace`;
+            const traceAuditPath = endpoint === 'generate'
+                ? '/data/llm/generate/trace'
+                : (req?.originalUrl || `/data/llm/${endpoint}`);
             const response = toLLMErrorResponse(error, {
                 requestId: reqId,
                 endpoint,
@@ -846,6 +864,8 @@ function createExecuteRouteHandler(arg = {}) {
                 req,
                 reqId,
                 normalized,
+                endpoint: traceAuditEndpoint,
+                path: traceAuditPath,
                 durationMs,
                 status: response.status,
                 ok: false,

@@ -68,7 +68,7 @@ describe("llm routes", () => {
       appendMemoryTraceAudit,
       toStringOrEmpty: (value: unknown) => (typeof value === "string" ? value : ""),
       getReqIdFromResponse: vi.fn(() => "req-trace"),
-      toLLMErrorResponse: vi.fn((_error: unknown) => ({
+      toLLMErrorResponse: vi.fn(() => ({
         status: 500,
         code: "INTERNAL_ERROR",
         payload: { error: "INTERNAL_ERROR", message: "Internal Error" },
@@ -110,5 +110,79 @@ describe("llm routes", () => {
     expect(appendMemoryTraceAudit).not.toHaveBeenCalled();
     expect(res.statusCode).toBe(200);
     expect((res.payload as Record<string, unknown>)?.endpoint).toBe("generate_trace");
+  });
+
+  it("uses normalized LLM error response shape for /data/llm/logs failures", async () => {
+    const { app, getHandlers } = createApp();
+    const toLLMErrorResponse = vi.fn((...args: unknown[]) => {
+      const ctx = (args[1] || {}) as Record<string, unknown>;
+      return {
+        status: 503,
+        code: "LOG_READ_FAILED",
+        payload: {
+          error: "LOG_READ_FAILED",
+          message: "read failed",
+          requestId: ctx.requestId,
+          endpoint: ctx.endpoint,
+          durationMs: ctx.durationMs,
+        },
+      };
+    });
+
+    registerLLMRoutes({
+      app,
+      dataRoot: "/tmp/risu-test",
+      promptPipeline: {
+        buildPromptTrace: vi.fn(() => []),
+      },
+      listOpenRouterModels: vi.fn(async () => ({ models: [] })),
+      parseLLMExecutionInput: vi.fn(() => ({})),
+      previewLLMExecution: vi.fn(async () => ({})),
+      handleLLMExecutePost: vi.fn(async () => {}),
+      buildGenerateExecutionPayload: vi.fn(async () => ({
+        mode: "model",
+        provider: "openrouter",
+        characterId: "charA",
+        chatId: "chatA",
+        request: { requestBody: { messages: [] } },
+      })),
+      appendMemoryTraceAudit: vi.fn(async () => {}),
+      toStringOrEmpty: (value: unknown) => (typeof value === "string" ? value : ""),
+      getReqIdFromResponse: vi.fn(() => "req-logs"),
+      toLLMErrorResponse,
+      logLLMExecutionStart: vi.fn(),
+      logLLMExecutionEnd: vi.fn(),
+      appendLLMAudit: vi.fn(async () => {}),
+      buildExecutionAuditRequest: vi.fn((_endpoint: string, body: unknown) => body),
+      sendSSE: vi.fn(),
+      sendJson: (res: Record<string, unknown>, status: number, payload: unknown) => {
+        res.statusCode = status;
+        res.payload = payload;
+      },
+      assembleLLMServerPrompt: vi.fn(async () => {}),
+      readLLMExecutionLogs: vi.fn(async () => {
+        throw new Error("boom");
+      }),
+    });
+
+    const logsHandler = getHandlers.get("/data/llm/logs");
+    if (!logsHandler) {
+      throw new Error("logs handler not registered");
+    }
+
+    const req = {
+      method: "GET",
+      originalUrl: "/data/llm/logs",
+      query: {},
+    };
+    const res = createRes();
+
+    await logsHandler(req, res);
+
+    expect(res.statusCode).toBe(503);
+    expect((res.payload as Record<string, unknown>)?.error).toBe("LOG_READ_FAILED");
+    expect((res.payload as Record<string, unknown>)?.requestId).toBe("req-logs");
+    expect((res.payload as Record<string, unknown>)?.endpoint).toBe("logs");
+    expect(toLLMErrorResponse).toHaveBeenCalledTimes(1);
   });
 });

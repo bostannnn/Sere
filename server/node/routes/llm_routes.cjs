@@ -310,14 +310,18 @@ function registerLLMRoutes(arg = {}) {
     });
 
     app.get('/data/llm/logs', async (req, res) => {
+        const startedAt = Date.now();
+        const reqId = getReqIdFromResponse(res);
         try {
             const logs = await readLLMExecutionLogs(dataRoot, req.query || {});
             sendJson(res, 200, { logs });
         } catch (error) {
-            sendJson(res, 500, {
-                error: 'LOG_READ_FAILED',
-                message: String(error?.message || error || 'Failed to read LLM logs'),
+            const response = toLLMErrorResponse(error, {
+                requestId: reqId,
+                endpoint: 'logs',
+                durationMs: Date.now() - startedAt,
             });
+            sendJson(res, response.status, response.payload);
         }
     });
 

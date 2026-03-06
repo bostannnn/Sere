@@ -178,7 +178,7 @@ describe("generate_helpers", () => {
       request: { requestBody: {} },
     });
 
-    expect(applyStateCommands).toHaveBeenCalledTimes(2);
+    expect(applyStateCommands).toHaveBeenCalledTimes(1);
     expect(order[0]).toBe("persist");
     expect(order[1]).toBe("prompt");
   });
@@ -229,6 +229,18 @@ describe("generate_helpers", () => {
     const helpers = createHelpersHarness({
       dataRoot,
       extractLatestUserMessage: () => "",
+      buildGeneratePromptMessages: async (payload) => {
+        const buildMemory = payload.buildServerMemoryMessages as ((arg: Record<string, unknown>) => Promise<unknown[]>);
+        await buildMemory({
+          character: payload.character,
+          chat: payload.chat,
+          settings: payload.settings,
+        });
+        return {
+          messages: [{ role: "user", content: "hello" }],
+          promptBlocks: [],
+        };
+      },
       buildServerMemoryMessages: async ({ chat }) => {
         const target = chat as { hypaV3Data?: Record<string, unknown> };
         target.hypaV3Data = {
@@ -263,5 +275,116 @@ describe("generate_helpers", () => {
     expect(Array.isArray(hypa.summaries)).toBe(true);
     expect(hypa.summaries?.[0]?.text).toBe("s1");
     expect(hypa.metrics && typeof hypa.metrics === "object").toBe(true);
+  });
+
+  it("fails generate when target chat is missing", async () => {
+    const { dataRoot, characterId, chatId } = await createDataRoot();
+    cleanup.push(dataRoot);
+    await rm(path.join(dataRoot, "characters", characterId, "chats", `${chatId}.json`), { force: true });
+
+    const helpers = createHelpersHarness({
+      dataRoot,
+      extractLatestUserMessage: () => "hello",
+      applyStateCommands: vi.fn(async () => ({ ok: true, lastEventId: 12, applied: [], conflicts: [] })),
+    });
+
+    await expect(
+      helpers.buildGenerateExecutionPayload({
+        characterId,
+        chatId,
+        userMessage: "hello",
+        streaming: false,
+        request: { requestBody: {} },
+      }),
+    ).rejects.toMatchObject({
+      code: "CHAT_NOT_FOUND",
+    });
+  });
+
+  it("does not retry append when stale conflict already contains the same tail user message", async () => {
+    const { dataRoot, characterId, chatId } = await createDataRoot();
+    cleanup.push(dataRoot);
+    const chatPath = path.join(dataRoot, "characters", characterId, "chats", `${chatId}.json`);
+    let appendAttempts = 0;
+    const applyStateCommands = vi.fn(async (commands: Record<string, unknown>[]) => {
+      const command = commands[0] || {};
+      if (command.type !== "chat.message.append") {
+        return { ok: true, lastEventId: 13, applied: [], conflicts: [] };
+      }
+      appendAttempts += 1;
+      if (appendAttempts === 1) {
+        await writeFile(
+          chatPath,
+          JSON.stringify({
+            chat: {
+              id: chatId,
+              name: "Chat A",
+              message: [
+                { role: "assistant", data: "older response" },
+                { role: "user", data: "fresh user message" },
+              ],
+              hypaV3Data: {
+                summaries: [{ text: "s1", chatMemos: [] }],
+                metrics: {},
+                lastSummarizedMessageIndex: 0,
+              },
+            },
+          }),
+          "utf-8",
+        );
+        const staleError = new Error("stale");
+        (staleError as Error & { result?: unknown }).result = {
+          ok: false,
+          conflicts: [{ code: "STALE_BASE_EVENT" }],
+        };
+        throw staleError;
+      }
+      return { ok: true, lastEventId: 14, applied: [], conflicts: [] };
+    });
+
+    const helpers = createHelpersHarness({
+      dataRoot,
+      extractLatestUserMessage: () => "fresh user message",
+      applyStateCommands,
+      readStateLastEventId: async () => 9,
+    });
+
+    await helpers.buildGenerateExecutionPayload({
+      characterId,
+      chatId,
+      userMessage: "fresh user message",
+      streaming: false,
+      request: { requestBody: {} },
+    });
+
+    expect(appendAttempts).toBe(1);
+    expect(applyStateCommands.mock.calls.filter((entry) => entry?.[0]?.[0]?.type === "chat.message.append").length).toBe(1);
+  });
+
+  it("skips hypa chat.replace when hypa data is unchanged", async () => {
+    const { dataRoot, characterId, chatId } = await createDataRoot();
+    cleanup.push(dataRoot);
+    const applyStateCommands = vi.fn(async () => ({ ok: true, lastEventId: 15, applied: [], conflicts: [] }));
+
+    const helpers = createHelpersHarness({
+      dataRoot,
+      extractLatestUserMessage: () => "",
+      buildGeneratePromptMessages: async () => ({
+        messages: [{ role: "assistant", content: "existing" }],
+        promptBlocks: [],
+      }),
+      buildServerMemoryMessages: async () => [],
+      applyStateCommands,
+    });
+
+    await helpers.buildGenerateExecutionPayload({
+      characterId,
+      chatId,
+      continue: true,
+      streaming: false,
+      request: { requestBody: {} },
+    });
+
+    expect(applyStateCommands).not.toHaveBeenCalled();
   });
 });

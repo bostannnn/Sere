@@ -203,18 +203,32 @@ function createGenerateHelpers(arg = {}) {
         };
     }
 
+    function isJsonEquivalent(left, right) {
+        try {
+            return JSON.stringify(left ?? null) === JSON.stringify(right ?? null);
+        } catch {
+            return false;
+        }
+    }
+
     async function appendUserMessageWithRetry({
         characterId,
         chatId,
+        chatPath,
         userMessage,
         source,
     }) {
-        if (!existsSync(path.join(dataDirs.characters, characterId, 'chats', `${chatId}.json`))) {
-            return;
+        const resolvedChatPath = toStringOrEmpty(chatPath) || path.join(dataDirs.characters, characterId, 'chats', `${chatId}.json`);
+        if (!existsSync(resolvedChatPath)) {
+            throw new LLMHttpError(
+                404,
+                'CHAT_NOT_FOUND',
+                `Chat not found: ${chatId}`
+            );
         }
         const normalizedUserMessage = toStringOrEmpty(userMessage);
         if (!normalizedUserMessage) {
-            return;
+            return false;
         }
         if (typeof applyStateCommands !== 'function') {
             throw new LLMHttpError(
@@ -235,13 +249,19 @@ function createGenerateHelpers(arg = {}) {
                         message: messagePayload,
                     },
                 ], source, { baseEventId });
-                return;
+                return true;
             } catch (error) {
                 if (!isStaleBaseConflict(error) || attempt >= 1) {
                     throw error;
                 }
+                const latestRaw = await readJsonFileWithRetry(resolvedChatPath);
+                const latestChat = toStoredChatObject(latestRaw);
+                if (isEquivalentTailUserMessage(latestChat, normalizedUserMessage)) {
+                    return false;
+                }
             }
         }
+        return false;
     }
 
     async function persistHypaDataWithRetry({
@@ -512,24 +532,32 @@ function createGenerateHelpers(arg = {}) {
             throw new LLMHttpError(404, 'CHARACTER_NOT_FOUND', `Character not found: ${characterId}`);
         }
         const chatPath = path.join(dataDirs.characters, characterId, 'chats', `${chatId}.json`);
+        if (!existsSync(chatPath)) {
+            throw new LLMHttpError(404, 'CHAT_NOT_FOUND', `Chat not found: ${chatId}`);
+        }
 
         const charRaw = await readJsonFileWithRetry(charPath);
-        const chatRaw = existsSync(chatPath)
-            ? await readJsonFileWithRetry(chatPath)
-            : { chat: { message: [] } };
+        const chatRaw = await readJsonFileWithRetry(chatPath);
         const character = charRaw.character || charRaw.data || charRaw || {};
         const chat = chatRaw.chat || chatRaw.data || chatRaw || {};
+        const baselineHypaV3Data = safeJsonClone(chat.hypaV3Data, null);
 
         // Hard invariant: user message must be durable before generation.
-        if (!readOnlyTrace && !rawBody.continue && existsSync(chatPath) && toStringOrEmpty(userMessage)) {
+        if (!readOnlyTrace && !rawBody.continue && toStringOrEmpty(userMessage)) {
             if (!isEquivalentTailUserMessage(chat, userMessage)) {
                 try {
-                    await appendUserMessageWithRetry({
+                    const appended = await appendUserMessageWithRetry({
                         characterId,
                         chatId,
+                        chatPath,
                         userMessage,
                         source: 'llm.generate.user-message',
                     });
+                    if (appended) {
+                        const messages = Array.isArray(chat.message) ? chat.message : [];
+                        messages.push(buildStoredUserMessage(userMessage));
+                        chat.message = messages;
+                    }
                 } catch (persistError) {
                     throw new LLMHttpError(
                         409,
@@ -538,14 +566,11 @@ function createGenerateHelpers(arg = {}) {
                         { reason: String(persistError?.message || persistError || 'unknown_error') }
                     );
                 }
-                const messages = Array.isArray(chat.message) ? chat.message : [];
-                messages.push(buildStoredUserMessage(userMessage));
-                chat.message = messages;
             }
         }
 
         let shouldPersistServerChat = false;
-        if (!readOnlyTrace && existsSync(chatPath)) {
+        if (!readOnlyTrace) {
             try {
                 const periodicResult = await maybeRunServerPeriodicHypaV3Summarization({
                     character,
@@ -582,10 +607,11 @@ function createGenerateHelpers(arg = {}) {
 
         // buildServerMemoryMessages may update chat.hypaV3Data.metrics (selection tracking).
         // Persist these back so similarity-based selection improves over time.
-        if (existsSync(chatPath) && chat.hypaV3Data?.summaries?.length > 0) {
+        const hypaV3DataChanged = !isJsonEquivalent(baselineHypaV3Data, chat.hypaV3Data);
+        if (hypaV3DataChanged) {
             shouldPersistServerChat = true;
         }
-        if (!readOnlyTrace && existsSync(chatPath) && shouldPersistServerChat) {
+        if (!readOnlyTrace && shouldPersistServerChat) {
             try {
                 await persistHypaDataWithRetry({
                     characterId,

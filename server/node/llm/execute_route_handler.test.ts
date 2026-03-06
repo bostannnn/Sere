@@ -399,6 +399,33 @@ describe("execute_route_handler streaming safety", () => {
 });
 
 describe("execute_route_handler visible output guard", () => {
+    it("tags /execute trace audits with execute_trace endpoint metadata", async () => {
+        const req = new MockReq();
+        const res = new MockRes();
+        const harness = createHarness({
+            normalized: {
+                endpoint: "execute",
+                mode: "emotion",
+                provider: "openrouter",
+                characterId: "",
+                chatId: "",
+                requestedStreaming: false,
+                streaming: false,
+                request: {},
+            },
+            executeLLM: async () => ({
+                type: "success",
+                result: "happy",
+            }),
+        });
+
+        await harness.handleLLMExecutePost(req, res, {}, "execute");
+
+        const traceAudit = harness.appendGenerateTraceAudit.mock.calls.at(-1)?.[0];
+        expect(traceAudit?.endpoint).toBe("execute_trace");
+        expect(traceAudit?.path).toBe("/data/llm/execute");
+    });
+
     it("fails non-stream model response when output is reasoning-only", async () => {
         const req = new MockReq();
         const res = new MockRes();

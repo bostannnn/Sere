@@ -88,4 +88,40 @@ describe("openrouter execute response shaping", () => {
         expect(result?.result).toContain("<Thoughts>");
         expect(result?.result).toContain("visible");
     });
+
+    it("returns upstream models even when local cache write fails", async () => {
+        const dataRoot = await createDataRootWithSettings();
+        const originalWriteFile = fs.writeFile;
+        global.fetch = vi.fn(async () => ({
+            ok: true,
+            text: async () => JSON.stringify({
+                data: [
+                    {
+                        id: "openai/gpt-4o-mini",
+                        name: "GPT-4o Mini",
+                        pricing: { prompt: 0.000001, completion: 0.000002 },
+                        context_length: 128000,
+                    },
+                ],
+            }),
+        })) as unknown as typeof fetch;
+        vi.spyOn(fs, "writeFile").mockImplementation(async (...args: Parameters<typeof fs.writeFile>) => {
+            const [filePath] = args;
+            if (String(filePath).includes("openrouter-models-cache.json")) {
+                throw new Error("disk full");
+            }
+            return originalWriteFile(...args);
+        });
+
+        try {
+            const { listOpenRouterModels } = await import("./openrouter.cjs");
+            const models = await listOpenRouterModels({ dataRoot, forceRefresh: true });
+            expect(Array.isArray(models?.models)).toBe(true);
+            expect(models?.stale).toBe(false);
+            expect(models?.source).toBe("upstream");
+            expect(models?.models?.[0]?.id).toBe("openai/gpt-4o-mini");
+        } finally {
+            await fs.rm(dataRoot, { recursive: true, force: true });
+        }
+    });
 });

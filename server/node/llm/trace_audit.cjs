@@ -17,6 +17,8 @@ function createTraceAuditors(arg = {}) {
         req,
         reqId,
         normalized,
+        endpoint = 'generate_trace',
+        path = '/data/llm/generate/trace',
         durationMs = 0,
         status = 200,
         ok = true,
@@ -34,8 +36,8 @@ function createTraceAuditors(arg = {}) {
             await appendLLMAudit({
                 requestId: reqId,
                 method: req?.method || 'POST',
-                path: '/data/llm/generate/trace',
-                endpoint: 'generate_trace',
+                path,
+                endpoint,
                 mode: normalizedAudit.mode || null,
                 provider: normalizedAudit.provider || null,
                 characterId: normalizedAudit.characterId || null,
@@ -55,7 +57,7 @@ function createTraceAuditors(arg = {}) {
                         response: {
                             type: 'success',
                             requestId: reqId,
-                            endpoint: 'generate_trace',
+                            endpoint,
                             messageCount: promptMessages.length,
                             promptMessages: promptMessagesForAudit,
                             truncatedForAudit: promptMessagesForAudit.length !== promptMessages.length

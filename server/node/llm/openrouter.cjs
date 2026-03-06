@@ -315,7 +315,11 @@ async function listOpenRouterModels(ctx = {}) {
             error: null,
         };
         setMemoryModelsCache(ctx.dataRoot, payload);
-        await writeModelsCache(ctx.dataRoot, payload);
+        try {
+            await writeModelsCache(ctx.dataRoot, payload);
+        } catch (cacheWriteError) {
+            console.warn('[OpenRouter] Failed to write models cache file:', cacheWriteError);
+        }
         return payload;
     } catch (error) {
         const cached = await readModelsCache(ctx.dataRoot);

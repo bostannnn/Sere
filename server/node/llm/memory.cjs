@@ -314,9 +314,6 @@ function planPeriodicHypaV3Summarization(arg = {}) {
     }
 
     const hypaSettings = resolveHypaV3Settings(settings, character);
-    if (hypaSettings.periodicSummarizationEnabled !== true) {
-        return { shouldRun: false, reason: 'periodic_summarization_disabled' };
-    }
     const batchSize = getSummaryBatchSize(hypaSettings);
     if (!Number.isFinite(Number(hypaSettings.periodicSummarizationInterval)) || Number(hypaSettings.periodicSummarizationInterval) <= 0) {
         return { shouldRun: false, reason: 'invalid_periodic_interval' };
