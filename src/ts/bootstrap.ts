@@ -86,6 +86,35 @@ export async function loadData() {
     }
 }
 
+let touchHardeningInstalled = false
+
+function isEditableInteractionTarget(target: EventTarget | null) {
+    const element = target as HTMLElement | null
+    if (!element) {
+        return false
+    }
+    return !!element.closest("input, textarea, select, [contenteditable='true']")
+}
+
+export function installTouchHardening() {
+    if (touchHardeningInstalled || typeof document === "undefined") {
+        return
+    }
+    touchHardeningInstalled = true
+
+    const preventGestureZoom = (event: Event) => {
+        if (isEditableInteractionTarget(event.target)) {
+            return
+        }
+        event.preventDefault()
+    }
+
+    document.documentElement.style.setProperty("overscroll-behavior-x", "none")
+    document.body.style.setProperty("overscroll-behavior-x", "none")
+    document.addEventListener("gesturestart", preventGestureZoom, { passive: false })
+    document.addEventListener("gesturechange", preventGestureZoom, { passive: false })
+}
+
 
 /**
  * Updates the error handling by adding custom handlers for errors and unhandled promise rejections.

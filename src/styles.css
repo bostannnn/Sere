@@ -6042,6 +6042,32 @@ body {
   height: var(--risu-height-size);
 }
 
+html,
+body,
+#app {
+  overscroll-behavior-x: none;
+}
+
+body {
+  touch-action: pan-y;
+  -webkit-text-size-adjust: 100%;
+}
+
+button,
+a,
+[role="button"],
+.seg-tab,
+.icon-btn {
+  touch-action: manipulation;
+}
+
+input,
+textarea,
+select,
+[contenteditable="true"] {
+  touch-action: auto;
+}
+
 .chattext p,
 .ds-chat-markdown p {
   color: var(--FontColorStandard);

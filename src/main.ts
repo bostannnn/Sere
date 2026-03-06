@@ -2,8 +2,8 @@ import "./ts/polyfill";
 import "core-js/actual"
 import "./ts/storage/database.svelte"
 import App from "./App.svelte";
-import { loadData } from "./ts/bootstrap";
-import { initHotkey } from "./ts/hotkey";
+import { loadData, installTouchHardening } from "./ts/bootstrap";
+import { initHotkey, initMobileGesture } from "./ts/hotkey";
 import { preLoadCheck } from "./preload";
 import { mount } from "svelte";
 import { hydrateBootColorScheme } from "./ts/gui/colorscheme";
@@ -42,6 +42,8 @@ const app = mount(App, {
 });
 loadData()
 initHotkey()
+initMobileGesture()
+installTouchHardening()
 disableDoubleTapZoom()
 document.getElementById('preloading')?.remove()
 

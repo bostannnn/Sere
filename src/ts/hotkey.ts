@@ -356,8 +356,60 @@ function focusQuery(query:string){
 
 
 
+let mobileGestureGuardInitialized = false
+
+function isEditableTouchTarget(target: EventTarget | null){
+    const element = target as HTMLElement | null
+    if(!element){
+        return false
+    }
+    return !!element.closest('input, textarea, select, [contenteditable=\"true\"]')
+}
+
 export function initMobileGesture(){
-    // Intentionally disabled: horizontal swipe gestures should never switch tabs/workspaces.
+    if(mobileGestureGuardInitialized || typeof document === 'undefined'){
+        return
+    }
+    mobileGestureGuardInitialized = true
+
+    let startX = 0
+    let startY = 0
+    let tracking = false
+
+    document.addEventListener('touchstart', (event) => {
+        if(event.touches.length !== 1 || isEditableTouchTarget(event.target)){
+            tracking = false
+            return
+        }
+        const touch = event.touches[0]
+        if(!touch){
+            tracking = false
+            return
+        }
+        startX = touch.clientX
+        startY = touch.clientY
+        tracking = true
+    }, { passive: true })
+
+    document.addEventListener('touchmove', (event) => {
+        if(!tracking || event.touches.length !== 1 || isEditableTouchTarget(event.target)){
+            return
+        }
+        const touch = event.touches[0]
+        if(!touch){
+            return
+        }
+        const deltaX = touch.clientX - startX
+        const deltaY = touch.clientY - startY
+        if(Math.abs(deltaX) > 16 && Math.abs(deltaX) > Math.abs(deltaY)){
+            // Prevent horizontal swipe gestures from switching browser/app tabs on touch devices.
+            event.preventDefault()
+        }
+    }, { passive: false })
+
+    document.addEventListener('touchend', () => {
+        tracking = false
+    }, { passive: true })
 }
 
 function changeToPreset(num:number){
