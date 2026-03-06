@@ -27,6 +27,17 @@
         container-name: ds-app-shell-topbar;
     }
 
+    .ds-app-v2-topbar-mobile-variant {
+        min-height: var(--ds-height-control-md);
+        gap: var(--ds-space-2);
+        padding: 0.5rem 0.75rem;
+    }
+
+    .ds-app-v2-topbar-mobile-variant[data-mobile-variant="mobile-chat"],
+    .ds-app-v2-topbar-mobile-variant[data-mobile-variant="mobile-settings-subpage"] {
+        min-height: var(--ds-height-control-md);
+    }
+
     .ds-app-v2-topbar-left {
         display: flex;
         align-items: center;
@@ -193,6 +204,17 @@
         padding-inline: 0.625rem;
     }
 
+    .ds-app-v2-topbar-mobile-library-filters {
+        min-width: 0;
+        max-width: min(100%, 26rem);
+        overflow-x: auto;
+        scrollbar-width: thin;
+    }
+
+    .ds-app-v2-topbar-mobile-library-filters .ds-app-v2-topbar-segment-btn {
+        min-width: max-content;
+    }
+
     .ds-app-v2-topbar-library-segment .ds-app-v2-topbar-segment-btn {
         min-width: 2.25rem;
         padding-inline: 0.5rem;
@@ -356,8 +378,14 @@
             display: none;
         }
 
-        .ds-app-v2-topbar-mobile-nav-bottom.ds-app-v2-topbar-has-mobile-back .ds-app-v2-topbar-right {
+        .ds-app-v2-topbar-mobile-nav-bottom.ds-app-v2-topbar-has-mobile-back[data-mobile-variant="mobile-settings-subpage"] .ds-app-v2-topbar-right {
             display: none;
+        }
+
+        .ds-app-v2-topbar-mobile-nav-bottom.ds-app-v2-topbar-has-mobile-back[data-mobile-variant="mobile-chat"] .ds-app-v2-topbar-right {
+            display: inline-flex;
+            width: auto;
+            margin-left: auto;
         }
 
         .ds-app-v2-topbar-mobile-nav-bottom .ds-app-v2-topbar-right {
@@ -380,6 +408,17 @@
             min-width: 0;
             flex: 1 1 0;
             padding-inline: 0.4rem;
+        }
+
+        .ds-app-v2-topbar-mobile-nav-bottom .ds-app-v2-topbar-mobile-library-filters {
+            flex: 1 1 auto;
+            width: auto;
+            max-width: none;
+        }
+
+        .ds-app-v2-topbar-mobile-nav-bottom .ds-app-v2-topbar-mobile-library-filters .ds-app-v2-topbar-segment-btn {
+            flex: 0 0 auto;
+            min-width: max-content;
         }
 
         .ds-app-v2-topbar-mobile-nav-bottom .ds-app-v2-topbar-btn {
@@ -425,6 +464,89 @@
         .ds-app-v2-mobile-nav-shell .ds-app-v2-topbar-nav-btn {
             width: 2.15rem;
             height: 2.15rem;
+        }
+    }
+
+    @media (max-width: 58rem) {
+        .ds-app-v2-topbar-mobile-nav-bottom {
+            flex: 0 0 auto;
+            min-height: auto;
+            align-items: stretch;
+            flex-wrap: wrap;
+            row-gap: 0.5rem;
+            padding-block: 0.5rem;
+        }
+
+        .ds-app-v2-topbar-mobile-nav-bottom .ds-app-v2-topbar-left {
+            display: none;
+        }
+
+        .ds-app-v2-topbar-mobile-nav-bottom.ds-app-v2-topbar-has-mobile-back .ds-app-v2-topbar-left {
+            display: inline-flex;
+            align-items: center;
+            gap: var(--ds-space-2);
+            min-width: 0;
+        }
+
+        .ds-app-v2-topbar-mobile-nav-bottom .ds-app-v2-topbar-center {
+            order: 1;
+            flex: 1 1 100%;
+            justify-content: stretch;
+        }
+
+        .ds-app-v2-topbar-mobile-nav-bottom.ds-app-v2-topbar-has-mobile-back .ds-app-v2-topbar-center {
+            display: none;
+        }
+
+        .ds-app-v2-topbar-mobile-nav-bottom.ds-app-v2-topbar-has-mobile-back[data-mobile-variant="mobile-settings-subpage"] .ds-app-v2-topbar-right {
+            display: none;
+        }
+
+        .ds-app-v2-topbar-mobile-nav-bottom.ds-app-v2-topbar-has-mobile-back[data-mobile-variant="mobile-chat"] .ds-app-v2-topbar-right {
+            display: inline-flex;
+            width: auto;
+            margin-left: auto;
+        }
+
+        .ds-app-v2-topbar-mobile-nav-bottom .ds-app-v2-topbar-right {
+            order: 2;
+            width: 100%;
+            justify-content: space-between;
+            gap: 0.375rem;
+        }
+
+        .ds-app-v2-topbar-mobile-nav-bottom .ds-app-v2-topbar-search {
+            width: 100%;
+        }
+
+        .ds-app-v2-topbar-mobile-nav-bottom .ds-app-v2-topbar-segment {
+            flex: 1 1 auto;
+            min-width: 0;
+        }
+
+        .ds-app-v2-topbar-mobile-nav-bottom .ds-app-v2-topbar-segment-btn {
+            min-width: 0;
+            flex: 1 1 0;
+            padding-inline: 0.4rem;
+        }
+
+        .ds-app-v2-topbar-mobile-nav-bottom .ds-app-v2-topbar-mobile-library-filters {
+            flex: 1 1 auto;
+            width: auto;
+            max-width: none;
+        }
+
+        .ds-app-v2-topbar-mobile-nav-bottom .ds-app-v2-topbar-mobile-library-filters .ds-app-v2-topbar-segment-btn {
+            flex: 0 0 auto;
+            min-width: max-content;
+        }
+
+        .ds-app-v2-topbar-mobile-nav-bottom .ds-app-v2-topbar-btn {
+            height: 2rem;
+        }
+
+        .ds-app-v2-topbar-mobile-nav-bottom .ds-app-v2-topbar-icon-btn {
+            width: 2rem;
         }
     }
 

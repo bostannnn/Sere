@@ -6,6 +6,7 @@
         HomeIcon,
         LayoutGridIcon,
         ListIcon,
+        MenuIcon,
         PanelRightIcon,
         PlusIcon,
         SettingsIcon,
@@ -17,6 +18,7 @@
     import "./AppShellTopbar.css";
 
     type Workspace = "home" | "characters" | "chats" | "library" | "playground" | "settings";
+    type MobileVariant = "desktop" | "mobile-chat" | "mobile-settings-subpage" | "mobile-library" | "mobile-root";
 
     interface Props {
         workspace: Workspace;
@@ -27,6 +29,12 @@
         primaryNavPlacement?: "top" | "bottom";
         mobileBackToMenuVisible?: boolean;
         onMobileBackToMenu?: () => void;
+        mobileVariant?: MobileVariant;
+        mobileTitle?: string;
+        showTopbarBack?: boolean;
+        onTopbarBack?: () => void;
+        showMobileMenuAction?: boolean;
+        onMobileMenuAction?: () => void;
         overflowItems?: MenuDef[];
         overflowOpen?: boolean;
         showShellSearch?: boolean;
@@ -45,6 +53,13 @@
         onShowActiveCharacters?: () => void;
         onShowTrashCharacters?: () => void;
         onAddCharacter?: () => void;
+        mobileLibraryFilterVisible?: boolean;
+        mobileLibrarySystemLabel?: string;
+        mobileLibraryEditionLabel?: string;
+        mobileLibraryCanReset?: boolean;
+        onOpenSystemSelector?: () => void;
+        onOpenEditionSelector?: () => void;
+        onResetLibraryFilters?: () => void;
     }
 
     let {
@@ -56,6 +71,12 @@
         primaryNavPlacement = "top",
         mobileBackToMenuVisible = false,
         onMobileBackToMenu = () => {},
+        mobileVariant = "desktop",
+        mobileTitle = "Risuai",
+        showTopbarBack = false,
+        onTopbarBack = () => {},
+        showMobileMenuAction = false,
+        onMobileMenuAction = () => {},
         overflowItems = [],
         overflowOpen = $bindable(false),
         showShellSearch = false,
@@ -74,6 +95,13 @@
         onShowActiveCharacters = () => {},
         onShowTrashCharacters = () => {},
         onAddCharacter = () => {},
+        mobileLibraryFilterVisible = false,
+        mobileLibrarySystemLabel = "All",
+        mobileLibraryEditionLabel = "All",
+        mobileLibraryCanReset = false,
+        onOpenSystemSelector = () => {},
+        onOpenEditionSelector = () => {},
+        onResetLibraryFilters = () => {},
     }: Props = $props();
 
     let overflowWrapEl = $state<HTMLElement | null>(null);
@@ -82,6 +110,10 @@
     const playgroundActive = $derived(workspace === "playground");
     const rulebooksActive = $derived(workspace === "library");
     const settingsActive = $derived(workspace === "settings");
+
+    const effectiveShowTopbarBack = $derived.by(() => {
+        return showTopbarBack || (primaryNavPlacement === "bottom" && mobileBackToMenuVisible);
+    });
 
     const openHome = () => {
         overflowOpen = false;
@@ -101,6 +133,14 @@
     const openSettings = () => {
         overflowOpen = false;
         onOpenSettings();
+    };
+
+    const runTopbarBack = () => {
+        if (showTopbarBack) {
+            onTopbarBack();
+            return;
+        }
+        onMobileBackToMenu();
     };
 
     const toggleOverflow = () => {
@@ -139,24 +179,25 @@
     class="ds-app-v2-topbar"
     class:ds-app-v2-topbar-has-search={showShellSearch}
     class:ds-app-v2-topbar-mobile-nav-bottom={primaryNavPlacement === "bottom"}
-    class:ds-app-v2-topbar-has-mobile-back={primaryNavPlacement === "bottom" && mobileBackToMenuVisible}
+    class:ds-app-v2-topbar-has-mobile-back={effectiveShowTopbarBack}
+    class:ds-app-v2-topbar-mobile-variant={mobileVariant !== "desktop"}
     data-workspace={workspace}
+    data-mobile-variant={mobileVariant}
 >
     <div class="ds-app-v2-topbar-left">
-        {#if primaryNavPlacement === "bottom" && mobileBackToMenuVisible}
+        {#if effectiveShowTopbarBack}
             <button
                 type="button"
                 class="ds-mobile-header-icon-btn icon-btn icon-btn--md"
                 title="Back"
                 aria-label="Back"
-                onclick={onMobileBackToMenu}
+                onclick={runTopbarBack}
                 data-testid="topbar-mobile-back-to-menu"
             >
                 <ArrowLeft size={18} />
             </button>
-            <span class="ds-mobile-header-title">Settings</span>
-        {/if}
-        {#if primaryNavPlacement === "top"}
+            <span class="ds-mobile-header-title">{mobileTitle}</span>
+        {:else if primaryNavPlacement === "top"}
             <nav class="ds-app-v2-topbar-nav action-rail" aria-label="Primary navigation">
                 <button
                     type="button"
@@ -245,7 +286,7 @@
     </div>
 
     <div class="ds-app-v2-topbar-center">
-        {#if showShellSearch}
+        {#if !effectiveShowTopbarBack && showShellSearch}
             <input
                 id="shellSearchInput"
                 type="search"
@@ -258,7 +299,63 @@
     </div>
 
     <div class="ds-app-v2-topbar-right">
-        {#if showLibraryControls}
+        {#if showMobileMenuAction}
+            <button
+                type="button"
+                class="ds-mobile-header-icon-btn icon-btn icon-btn--md"
+                title="Open menu"
+                aria-label="Open menu"
+                onclick={onMobileMenuAction}
+                data-testid="topbar-mobile-open-menu"
+            >
+                <MenuIcon size={18} />
+            </button>
+        {:else if mobileLibraryFilterVisible}
+            <div class="ds-app-v2-topbar-segment seg-tabs ds-app-v2-topbar-mobile-library-filters" role="group" aria-label="Rulebook filters">
+                <button
+                    type="button"
+                    class="ds-app-v2-topbar-segment-btn seg-tab"
+                    title={`System: ${mobileLibrarySystemLabel}`}
+                    aria-label={`System filter: ${mobileLibrarySystemLabel}`}
+                    onclick={onOpenSystemSelector}
+                    data-testid="topbar-library-mobile-system"
+                >
+                    System: {mobileLibrarySystemLabel}
+                </button>
+                <button
+                    type="button"
+                    class="ds-app-v2-topbar-segment-btn seg-tab"
+                    title={`Edition: ${mobileLibraryEditionLabel}`}
+                    aria-label={`Edition filter: ${mobileLibraryEditionLabel}`}
+                    onclick={onOpenEditionSelector}
+                    data-testid="topbar-library-mobile-edition"
+                >
+                    Edition: {mobileLibraryEditionLabel}
+                </button>
+                <button
+                    type="button"
+                    class="ds-app-v2-topbar-segment-btn seg-tab"
+                    title="Reset filters"
+                    aria-label="Reset filters"
+                    onclick={onResetLibraryFilters}
+                    disabled={!mobileLibraryCanReset}
+                    data-testid="topbar-library-mobile-reset"
+                >
+                    All
+                </button>
+            </div>
+            <button
+                type="button"
+                class="ds-app-v2-topbar-btn ds-app-v2-topbar-add-btn"
+                onclick={onAddLibraryDocuments}
+                data-testid="topbar-library-add-documents"
+                title="Add documents"
+                aria-label="Add documents"
+            >
+                <PlusIcon size={14} />
+                <span>Add</span>
+            </button>
+        {:else if showLibraryControls}
             <div class="ds-app-v2-topbar-segment ds-app-v2-topbar-library-segment seg-tabs" role="tablist" aria-label="Rulebook view mode">
                 <button
                     type="button"
