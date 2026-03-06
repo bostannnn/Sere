@@ -34,6 +34,7 @@ import { rulebookRag } from "./rag/rag";
 import { rulebookStorage } from "./rag/storage";
 import { convertInlineImagesToInlays } from "./inlineInlays";
 import { syncGameStateFromServer, updateGameStateFromMessage } from "./gameStateSync";
+import { ensureGenerationMessageTarget } from "./generationMessageTarget";
 import type { RagResult, RulebookMetadata } from "./rag/types";
 const processLog = (..._args: unknown[]) => {};
 
@@ -1746,10 +1747,39 @@ export async function sendChat(chatProcessIndex = -1,arg:{
     else if(req.type === 'streaming'){
         const reader = req.result.getReader()
         let msgIndex = DBState.db.characters[selectedChar].chats[selectedChatIndex()].message.length
+        const ensureGenerationMessage = (createWhenMissing = false) => {
+            const activeChat = DBState.db.characters[selectedChar]?.chats?.[selectedChatIndex()]
+            if(!activeChat){
+                return {
+                    activeChat: null,
+                    resolvedIndex: -1
+                }
+            }
+            const resolvedIndex = ensureGenerationMessageTarget({
+                chat: activeChat,
+                generationId,
+                fallbackIndex: msgIndex,
+                createWhenMissing,
+                createMessage: () => ({
+                    role: 'char',
+                    data: "",
+                    saying: currentChar.chaId,
+                    time: Date.now(),
+                    generationInfo,
+                    promptInfo,
+                    chatId: generationId,
+                })
+            })
+            return {
+                activeChat,
+                resolvedIndex
+            }
+        }
+
         let prefix = ''
         if(arg.continue){
             msgIndex -= 1
-            prefix = DBState.db.characters[selectedChar].chats[selectedChatIndex()].message[msgIndex].data
+            prefix = DBState.db.characters[selectedChar].chats[selectedChatIndex()].message[msgIndex]?.data ?? ''
         }
         else{
             DBState.db.characters[selectedChar].chats[selectedChatIndex()].message.push({
@@ -1762,7 +1792,16 @@ export async function sendChat(chatProcessIndex = -1,arg:{
                 chatId: generationId,
             })
         }
-        DBState.db.characters[selectedChar].chats[selectedChatIndex()].isStreaming = true
+        const streamTarget = ensureGenerationMessage(!arg.continue)
+        if(streamTarget.resolvedIndex >= 0){
+            msgIndex = streamTarget.resolvedIndex
+        }
+        if(arg.continue && !prefix && streamTarget.activeChat && msgIndex >= 0){
+            prefix = streamTarget.activeChat.message[msgIndex]?.data ?? ''
+        }
+        if(streamTarget.activeChat){
+            streamTarget.activeChat.isStreaming = true
+        }
         let lastResponseChunk:{[key:string]:string} = {}
         while(abortSignal.aborted === false){
             const readed = (await reader.read())
@@ -1779,14 +1818,23 @@ export async function sendChat(chatProcessIndex = -1,arg:{
                     if(DBState.db.removeIncompleteResponse){
                         result = trimUntilPunctuation(result)
                     }
+                    const currentTarget = ensureGenerationMessage(true)
+                    if(currentTarget.resolvedIndex >= 0){
+                        msgIndex = currentTarget.resolvedIndex
+                    }
                     const result2 = await processScriptFull(nowChatroom, reformatContent(prefix + result), 'editoutput', msgIndex)
-                    DBState.db.characters[selectedChar].chats[selectedChatIndex()].message[msgIndex].data = result2.data
+                    if(currentTarget.resolvedIndex >= 0 && currentTarget.activeChat){
+                        currentTarget.activeChat.message[msgIndex].data = result2.data
+                    }
                     emoChanged = result2.emoChanged
                     DBState.db.characters[selectedChar].reloadKeys += 1
                 }
             }
             if(readed.done){
-                DBState.db.characters[selectedChar].chats[selectedChatIndex()].isStreaming = false
+                const doneTarget = ensureGenerationMessage(false)
+                if(doneTarget.activeChat){
+                    doneTarget.activeChat.isStreaming = false
+                }
                 DBState.db.characters[selectedChar].reloadKeys += 1
                 
                 if (isNodeServer) {
@@ -1812,13 +1860,19 @@ export async function sendChat(chatProcessIndex = -1,arg:{
         if(triggerResult && triggerResult.sendAIprompt){
             resendChat = true
         }
-        const inlayr = runInlayScreen(currentChar, currentChat.message[msgIndex].data)
-        currentChat.message[msgIndex].data = inlayr.text
-        DBState.db.characters[selectedChar].chats[selectedChatIndex()] = currentChat
-        if(inlayr.promise){
-            const t = await inlayr.promise
-            currentChat.message[msgIndex].data = t
+        const finalMsgIndex = currentChat.message.findIndex((entry) => entry?.chatId === generationId)
+        const targetMsgIndex = finalMsgIndex >= 0
+            ? finalMsgIndex
+            : (msgIndex >= 0 && msgIndex < currentChat.message.length ? msgIndex : -1)
+        if(targetMsgIndex >= 0){
+            const inlayr = runInlayScreen(currentChar, currentChat.message[targetMsgIndex]?.data ?? '')
+            currentChat.message[targetMsgIndex].data = inlayr.text
             DBState.db.characters[selectedChar].chats[selectedChatIndex()] = currentChat
+            if(inlayr.promise){
+                const t = await inlayr.promise
+                currentChat.message[targetMsgIndex].data = t
+                DBState.db.characters[selectedChar].chats[selectedChatIndex()] = currentChat
+            }
         }
         if(DBState.db.ttsAutoSpeech){
             await sayTTS(currentChar, result)
