@@ -615,35 +615,6 @@
         .rag-dashboard-shell-mobile .rag-content-area-shell {
             padding: var(--ds-space-3);
         }
-
-        .rag-dashboard-shell-mobile .rag-content-area.is-grid .rag-book-card {
-            border-radius: 1.05rem;
-        }
-
-        .rag-dashboard-shell-mobile .rag-content-area.is-grid .rag-book-card-main {
-            aspect-ratio: 4 / 5;
-            padding: 0.45rem;
-        }
-
-        .rag-dashboard-shell-mobile .rag-content-area.is-grid .rag-book-icon,
-        .rag-dashboard-shell-mobile .rag-content-area.is-grid .rag-book-details {
-            inset: 0.45rem;
-            border-radius: calc(1.05rem - 0.45rem);
-        }
-
-        .rag-dashboard-shell-mobile .rag-content-area.is-grid .rag-book-details {
-            padding: 0.7rem 0.7rem 0.6rem;
-        }
-
-        .rag-dashboard-shell-mobile .rag-content-area.is-grid .rag-book-name {
-            font-size: 1.03rem;
-        }
-
-        .rag-dashboard-shell-mobile .rag-content-area.is-grid .rag-book-preview {
-            -webkit-line-clamp: 1;
-            line-clamp: 1;
-            min-height: 1.35em;
-        }
     }
 
     @media (max-width: 23rem) {
