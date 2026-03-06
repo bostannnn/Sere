@@ -595,7 +595,7 @@ export async function requestOpenAI(arg:RequestDataArgumentExtended):Promise<req
     }
 
 
-    let requestModel = aiModel === 'openrouter' ? db.proxyRequestModel : aiModel
+    const requestModel = aiModel === 'openrouter' ? db.proxyRequestModel : aiModel
     const useSubmodelOpenrouter = arg.mode && arg.mode !== 'model'
     let openrouterRequestModel = useSubmodelOpenrouter
         ? (db.openrouterSubRequestModel || db.openrouterRequestModel)

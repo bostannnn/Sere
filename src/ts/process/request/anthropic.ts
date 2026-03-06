@@ -340,7 +340,7 @@ export async function requestClaude(arg:RequestDataArgumentExtended):Promise<req
     const formated = arg.formated
     const db = getDatabase()
     const useStreaming = arg.useStreaming
-    let replacerURL = arg.customURL ?? ('https://api.anthropic.com/v1/messages')
+    const replacerURL = arg.customURL ?? ('https://api.anthropic.com/v1/messages')
     const apiKey = arg.key || db.claudeAPIKey
     const maxTokens = arg.maxTokens
 
