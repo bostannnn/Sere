@@ -51,9 +51,6 @@ vi.mock(import("src/lib/Setting/Pages/PluginSettings.svelte"), async () => ({
 vi.mock(import("src/lib/Setting/Pages/AdvancedSettings.svelte"), async () => ({
   default: (await import("./test-stubs/SettingsPageStub.svelte")).default,
 }));
-vi.mock(import("src/lib/Setting/Pages/LanguageSettings.svelte"), async () => ({
-  default: (await import("./test-stubs/SettingsPageStub.svelte")).default,
-}));
 vi.mock(
   import("src/lib/Setting/Pages/AccessibilitySettings.svelte"),
   async () => ({
@@ -249,7 +246,6 @@ describe("settings runtime mobile smoke", () => {
       "Other Bots",
       "Persona",
       "Display",
-      "Language",
       "Accessibility",
       "Modules",
       "Plugin",
@@ -274,7 +270,6 @@ describe("settings runtime mobile smoke", () => {
       "Other Bots",
       "Persona",
       "Display",
-      "Language",
       "Accessibility",
       "Modules",
       "Plugin",

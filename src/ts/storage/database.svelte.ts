@@ -359,6 +359,9 @@ export function setDatabase(data:Database){
     if(checkNullish(data.language)){
         data.language = 'en'
     }
+    else if(data.language !== 'en'){
+        data.language = 'en'
+    }
     if(checkNullish(data.swipe)){
         data.swipe = true
     }

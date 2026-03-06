@@ -11,7 +11,7 @@
 </svelte:head>
 
 <div class="ds-github-stars-row">
-  <a class="github-button ds-github-stars-button" href="https://github.com/kwaroran/risuAI" data-color-scheme="no-preference: dark; light: dark; dark: dark;" data-size="large" data-show-count="true" aria-label="Star kwaroran/risuAI on GitHub">Star</a>
+  <a class="github-button ds-github-stars-button" href="https://github.com/kwaroran/risuAI" data-color-scheme="no-preference: dark; light: dark; dark: dark;" data-size="large" data-show-count="true" title="Open RisuAI GitHub repository" aria-label="Open RisuAI GitHub repository">Star</a>
   <button
     type="button"
     title="Open RisuAI website"

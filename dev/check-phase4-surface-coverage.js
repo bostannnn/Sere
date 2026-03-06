@@ -423,16 +423,6 @@ const PHASE4_UNCOVERED_MATRIX = [
     ],
   },
   {
-    file: "src/lib/Setting/Pages/LanguageSettings.svelte",
-    classification: "migrate",
-    owner: "settings-contract",
-    rationale: "Language settings composes flattened page and section wrappers with shared field primitives.",
-    requiredPatterns: [
-      "class=\"ds-settings-page\"",
-      "class=\"ds-settings-section\"",
-    ],
-  },
-  {
     file: "src/lib/Setting/Pages/SeparateParametersSection.svelte",
     classification: "migrate",
     owner: "settings-contract",
