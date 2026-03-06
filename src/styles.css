@@ -161,6 +161,14 @@ body {
   overflow-x: hidden;
 }
 
+@media (hover: none) and (pointer: coarse) {
+  html,
+  body,
+  #app {
+    touch-action: manipulation;
+  }
+}
+
 :root {
   /* Design System Normalized V1 tokens */
   --ds-space-1: 4px;

@@ -16,7 +16,6 @@ const IGNORES = {
         "dist-ssr/**",
         "src-tauri/**",
         "prototypes/**",
-        "server/hono/**",   // separate sub-project with its own tsconfig
         ".claude/**",
         "**/*.local",
     ],

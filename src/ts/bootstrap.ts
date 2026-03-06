@@ -11,7 +11,6 @@ import { language } from "src/lang";
 import { startObserveDom } from "./observer.svelte";
 import { updateGuisize } from "./gui/guisize";
 import { updateLorebooks } from "./characters";
-import { initMobileGesture } from "./hotkey";
 import { moduleUpdate } from "./process/modules";
 import {
     saveDb,
@@ -68,9 +67,6 @@ export async function loadData() {
             }
             const shouldUseMobileLayout = window.innerWidth <= 900;
             MobileGUI.set(shouldUseMobileLayout)
-            if (shouldUseMobileLayout) {
-                initMobileGesture()
-            }
             loadedStore.set(true)
             selectedCharID.set(-1)
             startObserveDom()

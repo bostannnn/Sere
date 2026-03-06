@@ -307,4 +307,5 @@ describe("settings runtime mobile smoke", () => {
     SettingsMenuIndex.set(-1);
     await assertNavVisible("mobile final nav");
   });
+
 });

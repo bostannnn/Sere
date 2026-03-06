@@ -66,8 +66,7 @@ risuai-newest/
 │   └── test/               # Test files
 ├── src-tauri/              # Tauri desktop backend (Rust)
 ├── server/                 # Self-hosting server implementations
-│   ├── node/               # Node.js server (current)
-│   └── hono/               # Hono framework server (future)
+│   └── node/               # Node.js server
 ├── public/                 # Static assets
 ├── dist/                   # Build output
 ├── resources/              # Application resources
@@ -157,8 +156,6 @@ pnpm buildsite
 pnpm tauribuild
 pnpm tauri build
 
-# Hono server build
-pnpm hono:build
 ```
 
 ### Type Checking
@@ -275,7 +272,7 @@ Language files are located in `/src/lang/`.
 - **Web**: Vite static site
 - **Desktop (Tauri)**: Windows (NSIS), macOS (DMG, APP), Linux (DEB, RPM, AppImage)
 - **Docker**: Container (port 6001)
-- **Self-hosted**: Node.js or Hono server
+- **Self-hosted**: Node.js server
 
 ## Security
 
@@ -293,7 +290,6 @@ Language files are located in `/src/lang/`.
 | `plugins.md` | Plugin development guide |
 | `AGENTS.md` | AI assistant documentation |
 | `src/ts/plugins/migrationGuide.md` | Plugin API migration guide |
-| `server/hono/README.md` | Hono server documentation |
 | `server/node/readme.md` | Node server documentation |
 
 ## Contribution Guidelines

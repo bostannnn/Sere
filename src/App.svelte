@@ -4,6 +4,7 @@
             openPresetList,
             openPersonaList,
             MobileGUI,
+            selectedCharID,
             CustomGUISettingMenuStore,
             loadedStore,
             alertStore,
@@ -176,23 +177,27 @@
         </div>
     {:else if $CustomGUISettingMenuStore}
         <CustomGUISettingMenu />
+    {:else if $uiShellV2Enabled && $MobileGUI && $selectedCharID !== -1}
+        <div class="ds-app-mobile-shell">
+            <MobileHeader />
+            <MobileBody />
+            <MobileFooter />
+        </div>
+    {:else if $uiShellV2Enabled}
+        <AppShellV2 />
     {:else if $MobileGUI}
         <div class="ds-app-mobile-shell">
             <MobileHeader />
             <MobileBody />
             <MobileFooter />
         </div>
+    {:else if $settingsOpen}
+        <Settings />
+    {:else if $openRulebookManager}
+        <RulebookLibrary />
     {:else}
-        {#if $uiShellV2Enabled}
-            <AppShellV2 />
-        {:else if $settingsOpen}
-            <Settings />
-        {:else if $openRulebookManager}
-            <RulebookLibrary />
-        {:else}
-            <!-- Legacy desktop shell path placeholder until legacy branch is restored. -->
-            <ChatScreen />
-        {/if}
+        <!-- Legacy desktop shell path placeholder until legacy branch is restored. -->
+        <ChatScreen />
     {/if}
     {#if $alertStore.type !== 'none'}
         <AlertComp />

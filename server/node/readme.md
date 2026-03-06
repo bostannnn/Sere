@@ -2,8 +2,6 @@
 
 Last reviewed: 2026-02-15
 
-> Warning: Node server is planned to be deprecated in future versions, replaced with [Hono](https://hono.dev/) based server for broader runtime support.
-
 ## What This Server Handles Today
 - Server-first storage API (`/data/*`) for settings, characters, chats, assets, prompts/themes/color schemes, plugin data.
 - LLM migration endpoints (provider rollout phase):

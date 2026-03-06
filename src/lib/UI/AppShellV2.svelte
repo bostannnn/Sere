@@ -3,9 +3,11 @@
     import {
         additionalHamburgerMenu,
         settingsOpen,
+        SettingsMenuIndex,
         openPresetList,
         openPersonaList,
         bookmarkListOpen,
+        MobileGUI,
         selectedCharID,
         PlaygroundStore,
         DBState,
@@ -143,6 +145,22 @@
 
     const showShellSearch = $derived.by(() => {
         return resolvedAppRoute.workspace === "characters" || resolvedAppRoute.workspace === "library";
+    });
+
+    const useBottomPrimaryNav = $derived.by(() => {
+        if (!$MobileGUI) {
+            return false;
+        }
+        return resolvedAppRoute.workspace === "characters"
+            || resolvedAppRoute.workspace === "library"
+            || resolvedAppRoute.workspace === "settings"
+            || resolvedAppRoute.workspace === "playground";
+    });
+
+    const mobileSettingsSubmenuOpen = $derived.by(() => {
+        return $MobileGUI
+            && resolvedAppRoute.workspace === "settings"
+            && $SettingsMenuIndex !== -1;
     });
 
     function openHomeFromTopbar() {
@@ -323,13 +341,18 @@
     });
 </script>
 
-<div class="ds-app-v2-shell">
+<div class="ds-app-v2-shell" data-mobile-bottom-nav={useBottomPrimaryNav ? "1" : "0"}>
     <AppShellTopbar
         workspace={resolvedAppRoute.workspace}
         onOpenHome={openHomeFromTopbar}
         onOpenPlayground={openPlaygroundFromTopbar}
         onOpenRulebooks={openRulebooksFromTopbar}
         onOpenSettings={openSettingsFromTopbar}
+        primaryNavPlacement={useBottomPrimaryNav ? "bottom" : "top"}
+        mobileBackToMenuVisible={mobileSettingsSubmenuOpen}
+        onMobileBackToMenu={() => {
+            SettingsMenuIndex.set(-1);
+        }}
         overflowItems={additionalHamburgerMenu}
         bind:overflowOpen={topbarOverflowOpen}
         showShellSearch={showShellSearch}
@@ -387,5 +410,9 @@
         min-width: 0;
         display: flex;
         flex-direction: column;
+    }
+
+    .ds-app-v2-shell[data-mobile-bottom-nav="1"] {
+        padding-bottom: calc(var(--ds-space-4) * 3 + env(safe-area-inset-bottom, 0px));
     }
 </style>

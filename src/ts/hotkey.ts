@@ -1,7 +1,7 @@
 import { get } from "svelte/store"
 import { alertMd, alertSelect, alertToast, alertWait, doingAlert, alertRequestLogs, alertError } from "./alert"
 import { changeToPreset as changeToPreset2, getDatabase  } from "./storage/database.svelte"
-import { alertStore, MobileGUIStack, MobileSideBar, openPersonaList, openPresetList, PlaygroundStore, QuickSettings, SafeModeStore, selectedCharID, settingsOpen } from "./stores.svelte"
+import { alertStore, openPersonaList, openPresetList, PlaygroundStore, QuickSettings, SafeModeStore, selectedCharID, settingsOpen } from "./stores.svelte"
 import { language } from "src/lang"
 import { updateTextThemeAndCSS } from "./gui/colorscheme"
 import { defaultHotkeys } from "./defaulthotkeys"
@@ -357,57 +357,7 @@ function focusQuery(query:string){
 
 
 export function initMobileGesture(){
-    const pressingPointers = new Map<number, {x:number, y:number}>()
-
-    document.addEventListener('touchstart', (ev) => {
-        for(const touch of ev.changedTouches){
-            const ele = touch.target as HTMLElement
-            if(ele.tagName === 'BUTTON' || ele.tagName === 'INPUT' || ele.tagName === 'SELECT' || ele.tagName === 'TEXTAREA'){
-                return
-            }
-            pressingPointers.set(touch.identifier, {x: touch.clientX, y: touch.clientY})
-        }
-    }, {
-        passive: true
-    })
-    document.addEventListener('touchend', (ev) => {
-        for(const touch of ev.changedTouches){
-            const d = pressingPointers.get(touch.identifier)
-            if(!d){
-                continue
-            }
-            const moveX = touch.clientX - d.x
-            const moveY = touch.clientY - d.y
-            pressingPointers.delete(touch.identifier)
-
-            if(moveX > 50 && Math.abs(moveY) < Math.abs(moveX)){
-                if(get(selectedCharID) === -1){
-                    if(get(MobileGUIStack) > 0){
-                        MobileGUIStack.update(v => v - 1)
-                    }
-                }
-                else{
-                    if(get(MobileSideBar) > 0){
-                        MobileSideBar.update(v => v - 1)
-                    }
-                }
-            }
-            else if(moveX < -50 && Math.abs(moveY) < Math.abs(moveX)){
-                if(get(selectedCharID) === -1){
-                    if(get(MobileGUIStack) < 3){
-                        MobileGUIStack.update(v => v + 1)
-                    }
-                }
-                else{
-                    if(get(MobileSideBar) < 3){
-                        MobileSideBar.update(v => v + 1)
-                    }
-                }
-            }
-        }
-    }, {
-        passive: true
-    })
+    // Intentionally disabled: horizontal swipe gestures should never switch tabs/workspaces.
 }
 
 function changeToPreset(num:number){

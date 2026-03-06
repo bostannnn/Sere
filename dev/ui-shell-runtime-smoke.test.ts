@@ -13,6 +13,7 @@ vi.mock(import("src/ts/stores.svelte"), async () => {
   const openPresetList = writable(false);
   const openPersonaList = writable(false);
   const MobileGUI = writable(false);
+  const SettingsMenuIndex = writable(-1);
   const CustomGUISettingMenuStore = writable(false);
   const loadedStore = writable(true);
   const alertStore = writable({ type: "none", msg: "" });
@@ -64,6 +65,7 @@ vi.mock(import("src/ts/stores.svelte"), async () => {
     openPresetList,
     openPersonaList,
     MobileGUI,
+    SettingsMenuIndex,
     CustomGUISettingMenuStore,
     loadedStore,
     alertStore,
@@ -166,6 +168,8 @@ vi.mock(import("src/ts/characters"), () => ({
 
 import {
   DBState,
+  MobileGUI,
+  SettingsMenuIndex,
   appRouteStore,
   bookmarkListOpen,
   hypaV3ModalOpen,
@@ -174,6 +178,7 @@ import {
   openRulebookManager,
   selectedCharID,
   settingsOpen,
+  uiShellV2Enabled,
 } from "src/ts/stores.svelte";
 import AppComponent from "src/App.svelte";
 
@@ -217,6 +222,9 @@ describe("ui shell runtime smoke", () => {
     settingsOpen.set(false);
     openRulebookManager.set(false);
     selectedCharID.set(-1);
+    MobileGUI.set(false);
+    SettingsMenuIndex.set(-1);
+    uiShellV2Enabled.set(true);
     openPresetList.set(false);
     openPersonaList.set(false);
     bookmarkListOpen.set(false);
@@ -288,6 +296,51 @@ describe("ui shell runtime smoke", () => {
     expect(document.querySelector('[data-testid="app-rulebook-stub"]')).not.toBeNull();
     expect((document.getElementById("globalMenuBtn") as HTMLButtonElement | null)?.disabled).toBe(false);
     expect((document.querySelector('[data-testid="topbar-nav-rulebooks"]') as HTMLButtonElement | null)?.dataset.pressed).toBe("1");
+  });
+
+  it("uses AppShellV2 on mobile when ui shell v2 is enabled", async () => {
+    MobileGUI.set(true);
+    uiShellV2Enabled.set(true);
+    settingsOpen.set(false);
+    openRulebookManager.set(false);
+    selectedCharID.set(-1);
+    await flushUi();
+
+    expect(document.querySelector(".ds-app-v2-topbar")).not.toBeNull();
+    expect(document.querySelector(".ds-app-v2-mobile-nav-shell")).not.toBeNull();
+    expect(document.querySelector('.ds-app-v2-mobile-nav-shell [data-testid="topbar-nav-home"]')).not.toBeNull();
+    expect(document.querySelector('[data-testid="app-home-grid-stub"]')).not.toBeNull();
+    expect(document.querySelector(".ds-app-mobile-shell")).toBeNull();
+  });
+
+  it("uses legacy mobile chat shell on mobile chats even when ui shell v2 is enabled", async () => {
+    MobileGUI.set(true);
+    uiShellV2Enabled.set(true);
+    settingsOpen.set(false);
+    openRulebookManager.set(false);
+    selectedCharID.set(0);
+    await flushUi();
+
+    expect(document.querySelector(".ds-app-mobile-shell")).not.toBeNull();
+    expect(document.querySelector(".ds-app-v2-topbar")).toBeNull();
+  });
+
+  it("shows mobile settings back button in title bar for settings subpages", async () => {
+    MobileGUI.set(true);
+    uiShellV2Enabled.set(true);
+    settingsOpen.set(true);
+    selectedCharID.set(-1);
+    SettingsMenuIndex.set(1);
+    await flushUi();
+
+    const backBtn = document.querySelector('[data-testid="topbar-mobile-back-to-menu"]') as HTMLButtonElement | null;
+    expect(backBtn).not.toBeNull();
+    expect(backBtn?.getAttribute("title")).toBe("Back");
+    expect(backBtn?.getAttribute("aria-label")).toBe("Back");
+
+    backBtn?.click();
+    await flushUi();
+    expect(get(SettingsMenuIndex)).toBe(-1);
   });
 
   it("renders home grid in characters workspace and syncs topbar search binding", async () => {

@@ -1,5 +1,6 @@
 <script lang="ts">
     import {
+        ArrowLeft,
         BookIcon,
         EllipsisIcon,
         HomeIcon,
@@ -23,6 +24,9 @@
         onOpenPlayground?: () => void;
         onOpenRulebooks?: () => void;
         onOpenSettings?: () => void;
+        primaryNavPlacement?: "top" | "bottom";
+        mobileBackToMenuVisible?: boolean;
+        onMobileBackToMenu?: () => void;
         overflowItems?: MenuDef[];
         overflowOpen?: boolean;
         showShellSearch?: boolean;
@@ -49,6 +53,9 @@
         onOpenPlayground = () => {},
         onOpenRulebooks = () => {},
         onOpenSettings = () => {},
+        primaryNavPlacement = "top",
+        mobileBackToMenuVisible = false,
+        onMobileBackToMenu = () => {},
         overflowItems = [],
         overflowOpen = $bindable(false),
         showShellSearch = false,
@@ -128,92 +135,113 @@
     });
 </script>
 
-<header class="ds-app-v2-topbar" class:ds-app-v2-topbar-has-search={showShellSearch}>
+<header
+    class="ds-app-v2-topbar"
+    class:ds-app-v2-topbar-has-search={showShellSearch}
+    class:ds-app-v2-topbar-mobile-nav-bottom={primaryNavPlacement === "bottom"}
+    class:ds-app-v2-topbar-has-mobile-back={primaryNavPlacement === "bottom" && mobileBackToMenuVisible}
+    data-workspace={workspace}
+>
     <div class="ds-app-v2-topbar-left">
-        <nav class="ds-app-v2-topbar-nav action-rail" aria-label="Primary navigation">
+        {#if primaryNavPlacement === "bottom" && mobileBackToMenuVisible}
             <button
                 type="button"
-                id="globalMenuBtn"
-                class="ds-app-v2-topbar-btn ds-app-v2-topbar-icon-btn ds-app-v2-topbar-nav-btn icon-btn icon-btn--md icon-btn--bordered"
-                aria-label="Go to Home"
-                title="Home"
-                aria-pressed={homeActive}
-                data-pressed={homeActive ? "1" : "0"}
-                onclick={openHome}
-                data-testid="topbar-nav-home"
-            ><HomeIcon size={18} /></button>
+                class="ds-mobile-header-icon-btn icon-btn icon-btn--md"
+                title="Back"
+                aria-label="Back"
+                onclick={onMobileBackToMenu}
+                data-testid="topbar-mobile-back-to-menu"
+            >
+                <ArrowLeft size={18} />
+            </button>
+            <span class="ds-mobile-header-title">Settings</span>
+        {/if}
+        {#if primaryNavPlacement === "top"}
+            <nav class="ds-app-v2-topbar-nav action-rail" aria-label="Primary navigation">
+                <button
+                    type="button"
+                    id="globalMenuBtn"
+                    class="ds-app-v2-topbar-btn ds-app-v2-topbar-icon-btn ds-app-v2-topbar-nav-btn icon-btn icon-btn--md icon-btn--bordered"
+                    aria-label="Go to Home"
+                    title="Home"
+                    aria-pressed={homeActive}
+                    data-pressed={homeActive ? "1" : "0"}
+                    onclick={openHome}
+                    data-testid="topbar-nav-home"
+                ><HomeIcon size={18} /></button>
 
-            <button
-                type="button"
-                class="ds-app-v2-topbar-btn ds-app-v2-topbar-icon-btn ds-app-v2-topbar-nav-btn icon-btn icon-btn--md icon-btn--bordered"
-                aria-label="Go to Rulebooks"
-                title="Rulebooks"
-                aria-pressed={rulebooksActive}
-                data-pressed={rulebooksActive ? "1" : "0"}
-                onclick={openRulebooks}
-                data-testid="topbar-nav-rulebooks"
-            ><BookIcon size={18} /></button>
-
-            <button
-                type="button"
-                class="ds-app-v2-topbar-btn ds-app-v2-topbar-icon-btn ds-app-v2-topbar-nav-btn icon-btn icon-btn--md icon-btn--bordered"
-                aria-label="Go to Settings"
-                title="Settings"
-                aria-pressed={settingsActive}
-                data-pressed={settingsActive ? "1" : "0"}
-                onclick={openSettings}
-                data-testid="topbar-nav-settings"
-            ><SettingsIcon size={18} /></button>
-
-            <div class="ds-app-v2-topbar-overflow-wrap" bind:this={overflowWrapEl}>
                 <button
                     type="button"
                     class="ds-app-v2-topbar-btn ds-app-v2-topbar-icon-btn ds-app-v2-topbar-nav-btn icon-btn icon-btn--md icon-btn--bordered"
-                    aria-label="More navigation actions"
-                    title="More"
-                    aria-pressed={overflowOpen}
-                    aria-expanded={overflowOpen}
-                    aria-controls="topbar-overflow-menu"
-                    data-pressed={overflowOpen || playgroundActive ? "1" : "0"}
-                    onclick={toggleOverflow}
-                    data-testid="topbar-nav-more"
-                ><EllipsisIcon size={18} /></button>
+                    aria-label="Go to Rulebooks"
+                    title="Rulebooks"
+                    aria-pressed={rulebooksActive}
+                    data-pressed={rulebooksActive ? "1" : "0"}
+                    onclick={openRulebooks}
+                    data-testid="topbar-nav-rulebooks"
+                ><BookIcon size={18} /></button>
 
-                {#if overflowOpen}
-                    <div
-                        id="topbar-overflow-menu"
-                        class="ds-app-v2-topbar-overflow panel-shell ds-ui-menu"
+                <button
+                    type="button"
+                    class="ds-app-v2-topbar-btn ds-app-v2-topbar-icon-btn ds-app-v2-topbar-nav-btn icon-btn icon-btn--md icon-btn--bordered"
+                    aria-label="Go to Settings"
+                    title="Settings"
+                    aria-pressed={settingsActive}
+                    data-pressed={settingsActive ? "1" : "0"}
+                    onclick={openSettings}
+                    data-testid="topbar-nav-settings"
+                ><SettingsIcon size={18} /></button>
+
+                <div class="ds-app-v2-topbar-overflow-wrap" bind:this={overflowWrapEl}>
+                    <button
+                        type="button"
+                        class="ds-app-v2-topbar-btn ds-app-v2-topbar-icon-btn ds-app-v2-topbar-nav-btn icon-btn icon-btn--md icon-btn--bordered"
                         aria-label="More navigation actions"
-                        data-testid="topbar-nav-more-menu"
-                    >
-                        <button
-                            type="button"
-                            class="ds-app-v2-topbar-overflow-item ds-ui-menu-item"
-                            data-active={playgroundActive ? "1" : "0"}
-                            onclick={openPlayground}
-                            data-testid="topbar-nav-overflow-playground"
-                        >
-                            <ShellIcon size={16} />
-                            <span>Playground</span>
-                        </button>
+                        title="More"
+                        aria-pressed={overflowOpen}
+                        aria-expanded={overflowOpen}
+                        aria-controls="topbar-overflow-menu"
+                        data-pressed={overflowOpen || playgroundActive ? "1" : "0"}
+                        onclick={toggleOverflow}
+                        data-testid="topbar-nav-more"
+                    ><EllipsisIcon size={18} /></button>
 
-                        {#if overflowItems.length > 0}
-                            <div class="ds-app-v2-topbar-overflow-separator"></div>
-                            {#each overflowItems as item (`${item.id}-${item.name}`)}
-                                <button
-                                    type="button"
-                                    class="ds-app-v2-topbar-overflow-item ds-ui-menu-item"
-                                    onclick={() => runOverflowAction(item)}
-                                >
-                                    <PluginDefinedIcon ico={item} />
-                                    <span>{item.name}</span>
-                                </button>
-                            {/each}
-                        {/if}
-                    </div>
-                {/if}
-            </div>
-        </nav>
+                    {#if overflowOpen}
+                        <div
+                            id="topbar-overflow-menu"
+                            class="ds-app-v2-topbar-overflow panel-shell ds-ui-menu"
+                            aria-label="More navigation actions"
+                            data-testid="topbar-nav-more-menu"
+                        >
+                            <button
+                                type="button"
+                                class="ds-app-v2-topbar-overflow-item ds-ui-menu-item"
+                                data-active={playgroundActive ? "1" : "0"}
+                                onclick={openPlayground}
+                                data-testid="topbar-nav-overflow-playground"
+                            >
+                                <ShellIcon size={16} />
+                                <span>Playground</span>
+                            </button>
+
+                            {#if overflowItems.length > 0}
+                                <div class="ds-app-v2-topbar-overflow-separator"></div>
+                                {#each overflowItems as item (`${item.id}-${item.name}`)}
+                                    <button
+                                        type="button"
+                                        class="ds-app-v2-topbar-overflow-item ds-ui-menu-item"
+                                        onclick={() => runOverflowAction(item)}
+                                    >
+                                        <PluginDefinedIcon ico={item} />
+                                        <span>{item.name}</span>
+                                    </button>
+                                {/each}
+                            {/if}
+                        </div>
+                    {/if}
+                </div>
+            </nav>
+        {/if}
     </div>
 
     <div class="ds-app-v2-topbar-center">
@@ -348,3 +376,92 @@
         {/if}
     </div>
 </header>
+
+{#if primaryNavPlacement === "bottom"}
+    <div class="ds-app-v2-mobile-nav-shell">
+        <nav class="ds-app-v2-topbar-nav action-rail" aria-label="Primary navigation">
+            <button
+                type="button"
+                id="globalMenuBtn"
+                class="ds-app-v2-topbar-btn ds-app-v2-topbar-icon-btn ds-app-v2-topbar-nav-btn icon-btn icon-btn--md icon-btn--bordered"
+                aria-label="Go to Home"
+                title="Home"
+                aria-pressed={homeActive}
+                data-pressed={homeActive ? "1" : "0"}
+                onclick={openHome}
+                data-testid="topbar-nav-home"
+            ><HomeIcon size={18} /></button>
+
+            <button
+                type="button"
+                class="ds-app-v2-topbar-btn ds-app-v2-topbar-icon-btn ds-app-v2-topbar-nav-btn icon-btn icon-btn--md icon-btn--bordered"
+                aria-label="Go to Rulebooks"
+                title="Rulebooks"
+                aria-pressed={rulebooksActive}
+                data-pressed={rulebooksActive ? "1" : "0"}
+                onclick={openRulebooks}
+                data-testid="topbar-nav-rulebooks"
+            ><BookIcon size={18} /></button>
+
+            <button
+                type="button"
+                class="ds-app-v2-topbar-btn ds-app-v2-topbar-icon-btn ds-app-v2-topbar-nav-btn icon-btn icon-btn--md icon-btn--bordered"
+                aria-label="Go to Settings"
+                title="Settings"
+                aria-pressed={settingsActive}
+                data-pressed={settingsActive ? "1" : "0"}
+                onclick={openSettings}
+                data-testid="topbar-nav-settings"
+            ><SettingsIcon size={18} /></button>
+
+            <div class="ds-app-v2-topbar-overflow-wrap" bind:this={overflowWrapEl}>
+                <button
+                    type="button"
+                    class="ds-app-v2-topbar-btn ds-app-v2-topbar-icon-btn ds-app-v2-topbar-nav-btn icon-btn icon-btn--md icon-btn--bordered"
+                    aria-label="More navigation actions"
+                    title="More"
+                    aria-pressed={overflowOpen}
+                    aria-expanded={overflowOpen}
+                    aria-controls="topbar-overflow-menu"
+                    data-pressed={overflowOpen || playgroundActive ? "1" : "0"}
+                    onclick={toggleOverflow}
+                    data-testid="topbar-nav-more"
+                ><EllipsisIcon size={18} /></button>
+
+                {#if overflowOpen}
+                    <div
+                        id="topbar-overflow-menu"
+                        class="ds-app-v2-topbar-overflow panel-shell ds-ui-menu"
+                        aria-label="More navigation actions"
+                        data-testid="topbar-nav-more-menu"
+                    >
+                        <button
+                            type="button"
+                            class="ds-app-v2-topbar-overflow-item ds-ui-menu-item"
+                            data-active={playgroundActive ? "1" : "0"}
+                            onclick={openPlayground}
+                            data-testid="topbar-nav-overflow-playground"
+                        >
+                            <ShellIcon size={16} />
+                            <span>Playground</span>
+                        </button>
+
+                        {#if overflowItems.length > 0}
+                            <div class="ds-app-v2-topbar-overflow-separator"></div>
+                            {#each overflowItems as item (`${item.id}-${item.name}`)}
+                                <button
+                                    type="button"
+                                    class="ds-app-v2-topbar-overflow-item ds-ui-menu-item"
+                                    onclick={() => runOverflowAction(item)}
+                                >
+                                    <PluginDefinedIcon ico={item} />
+                                    <span>{item.name}</span>
+                                </button>
+                            {/each}
+                        {/if}
+                    </div>
+                {/if}
+            </div>
+        </nav>
+    </div>
+{/if}

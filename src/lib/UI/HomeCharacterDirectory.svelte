@@ -158,6 +158,11 @@
             ? window.matchMedia("(prefers-reduced-motion: reduce)").matches
             : false
     );
+    let coarsePointer = $state(
+        typeof window !== "undefined"
+            ? window.matchMedia("(hover: none), (pointer: coarse)").matches
+            : false
+    );
 
     const cardTiltController = createCardTiltController({
         hostSelector: "[data-home-tilt-card]",
@@ -172,6 +177,9 @@
     });
 
     function updateCardTilt(event: PointerEvent) {
+        if (coarsePointer) {
+            return;
+        }
         cardTiltController.onPointerMove(event);
     }
 
@@ -249,15 +257,21 @@
         document.addEventListener("keydown", handleDocumentKeydown);
 
         const motionMq = window.matchMedia("(prefers-reduced-motion: reduce)");
+        const coarsePointerMq = window.matchMedia("(hover: none), (pointer: coarse)");
         const handleMotionChange = (e: MediaQueryListEvent) => {
             reducedMotion = e.matches;
         };
+        const handlePointerModeChange = (e: MediaQueryListEvent) => {
+            coarsePointer = e.matches;
+        };
         motionMq.addEventListener("change", handleMotionChange);
+        coarsePointerMq.addEventListener("change", handlePointerModeChange);
 
         return () => {
             document.removeEventListener("pointerdown", handleDocumentPointerDown);
             document.removeEventListener("keydown", handleDocumentKeydown);
             motionMq.removeEventListener("change", handleMotionChange);
+            coarsePointerMq.removeEventListener("change", handlePointerModeChange);
         };
     });
 </script>
@@ -310,7 +324,7 @@
                                     </div>
                                 {:then source}
                                     {#if source}
-                                        <img src={source} alt="" loading="lazy" />
+                                        <img src={source} alt="" loading="lazy" draggable="false" />
                                     {:else}
                                         <div class="ds-home-character-avatar-fallback">
                                             {#if row.isGroup}
@@ -566,6 +580,10 @@
         height: 100%;
         display: block;
         object-fit: cover;
+        -webkit-user-drag: none;
+        user-select: none;
+        -webkit-touch-callout: none;
+        pointer-events: none;
     }
 
     .ds-home-character-avatar-fallback {
@@ -713,5 +731,76 @@
     .ds-home-directory-empty p {
         margin: 0;
         font-size: var(--ds-font-size-sm);
+    }
+
+    @media (max-width: 48rem) {
+        .ds-home-directory {
+            padding: var(--ds-space-3);
+        }
+
+        .ds-home-directory-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: var(--ds-space-2);
+        }
+
+        .ds-home-character-card {
+            border-radius: 1.05rem;
+        }
+
+        .ds-home-character-main {
+            aspect-ratio: 4 / 5;
+            padding: 0.45rem;
+        }
+
+        .ds-home-character-avatar,
+        .ds-home-character-overlay {
+            inset: 0.45rem;
+            border-radius: calc(1.05rem - 0.45rem);
+        }
+
+        .ds-home-character-overlay {
+            padding: 0.7rem 0.7rem 0.6rem;
+        }
+
+        .ds-home-character-head h3 {
+            font-size: 1.03rem;
+        }
+
+        .ds-home-character-preview {
+            -webkit-line-clamp: 1;
+            line-clamp: 1;
+            min-height: 1.35em;
+        }
+    }
+
+    @media (max-width: 23rem) {
+        .ds-home-directory-grid {
+            grid-template-columns: minmax(0, 1fr);
+        }
+    }
+
+    @media (hover: none), (pointer: coarse) {
+        .ds-home-character-card,
+        .ds-home-character-main {
+            transform: none !important;
+        }
+
+        .ds-home-character-card {
+            will-change: auto;
+        }
+
+        .ds-home-character-card:hover {
+            --home-card-lift: 0px;
+            box-shadow: 0 16px 30px rgb(0 0 0 / 0.24), inset 0 1px 0 rgb(255 255 255 / 0.06);
+        }
+
+        .ds-home-character-avatar::after {
+            display: none;
+        }
+
+        .ds-home-character-menu-trigger {
+            opacity: 1;
+            transform: none;
+        }
     }
 </style>

@@ -846,12 +846,6 @@ Remaining work from the UI baseline gate (tracked in archived `UI_BASELINE_MATRI
   - enforce durable log assertions for newly migrated endpoints to prevent silent regressions
   - keep tests deterministic by default (no live provider dependency), with optional live checks gated by env flags
 
-### 20. Remove Hono server track completely (low priority)
-- Decommission `/server/hono` once Node-server-first architecture is finalized:
-  - remove Hono source, configs, and docs references
-  - remove Hono-related scripts/dependencies that are no longer used
-  - confirm no CI/dev workflow still references Hono before deletion
-
 ---
 
 ## Key Files Reference
