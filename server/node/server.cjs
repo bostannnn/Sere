@@ -219,7 +219,7 @@ function createInternalStateCommandApplier(arg = {}) {
         throw new Error('createInternalStateCommandApplier requires applyCommands');
     }
 
-    return async function applyStateCommands(commands, source = 'internal') {
+    return async function applyStateCommands(commands, source = 'internal', options = {}) {
         const commandList = Array.isArray(commands) ? commands : [];
         if (commandList.length === 0) {
             return {
@@ -231,8 +231,11 @@ function createInternalStateCommandApplier(arg = {}) {
         }
         const sourceLabel = String(source || 'internal').replace(/[^a-zA-Z0-9._-]/g, '-');
         const clientMutationId = `srv-${sourceLabel}-${Date.now()}-${nodeCrypto.randomUUID()}`;
+        const rawBaseEventId = options && typeof options === 'object' ? options.baseEventId : null;
+        const baseEventId = Number.isFinite(Number(rawBaseEventId)) ? Number(rawBaseEventId) : undefined;
         const result = await applyCommands({
             clientMutationId,
+            ...(Number.isFinite(baseEventId) ? { baseEventId } : {}),
             commands: commandList,
         });
         if (!result?.ok) {
@@ -299,7 +302,7 @@ const {
     appendLLMAudit,
     getReqIdFromResponse,
     readJsonWithEtag,
-    writeJsonWithEtag,
+    readStateLastEventId: eventJournal.readLastEventId.bind(eventJournal),
     applyStateCommands,
     logLLMExecutionStart,
     logLLMExecutionEnd,

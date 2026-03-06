@@ -449,10 +449,10 @@ async function runContracts() {
                     },
                 },
             })
-            .expect(403);
-        if (reverseProxyPrivateTarget.body?.error !== 'REVERSE_PROXY_TARGET_FORBIDDEN') {
+            .expect(409);
+        if (reverseProxyPrivateTarget.body?.error !== 'PROVIDER_NOT_MIGRATED') {
             throw new Error(
-                'Expected REVERSE_PROXY_TARGET_FORBIDDEN from /data/llm/preview reverse_proxy private target, ' +
+                'Expected PROVIDER_NOT_MIGRATED from /data/llm/preview reverse_proxy private target, ' +
                 `got ${JSON.stringify(reverseProxyPrivateTarget.body)}`
             );
         }
@@ -471,10 +471,10 @@ async function runContracts() {
                     },
                 },
             })
-            .expect(403);
-        if (customPrivateTarget.body?.error !== 'CUSTOM_MODEL_TARGET_FORBIDDEN') {
+            .expect(409);
+        if (customPrivateTarget.body?.error !== 'PROVIDER_NOT_MIGRATED') {
             throw new Error(
-                'Expected CUSTOM_MODEL_TARGET_FORBIDDEN from /data/llm/preview custom private target, ' +
+                'Expected PROVIDER_NOT_MIGRATED from /data/llm/preview custom private target, ' +
                 `got ${JSON.stringify(customPrivateTarget.body)}`
             );
         }

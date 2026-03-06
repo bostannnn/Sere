@@ -60,7 +60,7 @@ Set `RISU_DEV_NODE_API=0` before `pnpm dev` to disable this behavior.
   - `RISU_AUDIT_INCLUDE_FULL_GENERATE_REQUEST=1` to keep full `/data/llm/generate` request payloads in durable logs (default: compact summary only)
 
 ## Current LLM Migration Limits
-- Provider support in server execution is currently OpenRouter + OpenAI + DeepSeek + Anthropic + Google + Mistral + Cohere + Ollama + Kobold + NovelAI + Horde + Ooba + Reverse Proxy + Custom (`xcustom:::`).
+- Provider support in server execution is currently OpenRouter + OpenAI + DeepSeek + Anthropic + Google + Ollama + Kobold + NovelAI.
 - Non-migrated providers return `PROVIDER_NOT_MIGRATED`.
 - Streaming on server path is implemented on `POST /data/llm/execute` (SSE).
 - Streaming is also available on `POST /data/llm/generate` because it reuses the execute pipeline.
@@ -74,10 +74,10 @@ Set `RISU_DEV_NODE_API=0` before `pnpm dev` to disable this behavior.
   - current user message
   - character depth prompt injection
 - Full parity prompt-template/lorebook/memory assembly is still pending; client-side assembly can be used explicitly via `useClientAssembledRequest: true` during transition.
-- `POST /data/llm/generate` currently supports scaffolded raw-assembly provider set: OpenRouter/OpenAI/DeepSeek/Anthropic/Google/Mistral.
+- `POST /data/llm/generate` currently supports scaffolded raw-assembly provider set: OpenRouter/OpenAI/DeepSeek/Anthropic/Google/Ollama/Kobold/NovelAI.
 - Node-server client routing now uses `/data/llm/generate` broadly:
   - raw server-assembly path for scaffolded providers
-  - compatibility path (`useClientAssembledRequest: true`) for providers that still depend on client-assembled provider-specific request shapes (e.g. `reverse_proxy`, `custom`, `novelai`, `ooba`, `kobold`, `ollama`, `cohere`, `horde`).
+  - compatibility path (`useClientAssembledRequest: true`) for transition payloads that still carry provider-specific request templates.
 - Model picker now shows all providers/models in UI; execution migration state is enforced server-side.
 
 ## Smoke Tests

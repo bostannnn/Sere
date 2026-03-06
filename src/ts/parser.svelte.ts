@@ -4,7 +4,7 @@ import markdownit from 'markdown-it'
 import { appVer, getCurrentCharacter, getDatabase, type Database, type character, type customscript, type groupChat, type triggerscript } from './storage/database.svelte';
 import { DBState, selIdState, selectedCharID } from './stores.svelte';
 import { aiWatermarkingLawApplies, getFileSrc } from './globalApi.svelte';
-import { isTauri, isNodeServer } from "src/ts/platform"
+import { isNodeServer } from "src/ts/platform"
 import { getChatVar, setChatVar, getGlobalChatVar } from './parser/chatVar.svelte';
 import { processScriptFull } from './process/scripts';
 import { get } from 'svelte/store';
@@ -1057,7 +1057,6 @@ function initMatcher(){
         callInternalFunction: function (_args: string[]): string {
             return ''
         },
-        isTauri: isTauri,
         isNodeServer: isNodeServer,
         isMobile: false,
         appVer: appVer,

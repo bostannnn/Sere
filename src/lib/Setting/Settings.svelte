@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { AccessibilityIcon, ActivityIcon, PackageIcon, BotIcon, CodeIcon, ContactIcon, LanguagesIcon, MonitorIcon, Sailboat, CircleXIcon, KeyboardIcon } from "@lucide/svelte";
+    import { AccessibilityIcon, ActivityIcon, PackageIcon, BotIcon, CodeIcon, ContactIcon, LanguagesIcon, MonitorIcon, Sailboat, KeyboardIcon } from "@lucide/svelte";
     import { language } from "src/lang";
     import DisplaySettings from "./Pages/DisplaySettings.svelte";
     import BotSettings from "./Pages/BotSettings.svelte";
@@ -7,7 +7,6 @@
     import PluginSettings from "./Pages/PluginSettings.svelte";
     import AdvancedSettings from "./Pages/AdvancedSettings.svelte";
     import { additionalSettingsMenu, MobileGUI, SettingsMenuIndex, settingsOpen, SizeStore } from "src/ts/stores.svelte";
-    import { DBState } from "src/ts/stores.svelte";
     import LanguageSettings from "./Pages/LanguageSettings.svelte";
     import AccessibilitySettings from "./Pages/AccessibilitySettings.svelte";
     import PersonaSettings from "./Pages/PersonaSettings.svelte";
@@ -19,7 +18,6 @@
     import LogsSettingsPage from "./Pages/LogsSettingsPage.svelte";
     import PluginDefinedIcon from "../Others/PluginDefinedIcon.svelte";
     import { isWebKit } from "src/ts/platform";
-    import Button from "src/lib/UI/GUI/Button.svelte";
 
     const isDesktopSettings = $derived($SizeStore.w >= 700 && !$MobileGUI)
     const isStackedSettings = $derived(!isDesktopSettings)
@@ -30,14 +28,6 @@
             return;
         }
         $SettingsMenuIndex = index;
-    }
-
-    function closeSettingsPanel() {
-        if (isDesktopSettings) {
-            settingsOpen.set(false);
-            return;
-        }
-        $SettingsMenuIndex = -1;
     }
 
     function handleNavListKeydown(event: KeyboardEvent) {
@@ -295,11 +285,6 @@
                         </button>
                     {/each}
                 {/if}
-                {#if !isDesktopSettings && !$MobileGUI}
-                    <Button size="sm" className="ds-settings-panel-close ds-settings-panel-close-button ds-settings-icon-action ds-settings-icon-action-compact icon-btn icon-btn--sm" onclick={() => {
-                        settingsOpen.set(false)
-                    }}> <CircleXIcon size={DBState.db.settingsCloseButtonSize} /> </Button>
-                {/if}
             </div>
         {/if}
         {#if isDesktopSettings || $SettingsMenuIndex !== -1}
@@ -339,11 +324,6 @@
                     {/if}
             </div>
             {/key}
-            {#if !$MobileGUI}
-                <Button size="sm" className="ds-settings-panel-close ds-settings-panel-close-button ds-settings-icon-action ds-settings-icon-action-compact icon-btn icon-btn--sm" onclick={closeSettingsPanel}>
-                    <CircleXIcon size={DBState.db.settingsCloseButtonSize} />
-                </Button>
-            {/if}
         {/if}
     </div>
 </div>

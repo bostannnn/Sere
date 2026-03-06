@@ -6,10 +6,6 @@ const mocks = vi.hoisted(() => ({
   toggleFullscreen: vi.fn(),
 }));
 
-vi.mock(import("src/ts/platform"), () => ({
-  isTauri: true,
-}));
-
 vi.mock(import("src/ts/globalApi.svelte"), () => ({
   openURL: mocks.openURL,
   toggleFullscreen: mocks.toggleFullscreen,
@@ -56,10 +52,10 @@ describe("github stars runtime smoke", () => {
       "button",
     ]);
     expect(iconLinks.map((button) => button.getAttribute("aria-label"))).toEqual([
-      "Open RisuAI GitHub repository",
       "Open RisuAI website",
       "Open RisuAI Patreon",
       "Send email to RisuAI",
+      "Toggle fullscreen",
     ]);
     iconLinks.forEach((button) => {
       expect(button.title.length).toBeGreaterThan(0);
@@ -69,7 +65,12 @@ describe("github stars runtime smoke", () => {
     iconLinks.forEach((button) => button.click());
     await flushUi();
 
-    expect(mocks.openURL).toHaveBeenCalledTimes(4);
-    expect(mocks.toggleFullscreen).toHaveBeenCalledTimes(0);
+    const githubButton = document.querySelector(
+      ".github-button.ds-github-stars-button",
+    ) as HTMLAnchorElement | null;
+    expect(githubButton?.getAttribute("href")).toBe("https://github.com/kwaroran/risuAI");
+
+    expect(mocks.openURL).toHaveBeenCalledTimes(3);
+    expect(mocks.toggleFullscreen).toHaveBeenCalledTimes(1);
   });
 });

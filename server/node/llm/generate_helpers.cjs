@@ -54,10 +54,13 @@ function createGenerateHelpers(arg = {}) {
     const applyStateCommands = typeof arg.applyStateCommands === 'function'
         ? arg.applyStateCommands
         : null;
+    const readStateLastEventId = typeof arg.readStateLastEventId === 'function'
+        ? arg.readStateLastEventId
+        : (async () => 0);
 
     const generateSupportedProviders = arg.generateSupportedProviders instanceof Set
         ? arg.generateSupportedProviders
-        : new Set(['openrouter', 'openai', 'deepseek', 'anthropic', 'google', 'mistral']);
+        : new Set(['openrouter', 'openai', 'deepseek', 'anthropic', 'google', 'ollama', 'kobold', 'novelai']);
 
     function extractExecutionResultText(result) {
         if (typeof result === 'string') {
@@ -165,6 +168,115 @@ function createGenerateHelpers(arg = {}) {
             }
         }
         throw lastError;
+    }
+
+    function isStaleBaseConflict(error) {
+        const conflicts = Array.isArray(error?.result?.conflicts) ? error.result.conflicts : [];
+        return conflicts.some((entry) => entry && typeof entry === 'object' && entry.code === 'STALE_BASE_EVENT');
+    }
+
+    function toStoredChatObject(chatRaw) {
+        return chatRaw?.chat || chatRaw?.data || chatRaw || {};
+    }
+
+    function getMessageText(message) {
+        if (!message || typeof message !== 'object') return '';
+        return toStringOrEmpty(message.data) || toStringOrEmpty(message.content);
+    }
+
+    function isEquivalentTailUserMessage(chat, userMessage) {
+        const normalizedUserMessage = toStringOrEmpty(userMessage);
+        if (!normalizedUserMessage) return false;
+        const messages = Array.isArray(chat?.message) ? chat.message : [];
+        if (messages.length === 0) return false;
+        const tail = messages[messages.length - 1];
+        const role = toStringOrEmpty(tail?.role).toLowerCase();
+        if (role !== 'user' && role !== 'human') return false;
+        return getMessageText(tail) === normalizedUserMessage;
+    }
+
+    function buildStoredUserMessage(userMessage) {
+        return {
+            role: 'user',
+            data: toStringOrEmpty(userMessage),
+            time: Date.now(),
+        };
+    }
+
+    async function appendUserMessageWithRetry({
+        characterId,
+        chatId,
+        userMessage,
+        source,
+    }) {
+        if (!existsSync(path.join(dataDirs.characters, characterId, 'chats', `${chatId}.json`))) {
+            return;
+        }
+        const normalizedUserMessage = toStringOrEmpty(userMessage);
+        if (!normalizedUserMessage) {
+            return;
+        }
+        if (typeof applyStateCommands !== 'function') {
+            throw new LLMHttpError(
+                500,
+                'STATE_COMMANDS_UNAVAILABLE',
+                'Internal state command service is unavailable for server-side user message persistence.'
+            );
+        }
+        const messagePayload = buildStoredUserMessage(normalizedUserMessage);
+        for (let attempt = 0; attempt < 2; attempt += 1) {
+            const baseEventId = await readStateLastEventId();
+            try {
+                await applyStateCommands([
+                    {
+                        type: 'chat.message.append',
+                        charId: characterId,
+                        chatId,
+                        message: messagePayload,
+                    },
+                ], source, { baseEventId });
+                return;
+            } catch (error) {
+                if (!isStaleBaseConflict(error) || attempt >= 1) {
+                    throw error;
+                }
+            }
+        }
+    }
+
+    async function persistHypaDataWithRetry({
+        characterId,
+        chatId,
+        chatPath,
+        hypaV3Data,
+        source,
+    }) {
+        if (!existsSync(chatPath) || typeof applyStateCommands !== 'function') {
+            return;
+        }
+        for (let attempt = 0; attempt < 2; attempt += 1) {
+            const baseEventId = await readStateLastEventId();
+            const latestRaw = await readJsonFileWithRetry(chatPath);
+            const latestChat = toStoredChatObject(latestRaw);
+            const nextChat = (latestChat && typeof latestChat === 'object') ? { ...latestChat } : {};
+            nextChat.id = toStringOrEmpty(nextChat.id) || chatId;
+            nextChat.hypaV3Data = safeJsonClone(hypaV3Data, hypaV3Data);
+            try {
+                await applyStateCommands([
+                    {
+                        type: 'chat.replace',
+                        charId: characterId,
+                        chatId,
+                        chat: nextChat,
+                    },
+                ], source, { baseEventId });
+                return;
+            } catch (error) {
+                if (!isStaleBaseConflict(error) || attempt >= 1) {
+                    throw error;
+                }
+            }
+        }
     }
 
     async function executeInternalLLMTextCompletion(payload = {}) {
@@ -341,28 +453,6 @@ function createGenerateHelpers(arg = {}) {
         };
     }
 
-    async function persistChatViaStateCommand(characterId, chatId, chat, source) {
-        if (typeof applyStateCommands !== 'function') {
-            throw new LLMHttpError(
-                500,
-                'STATE_COMMANDS_UNAVAILABLE',
-                'Internal state command service is unavailable for server-side chat persistence.'
-            );
-        }
-        const nextChat = (chat && typeof chat === 'object') ? { ...chat } : {};
-        if (!toStringOrEmpty(nextChat.id)) {
-            nextChat.id = chatId;
-        }
-        await applyStateCommands([
-            {
-                type: 'chat.replace',
-                charId: characterId,
-                chatId,
-                chat: nextChat,
-            },
-        ], source);
-    }
-
     async function buildGenerateExecutionPayload(rawBody, options = {}) {
         if (!rawBody || typeof rawBody !== 'object' || Array.isArray(rawBody)) {
             throw new LLMHttpError(400, 'INVALID_BODY', 'Request body must be a JSON object.');
@@ -370,6 +460,7 @@ function createGenerateHelpers(arg = {}) {
 
         const characterId = toStringOrEmpty(rawBody.characterId);
         const chatId = toStringOrEmpty(rawBody.chatId);
+        const readOnlyTrace = options.readOnlyTrace === true;
         const userMessage = promptPipeline.extractLatestUserMessage(rawBody);
         const mode = getGenerateMode(rawBody);
         if (mode !== 'model') {
@@ -429,8 +520,32 @@ function createGenerateHelpers(arg = {}) {
         const character = charRaw.character || charRaw.data || charRaw || {};
         const chat = chatRaw.chat || chatRaw.data || chatRaw || {};
 
+        // Hard invariant: user message must be durable before generation.
+        if (!readOnlyTrace && !rawBody.continue && existsSync(chatPath) && toStringOrEmpty(userMessage)) {
+            if (!isEquivalentTailUserMessage(chat, userMessage)) {
+                try {
+                    await appendUserMessageWithRetry({
+                        characterId,
+                        chatId,
+                        userMessage,
+                        source: 'llm.generate.user-message',
+                    });
+                } catch (persistError) {
+                    throw new LLMHttpError(
+                        409,
+                        'USER_MESSAGE_PERSIST_FAILED',
+                        'Failed to persist user message before generation.',
+                        { reason: String(persistError?.message || persistError || 'unknown_error') }
+                    );
+                }
+                const messages = Array.isArray(chat.message) ? chat.message : [];
+                messages.push(buildStoredUserMessage(userMessage));
+                chat.message = messages;
+            }
+        }
+
         let shouldPersistServerChat = false;
-        if (existsSync(chatPath)) {
+        if (!readOnlyTrace && existsSync(chatPath)) {
             try {
                 const periodicResult = await maybeRunServerPeriodicHypaV3Summarization({
                     character,
@@ -470,14 +585,15 @@ function createGenerateHelpers(arg = {}) {
         if (existsSync(chatPath) && chat.hypaV3Data?.summaries?.length > 0) {
             shouldPersistServerChat = true;
         }
-        if (existsSync(chatPath) && shouldPersistServerChat) {
+        if (!readOnlyTrace && existsSync(chatPath) && shouldPersistServerChat) {
             try {
-                await persistChatViaStateCommand(
+                await persistHypaDataWithRetry({
                     characterId,
                     chatId,
-                    chat,
-                    'llm.generate.hypav3',
-                );
+                    chatPath,
+                    hypaV3Data: chat.hypaV3Data,
+                    source: 'llm.generate.hypav3',
+                });
             } catch (metricsWriteError) {
                 console.error('[HypaV3] Failed to persist memory selection metrics:', metricsWriteError);
             }
@@ -513,6 +629,15 @@ function createGenerateHelpers(arg = {}) {
         const allowReasoningOnlyForDeepSeekV32Speciale =
             rawBody?.allowReasoningOnlyForDeepSeekV32Speciale === true ||
             rawBody?.request?.allowReasoningOnlyForDeepSeekV32Speciale === true;
+
+        Object.defineProperty(request, '__serverContext', {
+            value: {
+                character: safeJsonClone(character, character),
+                settings: safeJsonClone(settings, settings),
+            },
+            enumerable: false,
+            configurable: true,
+        });
 
         const output = {
             mode,

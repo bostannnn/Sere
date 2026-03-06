@@ -196,6 +196,7 @@ function registerLLMRoutes(arg = {}) {
         let payload = null;
         try {
             payload = await buildGenerateExecutionPayload(req.body, {
+                readOnlyTrace: true,
                 onPeriodicSummaryTrace: async (trace) => {
                     await appendMemoryTraceAudit({
                         req,

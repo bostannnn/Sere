@@ -13,6 +13,9 @@ function createExecuteRouteHandler(arg = {}) {
     const applyStateCommands = typeof arg.applyStateCommands === 'function'
         ? arg.applyStateCommands
         : null;
+    const readStateLastEventId = typeof arg.readStateLastEventId === 'function'
+        ? arg.readStateLastEventId
+        : (async () => 0);
     const getReqIdFromResponse = typeof arg.getReqIdFromResponse === 'function'
         ? arg.getReqIdFromResponse
         : (() => '-');
@@ -176,6 +179,39 @@ function createExecuteRouteHandler(arg = {}) {
         }
     }
 
+    function isStaleBaseConflict(error) {
+        const conflicts = Array.isArray(error?.result?.conflicts) ? error.result.conflicts : [];
+        return conflicts.some((entry) => entry && typeof entry === 'object' && entry.code === 'STALE_BASE_EVENT');
+    }
+
+    async function applyCharacterGameStateWithRetry(charId, gameStatePatch) {
+        if (typeof applyStateCommands !== 'function') {
+            throw new Error('STATE_COMMANDS_UNAVAILABLE');
+        }
+        const charPath = path.join(dataDirs.characters, charId, 'character.json');
+        for (let attempt = 0; attempt < 2; attempt += 1) {
+            const baseEventId = await readStateLastEventId();
+            const { json: charData } = await readJsonWithEtag(charPath);
+            const char = charData.character || charData.data || charData;
+            const nextCharacter = (char && typeof char === 'object') ? { ...char } : {};
+            nextCharacter.gameState = { ...(nextCharacter.gameState || {}), ...gameStatePatch };
+            try {
+                await applyStateCommands([
+                    {
+                        type: 'character.replace',
+                        charId,
+                        character: nextCharacter,
+                    },
+                ], 'llm.execute.game-state', { baseEventId });
+                return;
+            } catch (error) {
+                if (!isStaleBaseConflict(error) || attempt >= 1) {
+                    throw error;
+                }
+            }
+        }
+    }
+
     async function enqueueGameStateWrite(characterId, task) {
         const prev = gameStateWriteQueue.get(characterId) || Promise.resolve();
         const next = prev
@@ -200,9 +236,6 @@ function createExecuteRouteHandler(arg = {}) {
 
             const systemBlock = systemMatch[1];
             if (!systemBlock) return;
-
-            const { json: charData } = await readJsonWithEtag(charPath);
-            const char = charData.character || charData.data || charData;
 
             const stateRegex = /\[([^:\]]+):\s*([^\]]+?)(?=\s*\](?:\s*\[|$))/g;
             const fallbackRegex = /\[([^:\]]+):\s*([^\]]+)\]/g;
@@ -237,18 +270,7 @@ function createExecuteRouteHandler(arg = {}) {
             }
 
             if (Object.keys(updates).length > 0) {
-                const nextCharacter = (char && typeof char === 'object') ? { ...char } : {};
-                nextCharacter.gameState = { ...(nextCharacter.gameState || {}), ...updates };
-                if (typeof applyStateCommands !== 'function') {
-                    throw new Error('STATE_COMMANDS_UNAVAILABLE');
-                }
-                await applyStateCommands([
-                    {
-                        type: 'character.replace',
-                        charId,
-                        character: nextCharacter,
-                    },
-                ], 'llm.execute.game-state');
+                await applyCharacterGameStateWithRetry(charId, updates);
                 console.log(`[RAG-State] Server Autonomous Update for ${charId}:`, updates);
             }
         });
@@ -419,7 +441,7 @@ function createExecuteRouteHandler(arg = {}) {
 
                 const handleSSEEventBlock = async (rawEvent) => {
                     if (!rawEvent || !rawEvent.trim()) return;
-                    const lines = rawEvent.split('\n');
+                    const lines = rawEvent.split(/\r?\n/);
                     const dataLines = [];
                     for (const line of lines) {
                         if (line.startsWith('data:')) {
@@ -446,12 +468,14 @@ function createExecuteRouteHandler(arg = {}) {
                 };
 
                 const flushSSEBuffer = async (flushTrailing = false) => {
-                    let splitIndex = sseBuffer.indexOf('\n\n');
-                    while (splitIndex !== -1) {
-                        const eventBlock = sseBuffer.slice(0, splitIndex);
-                        sseBuffer = sseBuffer.slice(splitIndex + 2);
+                    let boundaryMatch = /\r?\n\r?\n/.exec(sseBuffer);
+                    while (boundaryMatch) {
+                        const boundaryIndex = boundaryMatch.index;
+                        const boundaryLength = boundaryMatch[0].length;
+                        const eventBlock = sseBuffer.slice(0, boundaryIndex);
+                        sseBuffer = sseBuffer.slice(boundaryIndex + boundaryLength);
                         await handleSSEEventBlock(eventBlock);
-                        splitIndex = sseBuffer.indexOf('\n\n');
+                        boundaryMatch = /\r?\n\r?\n/.exec(sseBuffer);
                     }
                     if (flushTrailing && sseBuffer.trim()) {
                         const trailingEvent = sseBuffer;
@@ -546,16 +570,27 @@ function createExecuteRouteHandler(arg = {}) {
                 } catch (err) {
                     const disconnected = clientDisconnected || err?.code === 'CLIENT_DISCONNECTED';
                     const durationMs = Date.now() - startedAt;
-                    const status = disconnected
-                        ? 499
-                        : (err instanceof LLMHttpError && Number.isFinite(Number(err.status))
-                            ? Number(err.status)
-                            : 500);
-                    const errorCode = disconnected
-                        ? 'CLIENT_DISCONNECTED'
-                        : (err instanceof LLMHttpError && typeof err.code === 'string' && err.code
-                            ? err.code
-                            : 'STREAM_ERROR');
+                    const errorResponse = disconnected
+                        ? {
+                            status: 499,
+                            code: 'CLIENT_DISCONNECTED',
+                            payload: {
+                                error: 'CLIENT_DISCONNECTED',
+                                message: 'Client disconnected during streaming response.',
+                                requestId: reqId,
+                                endpoint: normalized.endpoint,
+                                durationMs,
+                            },
+                        }
+                        : toLLMErrorResponse(err, {
+                            requestId: reqId,
+                            endpoint: normalized.endpoint,
+                            durationMs,
+                        });
+                    const status = Number.isFinite(Number(errorResponse?.status)) ? Number(errorResponse.status) : 500;
+                    const errorCode = typeof errorResponse?.code === 'string' && errorResponse.code
+                        ? errorResponse.code
+                        : 'STREAM_ERROR';
                     if (!disconnected) {
                         console.error('[LLMAPI] Stream error:', err);
                     }
@@ -585,10 +620,7 @@ function createExecuteRouteHandler(arg = {}) {
                         durationMs,
                         ragMeta: normalized._ragMeta || null,
                         request: buildExecutionAuditRequest(auditEndpointForRequest, requestBody),
-                        error: {
-                            error: errorCode,
-                            message: String(err),
-                        },
+                        error: errorResponse.payload,
                     });
                     await appendGenerateTraceAudit({
                         req,
@@ -597,18 +629,14 @@ function createExecuteRouteHandler(arg = {}) {
                         durationMs,
                         status,
                         ok: false,
-                        error: {
-                            error: errorCode,
-                            message: String(err),
-                        },
+                        error: errorResponse.payload,
                     });
                     if (!disconnected && !res.writableEnded && !res.destroyed) {
                         try {
                             await writeSSEEvent({
                                 type: 'fail',
-                                status,
-                                error: errorCode,
-                                message: String(err),
+                                status: errorResponse.status,
+                                ...errorResponse.payload,
                             });
                         } catch {}
                     }

@@ -10,7 +10,7 @@ import { sleep } from "src/ts/util";
 import { alertConfirm, alertError, alertNormal } from "src/ts/alert";
 import { language } from "src/lang";
 import { checkCharOrder, forageStorage, getFetchLogs } from "src/ts/globalApi.svelte";
-import { isNodeServer, isTauri } from "src/ts/platform";
+import { isNodeServer } from "src/ts/platform";
 import { get } from "svelte/store";
 import { checkCodeSafety } from "../pluginSafety";
 const pluginV3Log = (..._args: unknown[]) => {};
@@ -825,12 +825,9 @@ const makeRisuaiAPIV3 = (iframe:HTMLIFrameElement,plugin:RisuPlugin) => {
                 apiVersion: "3.0",
                 platform: 
                     isNodeServer ? 'node' :
-                    isTauri ? 'tauri' :
                     'web',
                 saveMethod:
-                    isTauri ? 'tauri' :
-                    forageStorage.isAccount ? 'account' :
-                    'local',
+                    forageStorage.isAccount ? 'account' : 'local',
             }
         },
         checkCharOrder: checkCharOrder,

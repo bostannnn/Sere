@@ -6,7 +6,6 @@
     
     import { DBState } from 'src/ts/stores.svelte';
     import { customProviderStore } from "src/ts/plugins/plugins.svelte";
-    import { isTauri } from "src/ts/platform"
     import { tokenizeAccurate, tokenizerList } from "src/ts/tokenizer";
     import ModelList from "src/lib/UI/ModelList.svelte";
     import DropList from "src/lib/SideBars/DropList.svelte";
@@ -466,9 +465,7 @@ const tokens = $state({
             <span class="ds-settings-note-danger">You must use textgen webui with --public-api</span>
             <span class="ds-settings-label">Stream {language.providerURL}</span>
             <TextInput bind:value={DBState.db.textgenWebUIStreamURL} placeholder="wss://..."/>
-            {#if !isTauri}
-                <span class="ds-settings-note-danger">You are using web version. you must use ngrok or other tunnels to use your local webui.</span>
-            {/if}
+            <span class="ds-settings-note-danger">You are using web version. you must use ngrok or other tunnels to use your local webui.</span>
             <span class="ds-settings-note-danger">Warning: For Ooba version over 1.7, use "Ooba" as model, and use url like http://127.0.0.1:5000/v1/chat/completions</span>
         </div>
     {/if}

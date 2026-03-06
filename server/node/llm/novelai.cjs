@@ -1,7 +1,5 @@
-const { existsSync } = require('fs');
-const fs = require('fs/promises');
-const path = require('path');
 const { LLMHttpError } = require('./errors.cjs');
+const { loadServerSettings } = require('./settings_cache.cjs');
 
 function safeClone(value) {
     if (value === null || value === undefined) return value;
@@ -10,19 +8,6 @@ function safeClone(value) {
     } catch {
         return value;
     }
-}
-
-async function loadSettings(dataRoot) {
-    const settingsPath = path.join(dataRoot, 'settings.json');
-    if (!existsSync(settingsPath)) {
-        throw new LLMHttpError(404, 'SETTINGS_NOT_FOUND', 'Server settings are not initialized.');
-    }
-    const raw = await fs.readFile(settingsPath, 'utf-8');
-    const parsed = JSON.parse(raw);
-    if (parsed && typeof parsed === 'object' && parsed.data && typeof parsed.data === 'object') {
-        return parsed.data;
-    }
-    return parsed;
 }
 
 function getRequestPayload(input) {
@@ -40,6 +25,19 @@ function resolveNovelAIUrl(model) {
     return 'https://api.novelai.net/ai/generate';
 }
 
+function normalizeNovelAIModelName(model) {
+    const raw = typeof model === 'string' ? model.trim() : '';
+    if (!raw) return 'clio-v1';
+    const normalized = raw.toLowerCase();
+    if (normalized === 'novelai_kayra' || normalized === 'kayra' || normalized === 'kayra-v1') {
+        return 'kayra-v1';
+    }
+    if (normalized === 'novelai' || normalized === 'novelai_clio' || normalized === 'clio' || normalized === 'clio-v1') {
+        return 'clio-v1';
+    }
+    return raw;
+}
+
 function buildExecutionRequest(input, settings, arg = {}) {
     const requireKey = arg.requireKey !== false;
     const payload = getRequestPayload(input);
@@ -48,9 +46,7 @@ function buildExecutionRequest(input, settings, arg = {}) {
     if (typeof requestBody.input !== 'string' || !requestBody.input.trim()) {
         throw new LLMHttpError(400, 'INVALID_PROMPT', 'NovelAI request requires a non-empty input.');
     }
-    if (typeof requestBody.model !== 'string' || !requestBody.model.trim()) {
-        requestBody.model = 'clio-v1';
-    }
+    requestBody.model = normalizeNovelAIModelName(requestBody.model);
     if (!requestBody.parameters || typeof requestBody.parameters !== 'object') {
         throw new LLMHttpError(400, 'INVALID_BODY', 'NovelAI request requires parameters object.');
     }
@@ -81,7 +77,7 @@ function sanitizeHeaders(headers) {
 }
 
 async function previewNovelAIExecution(input, ctx = {}) {
-    const settings = await loadSettings(ctx.dataRoot);
+    const settings = await loadServerSettings(ctx.dataRoot);
     const built = buildExecutionRequest(input, settings, { requireKey: false });
     return {
         url: built.url,
@@ -94,7 +90,7 @@ async function previewNovelAIExecution(input, ctx = {}) {
 }
 
 async function executeNovelAI(input, ctx = {}) {
-    const settings = await loadSettings(ctx.dataRoot);
+    const settings = await loadServerSettings(ctx.dataRoot);
     const built = buildExecutionRequest(input, settings);
 
     const upstream = await fetch(built.url, {

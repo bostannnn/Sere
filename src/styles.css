@@ -782,15 +782,21 @@ body {
   left: 0;
   width: 100vw;
   height: 100dvh;
-  z-index: var(--z-overlay, 110);
+  z-index: 2100;
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: center;
   overflow-y: auto;
-  padding: max(var(--ds-space-4), env(safe-area-inset-top))
+  padding: max(var(--ds-space-5), env(safe-area-inset-top))
     var(--ds-space-4)
-    max(var(--ds-space-4), env(safe-area-inset-bottom));
+    max(var(--ds-space-5), env(safe-area-inset-bottom));
   background: rgb(0 0 0 / 0.5);
+}
+
+.ds-model-list-dialog {
+  width: 100%;
+  display: flex;
+  justify-content: center;
 }
 
 .ds-model-list-panel.panel-shell {
@@ -856,6 +862,10 @@ body {
 
 .ds-model-list-item:hover {
   background: var(--ds-surface-active);
+}
+
+.ds-model-list-item.ds-model-list-item--child {
+  padding-left: calc(var(--ds-space-6) + var(--ds-space-3));
 }
 
 .ds-model-list-item.ds-model-list-item-compact {

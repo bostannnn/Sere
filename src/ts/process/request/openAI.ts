@@ -1,13 +1,13 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { language } from "src/lang"
-import { applyParameters, setObjectValue, type OpenAIChatExtra, type OpenAIContents, type OpenAIToolCall, type RequestDataArgumentExtended, type requestDataResponse, type StreamResponseChunk } from "./request"
+import { applyParameters, type OpenAIChatExtra, type OpenAIContents, type OpenAIToolCall, type RequestDataArgumentExtended, type requestDataResponse, type StreamResponseChunk } from "./request"
 import { getDatabase } from "src/ts/storage/database.svelte"
 import { LLMFlags, LLMFormat } from "src/ts/model/modellist"
 import { strongBan, tokenizeNum } from "src/ts/tokenizer"
 import { getFreeOpenRouterModel } from "src/ts/model/openrouter"
 import { addFetchLog, fetchNative, globalFetch, textifyReadableStream } from "src/ts/globalApi.svelte"
-import { isTauri, isNodeServer } from "src/ts/platform"
+import { isNodeServer, isTauri } from "src/ts/platform"
 import type { OpenAIChatFull } from "../index.svelte"
 import { extractJSON, getOpenAIJSONSchema } from "../templates/jsonSchema"
 import { applyChatTemplate } from "../templates/chatTemplate"
@@ -99,19 +99,13 @@ async function requestServerExecution(
     arg: RequestDataArgumentExtended,
     body: Record<string, any>,
     opts: {
-        provider: 'openrouter' | 'openai' | 'deepseek' | 'mistral' | 'reverse_proxy' | 'custom'
+        provider: 'openrouter' | 'openai' | 'deepseek'
         providerLabel: string
         keyMissingCode: string
-        proxyRequest?: {
-            url: string
-            method?: string
-            headers?: Record<string, string>
-        }
-        customModelId?: string
     }
 ): Promise<requestDataResponse> {
-    const generateProviders = new Set(['openrouter', 'openai', 'deepseek', 'mistral', 'reverse_proxy', 'custom']);
-    const rawGenerateProviders = new Set(['openrouter', 'openai', 'deepseek', 'mistral']);
+    const generateProviders = new Set(['openrouter', 'openai', 'deepseek']);
+    const rawGenerateProviders = new Set(['openrouter', 'openai', 'deepseek']);
     const requestMode = String(arg.mode ?? 'model');
     const hasServerAssemblyContext = !!(arg.currentChar?.chaId) && !!arg.chatId;
     const canUseGenerateEndpoint = requestMode === 'model';
@@ -237,8 +231,6 @@ async function requestServerExecution(
                     ? Number(requestBodyForServer.max_tokens ?? requestBodyForServer.max_completion_tokens)
                     : undefined,
                 tools: Array.isArray(requestBodyForServer.tools) ? requestBodyForServer.tools : undefined,
-                proxyRequest: opts.proxyRequest,
-                customModelId: opts.customModelId,
             },
         };
 
@@ -441,55 +433,24 @@ async function requestDeepSeekServerExecution(arg: RequestDataArgumentExtended, 
     });
 }
 
-async function requestMistralServerExecution(arg: RequestDataArgumentExtended, body: Record<string, any>): Promise<requestDataResponse> {
-    return await requestServerExecution(arg, body, {
-        provider: 'mistral',
-        providerLabel: 'Mistral',
-        keyMissingCode: 'MISTRAL_KEY_MISSING',
-    });
-}
-
-async function requestReverseProxyServerExecution(
-    arg: RequestDataArgumentExtended,
-    body: Record<string, any>,
-    url: string,
-    headers: Record<string, string>
-): Promise<requestDataResponse> {
-    const forwardedHeaders: Record<string, string> = {};
-    for (const [key, value] of Object.entries(headers || {})) {
-        if (key.toLowerCase() === 'authorization') continue;
-        forwardedHeaders[key] = value;
-    }
-    return await requestServerExecution(arg, body, {
-        provider: 'reverse_proxy',
-        providerLabel: 'Reverse proxy',
-        keyMissingCode: 'REVERSE_PROXY_KEY_MISSING',
-        proxyRequest: {
-            url,
-            method: 'POST',
-            headers: forwardedHeaders,
-        },
-    });
-}
-
-async function requestCustomServerExecution(
-    arg: RequestDataArgumentExtended,
-    body: Record<string, any>,
-    customModelId: string
-): Promise<requestDataResponse> {
-    return await requestServerExecution(arg, body, {
-        provider: 'custom',
-        providerLabel: 'Custom model',
-        keyMissingCode: 'CUSTOM_MODEL_KEY_MISSING',
-        customModelId,
-    });
-}
-
 export async function requestOpenAI(arg:RequestDataArgumentExtended):Promise<requestDataResponse>{
     let formatedChat:OpenAIChatExtra[] = []
     const formated = arg.formated
     const db = getDatabase()
     const aiModel = arg.aiModel
+
+    if (
+        aiModel?.startsWith('mistral') ||
+        aiModel === 'open-mistral-nemo' ||
+        aiModel === 'reverse_proxy' ||
+        aiModel?.startsWith('xcustom:::')
+    ) {
+        return {
+            type: 'fail',
+            noRetry: true,
+            result: `${language.errors.httpError}Provider has been removed: ${aiModel}.`,
+        }
+    }
 
     const processToolCalls = async (text:string, originalMessage:any) => {
         // Split text by tool_call tags and process each segment
@@ -583,7 +544,6 @@ export async function requestOpenAI(arg:RequestDataArgumentExtended):Promise<req
         }
     }
     
-    const oobaSystemPrompts:string[] = []
     for(let i=0;i<formatedChat.length;i++){
         if(formatedChat[i].role !== 'function'){
             if(!(formatedChat[i].name && formatedChat[i].name.startsWith('example_') && db.newOAIHandle)){
@@ -605,20 +565,6 @@ export async function requestOpenAI(arg:RequestDataArgumentExtended):Promise<req
             delete formatedChat[i].thoughts
             delete formatedChat[i].cachePoint
         }
-        if(aiModel === 'reverse_proxy' && db.reverseProxyOobaMode && formatedChat[i].role === 'system'){
-            const cont = formatedChat[i].content
-            if(typeof(cont) === 'string'){
-                oobaSystemPrompts.push(cont)
-                formatedChat[i].content = ''
-            }
-        }
-    }
-
-    if(oobaSystemPrompts.length > 0){
-        formatedChat.push({
-            role: 'system',
-            content: oobaSystemPrompts.join('\n')
-        })
     }
 
 
@@ -649,14 +595,11 @@ export async function requestOpenAI(arg:RequestDataArgumentExtended):Promise<req
     }
 
 
-    let requestModel = (aiModel === 'reverse_proxy' || aiModel === 'openrouter') ? db.proxyRequestModel : aiModel
+    let requestModel = aiModel === 'openrouter' ? db.proxyRequestModel : aiModel
     const useSubmodelOpenrouter = arg.mode && arg.mode !== 'model'
     let openrouterRequestModel = useSubmodelOpenrouter
         ? (db.openrouterSubRequestModel || db.openrouterRequestModel)
         : db.openrouterRequestModel
-    if(aiModel === 'reverse_proxy'){
-        requestModel = db.customProxyRequestModel
-    }
 
     if(aiModel === 'openrouter' && openrouterRequestModel === 'risu/free'){
         openrouterRequestModel = await getFreeOpenRouterModel()
@@ -672,122 +615,6 @@ export async function requestOpenAI(arg:RequestDataArgumentExtended):Promise<req
     }
 
     openAiRequestLog(formatedChat)
-    if(arg.modelInfo.format === LLMFormat.Mistral){
-        requestModel = aiModel
-
-        const reformatedChat:OpenAIChatExtra[] = []
-
-        for(let i=0;i<formatedChat.length;i++){
-            const chat = formatedChat[i]
-            if(i === 0){
-                if(chat.role === 'user' || chat.role === 'system'){
-                    reformatedChat.push({
-                        role: chat.role,
-                        content: chat.content
-                    })
-                }
-                else{
-                    reformatedChat.push({
-                        role: 'system',
-                        content:  chat.role + ':' + chat.content
-                    })
-                }
-            }
-            else{
-                const prevChat = reformatedChat[reformatedChat.length-1]
-                if(prevChat?.role === chat.role){
-                    reformatedChat[reformatedChat.length-1].content += '\n' + chat.content
-                    continue
-                }
-                else if(chat.role === 'system'){
-                    if(prevChat?.role === 'user'){
-                        reformatedChat[reformatedChat.length-1].content += '\nSystem:' + chat.content
-                    }
-                    else{
-                        reformatedChat.push({
-                            role: 'user',
-                            content: 'System:' + chat.content
-                        })
-                    }
-                }
-                else if(chat.role === 'function'){
-                    reformatedChat.push({
-                        role: 'user',
-                        content: chat.content
-                    })
-                }
-                else{
-                    reformatedChat.push({
-                        role: chat.role,
-                        content: chat.content
-                    })
-                }
-            }
-        }
-
-        const targs = {
-            body: applyParameters({
-                model: requestModel,
-                messages: reformatedChat,
-                safe_prompt: false,
-                max_tokens: arg.maxTokens,
-            }, ['temperature', 'presence_penalty', 'frequency_penalty', 'top_p'], {}, arg.mode ),
-            headers: {
-                "Authorization": "Bearer " + (arg.key ?? db.mistralKey),
-            },
-            abortSignal: arg.abortSignal,
-            chatId: arg.chatId
-        } as const
-
-        if (isNodeServer) {
-            return await requestMistralServerExecution(arg, targs.body)
-        }
-
-        if(arg.previewBody){
-            return {
-                type: 'success',
-                result: JSON.stringify({
-                    url: "https://api.mistral.ai/v1/chat/completions",
-                    body: targs.body,
-                    headers: targs.headers
-                })
-            }
-        }
-    
-        const res = await globalFetch(arg.customURL ?? "https://api.mistral.ai/v1/chat/completions", targs)
-
-        const dat = (res.data && typeof res.data === 'object')
-            ? (res.data as OpenAIHttpResponse)
-            : ({} as OpenAIHttpResponse)
-        if(res.ok){
-            try {
-                const msg:OpenAIChatFull = (dat.choices[0].message)
-                return {
-                    type: 'success',
-                    result: msg.content
-                }
-            } catch {                    
-                return {
-                    type: 'fail',
-                    result: (language.errors.httpError + `${JSON.stringify(dat)}`)
-                }
-            }
-        }
-        else{
-            if(dat.error && dat.error.message){                    
-                return {
-                    type: 'fail',
-                    result: (language.errors.httpError + `${dat.error.message}`)
-                }
-            }
-            else{                    
-                return {
-                    type: 'fail',
-                    result: (language.errors.httpError + `${JSON.stringify(res.data)}`)
-                }
-            }
-        }
-    }
 
     db.cipherChat = false
     let body:{
@@ -908,27 +735,10 @@ export async function requestOpenAI(arg:RequestDataArgumentExtended):Promise<req
         })
     }
 
-    if(aiModel === 'reverse_proxy' && db.reverseProxyOobaMode){
-        const OobaBodyTemplate = db.reverseProxyOobaArgs
-
-        const keys = Object.keys(OobaBodyTemplate)
-        for(const key of keys){
-            if(OobaBodyTemplate[key] !== undefined && OobaBodyTemplate[key] !== null){
-                body[key] = OobaBodyTemplate[key]
-            }
-        }
-
-    }
-
     if(supportsInlayImage()){
         // inlay models doesn't support logit_bias
         // OpenAI's gpt based llm model supports both logit_bias and inlay image
-        if(!(
-            aiModel.startsWith('gpt') || 
-            (aiModel == 'reverse_proxy' && (
-                db.proxyRequestModel?.startsWith('gpt') ||
-                (db.proxyRequestModel === 'custom' && db.customProxyRequestModel.startsWith('gpt'))
-            )))){
+        if(!aiModel.startsWith('gpt')){
             delete body.logit_bias
         }
     }
@@ -946,25 +756,8 @@ export async function requestOpenAI(arg:RequestDataArgumentExtended):Promise<req
         replacerURL = replacerURL.replace("risu::", '')
     }
 
-    if(aiModel === 'reverse_proxy' && db.autofillRequestUrl){
-        if(replacerURL.endsWith('v1')){
-            replacerURL += '/chat/completions'
-        }
-        else if(replacerURL.endsWith('v1/')){
-            replacerURL += 'chat/completions'
-        }
-        else if(!(replacerURL.endsWith('completions') || replacerURL.endsWith('completions/'))){
-            if(replacerURL.endsWith('/')){
-                replacerURL += 'v1/chat/completions'
-            }
-            else{
-                replacerURL += '/v1/chat/completions'
-            }
-        }
-    }
-
     const headers = {
-        "Authorization": "Bearer " + (arg.key ?? (aiModel === 'reverse_proxy' ?  db.proxyKey : (aiModel === 'openrouter' ? db.openrouterKey : db.openAIKey))),
+        "Authorization": "Bearer " + (arg.key ?? (aiModel === 'openrouter' ? db.openrouterKey : db.openAIKey)),
         "Content-Type": "application/json"
     }
 
@@ -993,9 +786,7 @@ export async function requestOpenAI(arg:RequestDataArgumentExtended):Promise<req
         isNodeServer &&
         arg.modelInfo.format === LLMFormat.OpenAICompatible &&
         aiModel !== 'openrouter' &&
-        !aiModel.startsWith('deepseek') &&
-        aiModel !== 'reverse_proxy' &&
-        !aiModel.startsWith('xcustom:::');
+        !aiModel.startsWith('deepseek');
 
     if (isNodeServer && aiModel === 'openrouter') {
         return await requestOpenRouterServerExecution(arg, body)
@@ -1006,11 +797,12 @@ export async function requestOpenAI(arg:RequestDataArgumentExtended):Promise<req
     if (isNodeServer && aiModel.startsWith('deepseek')) {
         return await requestDeepSeekServerExecution(arg, body)
     }
-    if (isNodeServer && aiModel === 'reverse_proxy') {
-        return await requestReverseProxyServerExecution(arg, body, replacerURL, headers)
-    }
-    if (isNodeServer && aiModel.startsWith('xcustom:::')) {
-        return await requestCustomServerExecution(arg, body, aiModel)
+    if (isNodeServer && (aiModel === 'reverse_proxy' || aiModel.startsWith('xcustom:::'))) {
+        return {
+            type: 'fail',
+            noRetry: true,
+            result: `${language.errors.httpError}Provider has been removed: ${aiModel}.`,
+        }
     }
 
     if(arg.useStreaming){
@@ -1072,73 +864,6 @@ export async function requestOpenAI(arg:RequestDataArgumentExtended):Promise<req
         return {
             type: 'streaming',
             result: wrapToolStream(transtream.readable, body, headers, replacerURL, arg)
-        }
-    }
-
-    if((aiModel === 'reverse_proxy' || aiModel.startsWith('xcustom:::')) && !isNodeServer){
-        const additionalParams = aiModel === 'reverse_proxy' ? db.additionalParams : []
-
-        if(aiModel.startsWith('xcustom:::')){
-            const found = db.customModels.find(m => m.id === aiModel)
-            const params = found?.params
-            if(params){
-                const lines = params.split('\n')
-                for(const line of lines){
-                    const split = line.split('=')
-                    if(split.length >= 2){
-                        additionalParams.push([split[0], split.slice(1).join('=')])
-                    }
-                }
-            }
-        }
-
-        for(let i=0;i<additionalParams.length;i++){
-            let key = additionalParams[i][0]
-            let value = additionalParams[i][1]
-
-            if(!key || !value){
-                continue
-            }
-
-            if(value === '{{none}}'){
-                if(key.startsWith('header::')){
-                    key = key.replace('header::', '')
-                    delete headers[key]
-                }
-                else{
-                    delete body[key]
-                }
-                continue
-            }
-
-            if(key.startsWith('header::')){
-                key = key.replace('header::', '')
-                headers[key] = value
-            }
-            else if(value.startsWith('json::')){
-                value = value.replace('json::', '')
-                try {
-                    body[key] = JSON.parse(value)                            
-                } catch {}
-            }
-            else if((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))){
-                body = setObjectValue(body, key, value.slice(1, -1))
-            }
-            else if(value === 'true' || value === 'false'){
-                body = setObjectValue(body, key, value === 'true')
-            }
-            else if(value === 'null'){
-                body = setObjectValue(body, key, null)
-            }
-            else{
-                const num = Number(value)
-                if(isNaN(num)){
-                    body = setObjectValue(body, key, value)
-                }
-                else{
-                    body = setObjectValue(body, key, num)
-                }
-            }
         }
     }
 
@@ -1535,51 +1260,6 @@ export async function requestOpenAIResponseAPI(arg:RequestDataArgumentExtended):
     if(requestURL.startsWith("risu::")){
         risuIdentify = true
         requestURL = requestURL.replace("risu::", '')
-    }
-
-    if(aiModel === 'reverse_proxy' && db.autofillRequestUrl){
-        try{
-            const url = new URL(requestURL)
-            const pathSegments = url.pathname.split('/').filter(Boolean)
-            const lastSegment = pathSegments[pathSegments.length - 1] ?? ''
-
-            if(url.searchParams.has('api-version') && url.pathname.includes('/responses')){
-                // Azure-style Responses API URL already includes the endpoint
-            }
-            else if(lastSegment === 'responses'){
-                // keep as-is
-            }
-            else if(lastSegment === 'v1'){
-                url.pathname = url.pathname.replace(/\/?$/, '/responses')
-            }
-            else{
-                url.pathname = url.pathname.replace(/\/?$/, '/v1/responses')
-            }
-
-            requestURL = url.toString()
-        }
-        catch{
-            const [baseURL, query] = requestURL.split('?', 2)
-            let nextURL = baseURL
-            const pathSegments = nextURL.split('/').filter(Boolean)
-            const lastSegment = pathSegments[pathSegments.length - 1] ?? ''
-            const hasApiVersion = query?.includes('api-version=')
-
-            if(hasApiVersion && nextURL.includes('/responses')){
-                // Azure-style Responses API URL already includes the endpoint
-            }
-            else if(lastSegment === 'responses'){
-                // keep as-is
-            }
-            else if(lastSegment === 'v1'){
-                nextURL += nextURL.endsWith('/') ? 'responses' : '/responses'
-            }
-            else{
-                nextURL += nextURL.endsWith('/') ? 'v1/responses' : '/v1/responses'
-            }
-
-            requestURL = query ? `${nextURL}?${query}` : nextURL
-        }
     }
 
     const headers = {

@@ -151,25 +151,6 @@ export const LLMModels: LLMModel[] = [
     },
     // Other providers
     {
-        name: 'Ooba',
-        id: 'ooba',
-        provider: LLMProvider.AsIs,
-        format: LLMFormat.Ooba,
-        flags: [LLMFlags.hasFirstSystemPrompt],
-        recommended: true,
-        parameters: [],
-        tokenizer: LLMTokenizer.Llama
-    },
-    {
-        name: 'Mancer',
-        id: 'mancer',
-        provider: LLMProvider.AsIs,
-        format: LLMFormat.OobaLegacy,
-        flags: [LLMFlags.hasFirstSystemPrompt],
-        parameters: [],
-        tokenizer: LLMTokenizer.Llama
-    },
-    {
         name: 'OpenRouter',
         id: 'openrouter',
         provider: LLMProvider.AsIs,
@@ -178,60 +159,6 @@ export const LLMModels: LLMModel[] = [
         parameters: ['temperature', 'top_p', 'frequency_penalty', 'presence_penalty', 'repetition_penalty', 'min_p', 'top_a', 'top_k'],
         recommended: true,
         tokenizer: LLMTokenizer.Unknown
-    },
-    // Mistral models
-    {
-        name: 'Mistral Small Latest',
-        id: 'mistral-small-latest',
-        shortName: 'Mistral S',
-        provider: LLMProvider.Mistral,
-        format: LLMFormat.Mistral,
-        flags: [LLMFlags.hasFirstSystemPrompt, LLMFlags.mustStartWithUserInput, LLMFlags.requiresAlternateRole],
-        recommended: true,
-        parameters: ['temperature', 'presence_penalty', 'frequency_penalty', 'top_p'],
-        tokenizer: LLMTokenizer.Mistral
-    },
-    {
-        name: 'Mistral Medium Latest',
-        id: 'mistral-medium-latest',
-        shortName: 'Mistral M',
-        provider: LLMProvider.Mistral,
-        format: LLMFormat.Mistral,
-        flags: [LLMFlags.hasFirstSystemPrompt, LLMFlags.mustStartWithUserInput, LLMFlags.requiresAlternateRole],
-        recommended: true,
-        parameters: ['temperature', 'presence_penalty', 'frequency_penalty', 'top_p'],
-        tokenizer: LLMTokenizer.Mistral
-    },
-    {
-        name: 'Mistral Large 2411',
-        id: 'mistral-large-2411',
-        shortName: 'Mistral L 2411',
-        provider: LLMProvider.Mistral,
-        format: LLMFormat.Mistral,
-        flags: [LLMFlags.hasFirstSystemPrompt, LLMFlags.mustStartWithUserInput, LLMFlags.requiresAlternateRole],
-        parameters: ['temperature', 'presence_penalty', 'frequency_penalty', 'top_p'],
-        tokenizer: LLMTokenizer.Mistral
-    },
-    {
-        name: 'Mistral Nemo',
-        id: 'open-mistral-nemo',
-        shortName: 'Mistral Nemo',
-        provider: LLMProvider.Mistral,
-        format: LLMFormat.Mistral,
-        flags: [LLMFlags.hasFirstSystemPrompt, LLMFlags.mustStartWithUserInput, LLMFlags.requiresAlternateRole],
-        parameters: ['temperature', 'presence_penalty', 'frequency_penalty', 'top_p'],
-        tokenizer: LLMTokenizer.Mistral
-    },
-    {
-        name: 'Mistral Large Latest',
-        id: 'mistral-large-latest',
-        shortName: 'Mistral L',
-        provider: LLMProvider.Mistral,
-        format: LLMFormat.Mistral,
-        flags: [LLMFlags.hasFirstSystemPrompt, LLMFlags.mustStartWithUserInput, LLMFlags.requiresAlternateRole],
-        parameters: ['temperature', 'presence_penalty', 'frequency_penalty', 'top_p'],
-        recommended: true,
-        tokenizer: LLMTokenizer.Mistral
     },
     // Google models
     ...GoogleModels,
@@ -270,81 +197,6 @@ export const LLMModels: LLMModel[] = [
         flags: [],
         parameters: [],
         tokenizer: LLMTokenizer.NovelList
-    },
-    // Cohere
-    {
-        name: "Command R",
-        id: 'cohere-command-r',
-        internalID: 'command-r',
-        provider: LLMProvider.Cohere,
-        format: LLMFormat.Cohere,
-        flags: [LLMFlags.hasFirstSystemPrompt, LLMFlags.requiresAlternateRole, LLMFlags.mustStartWithUserInput],
-        recommended: true,
-        parameters: [
-            'temperature', 'top_k', 'top_p', 'presence_penalty', 'frequency_penalty'
-        ],
-        tokenizer: LLMTokenizer.Cohere
-    },
-    {
-        name: "Command R Plus",
-        id: 'cohere-command-r-plus',
-        internalID: 'command-r-plus',
-        provider: LLMProvider.Cohere,
-        format: LLMFormat.Cohere,
-        flags: [LLMFlags.hasFirstSystemPrompt, LLMFlags.requiresAlternateRole, LLMFlags.mustStartWithUserInput],
-        recommended: true,
-        parameters: [
-            'temperature', 'top_k', 'top_p', 'presence_penalty', 'frequency_penalty'
-        ],
-        tokenizer: LLMTokenizer.Cohere
-    },
-    {
-        name: "Command R 08-2024",
-        id: 'cohere-command-r-08-2024',
-        internalID: 'command-r-08-2024',
-        provider: LLMProvider.Cohere,
-        format: LLMFormat.Cohere,
-        flags: [LLMFlags.hasFirstSystemPrompt, LLMFlags.requiresAlternateRole, LLMFlags.mustStartWithUserInput],
-        parameters: [
-            'temperature', 'top_k', 'top_p', 'presence_penalty', 'frequency_penalty'
-        ],
-        tokenizer: LLMTokenizer.Cohere
-    },
-    {
-        name: "Command R 03-2024",
-        id: 'cohere-command-r-03-2024',
-        internalID: 'command-r-03-2024',
-        provider: LLMProvider.Cohere,
-        format: LLMFormat.Cohere,
-        flags: [LLMFlags.hasFirstSystemPrompt, LLMFlags.requiresAlternateRole, LLMFlags.mustStartWithUserInput],
-        parameters: [
-            'temperature', 'top_k', 'top_p', 'presence_penalty', 'frequency_penalty'
-        ],
-        tokenizer: LLMTokenizer.Cohere
-    },
-    {
-        name: "Command R Plus 08-2024",
-        id: 'cohere-command-r-plus-08-2024',
-        internalID: 'command-r-plus-08-2024',
-        provider: LLMProvider.Cohere,
-        format: LLMFormat.Cohere,
-        flags: [LLMFlags.hasFirstSystemPrompt, LLMFlags.requiresAlternateRole, LLMFlags.mustStartWithUserInput],
-        parameters: [
-            'temperature', 'top_k', 'top_p', 'presence_penalty', 'frequency_penalty'
-        ],
-        tokenizer: LLMTokenizer.Cohere
-    },
-    {
-        name: "Command R Plus 04-2024",
-        id: 'cohere-command-r-plus-04-2024',
-        internalID: 'command-r-plus-04-2024',
-        provider: LLMProvider.Cohere,
-        format: LLMFormat.Cohere,
-        flags: [LLMFlags.hasFirstSystemPrompt, LLMFlags.requiresAlternateRole, LLMFlags.mustStartWithUserInput],
-        parameters: [
-            'temperature', 'top_k', 'top_p', 'presence_penalty', 'frequency_penalty'
-        ],
-        tokenizer: LLMTokenizer.Cohere
     },
     // NovelAI
     {
@@ -476,16 +328,6 @@ export const LLMModels: LLMModel[] = [
         tokenizer: LLMTokenizer.Unknown
     },
     {
-        id: 'reverse_proxy',
-        name: "Custom API",
-        provider: LLMProvider.AsIs,
-        format: LLMFormat.OpenAICompatible,
-        flags: [LLMFlags.hasFullSystemPrompt, LLMFlags.hasStreaming],
-        recommended: true,
-        parameters: ['temperature', 'top_p', 'frequency_penalty', 'presence_penalty', 'repetition_penalty', 'min_p', 'top_a', 'top_k', 'thinking_tokens'],
-        tokenizer: LLMTokenizer.Unknown
-    },
-    {
         id: 'echo_model',
         name: "Echo",
         provider: LLMProvider.Echo,
@@ -572,40 +414,6 @@ export function getModelInfo(id?: string | null): LLMModel{
             tokenizer: LLMTokenizer.Local
         }
     }
-    if(id.startsWith('horde:::')){
-        const withoutPrefix = id.replace('horde:::', '')
-        return {
-            id,
-            name: withoutPrefix,
-            shortName: withoutPrefix,
-            fullName: withoutPrefix,
-            internalID: withoutPrefix,
-            provider: LLMProvider.Horde,
-            format: LLMFormat.Horde,
-            flags: [],
-            parameters: OpenAIParameters,
-            tokenizer: LLMTokenizer.Unknown
-        }
-    }
-    if(id.startsWith('xcustom:::')){
-        const customModels = db?.customModels || []
-        const found = customModels.find((model) => model.id === id)
-        if(found){
-            return {
-                id: found.id,
-                name: found.name,
-                shortName: found.name,
-                fullName: found.name,
-                internalID: found.internalId,
-                provider: LLMProvider.AsIs,
-                format: found.format,
-                flags: found.flags,
-                parameters: ['temperature', 'top_p', 'frequency_penalty', 'presence_penalty', 'repetition_penalty', 'min_p', 'top_a', 'top_k', 'thinking_tokens'],
-                tokenizer: found.tokenizer
-            }
-        }
-    }
-
     return {
         id,
         name: id,
@@ -625,13 +433,32 @@ interface GetModelListGroup {
     models: LLMModel[]
 }
 
+function isCanonicalServerRuntimeCatalogModel(model: LLMModel): boolean {
+    if (!model || typeof model !== 'object') return false
+
+    if (model.id === 'openrouter') return true
+    if (model.format === LLMFormat.Kobold) return true
+    if (model.format === LLMFormat.Ollama) return true
+    if (model.format === LLMFormat.NovelAI) return true
+
+    if (model.provider === LLMProvider.OpenAI && model.format === LLMFormat.OpenAICompatible) return true
+    if (model.provider === LLMProvider.DeepSeek && model.format === LLMFormat.OpenAICompatible) return true
+    if (
+        model.provider === LLMProvider.Anthropic &&
+        (model.format === LLMFormat.Anthropic || model.format === LLMFormat.AnthropicLegacy)
+    ) return true
+    if (model.provider === LLMProvider.GoogleCloud && model.format === LLMFormat.GoogleCloud) return true
+
+    return false
+}
+
 export function getModelList<T extends boolean>(arg:{
     recommendedOnly?:boolean,
     groupedByProvider?:T
 } = {}): T extends true ? GetModelListGroup[] : LLMModel[]{
-   let models = LLMModels
+    let models = LLMModels.filter((model) => isCanonicalServerRuntimeCatalogModel(model))
     if(arg.recommendedOnly){
-         models = models.filter(model => model.recommended)
+        models = models.filter(model => model.recommended)
     }
     if(arg.groupedByProvider){
         const group: GetModelListGroup[] = []

@@ -256,6 +256,46 @@ function matchesFilter(entry, filters) {
     return true;
 }
 
+async function collectMatchingEntriesFromFileEnd(filePath, filters, limit, out) {
+    if (out.length >= limit) return;
+    const handle = await fs.open(filePath, 'r');
+    try {
+        const stat = await handle.stat();
+        let offset = stat.size;
+        let remainder = '';
+        const chunkSize = 64 * 1024;
+
+        while (offset > 0 && out.length < limit) {
+            const readSize = Math.min(chunkSize, offset);
+            offset -= readSize;
+            const buffer = Buffer.allocUnsafe(readSize);
+            await handle.read(buffer, 0, readSize, offset);
+            const text = buffer.toString('utf-8') + remainder;
+            const lines = text.split('\n');
+            remainder = lines.shift() || '';
+
+            for (let i = lines.length - 1; i >= 0; i--) {
+                const entry = parseLine(lines[i]);
+                if (!entry) continue;
+                if (!matchesFilter(entry, filters)) continue;
+                out.push(entry);
+                if (out.length >= limit) {
+                    return;
+                }
+            }
+        }
+
+        if (remainder && out.length < limit) {
+            const entry = parseLine(remainder);
+            if (entry && matchesFilter(entry, filters)) {
+                out.push(entry);
+            }
+        }
+    } finally {
+        await handle.close();
+    }
+}
+
 async function readExecutionLogs(dataRoot, query = {}) {
     const filePaths = await listLogFiles(dataRoot);
     if (filePaths.length === 0) {
@@ -274,24 +314,9 @@ async function readExecutionLogs(dataRoot, query = {}) {
     const result = [];
     for (let fileIdx = filePaths.length - 1; fileIdx >= 0; fileIdx--) {
         const filePath = filePaths[fileIdx];
-        const text = await fs.readFile(filePath, 'utf-8');
-        if (!text.trim()) {
-            continue;
-        }
-        const lines = text.split('\n').filter(Boolean);
-        for (let i = lines.length - 1; i >= 0; i--) {
-            const line = lines[i];
-            const entry = parseLine(line);
-            if (!entry) {
-                continue;
-            }
-            if (!matchesFilter(entry, filters)) {
-                continue;
-            }
-            result.push(entry);
-            if (result.length >= limit) {
-                return result;
-            }
+        await collectMatchingEntriesFromFileEnd(filePath, filters, limit, result);
+        if (result.length >= limit) {
+            return result;
         }
     }
     return result;
