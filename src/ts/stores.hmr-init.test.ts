@@ -22,7 +22,7 @@ vi.mock("src/ts/process/scripts", () => ({
 describe("stores runtime init", () => {
   beforeEach(() => {
     vi.resetModules();
-    document.body.innerHTML = "";
+    document.body.replaceChildren();
   });
 
   it("stores runtime init does not stack resize listeners across module re-import", async () => {
