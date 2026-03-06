@@ -972,7 +972,7 @@
         }
     }
 
-    @media (max-width: 720px) {
+    @media (max-width: 36rem) {
         .rag-toolbar-right {
             width: 100%;
             justify-content: space-between;
