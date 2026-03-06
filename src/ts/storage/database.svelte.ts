@@ -614,6 +614,7 @@ export function setDatabase(data:Database){
     data.promptSettings.maxThoughtTagDepth ??= -1
     data.openrouterFallback ??= true
     data.openrouterMiddleOut ??= false
+    data.openrouterAllowReasoningOnlyForDeepSeekV32Speciale ??= false
     data.removePunctuationHypa ??= true
     data.memoryLimitThickness ??= 1
     data.modules ??= []
@@ -1046,6 +1047,7 @@ export interface Database{
     openrouterKey:string
     openrouterMiddleOut:boolean
     openrouterFallback:boolean
+    openrouterAllowReasoningOnlyForDeepSeekV32Speciale:boolean
     selectedPersona:number
     personas:{
         personaPrompt:string
@@ -1676,6 +1678,7 @@ export interface botPreset{
         only: string[]
         ignore: string[]
     }
+    openrouterAllowReasoningOnlyForDeepSeekV32Speciale?: boolean
     useInstructPrompt?:boolean
     customPromptTemplateToggle?:string
     templateDefaultVariables?:string
@@ -2044,6 +2047,7 @@ export function saveCurrentPreset(){
         min_p: db.min_p,
         top_a: db.top_a,
         openrouterProvider: db.openrouterProvider,
+        openrouterAllowReasoningOnlyForDeepSeekV32Speciale: db.openrouterAllowReasoningOnlyForDeepSeekV32Speciale ?? false,
         useInstructPrompt: db.useInstructPrompt,
         customPromptTemplateToggle: db.customPromptTemplateToggle ?? "",
         templateDefaultVariables: db.templateDefaultVariables ?? "",
@@ -2168,6 +2172,7 @@ export function setPreset(db:Database, newPres: botPreset){
     db.min_p = newPres.min_p
     db.top_a = newPres.top_a
     db.openrouterProvider = newPres.openrouterProvider
+    db.openrouterAllowReasoningOnlyForDeepSeekV32Speciale = newPres.openrouterAllowReasoningOnlyForDeepSeekV32Speciale ?? false
     db.useInstructPrompt = newPres.useInstructPrompt ?? false
     db.customPromptTemplateToggle = newPres.customPromptTemplateToggle ?? ''
     db.templateDefaultVariables = newPres.templateDefaultVariables ?? ''

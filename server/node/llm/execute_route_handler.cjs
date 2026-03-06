@@ -63,6 +63,7 @@ function createExecuteRouteHandler(arg = {}) {
     const gameStateWriteQueue = new Map();
     const THOUGHT_BLOCK_REGEX = /<Thoughts>[\s\S]*?<\/Thoughts>\s*/gi;
     const THINK_BLOCK_REGEX = /<think>[\s\S]*?<\/think>\s*/gi;
+    const DEEPSEEK_V32_SPECIALE_MODEL_ID = 'deepseek/deepseek-v3.2-speciale';
 
     function stripHiddenReasoningBlocks(text) {
         if (typeof text !== 'string') {
@@ -74,8 +75,95 @@ function createExecuteRouteHandler(arg = {}) {
             .trim();
     }
 
-    function assertVisibleModelOutput(mode, text) {
+    function isDeepSeekV32SpecialeModel(model) {
+        return typeof model === 'string' && model.trim().toLowerCase() === DEEPSEEK_V32_SPECIALE_MODEL_ID;
+    }
+
+    function shouldAllowReasoningOnlyOutput(normalized) {
+        if (!normalized || normalized.mode !== 'model' || normalized.provider !== 'openrouter') {
+            return false;
+        }
+        if (!isDeepSeekV32SpecialeModel(normalized.model)) {
+            return false;
+        }
+        const request = (normalized.request && typeof normalized.request === 'object')
+            ? normalized.request
+            : {};
+        return request.allowReasoningOnlyForDeepSeekV32Speciale === true;
+    }
+
+    function dedupeChunkByExistingSuffix(existing, incoming) {
+        if (typeof incoming !== 'string' || !incoming) {
+            return '';
+        }
+        if (typeof existing !== 'string' || !existing) {
+            return incoming;
+        }
+        if (existing.endsWith(incoming)) {
+            return '';
+        }
+        const maxOverlap = Math.min(existing.length, incoming.length);
+        for (let overlap = maxOverlap; overlap > 0; overlap -= 1) {
+            if (existing.slice(-overlap) === incoming.slice(0, overlap)) {
+                return incoming.slice(overlap);
+            }
+        }
+        return incoming;
+    }
+
+    function extractOpenRouterReasoningDelta(delta) {
+        if (!delta || typeof delta !== 'object') {
+            return '';
+        }
+        const chunks = [];
+        if (typeof delta.reasoning === 'string' && delta.reasoning) {
+            chunks.push(delta.reasoning);
+        }
+        if (typeof delta.reasoning_content === 'string' && delta.reasoning_content) {
+            chunks.push(delta.reasoning_content);
+        }
+        if (Array.isArray(delta.reasoning_details)) {
+            for (const detail of delta.reasoning_details) {
+                if (typeof detail === 'string') {
+                    chunks.push(detail);
+                    continue;
+                }
+                if (!detail || typeof detail !== 'object') continue;
+                if (typeof detail.text === 'string' && detail.text) {
+                    chunks.push(detail.text);
+                } else if (Array.isArray(detail.text)) {
+                    for (const textPart of detail.text) {
+                        if (typeof textPart === 'string' && textPart) {
+                            chunks.push(textPart);
+                        } else if (textPart && typeof textPart === 'object' && typeof textPart.text === 'string' && textPart.text) {
+                            chunks.push(textPart.text);
+                        }
+                    }
+                }
+                if (typeof detail.reasoning === 'string' && detail.reasoning) {
+                    chunks.push(detail.reasoning);
+                }
+                if (typeof detail.content === 'string' && detail.content) {
+                    chunks.push(detail.content);
+                } else if (Array.isArray(detail.content)) {
+                    for (const contentPart of detail.content) {
+                        if (typeof contentPart === 'string' && contentPart) {
+                            chunks.push(contentPart);
+                        } else if (contentPart && typeof contentPart === 'object' && typeof contentPart.text === 'string' && contentPart.text) {
+                            chunks.push(contentPart.text);
+                        }
+                    }
+                }
+            }
+        }
+        return chunks.join('');
+    }
+
+    function assertVisibleModelOutput(mode, text, opts = {}) {
         if (mode !== 'model') {
+            return;
+        }
+        if (opts.allowReasoningOnly === true) {
             return;
         }
         const visible = stripHiddenReasoningBlocks(text);
@@ -174,6 +262,8 @@ function createExecuteRouteHandler(arg = {}) {
         try {
             normalized = parseLLMExecutionInput(requestBody, { endpoint: endpointName });
             wantsStream = !!normalized.requestedStreaming;
+            const allowReasoningOnlyOutput = shouldAllowReasoningOnlyOutput(normalized);
+            const treatOpenRouterReasoningAsContent = allowReasoningOnlyOutput && isDeepSeekV32SpecialeModel(normalized.model);
             const auditEndpointForRequest = endpointName === 'generate' ? 'generate' : normalized.endpoint;
             logLLMExecutionStart({
                 reqId,
@@ -211,6 +301,7 @@ function createExecuteRouteHandler(arg = {}) {
                 const decoder = new TextDecoder();
                 let fullText = '';
                 let anthropicThinkingOpen = false;
+                let openrouterReasoningOpen = false;
                 let sseBuffer = '';
                 let clientDisconnected = false;
 
@@ -260,7 +351,35 @@ function createExecuteRouteHandler(arg = {}) {
                 };
 
                 const extractTextFromEvent = (data) => {
-                    let text = data?.choices?.[0]?.delta?.content || '';
+                    const choice = data?.choices?.[0];
+                    const delta = (choice && typeof choice.delta === 'object') ? choice.delta : {};
+                    if (normalized.provider === 'openrouter') {
+                        const reasoning = extractOpenRouterReasoningDelta(delta);
+                        const content = typeof delta.content === 'string' ? delta.content : '';
+                        if (treatOpenRouterReasoningAsContent) {
+                            return `${reasoning || ''}${content || ''}`;
+                        }
+                        let openRouterText = '';
+                        if (reasoning) {
+                            if (!openrouterReasoningOpen) {
+                                openRouterText += '<Thoughts>\n';
+                                openrouterReasoningOpen = true;
+                            }
+                            openRouterText += reasoning;
+                        }
+                        if (content) {
+                            if (openrouterReasoningOpen) {
+                                openRouterText += '</Thoughts>\n\n';
+                                openrouterReasoningOpen = false;
+                            }
+                            openRouterText += content;
+                        }
+                        if (openRouterText) {
+                            return openRouterText;
+                        }
+                    }
+
+                    let text = typeof delta.content === 'string' ? delta.content : '';
                     if (!text && normalized.provider === 'anthropic') {
                         const dtype = data?.delta?.type;
                         if (dtype === 'text' || dtype === 'text_delta') {
@@ -318,8 +437,12 @@ function createExecuteRouteHandler(arg = {}) {
                     }
                     const text = extractTextFromEvent(data);
                     if (!text) return;
-                    fullText += text;
-                    await writeSSEEvent({ type: 'chunk', text });
+                    const emittedText = treatOpenRouterReasoningAsContent
+                        ? dedupeChunkByExistingSuffix(fullText, text)
+                        : text;
+                    if (!emittedText) return;
+                    fullText += emittedText;
+                    await writeSSEEvent({ type: 'chunk', text: emittedText });
                 };
 
                 const flushSSEBuffer = async (flushTrailing = false) => {
@@ -355,8 +478,15 @@ function createExecuteRouteHandler(arg = {}) {
                         await writeSSEEvent({ type: 'chunk', text: '</Thoughts>\n\n' });
                         anthropicThinkingOpen = false;
                     }
+                    if (openrouterReasoningOpen && !treatOpenRouterReasoningAsContent) {
+                        fullText += '</Thoughts>\n\n';
+                        await writeSSEEvent({ type: 'chunk', text: '</Thoughts>\n\n' });
+                        openrouterReasoningOpen = false;
+                    }
 
-                    assertVisibleModelOutput(normalized.mode, fullText);
+                    assertVisibleModelOutput(normalized.mode, fullText, {
+                        allowReasoningOnly: allowReasoningOnlyOutput,
+                    });
 
                     const durationMs = Date.now() - startedAt;
                     logLLMExecutionEnd({
@@ -519,7 +649,9 @@ function createExecuteRouteHandler(arg = {}) {
                 typeof executionResult?.result === 'string'
                     ? executionResult.result
                     : (typeof result === 'string' ? result : '');
-            assertVisibleModelOutput(normalized.mode, responseText);
+            assertVisibleModelOutput(normalized.mode, responseText, {
+                allowReasoningOnly: allowReasoningOnlyOutput,
+            });
             let sanitizedResponseText = sanitizeOutputByMode(normalized.mode, responseText);
             if (normalized.mode === 'emotion' && !sanitizedResponseText) {
                 sanitizedResponseText = 'neutral';

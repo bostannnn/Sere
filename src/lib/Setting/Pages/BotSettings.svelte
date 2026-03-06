@@ -105,8 +105,13 @@ const tokens = $state({
         ['anthropic/claude-v1-100k', 'Claude v1 100k'],
         ['anthropic/claude-1.2', 'Claude v1.2'],
     ] as const
+    const deepSeekV32SpecialeModelId = 'deepseek/deepseek-v3.2-speciale'
 
     const openrouterModels = $derived(openrouterModelState.models ?? [])
+    const showDeepSeekV32SpecialeReasoningToggle = $derived(
+        (DBState.db.aiModel === 'openrouter' && DBState.db.openrouterRequestModel === deepSeekV32SpecialeModelId) ||
+        (DBState.db.subModel === 'openrouter' && DBState.db.openrouterSubRequestModel === deepSeekV32SpecialeModelId)
+    )
 
     function formatOpenRouterUpdatedAt(value: string | null): string {
         if (!value) {
@@ -367,6 +372,14 @@ const tokens = $state({
                             {/each}
                         {/if}
                     </SelectInput>
+                </div>
+            {/if}
+            {#if showDeepSeekV32SpecialeReasoningToggle}
+                <div class="ds-settings-section">
+                    <Check
+                        bind:check={DBState.db.openrouterAllowReasoningOnlyForDeepSeekV32Speciale}
+                        name="DeepSeek-V3.2-Speciale: show unfiltered reasoning output"
+                    />
                 </div>
             {/if}
         </div>

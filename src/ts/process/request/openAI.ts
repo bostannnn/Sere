@@ -134,8 +134,9 @@ async function requestServerExecution(
         };
     };
 
+    const db = getDatabase();
     const charRagSettings = arg.currentChar?.ragSettings;
-    const globalRagSettings = getDatabase().globalRagSettings;
+    const globalRagSettings = db.globalRagSettings;
     const requestBodyForServer = (typeof structuredClone === 'function')
         ? structuredClone(body)
         : JSON.parse(JSON.stringify(body));
@@ -168,6 +169,13 @@ async function requestServerExecution(
         && !hasMultimodal
         && !hasNonStringMessage
         && !hasPromptOnly;
+    const requestModelId = typeof requestBodyForServer.model === 'string'
+        ? requestBodyForServer.model.trim().toLowerCase()
+        : '';
+    const allowReasoningOnlyForDeepSeekV32Speciale =
+        opts.provider === 'openrouter'
+        && requestModelId === 'deepseek/deepseek-v3.2-speciale'
+        && db.openrouterAllowReasoningOnlyForDeepSeekV32Speciale === true;
 
     const payload = canUseRawGeneratePayload
         ? {
@@ -177,6 +185,7 @@ async function requestServerExecution(
             chatId: arg.chatId ?? '',
             continue: !!arg.continue,
             streaming: !!arg.useStreaming,
+            allowReasoningOnlyForDeepSeekV32Speciale,
             userMessage: latestUserMessage,
             model: typeof requestBodyForServer.model === 'string' ? requestBodyForServer.model : undefined,
             maxTokens: Number.isFinite(Number(requestBodyForServer.max_tokens ?? requestBodyForServer.max_completion_tokens))
@@ -208,6 +217,7 @@ async function requestServerExecution(
             chatId: arg.chatId ?? '',
             continue: !!arg.continue,
             streaming: !!arg.useStreaming,
+            allowReasoningOnlyForDeepSeekV32Speciale,
             ragSettings: charRagSettings ? {
                 enabled: charRagSettings.enabled === true,
                 enabledRulebooks: Array.isArray(charRagSettings.enabledRulebooks) ? charRagSettings.enabledRulebooks : [],

@@ -5,7 +5,7 @@
     import { getCharImage } from '../../ts/characters';
     import { ParseMarkdown } from '../../ts/parser.svelte';
     import BarIcon from '../SideBars/BarIcon.svelte';
-    import { ChevronRightIcon, User } from '@lucide/svelte';
+    import { CheckIcon, ChevronRightIcon, CopyIcon, User } from '@lucide/svelte';
     import { isCharacterHasAssets } from 'src/ts/characterCards';
     import TextInput from '../UI/GUI/TextInput.svelte';
     import { aiLawApplies, getFetchData, getServerLLMLogs, openURL, type ServerLLMLogEntry } from 'src/ts/globalApi.svelte';
@@ -34,6 +34,7 @@
     let cardExportType = $state('')
     let cardExportType2 = $state('')
     let generationInfoMenuIndex = $state(0)
+    let requestDataCopiedKey:string|null = $state(null)
     let branchHover:null|{
         x:number,
         y:number,
@@ -126,6 +127,58 @@
         } catch {
             return String(value);
         }
+    }
+
+    const copyToClipboardSafe = async (text: string) => {
+        try {
+            if (navigator?.clipboard?.writeText) {
+                await navigator.clipboard.writeText(text);
+                return;
+            }
+        } catch {
+            // Fallback for non-secure contexts and unsupported clipboard APIs.
+        }
+
+        const textarea = document.createElement("textarea");
+        textarea.value = text;
+        textarea.style.position = "fixed";
+        textarea.style.opacity = "0";
+        document.body.appendChild(textarea);
+        textarea.select();
+        try {
+            document.execCommand("copy");
+        } finally {
+            document.body.removeChild(textarea);
+        }
+    };
+
+    async function copyRequestData(text: string, key: string) {
+        await copyToClipboardSafe(text);
+        requestDataCopiedKey = key;
+        setTimeout(() => {
+            if (requestDataCopiedKey === key) {
+                requestDataCopiedKey = null;
+            }
+        }, 1500);
+    }
+
+    function formatCombinedRequestData(payload: RequestDataPayload): string {
+        const sourceLabel = payload.source === "client"
+            ? "Client request log (in-memory)"
+            : "Server durable log fallback";
+        return [
+            "Log Source",
+            sourceLabel,
+            "",
+            "URL",
+            payload.url,
+            "",
+            "Request Body",
+            payload.body,
+            "",
+            "Response",
+            payload.response,
+        ].join("\n");
     }
 
     function getCurrentChatState() {
@@ -662,6 +715,47 @@
                             <code class="alert-code-block alert-prewrap">{data.source === "client" ? "Client request log (in-memory)" : "Server durable log fallback"}</code>
                             <h1 class="alert-section-title">URL</h1>
                             <code class="alert-code-block alert-prewrap">{data.url}</code>
+                            <div class="alert-requestdata-actions">
+                                <Button
+                                    size="sm"
+                                    styled="outlined"
+                                    onclick={() => copyRequestData(data.body, "request")}
+                                >
+                                    {#if requestDataCopiedKey === "request"}
+                                        <CheckIcon class="alert-copy-icon" />
+                                        {language.copied}
+                                    {:else}
+                                        <CopyIcon class="alert-copy-icon" />
+                                        {language.copy} Request
+                                    {/if}
+                                </Button>
+                                <Button
+                                    size="sm"
+                                    styled="outlined"
+                                    onclick={() => copyRequestData(data.response, "response")}
+                                >
+                                    {#if requestDataCopiedKey === "response"}
+                                        <CheckIcon class="alert-copy-icon" />
+                                        {language.copied}
+                                    {:else}
+                                        <CopyIcon class="alert-copy-icon" />
+                                        {language.copy} Response
+                                    {/if}
+                                </Button>
+                                <Button
+                                    size="sm"
+                                    styled="outlined"
+                                    onclick={() => copyRequestData(formatCombinedRequestData(data), "both")}
+                                >
+                                    {#if requestDataCopiedKey === "both"}
+                                        <CheckIcon class="alert-copy-icon" />
+                                        {language.copied}
+                                    {:else}
+                                        <CopyIcon class="alert-copy-icon" />
+                                        {language.copy} Both
+                                    {/if}
+                                </Button>
+                            </div>
                             <h1 class="alert-section-title">Request Body</h1>
                             <code class="alert-code-block alert-prewrap">{data.body}</code>
                             <h1 class="alert-section-title">Response</h1>
@@ -1595,6 +1689,19 @@
         border: 4px solid var(--ds-border-subtle);
         border-radius: var(--ds-radius-md);
         background: var(--ds-surface-1);
+    }
+
+    .alert-requestdata-actions {
+        margin-top: var(--ds-space-3);
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--ds-space-2);
+    }
+
+    :global(.alert-copy-icon) {
+        width: 0.9rem;
+        height: 0.9rem;
+        margin-right: var(--ds-space-1);
     }
 
     .alert-info-grid {
