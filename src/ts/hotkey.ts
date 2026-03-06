@@ -6,6 +6,7 @@ import { language } from "src/lang"
 import { updateTextThemeAndCSS } from "./gui/colorscheme"
 import { defaultHotkeys } from "./defaulthotkeys"
 import { isDoingChat, previewBody, sendChat } from "./process/index.svelte"
+import { isEditableTouchTarget, shouldPreventHorizontalSwipe } from "./mobileGestureGuard"
 
 export function initHotkey(){
     document.addEventListener('keydown', async (ev) => {
@@ -358,14 +359,6 @@ function focusQuery(query:string){
 
 let mobileGestureGuardInitialized = false
 
-function isEditableTouchTarget(target: EventTarget | null){
-    const element = target as HTMLElement | null
-    if(!element){
-        return false
-    }
-    return !!element.closest('input, textarea, select, [contenteditable=\"true\"]')
-}
-
 export function initMobileGesture(){
     if(mobileGestureGuardInitialized || typeof document === 'undefined'){
         return
@@ -374,20 +367,24 @@ export function initMobileGesture(){
 
     let startX = 0
     let startY = 0
+    let startTarget: EventTarget | null = null
     let tracking = false
 
     document.addEventListener('touchstart', (event) => {
         if(event.touches.length !== 1 || isEditableTouchTarget(event.target)){
             tracking = false
+            startTarget = null
             return
         }
         const touch = event.touches[0]
         if(!touch){
             tracking = false
+            startTarget = null
             return
         }
         startX = touch.clientX
         startY = touch.clientY
+        startTarget = event.target
         tracking = true
     }, { passive: true })
 
@@ -399,9 +396,14 @@ export function initMobileGesture(){
         if(!touch){
             return
         }
-        const deltaX = touch.clientX - startX
-        const deltaY = touch.clientY - startY
-        if(Math.abs(deltaX) > 16 && Math.abs(deltaX) > Math.abs(deltaY)){
+        if(shouldPreventHorizontalSwipe({
+            startX,
+            startY,
+            currentX: touch.clientX,
+            currentY: touch.clientY,
+            viewportWidth: window.innerWidth,
+            target: startTarget,
+        })){
             // Prevent horizontal swipe gestures from switching browser/app tabs on touch devices.
             event.preventDefault()
         }
@@ -409,6 +411,12 @@ export function initMobileGesture(){
 
     document.addEventListener('touchend', () => {
         tracking = false
+        startTarget = null
+    }, { passive: true })
+
+    document.addEventListener('touchcancel', () => {
+        tracking = false
+        startTarget = null
     }, { passive: true })
 }
 

@@ -240,9 +240,7 @@
         }
 
         // Re-register when filter state changes so shell topbar labels stay in sync.
-        selectedSystemFilter;
-        selectedEditionFilter;
-        systemTree();
+        getFilterSnapshot();
 
         registerShellActions({
             selectFiles,

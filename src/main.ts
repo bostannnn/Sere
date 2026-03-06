@@ -8,31 +8,6 @@ import { preLoadCheck } from "./preload";
 import { mount } from "svelte";
 import { hydrateBootColorScheme } from "./ts/gui/colorscheme";
 
-function disableDoubleTapZoom() {
-    let lastTouchEnd = 0;
-    document.addEventListener("touchend", (event) => {
-        const now = Date.now();
-        const delta = now - lastTouchEnd;
-        lastTouchEnd = now;
-
-        if (delta <= 0 || delta > 300) {
-            return;
-        }
-
-        const target = event.target as HTMLElement | null;
-        if (!target) {
-            return;
-        }
-
-        // Keep standard editing interactions intact.
-        if (target.closest("input, textarea, select, [contenteditable='true']")) {
-            return;
-        }
-
-        event.preventDefault();
-    }, { passive: false });
-}
-
 preLoadCheck()
 hydrateBootColorScheme()
 const target = document.getElementById("app");
@@ -44,7 +19,6 @@ loadData()
 initHotkey()
 initMobileGesture()
 installTouchHardening()
-disableDoubleTapZoom()
 document.getElementById('preloading')?.remove()
 
 export default app;

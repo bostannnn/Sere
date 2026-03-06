@@ -4,7 +4,6 @@
             openPresetList,
             openPersonaList,
             MobileGUI,
-            selectedCharID,
             CustomGUISettingMenuStore,
             loadedStore,
             alertStore,
