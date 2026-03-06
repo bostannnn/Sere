@@ -9,6 +9,7 @@ type NormalizedInput = {
     endpoint: string;
     mode: string;
     provider: string;
+    model?: string;
     characterId: string;
     chatId: string;
     requestedStreaming: boolean;
@@ -382,5 +383,102 @@ describe("execute_route_handler visible output guard", () => {
         expect(payload?.message || "").toContain("no visible content");
         const lastAudit = harness.appendLLMAudit.mock.calls.at(-1)?.[0];
         expect(lastAudit?.ok).toBe(false);
+    });
+
+    it("allows reasoning-only non-stream output for DeepSeek-V3.2-Speciale when toggle is enabled", async () => {
+        const req = new MockReq();
+        const res = new MockRes();
+        const harness = createHarness({
+            normalized: {
+                endpoint: "execute",
+                mode: "model",
+                provider: "openrouter",
+                model: "deepseek/deepseek-v3.2-speciale",
+                characterId: "",
+                chatId: "",
+                requestedStreaming: false,
+                streaming: false,
+                request: {
+                    allowReasoningOnlyForDeepSeekV32Speciale: true,
+                },
+            },
+            executeLLM: async () => ({
+                type: "success",
+                result: "<Thoughts>\ninternal only\n</Thoughts>\n",
+            }),
+        });
+
+        await harness.handleLLMExecutePost(req, res, {}, "execute");
+
+        expect(harness.sendJson).toHaveBeenCalledTimes(1);
+        const status = harness.sendJson.mock.calls[0]?.[1];
+        const payload = harness.sendJson.mock.calls[0]?.[2];
+        expect(status).toBe(200);
+        expect(payload?.type).toBe("success");
+        expect(typeof payload?.result).toBe("string");
+        expect(payload?.result).toContain("<Thoughts>");
+        const lastAudit = harness.appendLLMAudit.mock.calls.at(-1)?.[0];
+        expect(lastAudit?.ok).toBe(true);
+    });
+
+    it("streams OpenRouter reasoning as normal content and dedupes overlap when DeepSeek-V3.2-Speciale toggle is enabled", async () => {
+        const encoder = new TextEncoder();
+        const req = new MockReq();
+        const res = new MockRes();
+        let readCalls = 0;
+        const { stream } = createStreamFromRead(async () => {
+            readCalls += 1;
+            if (readCalls === 1) {
+                return {
+                    done: false,
+                    value: encoder.encode('data: {"choices":[{"delta":{"reasoning":"internal step"}}]}\n\n'),
+                };
+            }
+            if (readCalls === 2) {
+                return {
+                    done: false,
+                    value: encoder.encode('data: {"choices":[{"delta":{"content":"internal step and visible"}}]}\n\n'),
+                };
+            }
+            return { done: true };
+        });
+        const harness = createHarness({
+            normalized: {
+                endpoint: "execute",
+                mode: "model",
+                provider: "openrouter",
+                model: "deepseek/deepseek-v3.2-speciale",
+                characterId: "",
+                chatId: "",
+                requestedStreaming: true,
+                streaming: true,
+                request: {
+                    allowReasoningOnlyForDeepSeekV32Speciale: true,
+                },
+            },
+            executeLLM: async () => stream,
+        });
+
+        await harness.handleLLMExecutePost(req, res, {}, "execute");
+
+        const frames = toSSEDataFrames(res.text())
+            .map((frame) => {
+                try {
+                    return JSON.parse(frame);
+                } catch {
+                    return null;
+                }
+            })
+            .filter(Boolean);
+        const chunkTexts = frames
+            .filter((frame: Record<string, unknown>) => frame.type === "chunk")
+            .map((frame: Record<string, unknown>) => String(frame.text || ""))
+            .join("");
+        expect(chunkTexts).toBe("internal step and visible");
+        expect(chunkTexts).not.toContain("<Thoughts>");
+        expect(frames.find((frame: Record<string, unknown>) => frame.type === "fail")).toBeUndefined();
+        expect(frames.find((frame: Record<string, unknown>) => frame.type === "done")).toBeTruthy();
+        const lastAudit = harness.appendLLMAudit.mock.calls.at(-1)?.[0];
+        expect(lastAudit?.ok).toBe(true);
     });
 });

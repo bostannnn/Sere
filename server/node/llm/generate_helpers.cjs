@@ -510,6 +510,10 @@ function createGenerateHelpers(arg = {}) {
             requestTemplateBody
         );
 
+        const allowReasoningOnlyForDeepSeekV32Speciale =
+            rawBody?.allowReasoningOnlyForDeepSeekV32Speciale === true ||
+            rawBody?.request?.allowReasoningOnlyForDeepSeekV32Speciale === true;
+
         const output = {
             mode,
             provider: selection.provider,
@@ -517,6 +521,7 @@ function createGenerateHelpers(arg = {}) {
             chatId,
             continue: !!rawBody.continue,
             streaming: !!rawBody.streaming,
+            allowReasoningOnlyForDeepSeekV32Speciale,
             ragSettings: character.ragSettings || undefined,
             globalRagSettings: settings.globalRagSettings || undefined,
             request,

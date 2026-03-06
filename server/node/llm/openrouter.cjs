@@ -8,6 +8,7 @@ const OPENROUTER_MODELS_URL = 'https://openrouter.ai/api/v1/models';
 const OPENROUTER_MODELS_CACHE_FILE = path.join('logs', 'openrouter-models-cache.json');
 const OPENROUTER_MODELS_TIMEOUT_MS = 12000;
 const OPENROUTER_MODELS_MEMORY_TTL_MS = 60 * 1000;
+const DEEPSEEK_V32_SPECIALE_MODEL_ID = 'deepseek/deepseek-v3.2-speciale';
 const openRouterModelsMemoryCache = new Map();
 
 function safeClone(value) {
@@ -50,18 +51,83 @@ function getProviderConfig(settings) {
     return Object.keys(provider).length > 0 ? provider : null;
 }
 
-function parseResponseText(data) {
+function isDeepSeekV32SpecialeModel(model) {
+    return typeof model === 'string' && model.trim().toLowerCase() === DEEPSEEK_V32_SPECIALE_MODEL_ID;
+}
+
+function appendWithOverlapDedup(base, incoming) {
+    const current = typeof base === 'string' ? base : '';
+    const next = typeof incoming === 'string' ? incoming : '';
+    if (!next) return current;
+    if (!current) return next;
+    if (current.endsWith(next)) return current;
+    const maxOverlap = Math.min(current.length, next.length);
+    for (let overlap = maxOverlap; overlap > 0; overlap -= 1) {
+        if (current.slice(-overlap) === next.slice(0, overlap)) {
+            return current + next.slice(overlap);
+        }
+    }
+    return current + next;
+}
+
+function extractReasoningChunksFromDetails(details) {
+    if (!Array.isArray(details)) return '';
+    let combined = '';
+    for (const detail of details) {
+        if (typeof detail === 'string') {
+            combined = appendWithOverlapDedup(combined, detail);
+            continue;
+        }
+        if (!detail || typeof detail !== 'object') continue;
+        if (typeof detail.text === 'string') {
+            combined = appendWithOverlapDedup(combined, detail.text);
+        } else if (Array.isArray(detail.text)) {
+            for (const textPart of detail.text) {
+                if (typeof textPart === 'string') {
+                    combined = appendWithOverlapDedup(combined, textPart);
+                } else if (textPart && typeof textPart === 'object' && typeof textPart.text === 'string') {
+                    combined = appendWithOverlapDedup(combined, textPart.text);
+                }
+            }
+        }
+        if (typeof detail.reasoning === 'string') {
+            combined = appendWithOverlapDedup(combined, detail.reasoning);
+        }
+        if (typeof detail.content === 'string') {
+            combined = appendWithOverlapDedup(combined, detail.content);
+        } else if (Array.isArray(detail.content)) {
+            for (const contentPart of detail.content) {
+                if (typeof contentPart === 'string') {
+                    combined = appendWithOverlapDedup(combined, contentPart);
+                } else if (contentPart && typeof contentPart === 'object' && typeof contentPart.text === 'string') {
+                    combined = appendWithOverlapDedup(combined, contentPart.text);
+                }
+            }
+        }
+    }
+    return combined;
+}
+
+function parseResponseText(data, opts = {}) {
     const text = data?.choices?.[0]?.text;
     if (typeof text === 'string') {
         return text;
     }
 
-    const message = data?.choices?.[0]?.message;
+    const choice = data?.choices?.[0];
+    const message = choice?.message;
     const content = typeof message?.content === 'string' ? message.content : '';
-    const reasoning =
-        data?.choices?.[0]?.reasoning_content ||
-        data?.choices?.[0]?.message?.reasoning_content ||
-        data?.choices?.[0]?.message?.reasoning;
+    let reasoning = '';
+    reasoning = appendWithOverlapDedup(reasoning, choice?.reasoning_content);
+    reasoning = appendWithOverlapDedup(reasoning, message?.reasoning_content);
+    reasoning = appendWithOverlapDedup(reasoning, message?.reasoning);
+    reasoning = appendWithOverlapDedup(reasoning, extractReasoningChunksFromDetails(choice?.reasoning_details));
+    reasoning = appendWithOverlapDedup(reasoning, extractReasoningChunksFromDetails(message?.reasoning_details));
+
+    if (opts.treatReasoningAsContent === true) {
+        const merged = appendWithOverlapDedup(reasoning, content);
+        return merged || content;
+    }
 
     if (typeof reasoning === 'string' && reasoning.trim()) {
         return `<Thoughts>\n${reasoning}\n</Thoughts>\n${content}`;
@@ -410,6 +476,8 @@ async function previewOpenRouterExecution(input, ctx = {}) {
 async function executeOpenRouter(input, ctx = {}) {
     const settings = await loadSettings(ctx.dataRoot);
     const built = buildExecutionRequest(input, settings);
+    const allowReasoningOnlyForDeepSeekV32Speciale = input?.request?.allowReasoningOnlyForDeepSeekV32Speciale === true;
+    const treatReasoningAsContent = allowReasoningOnlyForDeepSeekV32Speciale && isDeepSeekV32SpecialeModel(built?.body?.model);
 
     const upstream = await fetch(built.url, {
         method: 'POST',
@@ -449,7 +517,7 @@ async function executeOpenRouter(input, ctx = {}) {
         throw new LLMHttpError(502, 'INVALID_UPSTREAM_RESPONSE', 'OpenRouter returned non-JSON response.');
     }
 
-    const result = parseResponseText(parsed);
+    const result = parseResponseText(parsed, { treatReasoningAsContent });
     if (typeof result !== 'string') {
         throw new LLMHttpError(502, 'INVALID_UPSTREAM_RESPONSE', 'OpenRouter response did not contain text content.');
     }
