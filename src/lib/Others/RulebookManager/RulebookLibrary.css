@@ -564,6 +564,48 @@
         transform: translateY(0) scale(1.06);
     }
 
+    .rag-content-area.is-grid .rag-book-pin-wrap {
+        position: absolute;
+        top: 1.05rem;
+        right: 1.05rem;
+        z-index: 4;
+        pointer-events: auto;
+    }
+
+    .rag-content-area.is-grid .rag-book-pin-wrap .rag-book-pin-btn {
+        width: 1.7rem;
+        height: 1.7rem;
+        min-width: 1.7rem;
+        min-height: 1.7rem;
+        border-radius: 999px;
+        border: 1px solid rgb(243 248 255 / 24%);
+        background: linear-gradient(180deg, rgb(255 255 255 / 18%) 0%, rgb(182 194 220 / 5%) 100%);
+        color: rgb(236 242 255 / 88%);
+        opacity: 0.76;
+        backdrop-filter: blur(8px);
+        transform: translateY(2px);
+        transition:
+            opacity var(--ds-motion-fast) var(--ds-ease-standard),
+            transform var(--ds-motion-fast) var(--ds-ease-standard),
+            border-color var(--ds-motion-fast) var(--ds-ease-standard),
+            background-color var(--ds-motion-fast) var(--ds-ease-standard),
+            color var(--ds-motion-fast) var(--ds-ease-standard);
+    }
+
+    .rag-content-area.is-grid .rag-book-card:hover .rag-book-pin-wrap .rag-book-pin-btn,
+    .rag-content-area.is-grid .rag-book-pin-wrap .rag-book-pin-btn:focus-visible {
+        opacity: 1;
+        transform: translateY(0);
+    }
+
+    .rag-content-area.is-grid .rag-book-pin-wrap .rag-book-pin-btn:hover {
+        border-color: rgb(243 248 255 / 34%);
+        background: linear-gradient(180deg, rgb(255 255 255 / 24%) 0%, rgb(182 194 220 / 10%) 100%);
+        color: rgb(246 249 255 / 96%);
+        opacity: 1;
+        transform: translateY(0) scale(1.06);
+    }
+
     @media (prefers-reduced-motion: reduce) {
         .rag-content-area.is-grid .rag-book-card,
         .rag-content-area.is-grid .rag-book-icon::after,
@@ -600,15 +642,15 @@
             opacity: 1;
             transform: none;
         }
+
+        .rag-content-area.is-grid .rag-book-pin-wrap .rag-book-pin-btn {
+            opacity: 1;
+            transform: none;
+        }
     }
 
     .rag-dashboard-shell-mobile .rag-content-area-shell {
         padding: var(--ds-space-3);
-    }
-
-    .rag-dashboard-shell-mobile .rag-content-area.is-grid {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: var(--ds-space-2);
     }
 
     @media (max-width: 48rem) {

@@ -77,15 +77,6 @@
                 <div class="rag-book-head-row">
                     <h3 class="rag-book-name" title={book.name}>{book.name}</h3>
                     <div class="rag-book-tools action-rail" data-testid="rulebook-library-book-actions" data-rag-book-menu>
-                        <IconButton
-                            onclick={() => onTogglePriority(book)}
-                            className={`rag-book-pin-btn ${book.priority ? "is-priority" : ""}`}
-                            title={book.priority ? "Remove priority" : "Mark as priority"}
-                            ariaLabel={book.priority ? `Remove priority from ${book.name}` : `Mark ${book.name} as priority`}
-                            ariaPressed={Boolean(book.priority)}
-                        >
-                            <StarIcon size={16} fill={book.priority ? "currentColor" : "none"} />
-                        </IconButton>
                         <button
                             type="button"
                             class="rag-book-menu-trigger icon-btn icon-btn--sm icon-btn--bordered"
@@ -128,6 +119,17 @@
                 <p class="rag-book-preview">{resolveRulebookPreview(book)}</p>
                 <span class="rag-book-meta">{resolveChunkMeta(book.chunkCount)}</span>
             </div>
+        </div>
+        <div class="rag-book-pin-wrap action-rail" data-rag-book-menu>
+            <IconButton
+                onclick={() => onTogglePriority(book)}
+                className={`rag-book-pin-btn ${book.priority ? "is-priority" : ""}`}
+                title={book.priority ? "Remove priority" : "Mark as priority"}
+                ariaLabel={book.priority ? `Remove priority from ${book.name}` : `Mark ${book.name} as priority`}
+                ariaPressed={Boolean(book.priority)}
+            >
+                <StarIcon size={16} fill={book.priority ? "currentColor" : "none"} />
+            </IconButton>
         </div>
     </div>
 {:else}
