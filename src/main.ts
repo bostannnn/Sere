@@ -7,7 +7,7 @@ import { initHotkey, initMobileGesture } from "./ts/hotkey";
 import { preLoadCheck } from "./preload";
 import { mount } from "svelte";
 import { hydrateBootColorScheme } from "./ts/gui/colorscheme";
-import { initStoresRuntime } from "./ts/stores.svelte";
+import { disposeStoresRuntime, initStoresRuntime } from "./ts/stores.svelte";
 
 preLoadCheck()
 hydrateBootColorScheme()
@@ -22,5 +22,21 @@ initHotkey()
 initMobileGesture()
 installTouchHardening()
 document.getElementById('preloading')?.remove()
+
+let mainRuntimeDisposed = false
+
+export function disposeMainRuntime() {
+    if (mainRuntimeDisposed) {
+        return
+    }
+    mainRuntimeDisposed = true
+    disposeStoresRuntime()
+}
+
+if (import.meta.hot) {
+    import.meta.hot.dispose(() => {
+        disposeMainRuntime()
+    })
+}
 
 export default app;

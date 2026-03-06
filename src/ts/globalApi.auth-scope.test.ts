@@ -206,4 +206,27 @@ describe("globalApi auth scope", () => {
     expect(forwardedHeaders["risu-auth"]).toBeUndefined();
     expect(forwardedHeaders["x-risu-client-id"]).toBeUndefined();
   });
+
+  it("globalFetch with usePlainFetch=true does not direct-fetch external OpenRouter URL in server mode", async () => {
+    shared.getDatabaseMock.mockImplementation(() => ({
+      usePlainFetch: true,
+      requestLocation: "",
+      characters: [],
+      modules: [],
+      personas: [],
+      characterOrder: [],
+      botPresets: [],
+    }));
+    const { globalFetch } = await import("src/ts/globalApi.svelte");
+
+    const targetUrl = "https://openrouter.ai/api/v1/chat/completions";
+    await globalFetch(targetUrl, { method: "POST", body: { ping: true } });
+
+    const firstCallUrl = shared.fetchMock.mock.calls[0]?.[0];
+    const firstCallInit = shared.fetchMock.mock.calls[0]?.[1] as RequestInit | undefined;
+    const proxyHeaders = (firstCallInit?.headers ?? {}) as Record<string, string>;
+
+    expect(firstCallUrl).toBe("/data/proxy");
+    expect(decodeURIComponent(proxyHeaders["risu-url"])).toBe(targetUrl);
+  });
 });

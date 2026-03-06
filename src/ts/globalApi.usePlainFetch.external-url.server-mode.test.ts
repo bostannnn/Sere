@@ -1,15 +1,12 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { writable } from "svelte/store";
-import {
-  getSaveDbRuntimeStartCountForTests,
-  isSaveDbRuntimeInitializedForTests,
-  resetSaveDbRuntimeForTests,
-} from "src/ts/globalApi.test-utils";
 
 const shared = vi.hoisted(() => {
-  const saveServerDatabaseMock = vi.fn(async () => {});
+  const fetchMock = vi.fn();
+  const resolveServerAuthTokenMock = vi.fn(async () => "digest-token");
+  const getServerAuthClientIdMock = vi.fn(() => "client-id-1");
   const getDatabaseMock = vi.fn(() => ({
-    usePlainFetch: false,
+    usePlainFetch: true,
     requestLocation: "",
     characters: [],
     modules: [],
@@ -19,7 +16,9 @@ const shared = vi.hoisted(() => {
   }));
 
   return {
-    saveServerDatabaseMock,
+    fetchMock,
+    resolveServerAuthTokenMock,
+    getServerAuthClientIdMock,
     getDatabaseMock,
   };
 });
@@ -32,8 +31,8 @@ vi.mock("src/ts/platform", () => ({
 
 vi.mock("src/ts/storage/serverAuth", () => ({
   fetchWithServerAuth: vi.fn(),
-  getServerAuthClientId: vi.fn(() => "client-id-1"),
-  resolveServerAuthToken: vi.fn(async () => "digest-token"),
+  getServerAuthClientId: shared.getServerAuthClientIdMock,
+  resolveServerAuthToken: shared.resolveServerAuthTokenMock,
 }));
 
 vi.mock("src/ts/storage/database.svelte", () => ({
@@ -44,16 +43,8 @@ vi.mock("src/ts/storage/database.svelte", () => ({
 }));
 
 vi.mock("src/ts/stores.svelte", () => ({
-  DBState: {
-    db: {
-      requestLocation: "",
-      characters: [],
-      modules: [],
-      personas: [],
-      characterOrder: [],
-      botPresets: [],
-    },
-  },
+  selectedCharID: writable(-1),
+  DBState: { db: { requestLocation: "", characters: [] } },
   selIdState: { selId: -1 },
   ReloadGUIPointer: writable(0),
 }));
@@ -63,7 +54,7 @@ vi.mock("src/ts/storage/serverStateClient", () => ({
 }));
 
 vi.mock("src/ts/storage/serverDb", () => ({
-  saveServerDatabase: shared.saveServerDatabaseMock,
+  saveServerDatabase: vi.fn(async () => {}),
 }));
 
 vi.mock("src/ts/storage/serverStorage", () => ({
@@ -108,35 +99,34 @@ vi.mock("src/ts/characterCards", () => ({
   hubURL: "https://hub.invalid",
 }));
 
-describe("saveDb idempotence", () => {
+describe("globalFetch external URL routing in server mode", () => {
   beforeEach(() => {
     vi.resetModules();
-    shared.saveServerDatabaseMock.mockClear();
+    shared.fetchMock.mockReset();
     shared.getDatabaseMock.mockClear();
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () =>
-        new Response('{"ok":true}', {
-          status: 200,
-          headers: { "content-type": "application/json" },
-        }),
-      ),
+    shared.fetchMock.mockResolvedValue(
+      new Response('{"ok":true}', {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
     );
+    vi.stubGlobal("fetch", shared.fetchMock);
   });
 
-  afterEach(async () => {
-    await import("src/ts/globalApi.svelte");
-    resetSaveDbRuntimeForTests();
-  });
+  it("globalFetch routes absolute non-local URLs through /data/proxy even when usePlainFetch is true", async () => {
+    const { globalFetch } = await import("src/ts/globalApi.svelte");
 
-  it("saveDb initializes server autosave watchers only once across repeated calls", async () => {
-    const mod = await import("src/ts/globalApi.svelte");
+    const targetUrl = "https://openrouter.ai/api/v1/chat/completions";
+    const result = await globalFetch(targetUrl, { method: "POST", body: { ping: true } });
 
-    resetSaveDbRuntimeForTests();
-    await mod.saveDb();
-    await mod.saveDb();
+    expect(result.ok).toBe(true);
+    expect(shared.fetchMock).toHaveBeenCalledTimes(1);
 
-    expect(isSaveDbRuntimeInitializedForTests()).toBe(true);
-    expect(getSaveDbRuntimeStartCountForTests()).toBe(1);
+    const firstCallUrl = shared.fetchMock.mock.calls[0]?.[0];
+    const firstCallInit = shared.fetchMock.mock.calls[0]?.[1] as RequestInit | undefined;
+    const headers = (firstCallInit?.headers ?? {}) as Record<string, string>;
+
+    expect(firstCallUrl).toBe("/data/proxy");
+    expect(decodeURIComponent(headers["risu-url"])).toBe(targetUrl);
   });
 });

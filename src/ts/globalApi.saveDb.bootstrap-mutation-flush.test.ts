@@ -1,17 +1,18 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { writable } from "svelte/store";
-import {
-  getSaveDbRuntimeStartCountForTests,
-  isSaveDbRuntimeInitializedForTests,
-  resetSaveDbRuntimeForTests,
-} from "src/ts/globalApi.test-utils";
+import { resetSaveDbRuntimeForTests } from "src/ts/globalApi.test-utils";
 
 const shared = vi.hoisted(() => {
   const saveServerDatabaseMock = vi.fn(async () => {});
   const getDatabaseMock = vi.fn(() => ({
     usePlainFetch: false,
     requestLocation: "",
-    characters: [],
+    characters: [
+      {
+        chaId: "boot-assigned-char-id",
+        chats: [{ id: "boot-assigned-chat-id" }],
+      },
+    ],
     modules: [],
     personas: [],
     characterOrder: [],
@@ -47,7 +48,12 @@ vi.mock("src/ts/stores.svelte", () => ({
   DBState: {
     db: {
       requestLocation: "",
-      characters: [],
+      characters: [
+        {
+          chaId: "boot-assigned-char-id",
+          chats: [{ id: "boot-assigned-chat-id" }],
+        },
+      ],
       modules: [],
       personas: [],
       characterOrder: [],
@@ -108,35 +114,27 @@ vi.mock("src/ts/characterCards", () => ({
   hubURL: "https://hub.invalid",
 }));
 
-describe("saveDb idempotence", () => {
+describe("saveDb bootstrap mutation flush", () => {
   beforeEach(() => {
     vi.resetModules();
+    vi.useFakeTimers();
     shared.saveServerDatabaseMock.mockClear();
     shared.getDatabaseMock.mockClear();
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () =>
-        new Response('{"ok":true}', {
-          status: 200,
-          headers: { "content-type": "application/json" },
-        }),
-      ),
-    );
   });
 
   afterEach(async () => {
     await import("src/ts/globalApi.svelte");
     resetSaveDbRuntimeForTests();
+    vi.runOnlyPendingTimers();
+    vi.useRealTimers();
   });
 
-  it("saveDb initializes server autosave watchers only once across repeated calls", async () => {
+  it("saveDb flushes boot-time assignIds mutations without waiting for a second user mutation", async () => {
     const mod = await import("src/ts/globalApi.svelte");
 
-    resetSaveDbRuntimeForTests();
     await mod.saveDb();
-    await mod.saveDb();
+    await vi.advanceTimersByTimeAsync(260);
 
-    expect(isSaveDbRuntimeInitializedForTests()).toBe(true);
-    expect(getSaveDbRuntimeStartCountForTests()).toBe(1);
+    expect(shared.saveServerDatabaseMock).toHaveBeenCalledTimes(1);
   });
 });

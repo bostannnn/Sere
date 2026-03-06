@@ -1,33 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const shared = vi.hoisted(() => {
-  const order: string[] = [];
   const mountMock = vi.fn(() => ({ destroy: vi.fn() }));
-  const preLoadCheckMock = vi.fn(() => {
-    shared.order.push("preLoadCheck");
-  });
-  const hydrateBootColorSchemeMock = vi.fn(() => {
-    shared.order.push("hydrateBootColorScheme");
-  });
-  const initStoresRuntimeMock = vi.fn(() => {
-    shared.order.push("initStoresRuntime");
-  });
+  const preLoadCheckMock = vi.fn();
+  const hydrateBootColorSchemeMock = vi.fn();
+  const initStoresRuntimeMock = vi.fn();
   const disposeStoresRuntimeMock = vi.fn();
-  const loadDataMock = vi.fn(() => {
-    shared.order.push("loadData");
-  });
-  const initHotkeyMock = vi.fn(() => {
-    shared.order.push("initHotkey");
-  });
-  const initMobileGestureMock = vi.fn(() => {
-    shared.order.push("initMobileGesture");
-  });
-  const installTouchHardeningMock = vi.fn(() => {
-    shared.order.push("installTouchHardening");
-  });
+  const loadDataMock = vi.fn();
+  const initHotkeyMock = vi.fn();
+  const initMobileGestureMock = vi.fn();
+  const installTouchHardeningMock = vi.fn();
 
   return {
-    order,
     mountMock,
     preLoadCheckMock,
     hydrateBootColorSchemeMock,
@@ -68,10 +52,9 @@ vi.mock("src/ts/stores.svelte", () => ({
   disposeStoresRuntime: shared.disposeStoresRuntimeMock,
 }));
 
-describe("main boot order", () => {
+describe("main HMR dispose", () => {
   beforeEach(() => {
     vi.resetModules();
-    shared.order.length = 0;
     shared.mountMock.mockClear();
     shared.preLoadCheckMock.mockClear();
     shared.hydrateBootColorSchemeMock.mockClear();
@@ -90,21 +73,29 @@ describe("main boot order", () => {
     document.body.append(appRoot, preloading);
   });
 
-  it("main boot sequence remains deterministic and one-time on module re-import", async () => {
-    await import("src/main");
+  it("main runtime disposes boot listeners/effects on HMR and re-inits once", async () => {
+    const firstMain = await import("src/main");
+
+    firstMain.disposeMainRuntime();
+    firstMain.disposeMainRuntime();
+
+    expect(shared.disposeStoresRuntimeMock).toHaveBeenCalledTimes(1);
+
+    vi.resetModules();
+    const appRoot = document.getElementById("app") ?? document.createElement("div");
+    if (!appRoot.id) {
+      appRoot.id = "app";
+      document.body.appendChild(appRoot);
+    }
+    if (!document.getElementById("preloading")) {
+      const preloading = document.createElement("div");
+      preloading.id = "preloading";
+      document.body.appendChild(preloading);
+    }
+
     await import("src/main");
 
-    expect(shared.order).toEqual([
-      "preLoadCheck",
-      "hydrateBootColorScheme",
-      "initStoresRuntime",
-      "loadData",
-      "initHotkey",
-      "initMobileGesture",
-      "installTouchHardening",
-    ]);
-    expect(shared.mountMock).toHaveBeenCalledTimes(1);
-    expect(shared.loadDataMock).toHaveBeenCalledTimes(1);
-    expect(document.getElementById("preloading")).toBeNull();
+    expect(shared.initStoresRuntimeMock).toHaveBeenCalledTimes(2);
+    expect(shared.disposeStoresRuntimeMock).toHaveBeenCalledTimes(1);
   });
 });

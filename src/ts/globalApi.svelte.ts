@@ -282,6 +282,39 @@ export const requiresFullEncoderReload = $state({
 let serverSaveRuntimeInitialized = false
 let disposeServerSaveRuntime: (() => void) | null = null
 let serverSaveRuntimeStartCount = 0
+const SAVE_DB_RUNTIME_TEST_HOOKS_KEY = "__RISU_SAVE_DB_RUNTIME_TEST_HOOKS__"
+
+type SaveDbRuntimeTestHooks = {
+    resetSaveDbRuntimeForTests: () => void
+    isSaveDbRuntimeInitializedForTests: () => boolean
+    getSaveDbRuntimeStartCountForTests: () => number
+}
+
+function resetSaveDbRuntimeForTestsInternal() {
+    disposeServerSaveRuntime?.()
+    serverSaveRuntimeStartCount = 0
+}
+
+function isSaveDbRuntimeInitializedForTestsInternal() {
+    return serverSaveRuntimeInitialized
+}
+
+function getSaveDbRuntimeStartCountForTestsInternal() {
+    return serverSaveRuntimeStartCount
+}
+
+function registerSaveDbRuntimeTestHooks() {
+    if (import.meta.env.MODE !== "test") {
+        return
+    }
+    ;(globalThis as typeof globalThis & { [SAVE_DB_RUNTIME_TEST_HOOKS_KEY]?: SaveDbRuntimeTestHooks })[SAVE_DB_RUNTIME_TEST_HOOKS_KEY] = {
+        resetSaveDbRuntimeForTests: resetSaveDbRuntimeForTestsInternal,
+        isSaveDbRuntimeInitializedForTests: isSaveDbRuntimeInitializedForTestsInternal,
+        getSaveDbRuntimeStartCountForTests: getSaveDbRuntimeStartCountForTestsInternal,
+    }
+}
+
+registerSaveDbRuntimeTestHooks()
 
 export async function saveDb() {
     if (!isNodeServer) {
@@ -450,6 +483,9 @@ export async function saveDb() {
         })
     })
 
+    // Flush once after startup to persist any boot-time normalization (e.g. id/migration repair).
+    scheduleServerSave()
+
     disposeServerSaveRuntime = () => {
         if (disposed) {
             return
@@ -470,19 +506,6 @@ if (import.meta.hot) {
     import.meta.hot.dispose(() => {
         disposeServerSaveRuntime?.()
     })
-}
-
-export function resetSaveDbRuntimeForTests() {
-    disposeServerSaveRuntime?.()
-    serverSaveRuntimeStartCount = 0
-}
-
-export function isSaveDbRuntimeInitializedForTests() {
-    return serverSaveRuntimeInitialized
-}
-
-export function getSaveDbRuntimeStartCountForTests() {
-    return serverSaveRuntimeStartCount
 }
 
 /**
@@ -732,13 +755,12 @@ export async function globalFetch(url: string, arg: GlobalFetchArgs = {}): Promi
                 status: 503
             };
         }
-        const db = getDatabase();
         if (arg.abortSignal?.aborted) { return { ok: false, data: 'aborted', headers: {}, status: 400 }; }
 
         const routeMeta = resolveRequestRouteMeta(url)
         arg.headers = await appendLocalServerAuthHeaders(arg.headers ?? {}, routeMeta)
 
-        const forcePlainFetch = routeMeta.isLocalRequest || db.usePlainFetch || arg.plainFetchForce;
+        const forcePlainFetch = routeMeta.isLocalRequest || arg.plainFetchForce;
         const shouldBypassProxy = forcePlainFetch && !arg.plainFetchDeforce;
 
         if (shouldBypassProxy) {

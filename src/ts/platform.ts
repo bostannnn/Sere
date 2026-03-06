@@ -6,7 +6,6 @@ export const isTauri: boolean = false;
 export const isNodeServer: boolean = isTestMode
   ? !!(globalThis as typeof globalThis & { __NODE__?: boolean }).__NODE__
   : true;
-export const isWeb: boolean = false;
 export const isMobile: boolean = /Android|iPhone|iPad|iPod|webOS/i.test(navigator.userAgent);
 
 export const isFirefox: boolean = navigator.userAgent.includes("Firefox")

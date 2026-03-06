@@ -10,9 +10,7 @@
             LoadingStatusState,
             bookmarkListOpen,
             popupStore,
-            uiShellV2Enabled,
         } from './ts/stores.svelte';
-        import ChatScreen from './lib/ChatScreens/ChatScreen.svelte';
     import AlertComp from './lib/Others/AlertComp.svelte';
     
     import BookmarkList from './lib/Others/BookmarkList.svelte';
@@ -42,7 +40,6 @@
     
     let aprilFools = $state(new Date().getMonth() === 3 && new Date().getDate() === 1)
     let aprilFoolsPage = $state(0)
-    const showUiShellFlagBadge = import.meta.env.DEV
 
     function closePresetList() {
         $openPresetList = false
@@ -54,7 +51,7 @@
 
 </script>
 
-<main class="ds-app-shell" data-ui-shell-v2={$uiShellV2Enabled ? '1' : '0'} ondragover={(e) => {
+<main class="ds-app-shell" ondragover={(e) => {
     e.preventDefault()
     if (e.dataTransfer) e.dataTransfer.dropEffect = 'link'
 }} ondrop={async (e) => {
@@ -172,8 +169,6 @@
         </div>
     {:else if $CustomGUISettingMenuStore}
         <CustomGUISettingMenu />
-    {:else if $uiShellV2Enabled}
-        <AppShellV2 />
     {:else if $MobileGUI}
         <div class="ds-app-mobile-shell">
             <MobileHeader />
@@ -185,8 +180,7 @@
     {:else if $openRulebookManager}
         <RulebookLibrary />
     {:else}
-        <!-- Legacy desktop shell path placeholder until legacy branch is restored. -->
-        <ChatScreen />
+        <AppShellV2 />
     {/if}
     {#if $alertStore.type !== 'none'}
         <AlertComp />
@@ -208,38 +202,4 @@
     {#if popupStore.children}
         <PopupList />
     {/if}
-
-    {#if showUiShellFlagBadge}
-        <div class="ds-ui-shell-flag-badge" data-state={$uiShellV2Enabled ? 'on' : 'off'}>
-            ui_shell_v2: {$uiShellV2Enabled ? 'ON' : 'OFF'}
-        </div>
-    {/if}
 </main>
-
-<style>
-    .ds-ui-shell-flag-badge {
-        position: fixed;
-        right: 0.75rem;
-        bottom: 0.75rem;
-        z-index: 9999;
-        pointer-events: none;
-        border: 1px solid var(--ds-border-subtle);
-        border-radius: var(--ds-radius-pill);
-        padding: 0.25rem 0.5rem;
-        font-size: var(--ds-font-size-xs);
-        line-height: 1;
-        background: color-mix(in srgb, var(--ds-surface-2) 85%, transparent);
-        color: var(--ds-text-secondary);
-        backdrop-filter: blur(4px);
-    }
-
-    .ds-ui-shell-flag-badge[data-state='on'] {
-        border-color: color-mix(in srgb, var(--ds-text-success) 45%, var(--ds-border-subtle));
-        color: var(--ds-text-success);
-    }
-
-    .ds-ui-shell-flag-badge[data-state='off'] {
-        border-color: color-mix(in srgb, var(--ds-text-danger) 45%, var(--ds-border-subtle));
-        color: var(--ds-text-danger);
-    }
-</style>

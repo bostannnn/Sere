@@ -47,40 +47,6 @@ export interface AppRoute {
     inspector: AppInspector
 }
 
-const uiShellV2FlagKey = "risu:ui_shell_v2"
-
-function readUiShellV2Flag(){
-    if(typeof window === "undefined"){
-        return true
-    }
-    const fromQuery = new URLSearchParams(window.location.search).get("ui_shell_v2")
-    if(fromQuery === "1"){
-        window.localStorage.setItem(uiShellV2FlagKey, "1")
-        return true
-    }
-    if(fromQuery === "0"){
-        window.localStorage.setItem(uiShellV2FlagKey, "0")
-        return false
-    }
-    const saved = window.localStorage.getItem(uiShellV2FlagKey)
-    if(saved === "1"){
-        return true
-    }
-    if(saved === "0"){
-        return false
-    }
-    // Keep current behavior unchanged until legacy shell path is restored.
-    return true
-}
-
-export const uiShellV2Enabled = writable(readUiShellV2Flag())
-export function setUiShellV2Enabled(enabled:boolean){
-    uiShellV2Enabled.set(enabled)
-    if(typeof window !== "undefined"){
-        window.localStorage.setItem(uiShellV2FlagKey, enabled ? "1" : "0")
-    }
-}
-
 export const appRouteStore = writable<AppRoute>({
     workspace: "characters",
     selectedCharacterId: null,
@@ -223,9 +189,6 @@ export function createSimpleCharacter(char:character|groupChat){
     return simpleChar
 
 }
-
-// Preserve pre-shell-v2 behavior: initialize viewport stores as soon as the module loads.
-initStoresRuntime()
 
 if (import.meta.hot) {
     import.meta.hot.dispose(() => {
