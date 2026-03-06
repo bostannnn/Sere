@@ -1,9 +1,7 @@
     <script lang="ts">
     import {
-            settingsOpen,
             openPresetList,
             openPersonaList,
-            MobileGUI,
             CustomGUISettingMenuStore,
             loadedStore,
             alertStore,
@@ -14,7 +12,6 @@
     import AlertComp from './lib/Others/AlertComp.svelte';
     
     import BookmarkList from './lib/Others/BookmarkList.svelte';
-    import Settings from './lib/Setting/Settings.svelte';
     import { importCharacterProcess } from './ts/characterCards';
     import { importPreset, getDatabase, setDatabase } from './ts/storage/database.svelte';
     import { readModule } from './ts/process/modules';
@@ -23,14 +20,10 @@
     import SavePopupIconComp from './lib/Others/SavePopupIcon.svelte';
     import Botpreset from './lib/Setting/botpreset.svelte';
     import ListedPersona from './lib/Setting/listedPersona.svelte';
-    import MobileHeader from './lib/Mobile/MobileHeader.svelte';
-    import MobileBody from './lib/Mobile/MobileBody.svelte';
-    import MobileFooter from './lib/Mobile/MobileFooter.svelte';
     import CustomGUISettingMenu from './lib/Setting/Pages/CustomGUISettingMenu.svelte';
     import { checkCharOrder } from './ts/globalApi.svelte';
     import { ArrowUpIcon, GlobeIcon, PlusIcon } from '@lucide/svelte';
-    import { hypaV3ProgressStore, openRulebookManager } from "./ts/stores.svelte";
-    import RulebookLibrary from './lib/Others/RulebookManager/RulebookLibrary.svelte';
+    import { hypaV3ProgressStore } from "./ts/stores.svelte";
     import HypaV3Progress from './lib/Others/HypaV3Progress.svelte';
     import PluginAlertModal from './lib/Others/PluginAlertModal.svelte';
     import PopupList from './lib/UI/PopupList.svelte';
@@ -169,16 +162,6 @@
         </div>
     {:else if $CustomGUISettingMenuStore}
         <CustomGUISettingMenu />
-    {:else if $MobileGUI}
-        <div class="ds-app-mobile-shell">
-            <MobileHeader />
-            <MobileBody />
-            <MobileFooter />
-        </div>
-    {:else if $settingsOpen}
-        <Settings />
-    {:else if $openRulebookManager}
-        <RulebookLibrary />
     {:else}
         <AppShellV2 />
     {/if}

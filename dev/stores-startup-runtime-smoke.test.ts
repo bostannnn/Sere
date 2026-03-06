@@ -13,10 +13,15 @@ vi.mock(import("src/ts/parser.svelte"), () => ({
 }));
 
 describe("stores startup runtime smoke", () => {
-  it("imports stores module without init-order crashes and initializes viewport state", async () => {
+  it("imports stores module without init-order crashes and initializes viewport state only after explicit init", async () => {
     vi.resetModules();
 
     const stores = await import("src/ts/stores.svelte");
+    const sizeBeforeInit = get(stores.SizeStore);
+    expect(sizeBeforeInit.w).toBe(0);
+    expect(sizeBeforeInit.h).toBe(0);
+
+    stores.initStoresRuntime();
     const size = get(stores.SizeStore);
     const isDynamic = get(stores.DynamicGUI);
     const isMobile = get(stores.MobileGUI);
@@ -27,5 +32,6 @@ describe("stores startup runtime smoke", () => {
     expect(size.h).toBeGreaterThan(0);
     expect(typeof isDynamic).toBe("boolean");
     expect(typeof isMobile).toBe("boolean");
+    stores.disposeStoresRuntime();
   });
 });
