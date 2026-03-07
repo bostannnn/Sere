@@ -78,13 +78,14 @@ const tokens = $state({
     let submenu = $state(0)
     const modelInfo = $derived(getModelInfo(DBState.db.aiModel))
     const subModelInfo = $derived(getModelInfo(DBState.db.subModel))
+    const removedModelMigrationNotice = $derived((DBState.db.removedModelMigrationNotice ?? []).join(" "))
     let openrouterSearchQuery = $state("")
     let openrouterSubSearchQuery = $state("")
     let openrouterModelsLoading = $state(false)
     let openrouterModelState = $state<OpenRouterModelsState>({
         models: [],
         status: 0,
-        source: 'legacy-proxy',
+        source: 'server',
         stale: false,
         updatedAt: null,
         error: ''
@@ -133,6 +134,10 @@ const tokens = $state({
         }
     }
 
+    function dismissRemovedModelMigrationNotice() {
+        DBState.db.removedModelMigrationNotice = []
+    }
+
     $effect(() => {
         const needsOpenrouterModels = DBState.db.aiModel === 'openrouter' || DBState.db.subModel === 'openrouter'
         if (!needsOpenrouterModels) {
@@ -160,6 +165,16 @@ const tokens = $state({
 </h2>
 
 <div class="ds-settings-page">
+{#if removedModelMigrationNotice}
+    <div class="ds-settings-section ds-settings-card">
+        <span class="ds-settings-note-danger">{removedModelMigrationNotice}</span>
+        <div class="ds-settings-inline-actions action-rail">
+            <Button size="sm" styled="outlined" onclick={dismissRemovedModelMigrationNotice}>
+                Dismiss
+            </Button>
+        </div>
+    </div>
+{/if}
 {#if submenu !== -1}
     <SettingsSubTabs
         items={[
@@ -233,39 +248,6 @@ const tokens = $state({
     {#if modelInfo.provider === LLMProvider.NovelAI || subModelInfo.provider === LLMProvider.NovelAI}
         <span class="ds-settings-label">NovelAI Bearer Token</span>
         <TextInput hideText={DBState.db.hideApiKey} bind:value={DBState.db.novelai.token}/>
-    {/if}
-    {#if DBState.db.aiModel === 'reverse_proxy' || DBState.db.subModel === 'reverse_proxy'}
-        <div class="ds-settings-section">
-            <span class="ds-settings-label">URL <Help key="forceUrl"/></span>
-            <TextInput size="sm" bind:value={DBState.db.forceReplaceUrl} placeholder="https//..." />
-            <span class="ds-settings-label"> {language.proxyAPIKey}</span>
-            <TextInput hideText={DBState.db.hideApiKey} size="sm" placeholder="leave it blank if it hasn't password" bind:value={DBState.db.proxyKey} />
-            <span class="ds-settings-label"> {language.proxyRequestModel}</span>
-            <TextInput size="sm" bind:value={DBState.db.customProxyRequestModel} placeholder="Name" />
-            <span class="ds-settings-label"> {language.format}</span>
-            <SelectInput value={DBState.db.customAPIFormat.toString()} onchange={(e) => {
-                DBState.db.customAPIFormat = parseInt(e.currentTarget.value)
-            }}>
-                <OptionInput value={LLMFormat.OpenAICompatible.toString()}>
-                    OpenAI Compatible
-                </OptionInput>
-                <OptionInput value={LLMFormat.OpenAIResponseAPI.toString()}>
-                    OpenAI Response API
-                </OptionInput>
-                <OptionInput value={LLMFormat.Anthropic.toString()}>
-                    Anthropic Claude
-                </OptionInput>
-                <OptionInput value={LLMFormat.Mistral.toString()}>
-                    Mistral
-                </OptionInput>
-                <OptionInput value={LLMFormat.GoogleCloud.toString()}>
-                    Google Cloud
-                </OptionInput>
-                <OptionInput value={LLMFormat.Cohere.toString()}>
-                    Cohere
-                </OptionInput>
-            </SelectInput>
-        </div>
     {/if}
     {#if modelInfo.provider === LLMProvider.Cohere || subModelInfo.provider === LLMProvider.Cohere}
         <div class="ds-settings-section">
@@ -383,7 +365,7 @@ const tokens = $state({
             {/if}
         </div>
     {/if}
-    {#if DBState.db.aiModel === 'openrouter' || DBState.db.aiModel === 'reverse_proxy'}
+    {#if DBState.db.aiModel === 'openrouter'}
         <span class="ds-settings-label">{language.tokenizer}</span>
         <SelectInput bind:value={DBState.db.customTokenizer}>
             {#each tokenizerList as entry (entry[0])}
@@ -415,9 +397,6 @@ const tokens = $state({
             {/if}
         {/if}
 
-        {#if DBState.db.aiModel === 'reverse_proxy' || DBState.db.subModel === 'reverse_proxy'}
-            <Check bind:check={DBState.db.reverseProxyOobaMode} name={`${language.reverseProxyOobaMode}`}/>
-        {/if}
         {#if modelInfo.provider === LLMProvider.NovelAI || subModelInfo.provider === LLMProvider.NovelAI}
             <Check bind:check={DBState.db.NAIadventure} name={language.textAdventureNAI}/>
 
@@ -595,7 +574,7 @@ const tokens = $state({
         <!-- Standard parameters now handled by SettingRenderer above -->
     {/if}
 
-    {#if (DBState.db.reverseProxyOobaMode && DBState.db.aiModel === 'reverse_proxy') || (DBState.db.aiModel === 'ooba')}
+    {#if DBState.db.aiModel === 'ooba'}
         <OobaSettings instructionMode={DBState.db.aiModel === 'ooba'} />
     {/if}
 

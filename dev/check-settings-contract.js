@@ -113,14 +113,6 @@ const checks = [
     ],
   },
   {
-    file: path.join(ROOT, "src/lib/Setting/Pages/Advanced/CustomModelsSettings.svelte"),
-    patterns: [
-      "class=\"ds-settings-inline-actions ds-settings-model-row-actions action-rail\"",
-      "class=\"ds-settings-inline-actions action-rail\"",
-      "className=\"ds-settings-model-row-toggle\"",
-    ],
-  },
-  {
     file: path.join(ROOT, "src/lib/Setting/Pages/Module/ModuleSettings.svelte"),
     patterns: [
       "className=\"control-field\"",

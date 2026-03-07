@@ -1,6 +1,6 @@
 import { HypaProcessorV2, type EmbeddingText } from "../memory/hypamemoryv2";
 import { isNodeServer } from "src/ts/platform";
-import { getDatabase } from "src/ts/storage/database.svelte";
+import { getDatabase, resolveGlobalRagSettings } from "src/ts/storage/database.svelte";
 import { globalFetch } from "src/ts/globalApi.svelte";
 import type { RagChunk, RagResult, RulebookMetadata } from "./types";
 import { ragProgressStore } from "../../stores.svelte";
@@ -187,7 +187,7 @@ export class RulebookRag {
     minScore: number = 0.1
   ): Promise<RagResult<RulebookMetadata>[]> {
     if (isNodeServer) {
-      const db = getDatabase();
+      const globalRagSettings = resolveGlobalRagSettings(getDatabase().globalRagSettings);
       const res = await globalFetch("/data/rag/search", {
         method: "POST",
         body: {
@@ -195,7 +195,7 @@ export class RulebookRag {
           bookIds: Array.isArray(rulebookIdOrIds) ? rulebookIdOrIds : [rulebookIdOrIds],
           topK,
           minScore,
-          model: db.globalRagSettings.model || "MiniLM",
+          model: globalRagSettings.model,
         },
       });
       return res.ok ? res.data : [];

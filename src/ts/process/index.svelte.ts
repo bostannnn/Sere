@@ -1,7 +1,7 @@
 /* eslint-disable svelte/prefer-svelte-reactivity */
 import { isNodeServer } from "../platform";
 import { get, writable } from "svelte/store";
-import { getDatabase, type character, type MessageGenerationInfo, type Chat, type MessagePresetInfo, changeToPreset, setCurrentChat, type Message } from "../storage/database.svelte";
+import { getDatabase, resolveGlobalRagSettings, type character, type MessageGenerationInfo, type Chat, type MessagePresetInfo, changeToPreset, setCurrentChat, type Message } from "../storage/database.svelte";
 import { CharEmotion, DBState, ragLastResult, selectedCharID, stateEditorActive } from "../stores.svelte";
 import { ChatTokenizer, tokenize, tokenizeNum } from "../tokenizer";
 import { language } from "../../lang";
@@ -1241,7 +1241,7 @@ export async function sendChat(chatProcessIndex = -1,arg:{
     }
 
     //continue chat model
-    if(arg.continue && (DBState.db.aiModel.startsWith('claude') || DBState.db.aiModel.startsWith('gpt') || DBState.db.aiModel.startsWith('openrouter') || DBState.db.aiModel.startsWith('reverse_proxy'))){
+    if(arg.continue && (DBState.db.aiModel.startsWith('claude') || DBState.db.aiModel.startsWith('gpt') || DBState.db.aiModel.startsWith('openrouter'))){
         unformated.postEverything.push({
             role: 'system',
             content: '[Continue the last response]'
@@ -1253,7 +1253,7 @@ export async function sendChat(chatProcessIndex = -1,arg:{
             if(!chat.content.trim() && !(chat.multimodals && chat.multimodals.length > 0)){
                 continue
             }
-            if(!(DBState.db.aiModel.startsWith('gpt') || DBState.db.aiModel.startsWith('claude') || DBState.db.aiModel === 'openrouter' || DBState.db.aiModel === 'reverse_proxy')){
+            if(!(DBState.db.aiModel.startsWith('gpt') || DBState.db.aiModel.startsWith('claude') || DBState.db.aiModel === 'openrouter')){
                 formated.push(chat)
                 continue
             }
@@ -1324,9 +1324,9 @@ export async function sendChat(chatProcessIndex = -1,arg:{
         }
 
         if (query && !isNodeServer) {
-            const globalRagSettings = getDatabase().globalRagSettings;
-            const topK = globalRagSettings?.topK || 3;
-            const minScore = globalRagSettings?.minScore || 0.0;
+            const globalRagSettings = resolveGlobalRagSettings(getDatabase().globalRagSettings);
+            const topK = globalRagSettings.topK;
+            const minScore = globalRagSettings.minScore;
             const bookIds = currentChar.ragSettings.enabledRulebooks;
             // In client mode, we need to ensure vectors are loaded into processor
             if (!isNodeServer) {
@@ -1356,7 +1356,7 @@ export async function sendChat(chatProcessIndex = -1,arg:{
             let ragPrompt = rulebookRag.formatForPrompt(filteredResults);
 
             // Respect budget
-            const budget = globalRagSettings?.budget || 800;
+            const budget = globalRagSettings.budget;
             let ragTokens = await tokenize(ragPrompt);
 
             while (ragTokens > budget && filteredResults.length > 1) {

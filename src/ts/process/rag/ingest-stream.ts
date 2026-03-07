@@ -1,5 +1,5 @@
 import { resolveProxyAuth } from "src/ts/globalApi.svelte";
-import { getDatabase } from "src/ts/storage/database.svelte";
+import { getDatabase, resolveGlobalRagSettings } from "src/ts/storage/database.svelte";
 import type { RagIndex } from "./types";
 const ragIngestLog = (..._args: unknown[]) => {};
 
@@ -34,7 +34,7 @@ export async function ingestRulebookOnServer(
   metadata: { system?: string; edition?: string },
   onProgress?: (event: IngestProgressEvent) => void
 ): Promise<RagIndex> {
-  const db = getDatabase();
+  const globalRagSettings = resolveGlobalRagSettings(getDatabase().globalRagSettings);
   const base64 = Buffer.from(fileData).toString("base64");
   ragIngestLog(`[RAG] Uploading rulebook: ${name}, base64 size: ${base64.length} bytes`);
 
@@ -49,7 +49,7 @@ export async function ingestRulebookOnServer(
       name,
       base64,
       source_file,
-      model: db.globalRagSettings.model || "MiniLM",
+      model: globalRagSettings.model,
       metadata,
       thumbnail,
     }),

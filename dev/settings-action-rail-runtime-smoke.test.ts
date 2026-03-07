@@ -1,10 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mount, tick, unmount } from "svelte";
 
-vi.mock(import("uuid"), () => ({
-  v4: () => "generated-custom-model-id",
-}));
-
 vi.mock(import("src/lang"), () => ({
   language: {
     customStopWords: "Custom Stop Words",
@@ -15,14 +11,6 @@ vi.mock(import("src/lang"), () => ({
     openrouterProviderOnly: "Provider only",
     openrouterProviderIgnore: "Provider ignore",
     provider: "Provider",
-    customModels: "Custom Models",
-    name: "Name",
-    proxyRequestModel: "Proxy Request Model",
-    tokenizer: "Tokenizer",
-    format: "Format",
-    proxyAPIKey: "Proxy API Key",
-    additionalParams: "Additional Params",
-    flags: "Flags",
   },
 }));
 
@@ -77,7 +65,6 @@ vi.mock(import("src/ts/stores.svelte"), async () => {
 
 import OpenrouterSettings from "src/lib/Setting/Pages/OpenrouterSettings.svelte";
 import OobaSettings from "src/lib/Setting/Pages/OobaSettings.svelte";
-import CustomModelsSettings from "src/lib/Setting/Pages/Advanced/CustomModelsSettings.svelte";
 import { DBState } from "src/ts/stores.svelte";
 
 let app: Record<string, unknown> | undefined;
@@ -94,19 +81,6 @@ function createDbState() {
     },
     reverseProxyOobaArgs: {},
     localStopStrings: ["stop-alpha"],
-    customModels: [
-      {
-        internalId: "openai/gpt-4.1",
-        url: "https://example.com",
-        tokenizer: 0,
-        format: 0,
-        id: "custom-model-alpha",
-        key: "",
-        name: "Alpha",
-        params: "",
-        flags: [],
-      },
-    ],
   };
 }
 
@@ -192,47 +166,5 @@ describe("settings action-rail runtime smoke", () => {
     removeButton?.click();
     await flushUi();
     expect(DBState.db.localStopStrings.length).toBe(1);
-  });
-
-  it("keeps custom model row and footer controls on action-rail", async () => {
-    const target = document.createElement("div");
-    document.body.appendChild(target);
-    app = mount(CustomModelsSettings, { target });
-    await flushUi();
-
-    const rowRail = document.querySelector(
-      ".ds-settings-inline-actions.ds-settings-model-row-actions.action-rail",
-    ) as HTMLElement | null;
-    expect(rowRail).not.toBeNull();
-
-    const rowButtons = Array.from(
-      rowRail?.querySelectorAll("button.ds-settings-icon-action") ?? [],
-    ) as HTMLButtonElement[];
-    expect(rowButtons.length).toBe(3);
-    expect(rowButtons[0]?.classList.contains("icon-btn")).toBe(true);
-    expect(rowButtons[0]?.classList.contains("icon-btn--sm")).toBe(true);
-
-    const toggleButton = document.querySelector(
-      ".ds-settings-model-row-toggle",
-    ) as HTMLButtonElement | null;
-    expect(toggleButton).not.toBeNull();
-    toggleButton?.click();
-    await flushUi();
-
-    const rails = Array.from(
-      document.querySelectorAll(".ds-settings-inline-actions.action-rail"),
-    ) as HTMLElement[];
-    expect(rails.length).toBeGreaterThanOrEqual(3);
-
-    const footerRail = rails[rails.length - 1];
-    const addButton = footerRail?.querySelector(
-      "button.ds-settings-icon-action",
-    ) as HTMLButtonElement | null;
-    expect(addButton).not.toBeNull();
-    addButton?.click();
-    await flushUi();
-
-    expect(DBState.db.customModels.length).toBe(2);
-    expect(DBState.db.customModels[1]?.id).toBe("xcustom:::generated-custom-model-id");
   });
 });

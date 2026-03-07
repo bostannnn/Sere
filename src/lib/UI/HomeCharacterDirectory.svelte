@@ -19,6 +19,7 @@
     }: Props = $props();
 
     let openMenuKey = $state<string | null>(null);
+    let imageSources = $state<Record<string, string | null>>({});
     type CharacterRow = {
         key: string;
         chaId: string;
@@ -34,6 +35,10 @@
 
     function normalizeQuery(value: string) {
         return value.replace(/\s+/g, "").toLocaleLowerCase();
+    }
+
+    function getImageCacheKey(image: string, hideAllImages: boolean) {
+        return `${hideAllImages ? "hidden" : "visible"}:${image}`;
     }
 
     function resolveSafeChatIndex(chats: Chat[], index: number) {
@@ -242,6 +247,16 @@
     }
 
     const rowKeys = $derived.by(() => new Set(rows.map((row) => row.key)));
+    const visibleImageEntries = $derived.by(() => {
+        const hideAllImages = Boolean(DBState.db.hideAllImages);
+        return Array.from(
+            new Map(
+                rows
+                    .filter((row) => !!row.image)
+                    .map((row) => [getImageCacheKey(row.image, hideAllImages), row.image])
+            ).entries()
+        );
+    });
 
     $effect(() => {
         if (!openMenuKey) {
@@ -250,6 +265,39 @@
         if (!rowKeys.has(openMenuKey)) {
             openMenuKey = null;
         }
+    });
+
+    $effect(() => {
+        const nextKeys = new Set(visibleImageEntries.map(([cacheKey]) => cacheKey));
+        const cachedEntries = Object.entries(imageSources).filter(([cacheKey]) => nextKeys.has(cacheKey));
+        if (cachedEntries.length !== Object.keys(imageSources).length) {
+            imageSources = Object.fromEntries(cachedEntries);
+        }
+
+        const missingEntries = visibleImageEntries.filter(([cacheKey]) => imageSources[cacheKey] === undefined);
+        if (missingEntries.length === 0) {
+            return;
+        }
+
+        let canceled = false;
+        void Promise.all(
+            missingEntries.map(async ([cacheKey, image]) => {
+                const source = await getCharImage(image, "plain");
+                return [cacheKey, source] as const;
+            })
+        ).then((resolvedEntries) => {
+            if (canceled) {
+                return;
+            }
+            imageSources = {
+                ...imageSources,
+                ...Object.fromEntries(resolvedEntries),
+            };
+        });
+
+        return () => {
+            canceled = true;
+        };
     });
 
     onMount(() => {
@@ -313,28 +361,13 @@
                         title={row.name}
                     >
                         <div class="ds-home-character-avatar" aria-hidden="true">
-                            {#if row.image}
-                                {#await getCharImage(row.image, "plain")}
-                                    <div class="ds-home-character-avatar-fallback">
-                                        {#if row.isGroup}
-                                            <UsersIcon size={22} />
-                                        {:else}
-                                            <UserIcon size={22} />
-                                        {/if}
-                                    </div>
-                                {:then source}
-                                    {#if source}
-                                        <img src={source} alt="" loading="lazy" draggable="false" />
-                                    {:else}
-                                        <div class="ds-home-character-avatar-fallback">
-                                            {#if row.isGroup}
-                                                <UsersIcon size={22} />
-                                            {:else}
-                                                <UserIcon size={22} />
-                                            {/if}
-                                        </div>
-                                    {/if}
-                                {/await}
+                            {#if row.image && imageSources[getImageCacheKey(row.image, Boolean(DBState.db.hideAllImages))]}
+                                <img
+                                    src={imageSources[getImageCacheKey(row.image, Boolean(DBState.db.hideAllImages))] ?? ""}
+                                    alt=""
+                                    loading="lazy"
+                                    draggable="false"
+                                />
                             {:else}
                                 <div class="ds-home-character-avatar-fallback">
                                     {#if row.isGroup}
@@ -465,7 +498,6 @@
         transition: transform var(--ds-motion-base) var(--ds-ease-emphasized),
             border-color var(--ds-motion-base) var(--ds-ease-emphasized),
             box-shadow var(--ds-motion-base) var(--ds-ease-emphasized);
-        will-change: transform;
     }
 
     .ds-home-character-card:hover {

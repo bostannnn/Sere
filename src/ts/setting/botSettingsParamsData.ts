@@ -39,7 +39,6 @@ export const seedSetting: SettingItem = {
     bindKey: 'generationSeed',
     condition: (ctx) => 
         ctx.db.aiModel.startsWith('gpt') || 
-        ctx.db.aiModel === 'reverse_proxy' || 
         ctx.db.aiModel === 'openrouter',
     keywords: ['seed', 'random', 'deterministic'],
 };

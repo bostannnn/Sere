@@ -4,7 +4,7 @@ import { alertAddCharacter, alertConfirm, alertError, alertNormal, alertSelect, 
 import { language } from "../lang";
 import { checkNullish, findCharacterbyId, getUserName, selectMultipleFile, selectSingleFile, sleep } from "./util";
 import { v4 as uuidv4, v4 } from 'uuid';
-import { MobileGUIStack, selectedCharID } from "./stores.svelte";
+import { selectedCharID } from "./stores.svelte";
 import { AppendableBuffer, changeChatTo, checkCharOrder, downloadFile, getFileSrc, requiresFullEncoderReload } from "./globalApi.svelte";
 import { updateInlayScreen } from "./process/inlayScreen";
 import { checkImageType, parseMarkdownSafe } from "./parser.svelte";
@@ -899,7 +899,6 @@ export async function removeChar(index:number,name:string, type:'normal'|'perman
 export async function addCharacter(arg:{
     reseter?:()=>void,
 } = {}){
-    MobileGUIStack.set(100)
     const reseter = arg.reseter ?? (() => {})
     const r = await alertAddCharacter()
     reseter();
@@ -914,14 +913,12 @@ export async function addCharacter(arg:{
             await importCharacter()
             break
         default:
-            MobileGUIStack.set(0)
             return
     }
     const db = getDatabase()
     if(db.characters[db.characters.length-1]){
         changeChar(db.characters.length-1)
     }
-    MobileGUIStack.set(0)
 }
 
 export function changeChar(index: number, arg:{

@@ -797,14 +797,6 @@ export async function requestOpenAI(arg:RequestDataArgumentExtended):Promise<req
     if (isNodeServer && aiModel.startsWith('deepseek')) {
         return await requestDeepSeekServerExecution(arg, body)
     }
-    if (isNodeServer && (aiModel === 'reverse_proxy' || aiModel.startsWith('xcustom:::'))) {
-        return {
-            type: 'fail',
-            noRetry: true,
-            result: `${language.errors.httpError}Provider has been removed: ${aiModel}.`,
-        }
-    }
-
     if(arg.useStreaming){
         body.stream = true
         const urlHost = new URL(replacerURL).host

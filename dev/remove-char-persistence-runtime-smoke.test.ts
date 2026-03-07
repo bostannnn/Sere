@@ -75,7 +75,6 @@ vi.mock("uuid", () => ({
 }));
 
 vi.mock(import("src/ts/stores.svelte"), () => ({
-  MobileGUIStack: { set: vi.fn() },
   selectedCharID: { set: mocks.selectedCharSetMock },
 }));
 

@@ -17,7 +17,6 @@ import type { Component } from 'svelte';
 // Import custom components here
 import SeparateParametersSection from 'src/lib/Setting/Pages/SeparateParametersSection.svelte';
 import BanCharacterSetSettings from 'src/lib/Setting/Pages/Advanced/BanCharacterSetSettings.svelte';
-import CustomModelsSettings from 'src/lib/Setting/Pages/Advanced/CustomModelsSettings.svelte';
 import SettingsExportButtons from 'src/lib/Setting/Pages/Advanced/SettingsExportButtons.svelte';
 import ServerPasswordSettings from 'src/lib/Setting/Pages/Advanced/ServerPasswordSettings.svelte';
 import ComfyCommanderSettings from 'src/lib/Setting/Pages/Advanced/ComfyCommanderSettings.svelte';
@@ -29,7 +28,6 @@ import ComfyCommanderSettings from 'src/lib/Setting/Pages/Advanced/ComfyCommande
 export const customComponents: Record<string, Component<unknown>> = {
     'SeparateParametersSection': SeparateParametersSection,
     'BanCharacterSetSettings': BanCharacterSetSettings,
-    'CustomModelsSettings': CustomModelsSettings,
     'SettingsExportButtons': SettingsExportButtons,
     'ServerPasswordSettings': ServerPasswordSettings,
     'ComfyCommanderSettings': ComfyCommanderSettings,

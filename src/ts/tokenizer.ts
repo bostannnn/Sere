@@ -94,7 +94,7 @@ export async function encode(data:string):Promise<(number[]|Uint32Array|Int32Arr
 
     let result: number[] | Uint32Array | Int32Array | undefined = undefined;
 
-    if(db.aiModel === 'openrouter' || db.aiModel === 'reverse_proxy'){
+    if(db.aiModel === 'openrouter'){
         switch(db.customTokenizer){
             case 'mistral':
                 result = await tokenizeWebTokenizers(data, 'mistral'); break;

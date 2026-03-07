@@ -45,6 +45,105 @@ const emotionEmbeddingModels: Set<HypaModel> = new Set([
 
 const COMFY_COMMANDER_PLUGIN_NAME = 'Comfy Commander'
 const COMFY_COMMANDER_DEFAULT_BASE_URL = 'http://127.0.0.1:8188'
+const DEFAULT_OPENROUTER_REQUEST_MODEL = 'openai/gpt-3.5-turbo'
+const REMOVED_PROVIDER_MIGRATION_NOTICE = 'Legacy removed providers were migrated to OpenRouter. Review Bot Settings and re-save any affected presets.'
+type GlobalRagSettingsDefaults = {
+    enabled: boolean
+    topK: number
+    minScore: number
+    budget: number
+    enabledRulebooks: string[]
+    model: string
+}
+
+export const DEFAULT_GLOBAL_RAG_SETTINGS: Readonly<GlobalRagSettingsDefaults> = Object.freeze({
+    enabled: false,
+    topK: 7,
+    minScore: 0.6,
+    budget: 1500,
+    enabledRulebooks: [] as string[],
+    model: 'bgeLargeEnGPU',
+})
+
+function cloneDefaultGlobalRagSettings() {
+    return {
+        ...DEFAULT_GLOBAL_RAG_SETTINGS,
+        enabledRulebooks: [...DEFAULT_GLOBAL_RAG_SETTINGS.enabledRulebooks],
+    }
+}
+
+function isRemovedLegacyModelId(value: unknown): value is string {
+    return typeof value === 'string' && (value === 'reverse_proxy' || value.startsWith('xcustom:::'))
+}
+
+function ensureOpenRouterRequestModel(value: unknown) {
+    if (typeof value !== 'string') {
+        return DEFAULT_OPENROUTER_REQUEST_MODEL
+    }
+    const trimmed = value.trim()
+    if (!trimmed || isRemovedLegacyModelId(trimmed)) {
+        return DEFAULT_OPENROUTER_REQUEST_MODEL
+    }
+    return trimmed
+}
+
+type LegacyProviderTarget = {
+    aiModel?: string
+    subModel?: string
+    openrouterRequestModel?: string
+    openrouterSubRequestModel?: string
+}
+
+function migrateRemovedProviderSelections(target: LegacyProviderTarget): boolean {
+    let changed = false
+
+    if (isRemovedLegacyModelId(target.aiModel)) {
+        target.aiModel = 'openrouter'
+        target.openrouterRequestModel = ensureOpenRouterRequestModel(target.openrouterRequestModel)
+        changed = true
+    }
+    else if (target.aiModel === 'openrouter') {
+        const nextRequestModel = ensureOpenRouterRequestModel(target.openrouterRequestModel)
+        if (nextRequestModel !== target.openrouterRequestModel) {
+            target.openrouterRequestModel = nextRequestModel
+            changed = true
+        }
+    }
+
+    if (isRemovedLegacyModelId(target.subModel)) {
+        target.subModel = 'openrouter'
+        target.openrouterSubRequestModel = ensureOpenRouterRequestModel(target.openrouterSubRequestModel)
+        changed = true
+    }
+    else if (target.subModel === 'openrouter') {
+        const nextSubRequestModel = ensureOpenRouterRequestModel(target.openrouterSubRequestModel)
+        if (nextSubRequestModel !== target.openrouterSubRequestModel) {
+            target.openrouterSubRequestModel = nextSubRequestModel
+            changed = true
+        }
+    }
+
+    return changed
+}
+
+export type ChatBackgroundMode = 'inherit' | 'default' | 'custom'
+
+export function resolveChatBackgroundMode(mode: unknown, backgroundImage: unknown): ChatBackgroundMode {
+    const normalizedImage = typeof backgroundImage === 'string' ? backgroundImage.trim() : ''
+    if (mode === 'default') {
+        return 'default'
+    }
+    if (mode === 'custom' && normalizedImage) {
+        return 'custom'
+    }
+    return 'inherit'
+}
+
+function normalizeChatBackground(chat: Partial<Chat>) {
+    const normalizedImage = typeof chat.backgroundImage === 'string' ? chat.backgroundImage.trim() : ''
+    chat.backgroundImage = normalizedImage
+    chat.backgroundMode = resolveChatBackgroundMode(chat.backgroundMode, normalizedImage)
+}
 
 function createComfyCommanderId(prefix: 'wf' | 'tpl') {
     return `cc-${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
@@ -296,6 +395,14 @@ export function setDatabase(data:Database){
     if(checkNullish(data.characters)){
         data.characters = []
     }
+    for (const char of data.characters) {
+        if (!Array.isArray(char?.chats)) {
+            continue
+        }
+        for (const chat of char.chats) {
+            normalizeChatBackground(chat)
+        }
+    }
     if(checkNullish(data.apiType)){
         data.apiType = 'gemini-3-flash-preview'
     }
@@ -538,7 +645,7 @@ export function setDatabase(data:Database){
     data.ooba ??= safeStructuredClone(defaultOoba)
     data.ainconfig ??= safeStructuredClone(defaultAIN)
     data.openrouterKey ??= ''
-    data.openrouterRequestModel ??= 'openai/gpt-3.5-turbo'
+    data.openrouterRequestModel ??= DEFAULT_OPENROUTER_REQUEST_MODEL
     data.openrouterSubRequestModel ??= data.openrouterRequestModel
     data.NAIsettings ??= safeStructuredClone(prebuiltNAIpresets)
     data.assetWidth ??= -1
@@ -658,6 +765,19 @@ export function setDatabase(data:Database){
         only: [],
         ignore: []
     }
+    data.removedModelMigrationNotice ??= []
+    const removedModelMigrationNotices = new Set(data.removedModelMigrationNotice)
+    if (migrateRemovedProviderSelections(data)) {
+        removedModelMigrationNotices.add(REMOVED_PROVIDER_MIGRATION_NOTICE)
+    }
+    if (data.botPresets) {
+        for (const preset of data.botPresets) {
+            if (migrateRemovedProviderSelections(preset)) {
+                removedModelMigrationNotices.add(REMOVED_PROVIDER_MIGRATION_NOTICE)
+            }
+        }
+    }
+    data.removedModelMigrationNotice = [...removedModelMigrationNotices]
     data.useInstructPrompt ??= false
     data.hanuraiEnable ??= false
     data.hanuraiSplit ??= false
@@ -732,14 +852,7 @@ export function setDatabase(data:Database){
     data.banCharacterset ??= []
     data.showPromptComparison ??= false
     data.OaiCompAPIKeys ??= {}
-    data.globalRagSettings ??= {
-        enabled: false,
-        topK: 3,
-        minScore: 0.1,
-        budget: 1500, // Increased default for context expansion
-        enabledRulebooks: [],
-        model: 'MiniLM' // Separate model for RAG
-    }
+    data.globalRagSettings = resolveGlobalRagSettings(data.globalRagSettings)
     data.reasoningEffort ??= 0
     data.hypaV3Presets ??= [
         createHypaV3Preset("Default", {
@@ -1223,6 +1336,7 @@ export interface Database{
     OaiCompAPIKeys: {[key:string]:string}
     inlayErrorResponse:boolean
     globalRagSettings: RagSettings
+    removedModelMigrationNotice: string[]
     reasoningEffort:number
     bulkEnabling:boolean
     showTranslationLoading: boolean
@@ -1555,6 +1669,32 @@ export interface RagSettings {
     model?: string
 }
 
+export function resolveGlobalRagSettings(value: Partial<RagSettings> | null | undefined): RagSettings {
+    const next = cloneDefaultGlobalRagSettings()
+    if (!value || typeof value !== 'object') {
+        return next
+    }
+    if (typeof value.enabled === 'boolean') {
+        next.enabled = value.enabled
+    }
+    if (typeof value.topK === 'number' && Number.isFinite(value.topK) && value.topK > 0) {
+        next.topK = value.topK
+    }
+    if (typeof value.minScore === 'number' && Number.isFinite(value.minScore)) {
+        next.minScore = value.minScore
+    }
+    if (typeof value.budget === 'number' && Number.isFinite(value.budget) && value.budget > 0) {
+        next.budget = value.budget
+    }
+    if (Array.isArray(value.enabledRulebooks)) {
+        next.enabledRulebooks = value.enabledRulebooks.filter((entry): entry is string => typeof entry === 'string' && entry.trim().length > 0)
+    }
+    if (typeof value.model === 'string' && value.model.trim()) {
+        next.model = value.model.trim()
+    }
+    return next
+}
+
 
 export interface groupChat{ 
     type: 'group'
@@ -1643,6 +1783,7 @@ export interface botPreset{
     formatingOrder: FormatingOrderItem[]
     aiModel?: string
     subModel?:string
+    removedModelMigrationNotice?: string[]
     currentPluginProvider?:string
     textgenWebUIStreamURL?:string
     textgenWebUIBlockingURL?:string
@@ -1793,6 +1934,8 @@ export interface Chat{
     note:string
     name:string
     localLore: loreBook[]
+    backgroundMode?: ChatBackgroundMode
+    backgroundImage?: string
     supaMemoryData?:string
     hypaV2Data?:SerializableHypaV2Data
     lastMemory?:string
@@ -2223,6 +2366,11 @@ export function setPreset(db:Database, newPres: botPreset){
     db.modelTools = safeStructuredClone(newPres.modelTools ?? [])
     db.verbosity = newPres.verbosity ?? 1
     db.dynamicOutput = newPres.dynamicOutput
+    const removedModelMigrationNotices = new Set(db.removedModelMigrationNotice ?? [])
+    if (migrateRemovedProviderSelections(db)) {
+        removedModelMigrationNotices.add(REMOVED_PROVIDER_MIGRATION_NOTICE)
+    }
+    db.removedModelMigrationNotice = [...removedModelMigrationNotices]
 
     return db
 }

@@ -1,6 +1,4 @@
-import { addFetchLog, globalFetch } from "../globalApi.svelte";
-import { isNodeServer } from "../platform";
-import { getDatabase } from "../storage/database.svelte";
+import { addFetchLog } from "../globalApi.svelte";
 import { fetchWithServerAuth } from "../storage/serverAuth";
 
 export interface OpenRouterModelEntry {
@@ -13,7 +11,7 @@ export interface OpenRouterModelEntry {
 export interface OpenRouterModelsState {
     models: OpenRouterModelEntry[];
     status: number;
-    source: 'upstream' | 'server' | 'cache' | 'memory' | 'legacy-proxy';
+    source: 'upstream' | 'server' | 'cache' | 'memory';
     stale: boolean;
     updatedAt: string | null;
     error: string;
@@ -22,48 +20,6 @@ export interface OpenRouterModelsState {
 const CLIENT_MODELS_CACHE_TTL_MS = 60 * 1000;
 let cachedState: OpenRouterModelsState | null = null;
 let cachedAtMs = 0;
-
-type OpenRouterRawModel = {
-    id?: string;
-    name?: string;
-    pricing?: {
-        prompt?: string | number;
-        completion?: string | number;
-    };
-    context_length?: number | string;
-};
-
-function parseModelPrice(model: OpenRouterRawModel): number {
-    const promptCost = Number(model?.pricing?.prompt);
-    const completionCost = Number(model?.pricing?.completion);
-    const candidate = ((promptCost * 3) + completionCost) / 4;
-    if (!Number.isFinite(candidate) || candidate < 0) {
-        return 0;
-    }
-    return candidate;
-}
-
-function mapOpenRouterModels(rawModels: OpenRouterRawModel[]): OpenRouterModelEntry[] {
-    return rawModels
-        .filter((model) => model && typeof model.id === 'string' && model.id.trim())
-        .map((model) => {
-            const price = parseModelPrice(model);
-            const modelId = model.id.trim();
-            const baseName = typeof model.name === 'string' && model.name.trim() ? model.name.trim() : modelId;
-            return {
-                id: modelId,
-                name: price > 0 ? `${baseName} - $${(price * 1000).toFixed(5)}/1k` : `${baseName} - Free`,
-                price,
-                context_length: Number.isFinite(Number(model.context_length)) ? Number(model.context_length) : 0,
-            };
-        })
-        .sort((a, b) => {
-            if (a.price !== b.price) {
-                return a.price - b.price;
-            }
-            return a.name.localeCompare(b.name);
-        });
-}
 
 function extractErrorMessage(data: unknown, fallback: string): string {
     const payload = data as {
@@ -92,7 +48,7 @@ function makeState(partial: Partial<OpenRouterModelsState>): OpenRouterModelsSta
     return {
         models: partial.models ?? [],
         status: partial.status ?? 0,
-        source: partial.source ?? 'legacy-proxy',
+        source: partial.source ?? 'server',
         stale: !!partial.stale,
         updatedAt: partial.updatedAt ?? null,
         error: partial.error ?? '',
@@ -149,34 +105,6 @@ async function fetchOpenRouterModelsFromServer(forceRefresh = false): Promise<Op
     }
 }
 
-async function fetchOpenRouterModelsViaProxy(): Promise<OpenRouterModelsState> {
-    const db = getDatabase();
-    const headers = {
-        Authorization: `Bearer ${db.openrouterKey}`,
-        'Content-Type': 'application/json',
-    };
-    const res = await globalFetch('https://openrouter.ai/api/v1/models', {
-        method: 'GET',
-        headers,
-    });
-
-    if (!res.ok || !Array.isArray(res.data?.data)) {
-        return makeState({
-            status: res.status ?? 0,
-            source: 'legacy-proxy',
-            stale: false,
-            error: extractErrorMessage(res.data, 'Failed to load OpenRouter models.'),
-        });
-    }
-
-    return makeState({
-        models: mapOpenRouterModels(res.data.data),
-        status: res.status,
-        source: 'upstream',
-        stale: false,
-    });
-}
-
 export async function openRouterModelsWithState(arg: { forceRefresh?: boolean } = {}): Promise<OpenRouterModelsState> {
     const forceRefresh = !!arg.forceRefresh;
     if (!forceRefresh && cachedState && (Date.now() - cachedAtMs) < CLIENT_MODELS_CACHE_TTL_MS) {
@@ -186,9 +114,7 @@ export async function openRouterModelsWithState(arg: { forceRefresh?: boolean } 
         });
     }
 
-    const fetched = isNodeServer
-        ? await fetchOpenRouterModelsFromServer(forceRefresh)
-        : await fetchOpenRouterModelsViaProxy();
+    const fetched = await fetchOpenRouterModelsFromServer(forceRefresh);
 
     if (fetched.models.length > 0) {
         cachedState = fetched;
