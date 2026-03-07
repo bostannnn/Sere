@@ -160,6 +160,12 @@
         +   (DBState.db.textScreenRounded ? "border-radius: 2rem; padding: 1rem;" : '')
         +   (normalizeBorderColor(DBState.db.textScreenBorder) ? `border: 0.3rem solid ${normalizeBorderColor(DBState.db.textScreenBorder)};` : '')
     )
+    const waifuExternalStyles = $derived(
+            (`background: color-mix(in srgb, ${normalizeScreenBackgroundColor(DBState.db.textScreenColor)} 8%, transparent);\n`)
+        +   (DBState.db.textBorder ? "text-shadow: -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000;" : '')
+        +   (DBState.db.textScreenRounded ? "border-radius: 2rem; padding: 1rem;" : '')
+        +   (normalizeBorderColor(DBState.db.textScreenBorder) ? `border: 0.3rem solid ${normalizeBorderColor(DBState.db.textScreenBorder)};` : '')
+    )
     let bgImg= $state('')
     let lastBg = ''
     let emotionSrc = $state<string[]>([])
@@ -204,32 +210,42 @@
 >
     <div class="ds-chat-screen-main">
         {#if DBState.db.theme === 'waifu'}
-            <div class="ds-chat-theme-waifu-shell" style="{bgImg.length < 4 ? wallPaper : bgImg}">
+            <div
+                class="ds-chat-theme-waifu-shell"
+                style="{bgImg.length < 4 ? wallPaper : bgImg}"
+                style:--ds-waifu-chat-width="{42 * (DBState.db.waifuWidth / 100)}rem"
+                style:--ds-waifu-portrait-width="{42 * (DBState.db.waifuWidth2 / 100)}rem"
+            >
                 <BackgroundDom />
                 {#if $selectedCharID >= 0}
                     {#if DBState.db.characters[$selectedCharID].viewScreen !== 'none'}
-                        <div class="ds-chat-waifu-side-shell ds-chat-waifu-side-image" style:width="{42 * (DBState.db.waifuWidth2 / 100)}rem">
+                        <div class="ds-chat-waifu-side-shell ds-chat-waifu-side-image">
                             <TransitionImage classType="waifu" src={emotionSrc}/>
                         </div>
                     {/if}
                 {/if}
-                <div class="ds-chat-waifu-main-shell" style:width="{42 * (DBState.db.waifuWidth / 100)}rem" class:ds-chat-waifu-main-half={$selectedCharID >= 0 && DBState.db.characters[$selectedCharID].viewScreen !== 'none'}>
+                <div class="ds-chat-waifu-main-shell" class:ds-chat-waifu-main-half={$selectedCharID >= 0 && DBState.db.characters[$selectedCharID].viewScreen !== 'none'}>
                     <DefaultChatScreen
-                        customStyle={`${externalStyles}backdrop-filter: blur(4px);`}
+                        customStyle={waifuExternalStyles}
                         onOpenChatList={openGlobalChatList}
                         onOpenModuleList={openGlobalModuleList}
                     />
                 </div>
             </div>
         {:else if DBState.db.theme === 'waifuMobile'}
-            <div class="ds-chat-theme-waifu-mobile-shell" style={bgImg.length < 4 ? wallPaper : bgImg}>
+            <div
+                class="ds-chat-theme-waifu-mobile-shell"
+                style={bgImg.length < 4 ? wallPaper : bgImg}
+                style:--ds-waifu-chat-width="{42 * (DBState.db.waifuWidth / 100)}rem"
+                style:--ds-waifu-portrait-width="{42 * (DBState.db.waifuWidth2 / 100)}rem"
+            >
                 <BackgroundDom />
                 <div class="ds-chat-waifu-mobile-overlay"
                     class:ds-chat-waifu-mobile-third={$selectedCharID >= 0 && DBState.db.characters[$selectedCharID].viewScreen !== 'none'}
                     class:ds-chat-waifu-mobile-full={!($selectedCharID >= 0 && DBState.db.characters[$selectedCharID].viewScreen !== 'none')}
                 >
                     <DefaultChatScreen
-                        customStyle={`${externalStyles}backdrop-filter: blur(4px);`}
+                        customStyle={waifuExternalStyles}
                         onOpenChatList={openGlobalChatList}
                         onOpenModuleList={openGlobalModuleList}
                     />

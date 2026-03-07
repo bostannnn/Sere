@@ -1719,9 +1719,7 @@ export function getLanguageCodes() {
     languageCodes = languageCodes.map(v => {
         return {
             code: v.code.toLocaleLowerCase(),
-            name: new Intl.DisplayNames([
-                DBState.db.language === 'cn' ? 'zh' : DBState.db.language
-            ], {
+            name: new Intl.DisplayNames(['en'], {
                 type: 'language',
                 fallback: 'none'
             }).of(v.code)

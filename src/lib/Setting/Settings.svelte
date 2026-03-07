@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { AccessibilityIcon, ActivityIcon, PackageIcon, BotIcon, CodeIcon, ContactIcon, LanguagesIcon, MonitorIcon, Sailboat, KeyboardIcon } from "@lucide/svelte";
+    import { AccessibilityIcon, ActivityIcon, PackageIcon, BotIcon, CodeIcon, ContactIcon, MonitorIcon, Sailboat, KeyboardIcon } from "@lucide/svelte";
     import { language } from "src/lang";
     import DisplaySettings from "./Pages/DisplaySettings.svelte";
     import BotSettings from "./Pages/BotSettings.svelte";
@@ -7,7 +7,6 @@
     import PluginSettings from "./Pages/PluginSettings.svelte";
     import AdvancedSettings from "./Pages/AdvancedSettings.svelte";
     import { additionalSettingsMenu, MobileGUI, SettingsMenuIndex, SizeStore } from "src/ts/stores.svelte";
-    import LanguageSettings from "./Pages/LanguageSettings.svelte";
     import AccessibilitySettings from "./Pages/AccessibilitySettings.svelte";
     import PersonaSettings from "./Pages/PersonaSettings.svelte";
     import PromptSettings from "./Pages/PromptSettings.svelte";
@@ -21,7 +20,7 @@
 
     const isDesktopSettings = $derived($SizeStore.w >= 700 && !$MobileGUI)
     const isStackedSettings = $derived(!isDesktopSettings)
-    const allowedSettingsMenus = new Set([-1, 1, 2, 3, 4, 6, 10, 11, 12, 13, 14, 15, 16, 17]);
+    const allowedSettingsMenus = new Set([-1, 1, 2, 3, 4, 6, 11, 12, 13, 14, 15, 16, 17]);
 
     function selectMenu(index: number) {
         if ($SettingsMenuIndex === index) {
@@ -153,20 +152,6 @@
                         <span>{language.display}</span>
                     </button>
                 {/if}
-                <button
-                    type="button"
-                    class="ds-settings-nav-item"
-                    title={language.language}
-                    aria-label={language.language}
-                    aria-pressed={$SettingsMenuIndex === 10}
-                    onkeydown={handleNavListKeydown}
-                    class:is-active={$SettingsMenuIndex === 10}
-                    onclick={() => {
-                        selectMenu(10)
-                }}>
-                    <LanguagesIcon />
-                    <span>{language.language}</span>
-                </button>
                 {#if !$isLite}
                     <button
                         type="button"
@@ -303,8 +288,6 @@
                         <PluginSettings />
                     {:else if $SettingsMenuIndex === 6}
                         <AdvancedSettings />
-                    {:else if $SettingsMenuIndex === 10}
-                        <LanguageSettings/>
                     {:else if $SettingsMenuIndex === 11}
                         <AccessibilitySettings/>
                     {:else if $SettingsMenuIndex === 12}

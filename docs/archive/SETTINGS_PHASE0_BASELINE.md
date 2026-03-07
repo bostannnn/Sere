@@ -32,7 +32,7 @@ Settings pages detected under `/Users/andrewbostan/Documents/RisuAII/src/lib/Set
 - `BotSettings.svelte`
 - `OtherBotSettings.svelte`
 - `DisplaySettings.svelte`
-- `LanguageSettings.svelte`
+- `LanguageSettings.svelte (removed in 2026 English-only localization)`
 - `AccessibilitySettings.svelte`
 - `Module/ModuleSettings.svelte`
 - `AdvancedSettings.svelte`
