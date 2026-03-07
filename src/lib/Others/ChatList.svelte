@@ -4,14 +4,17 @@
     
     import { DBState } from 'src/ts/stores.svelte';
     import { selectedCharID } from "../../ts/stores.svelte";
-    import { DownloadIcon, SquarePenIcon, HardDriveUploadIcon, PlusIcon, TrashIcon, XIcon } from "@lucide/svelte";
+    import { DownloadIcon, SquarePenIcon, HardDriveUploadIcon, PlusIcon, TrashIcon, XIcon, ImageIcon } from "@lucide/svelte";
     import { exportChat, importChat } from "../../ts/characters";
     import { findCharacterbyId } from "../../ts/util";
     import TextInput from "../UI/GUI/TextInput.svelte";
     import { changeChatTo } from "src/ts/globalApi.svelte";
     import { v4 } from "uuid";
+    import ChatBackgroundPicker from "./ChatBackgroundPicker.svelte";
+    import { resolveChatBackgroundMode } from "src/ts/storage/database.svelte";
 
     let editMode = $state(false)
+    let backgroundPickerChatId = $state(null)
     /** @type {{close?: any}} */
     const { close = () => {} } = $props();
 
@@ -26,6 +29,31 @@
             if (parsed > maxSuffix) maxSuffix = parsed
         }
         return `New Chat ${maxSuffix + 1}`
+    }
+
+    function getStableChatId(chat, index) {
+        return chat.id ?? `chat-${index}`
+    }
+
+    function isBackgroundPickerOpen(chat, index) {
+        return backgroundPickerChatId === getStableChatId(chat, index)
+    }
+
+    function hasBackgroundOverride(chat) {
+        return resolveChatBackgroundMode(chat.backgroundMode, chat.backgroundImage) !== 'inherit'
+    }
+
+    function toggleBackgroundPicker(chat, index, event) {
+        event.stopPropagation()
+        if (DBState.db.characters[$selectedCharID].chatPage !== index) {
+            changeChatTo(index)
+        }
+        const stableId = getStableChatId(chat, index)
+        backgroundPickerChatId = backgroundPickerChatId === stableId ? null : stableId
+    }
+
+    function stopActionKeydown(event) {
+        event.stopPropagation()
     }
 </script>
 
@@ -46,57 +74,79 @@
             </div>
         </div>
         {#each DBState.db.characters[$selectedCharID].chats as chat, i (chat.id ?? i)}
-            <div
-                role="button"
-                tabindex="0"
-                onclick={() => {
-                if(!editMode){
-                    changeChatTo(i)
-                    close()
-                }
-                }}
-                onkeydown={(event) => {
-                    if ((event.key === 'Enter' || event.key === ' ') && !editMode) {
-                        event.preventDefault()
+            <div class="ds-chatlist-item">
+                <div
+                    role="button"
+                    tabindex="0"
+                    onclick={() => {
+                    if(!editMode){
                         changeChatTo(i)
                         close()
                     }
-                }}
-                class="ds-settings-list-row ds-settings-list-row-inset ds-chatlist-row"
-                class:is-active={i === DBState.db.characters[$selectedCharID].chatPage}
-                title={chat.name}
-                aria-label={`Open ${chat.name}`}
-                aria-current={i === DBState.db.characters[$selectedCharID].chatPage ? 'true' : undefined}
-            >
-                {#if editMode}
-                    <TextInput bind:value={DBState.db.characters[$selectedCharID].chats[i].name} padding={false}/>
-                {:else}
-                    <span>{chat.name}</span>
-                {/if}
-                <div class="ds-settings-grow-min action-rail ds-ui-action-rail ds-ui-action-rail-end">
-                    <button type="button" class="ds-settings-icon-link icon-btn icon-btn--sm" onclick={async (e) => {
-                        e.stopPropagation()
-                        exportChat(i)
-                    }} title="Export chat" aria-label="Export chat">
-                        <DownloadIcon size={18}/>
-                    </button>
-                    <button type="button" class="ds-settings-icon-link icon-btn icon-btn--sm" onclick={async (e) => {
-                        e.stopPropagation()
-                        if(DBState.db.characters[$selectedCharID].chats.length === 1){
-                            alertError(language.errors.onlyOneChat)
-                            return
+                    }}
+                    onkeydown={(event) => {
+                        if ((event.key === 'Enter' || event.key === ' ') && !editMode) {
+                            event.preventDefault()
+                            changeChatTo(i)
+                            close()
                         }
-                        const d = await alertConfirm(`${language.removeConfirm}${chat.name}`)
-                        if(d){
-                            changeChatTo(0)
-                            const chats = DBState.db.characters[$selectedCharID].chats
-                            chats.splice(i, 1)
-                            DBState.db.characters[$selectedCharID].chats = chats
-                        }
-                    }} title="Delete chat" aria-label="Delete chat">
-                        <TrashIcon size={18}/>
-                    </button>
+                    }}
+                    class="ds-settings-list-row ds-settings-list-row-inset ds-chatlist-row"
+                    class:is-active={i === DBState.db.characters[$selectedCharID].chatPage}
+                    title={chat.name}
+                    aria-label={`Open ${chat.name}`}
+                    aria-current={i === DBState.db.characters[$selectedCharID].chatPage ? 'true' : undefined}
+                >
+                    {#if editMode}
+                        <TextInput bind:value={DBState.db.characters[$selectedCharID].chats[i].name} padding={false}/>
+                    {:else}
+                        <span>{chat.name}</span>
+                    {/if}
+                    <div class="ds-settings-grow-min action-rail ds-ui-action-rail ds-ui-action-rail-end">
+                        <button
+                            type="button"
+                            class="ds-settings-icon-link icon-btn icon-btn--sm"
+                            class:is-background-active={hasBackgroundOverride(chat)}
+                            onkeydown={stopActionKeydown}
+                            onclick={(event) => toggleBackgroundPicker(chat, i, event)}
+                            title={language.chatBackground}
+                            aria-label={language.chatBackground}
+                        >
+                            <ImageIcon size={18}/>
+                        </button>
+                        <button type="button" class="ds-settings-icon-link icon-btn icon-btn--sm" onkeydown={stopActionKeydown} onclick={async (e) => {
+                            e.stopPropagation()
+                            exportChat(i)
+                        }} title="Export chat" aria-label="Export chat">
+                            <DownloadIcon size={18}/>
+                        </button>
+                        <button type="button" class="ds-settings-icon-link icon-btn icon-btn--sm" onkeydown={stopActionKeydown} onclick={async (e) => {
+                            e.stopPropagation()
+                            if(DBState.db.characters[$selectedCharID].chats.length === 1){
+                                alertError(language.errors.onlyOneChat)
+                                return
+                            }
+                            const d = await alertConfirm(`${language.removeConfirm}${chat.name}`)
+                            if(d){
+                                changeChatTo(0)
+                                const chats = DBState.db.characters[$selectedCharID].chats
+                                chats.splice(i, 1)
+                                DBState.db.characters[$selectedCharID].chats = chats
+                                if (backgroundPickerChatId === getStableChatId(chat, i)) {
+                                    backgroundPickerChatId = null
+                                }
+                            }
+                        }} title="Delete chat" aria-label="Delete chat">
+                            <TrashIcon size={18}/>
+                        </button>
+                    </div>
                 </div>
+
+                {#if isBackgroundPickerOpen(chat, i)}
+                    <div class="ds-chatlist-background-panel">
+                        <ChatBackgroundPicker chat={chat} />
+                    </div>
+                {/if}
             </div>
         {/each}
         <div class="action-rail ds-ui-action-rail ds-chatlist-footer">
@@ -140,3 +190,20 @@
         </div>
     </div>
 </div>
+
+<style>
+    .ds-chatlist-item {
+        display: flex;
+        flex-direction: column;
+        gap: var(--ds-space-1);
+    }
+
+    .ds-chatlist-background-panel {
+        padding-inline: var(--ds-space-2);
+    }
+
+    .is-background-active {
+        color: var(--ds-text-primary);
+        background: color-mix(in srgb, var(--risu-theme-selected) 18%, transparent);
+    }
+</style>

@@ -13,6 +13,7 @@
     import ChatRightSidebarHost from "./ChatRightSidebarHost.svelte";
     import ModuleChatMenu from "../Setting/Pages/Module/ModuleChatMenu.svelte";
     import { language } from "../../lang";
+    import { resolveChatBackgroundMode } from "../../ts/storage/database.svelte";
     interface Props {
         rightSidebarOpen?: boolean;
         rightSidebarTab?: "chat" | "character" | "memory";
@@ -167,17 +168,35 @@
         +   (normalizeBorderColor(DBState.db.textScreenBorder) ? `border: 0.3rem solid ${normalizeBorderColor(DBState.db.textScreenBorder)};` : '')
     )
     let bgImg= $state('')
+    let forceDefaultWallpaper = $state(false)
     let lastBg = ''
+    let lastBackgroundMode = ''
     let emotionSrc = $state<string[]>([])
     let emotionRequestId = 0
+    let backgroundRequestId = 0
     $effect(() => {
-        const requestedBackground = DBState.db.customBackground
-        if (requestedBackground === lastBg) {
+        const selected = $selectedCharID
+        const currentChat = selected >= 0 ? DBState.db.characters[selected]?.chats?.[DBState.db.characters[selected]?.chatPage ?? 0] : null
+        const backgroundMode = resolveChatBackgroundMode(currentChat?.backgroundMode, currentChat?.backgroundImage)
+        const requestedBackground = backgroundMode === 'custom' ? currentChat?.backgroundImage ?? '' : DBState.db.customBackground
+        if (requestedBackground === lastBg && backgroundMode === lastBackgroundMode) {
             return
         }
         lastBg = requestedBackground
+        lastBackgroundMode = backgroundMode
+        const requestId = ++backgroundRequestId
+        if (backgroundMode === 'default') {
+            bgImg = ''
+            forceDefaultWallpaper = true
+            return
+        }
         ;(async () => {
-            bgImg = await getCustomBackground(requestedBackground)
+            const nextBackground = await getCustomBackground(requestedBackground)
+            if (requestId !== backgroundRequestId) {
+                return
+            }
+            bgImg = nextBackground
+            forceDefaultWallpaper = false
         })()
     });
     $effect(() => {
@@ -261,7 +280,7 @@
         {:else}
             <div class="ds-chat-theme-classic-shell">
                 <BackgroundDom />
-                <div style={bgImg} class="ds-chat-theme-classic-main" class:ds-chat-theme-classic-main-max={DBState.db.classicMaxWidth}>
+                <div style={forceDefaultWallpaper ? wallPaper : bgImg} class="ds-chat-theme-classic-main" class:ds-chat-theme-classic-main-max={DBState.db.classicMaxWidth}>
                     {#if $selectedCharID >= 0}
                         {#if DBState.db.characters[$selectedCharID].viewScreen !== 'none' && (DBState.db.characters[$selectedCharID].type === 'group' || (!DBState.db.characters[$selectedCharID].inlayViewScreen))}
                             <ResizeBox />

@@ -2,19 +2,19 @@
     import { onDestroy, onMount } from "svelte";
     import { v4 } from "uuid";
     import Sortable from 'sortablejs/modular/sortable.core.esm.js';
-    import { DownloadIcon, PencilIcon, HardDriveUploadIcon, MenuIcon, TrashIcon, SplitIcon, FolderPlusIcon, BookmarkCheckIcon } from "@lucide/svelte";
+    import { DownloadIcon, PencilIcon, HardDriveUploadIcon, MenuIcon, TrashIcon, SplitIcon, FolderPlusIcon, BookmarkCheckIcon, ImageIcon } from "@lucide/svelte";
 
-    import type { Chat, ChatFolder, character, groupChat } from "src/ts/storage/database.svelte";
-    import { DBState, ReloadGUIPointer } from 'src/ts/stores.svelte';
-    import { selectedCharID } from "src/ts/stores.svelte";
+    import { type Chat, type ChatFolder, type character, type groupChat, resolveChatBackgroundMode } from "src/ts/storage/database.svelte";
+    import { DBState, ReloadGUIPointer, bookmarkListOpen, selectedCharID } from 'src/ts/stores.svelte';
 
     import CheckInput from "../UI/GUI/CheckInput.svelte";
     import Button from "../UI/GUI/Button.svelte";
     import TextInput from "../UI/GUI/TextInput.svelte";
+    import ChatBackgroundPicker from "../Others/ChatBackgroundPicker.svelte";
 
     import { exportChat, importChat, exportAllChats } from "src/ts/characters";
     import { alertChatOptions, alertConfirm, alertError, alertNormal, alertSelect, alertStore } from "src/ts/alert";
-    import { findCharacterbyId, sleep, sortableOptions } from "src/ts/util";    import { bookmarkListOpen } from "src/ts/stores.svelte";
+    import { findCharacterbyId, sleep, sortableOptions } from "src/ts/util";
     import { language } from "src/lang";
     import Toggles from "./Toggles.svelte";
     import { changeChatTo, createChatCopyName } from "src/ts/globalApi.svelte";
@@ -32,6 +32,7 @@
     let folderEles: HTMLDivElement = $state()
     let listEle: HTMLDivElement = $state()
     let sorted = $state(0)
+    let backgroundPickerChatId = $state<string | null>(null)
     const sideChatListLog = (..._args: unknown[]) => {};
     void ReloadGUIPointer;
     const hasUnfolderedChats = $derived(chara.chats.some((chat) => chat.folderId == null))
@@ -161,6 +162,28 @@
         }
         return `New Chat ${maxSuffix + 1}`
     }
+
+    function getStableChatId(chat: Chat, index: number) {
+        return chat.id ?? `chat-${index}`
+    }
+
+    function isBackgroundPickerOpen(chat: Chat, index: number) {
+        return backgroundPickerChatId === getStableChatId(chat, index)
+    }
+
+    function hasBackgroundOverride(chat: Chat) {
+        return resolveChatBackgroundMode(chat.backgroundMode, chat.backgroundImage) !== 'inherit'
+    }
+
+    function toggleBackgroundPicker(chat: Chat, chatIndex: number, event: MouseEvent) {
+        event.stopPropagation()
+        const stableId = getStableChatId(chat, chatIndex)
+        if (chara.chatPage !== chatIndex) {
+            changeChatTo(chatIndex)
+            $ReloadGUIPointer += 1
+        }
+        backgroundPickerChatId = backgroundPickerChatId === stableId ? null : stableId
+    }
 </script>
 <div class="side-chat-list-root">
     <Button className="side-new-chat-button" type="button" onclick={() => {
@@ -188,6 +211,125 @@
         changeChatTo(0)
         $ReloadGUIPointer += 1
     }}>{language.newChat}</Button>
+
+    {#snippet chatRow(chat, chatIndex)}
+        <div class="side-chat-item" data-risu-chat-idx={chatIndex}>
+            <button
+                type="button"
+                onclick={() => {
+                    if(!editMode){
+                        changeChatTo(chatIndex)
+                        $ReloadGUIPointer += 1
+                    }
+                }}
+                class="side-row side-chat-row ds-ui-list-row"
+                class:side-row-selected={chatIndex === chara.chatPage}
+            >
+                {#if editMode}
+                    <TextInput
+                        value={chat.name ?? ''}
+                        oninput={(event) => {
+                            chat.name = event.currentTarget.value
+                        }}
+                        className="side-input-grow"
+                        padding={false}
+                    />
+                {:else}
+                    <span class="side-row-text">{chat.name}</span>
+                {/if}
+                <div class="side-row-actions action-rail">
+                    <div
+                        role="button"
+                        tabindex="0"
+                        aria-label={language.chatBackground}
+                        title={language.chatBackground}
+                        onkeydown={handleActionKeydown}
+                        class="side-action-btn icon-btn icon-btn--sm"
+                        class:side-action-btn-active={hasBackgroundOverride(chat)}
+                        onclick={(event) => toggleBackgroundPicker(chat, chatIndex, event)}
+                    >
+                        <ImageIcon size={18}/>
+                    </div>
+                    <div role="button" tabindex="0" aria-label="Chat options" title="Chat options" onkeydown={handleActionKeydown} class="side-action-btn icon-btn icon-btn--sm" onclick={async (event) => {
+                        event.stopPropagation()
+                        const option = await alertChatOptions()
+                        switch(option){
+                            case 0:{
+                                const newChat = $state.snapshot(chara.chats[chatIndex])
+                                newChat.name = createChatCopyName(newChat.name, 'Copy')
+                                newChat.id = v4()
+                                chara.chats.unshift(newChat)
+                                changeChatTo(0)
+                                chara.chats = [...chara.chats]
+                                break
+                            }
+                            case 1:{
+                                if(chat.bindedPersona){
+                                    const confirm = await alertConfirm(language.doYouWantToUnbindCurrentPersona)
+                                    if(confirm){
+                                        chat.bindedPersona = ''
+                                        alertNormal(language.personaUnbindedSuccess)
+                                    }
+                                }
+                                else{
+                                    const confirm = await alertConfirm(language.doYouWantToBindCurrentPersona)
+                                    if(confirm){
+                                        if(!DBState.db.personas[DBState.db.selectedPersona].id){
+                                            DBState.db.personas[DBState.db.selectedPersona].id = v4()
+                                        }
+                                        chat.bindedPersona = DBState.db.personas[DBState.db.selectedPersona].id
+                                        sideChatListLog(DBState.db.personas[DBState.db.selectedPersona])
+                                        alertNormal(language.personaBindedSuccess)
+                                    }
+                                }
+                                break
+                            }
+                        }
+                    }}>
+                        <MenuIcon size={18}/>
+                    </div>
+                    <div role="button" tabindex="0" aria-label="Rename chat" title="Rename chat" onkeydown={handleActionKeydown} class="side-action-btn icon-btn icon-btn--sm" onclick={(event) => {
+                        event.stopPropagation()
+                        editMode = !editMode
+                    }}>
+                        <PencilIcon size={18}/>
+                    </div>
+                    <div role="button" tabindex="0" aria-label="Export chat" title="Export chat" onkeydown={handleActionKeydown} class="side-action-btn icon-btn icon-btn--sm" onclick={async (event) => {
+                        event.stopPropagation()
+                        exportChat(chatIndex)
+                    }}>
+                        <DownloadIcon size={18}/>
+                    </div>
+                    <div role="button" tabindex="0" aria-label="Delete chat" title="Delete chat" onkeydown={handleActionKeydown} class="side-action-btn icon-btn icon-btn--sm" onclick={async (event) => {
+                        event.stopPropagation()
+                        if(chara.chats.length === 1){
+                            alertError(language.errors.onlyOneChat)
+                            return
+                        }
+                        const d = await alertConfirm(`${language.removeConfirm}${chat.name}`)
+                        if(d){
+                            changeChatTo(0)
+                            $ReloadGUIPointer += 1
+                            const chats = chara.chats
+                            chats.splice(chatIndex, 1)
+                            chara.chats = chats
+                            if (backgroundPickerChatId === getStableChatId(chat, chatIndex)) {
+                                backgroundPickerChatId = null
+                            }
+                        }
+                    }}>
+                        <TrashIcon size={18}/>
+                    </div>
+                </div>
+            </button>
+
+            {#if isBackgroundPickerOpen(chat, chatIndex)}
+                <div class="side-chat-background-panel">
+                    <ChatBackgroundPicker chat={chat} />
+                </div>
+            {/if}
+        </div>
+    {/snippet}
 
     {#key sorted}
     <div class="side-chat-list-scroll list-shell" data-testid="side-chat-list-shell" bind:this={listEle}>
@@ -276,92 +418,7 @@
                     <div></div>
                     {:else}
                     {#each chara.chats.filter(chat => chat.folderId == chara.chatFolders[i].id) as chat (chat.id)}
-                    <button type="button" data-risu-chat-idx={chara.chats.indexOf(chat)} onclick={() => {
-                        if(!editMode){
-                            changeChatTo(chara.chats.indexOf(chat))
-                            $ReloadGUIPointer += 1
-                        }
-                    }} class="risu-chats side-row side-chat-row ds-ui-list-row" class:side-row-selected={chara.chats.indexOf(chat) === chara.chatPage}>
-                        {#if editMode}
-                            <TextInput
-                                value={chat.name ?? ''}
-                                oninput={(event) => {
-                                    chat.name = event.currentTarget.value
-                                }}
-                                className="side-input-grow"
-                                padding={false}
-                            />
-                        {:else}
-                            <span class="side-row-text">{chat.name}</span>
-                        {/if}
-                        <div class="side-row-actions action-rail">
-                            <div role="button" tabindex="0" aria-label="Chat options" title="Chat options" onkeydown={handleActionKeydown} class="side-action-btn icon-btn icon-btn--sm" onclick={async () => {
-                                const option = await alertChatOptions()
-                                switch(option){
-                                    case 0:{
-                                        const newChat = $state.snapshot(chara.chats[chara.chats.indexOf(chat)])
-                                        newChat.name = createChatCopyName(newChat.name, 'Copy')
-                                        newChat.id = v4()
-                                        chara.chats.unshift(newChat)
-                                        changeChatTo(0)
-                                        chara.chats = chara.chats
-                                        break
-                                    }
-                                    case 1:{
-                                        if(chat.bindedPersona){
-                                            const confirm = await alertConfirm(language.doYouWantToUnbindCurrentPersona)
-                                            if(confirm){
-                                                chat.bindedPersona = ''
-                                                alertNormal(language.personaUnbindedSuccess)
-                                            }
-                                        }
-                                        else{
-                                            const confirm = await alertConfirm(language.doYouWantToBindCurrentPersona)
-                                            if(confirm){
-                                                if(!DBState.db.personas[DBState.db.selectedPersona].id){
-                                                    DBState.db.personas[DBState.db.selectedPersona].id = v4()
-                                                }
-                                                chat.bindedPersona = DBState.db.personas[DBState.db.selectedPersona].id
-                                                sideChatListLog(DBState.db.personas[DBState.db.selectedPersona])
-                                                alertNormal(language.personaBindedSuccess)
-                                            }
-                                        }
-                                        break
-                                    }
-                                }
-                            }}>
-                                <MenuIcon size={18}/>
-                            </div>
-                            <div role="button" tabindex="0" aria-label="Rename chat" title="Rename chat" onkeydown={handleActionKeydown} class="side-action-btn icon-btn icon-btn--sm" onclick={() => {
-                                editMode = !editMode
-                            }}>
-                                <PencilIcon size={18}/>
-                            </div>
-                            <div role="button" tabindex="0" aria-label="Export chat" title="Export chat" onkeydown={handleActionKeydown} class="side-action-btn icon-btn icon-btn--sm" onclick={async (e) => {
-                                e.stopPropagation()
-                                exportChat(chara.chats.indexOf(chat))
-                            }}>
-                                <DownloadIcon size={18}/>
-                            </div>
-                            <div role="button" tabindex="0" aria-label="Delete chat" title="Delete chat" onkeydown={handleActionKeydown} class="side-action-btn icon-btn icon-btn--sm" onclick={async (e) => {
-                                e.stopPropagation()
-                                if(chara.chats.length === 1){
-                                    alertError(language.errors.onlyOneChat)
-                                    return
-                                }
-                                const d = await alertConfirm(`${language.removeConfirm}${chat.name}`)
-                                if(d){
-                                    changeChatTo(0)
-                                    $ReloadGUIPointer += 1
-                                    const chats = chara.chats
-                                    chats.splice(chara.chats.indexOf(chat), 1)
-                                    chara.chats = chats
-                                }
-                            }}>
-                                <TrashIcon size={18}/>
-                            </div>
-                        </div>
-                    </button>
+                    {@render chatRow(chat, chara.chats.indexOf(chat))}
                     {/each}
                     {/if}
                 </div>
@@ -375,95 +432,7 @@
             {:else}
             {#each chara.chats as chat, i (chat.id ?? i)}
             {#if chat.folderId == null}
-            <button type="button" data-risu-chat-idx={i} onclick={() => {
-                if(!editMode){
-                    changeChatTo(i)
-                    $ReloadGUIPointer += 1
-                }
-            }}
-            class="side-row side-chat-row ds-ui-list-row"
-            class:side-row-selected={i === chara.chatPage}>
-                {#if editMode}
-                    <TextInput
-                        value={chara.chats[i].name ?? ''}
-                        oninput={(event) => {
-                            chara.chats[i].name = event.currentTarget.value
-                        }}
-                        className="side-input-grow"
-                        padding={false}
-                    />
-                {:else}
-                    <span class="side-row-text">{chat.name}</span>
-                {/if}
-                <div class="side-row-actions action-rail">
-                    <div role="button" tabindex="0" aria-label="Chat options" title="Chat options" onkeydown={handleActionKeydown} class="side-action-btn icon-btn icon-btn--sm" onclick={async () => {
-                        const option = await alertChatOptions()
-                        switch(option){
-                            case 0:{
-                                const newChat = $state.snapshot(chara.chats[i])
-                                newChat.name = createChatCopyName(newChat.name, 'Copy')
-                                newChat.id = v4()
-                                chara.chats.unshift(newChat)
-                                changeChatTo(0)
-                                chara.chats = chara.chats
-                                break
-                            }
-                            case 1:{
-                                const chat = chara.chats[i]
-                                if(chat.bindedPersona){
-                                    const confirm = await alertConfirm(language.doYouWantToUnbindCurrentPersona)
-                                    if(confirm){
-                                        chat.bindedPersona = ''
-                                        alertNormal(language.personaUnbindedSuccess)
-                                    }
-                                }
-                                else{
-                                    const confirm = await alertConfirm(language.doYouWantToBindCurrentPersona)
-                                    if(confirm){
-                                        if(!DBState.db.personas[DBState.db.selectedPersona].id){
-                                            DBState.db.personas[DBState.db.selectedPersona].id = v4()
-                                        }
-                                        chat.bindedPersona = DBState.db.personas[DBState.db.selectedPersona].id
-                                        sideChatListLog(DBState.db.personas[DBState.db.selectedPersona])
-                                        alertNormal(language.personaBindedSuccess)
-                                    }
-                                }
-                                break
-                            }
-                        }
-                    }}>
-                        <MenuIcon size={18}/>
-                    </div>
-                    <div role="button" tabindex="0" aria-label="Rename chat" title="Rename chat" onkeydown={handleActionKeydown} class="side-action-btn icon-btn icon-btn--sm" onclick={() => {
-                        editMode = !editMode
-                    }}>
-                        <PencilIcon size={18}/>
-                    </div>
-                    <div role="button" tabindex="0" aria-label="Export chat" title="Export chat" onkeydown={handleActionKeydown} class="side-action-btn icon-btn icon-btn--sm" onclick={async (e) => {
-                        e.stopPropagation()
-                        exportChat(i)
-                    }}>
-                        <DownloadIcon size={18}/>
-                    </div>
-                    <div role="button" tabindex="0" aria-label="Delete chat" title="Delete chat" onkeydown={handleActionKeydown} class="side-action-btn icon-btn icon-btn--sm" onclick={async (e) => {
-                        e.stopPropagation()
-                        if(chara.chats.length === 1){
-                            alertError(language.errors.onlyOneChat)
-                            return
-                        }
-                        const d = await alertConfirm(`${language.removeConfirm}${chat.name}`)
-                        if(d){
-                            changeChatTo(0)
-                            $ReloadGUIPointer += 1
-                            const chats = chara.chats
-                            chats.splice(i, 1)
-                            chara.chats = chats
-                        }
-                    }}>
-                        <TrashIcon size={18}/>
-                    </div>
-                </div>
-            </button>
+            {@render chatRow(chat, i)}
             {/if}
             {/each}
             {/if}
@@ -582,6 +551,12 @@
 
     .side-chat-group--flat {
         padding: 0;
+    }
+
+    .side-chat-item {
+        display: flex;
+        flex-direction: column;
+        gap: var(--ds-space-1);
     }
 
     .side-hidden {
@@ -714,6 +689,16 @@
     .side-action-btn:hover {
         color: var(--ds-text-primary);
         background: var(--ds-surface-active);
+    }
+
+    .side-action-btn-active {
+        color: var(--ds-text-primary);
+        background: color-mix(in srgb, var(--risu-theme-selected) 18%, transparent);
+    }
+
+    .side-chat-background-panel {
+        padding-inline: var(--ds-space-2);
+        padding-bottom: var(--ds-space-1);
     }
 
     .side-action-btn-end {
