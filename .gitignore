@@ -48,6 +48,7 @@ dist.zip
 !/scripts/test-server-memory.js
 !/scripts/test-server-http-setup-unit.cjs
 !/scripts/test-server-rag.js
+!/scripts/run-all-tests.cjs
 .env
 /server/node/ssl/certificate
 

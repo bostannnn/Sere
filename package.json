@@ -31,6 +31,7 @@
     "check:loc": "node dev/check-file-loc.js --all",
     "check:loc:staged": "node dev/check-file-loc.js --staged",
     "test": "vitest run",
+    "test:all": "node scripts/run-all-tests.cjs",
     "lint": "eslint src server/node dev public/sw.js",
     "tauri": "tauri",
     "buildsite": "vite build --outDir dist",
