@@ -80,12 +80,19 @@ function compactEntry(entry) {
         hasData: !!req,
         requestBodyKeys: req?.request?.requestBody && typeof req.request.requestBody === 'object'
             ? Object.keys(req.request.requestBody).slice(0, 40)
-            : [],
+            : (Array.isArray(req?.request?.requestBodyKeys) ? req.request.requestBodyKeys.slice(0, 40) : []),
         model: req?.request?.model || req?.model || '',
         messageCount: Array.isArray(req?.request?.messages)
             ? req.request.messages.length
-            : (Array.isArray(req?.request?.requestBody?.messages) ? req.request.requestBody.messages.length : 0),
+            : (
+                Array.isArray(req?.request?.requestBody?.messages)
+                    ? req.request.requestBody.messages.length
+                    : (Number.isFinite(Number(req?.request?.messagesCount)) ? Number(req.request.messagesCount) : 0)
+            ),
         maxTokens: req?.request?.maxTokens ?? req?.maxTokens ?? null,
+        estimatedPromptTokens: req?.request?.estimatedPromptTokens ?? null,
+        promptChars: req?.request?.promptChars ?? null,
+        toolsCount: req?.request?.toolsCount ?? null,
     };
     out.response = {
         hasData: !!res,

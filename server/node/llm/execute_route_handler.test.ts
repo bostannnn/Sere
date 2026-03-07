@@ -336,6 +336,44 @@ describe("execute_route_handler streaming safety", () => {
         expect(audit?.ok).toBe(true);
     });
 
+    it("audits exactly one CLIENT_DISCONNECTED outcome when disconnect happens during final done-frame delivery", async () => {
+        const encoder = new TextEncoder();
+        const req = new MockReq();
+        const res = new MockRes((chunk, target) => {
+            if (chunk.includes('"type":"done"')) {
+                queueMicrotask(() => {
+                    req.emit("aborted");
+                    target.emit("close");
+                });
+                return false;
+            }
+            return true;
+        });
+        let readCalls = 0;
+        const { stream } = createStreamFromRead(async () => {
+            readCalls += 1;
+            if (readCalls === 1) {
+                return {
+                    done: false,
+                    value: encoder.encode('data: {"choices":[{"delta":{"content":"final text"}}]}\n\n'),
+                };
+            }
+            return { done: true };
+        });
+        const harness = createHarness({
+            executeLLM: async () => stream,
+        });
+
+        await harness.handleLLMExecutePost(req, res, {}, "execute");
+
+        expect(harness.appendLLMAudit).toHaveBeenCalledTimes(1);
+        const audit = harness.appendLLMAudit.mock.calls[0]?.[0];
+        expect(audit?.status).toBe(499);
+        expect(audit?.error?.error).toBe("CLIENT_DISCONNECTED");
+        expect(harness.logLLMExecutionEnd).toHaveBeenCalledTimes(1);
+        expect(harness.logLLMExecutionEnd.mock.calls[0]?.[0]?.status).toBe(499);
+    });
+
     it("parses CRLF-framed SSE blocks from upstream streams", async () => {
         const encoder = new TextEncoder();
         const req = new MockReq();
@@ -364,7 +402,7 @@ describe("execute_route_handler streaming safety", () => {
         expect(frames.some((payload: Record<string, unknown>) => payload.type === "done")).toBe(true);
     });
 
-    it("uses cleanup path for fallback SSE responses", async () => {
+    it("classifies fallback SSE disconnects as CLIENT_DISCONNECTED", async () => {
         const req = new MockReq();
         const res = new MockRes((chunk) => {
             if (chunk.includes('"type":"chunk"')) {
@@ -393,6 +431,12 @@ describe("execute_route_handler streaming safety", () => {
 
         expect(res.writableEnded).toBe(true);
         expect(harness.sendJson).not.toHaveBeenCalled();
+        expect(harness.appendLLMAudit).toHaveBeenCalledTimes(1);
+        const audit = harness.appendLLMAudit.mock.calls[0]?.[0];
+        expect(audit?.status).toBe(499);
+        expect(audit?.error?.error).toBe("CLIENT_DISCONNECTED");
+        expect(harness.logLLMExecutionEnd).toHaveBeenCalledTimes(1);
+        expect(harness.logLLMExecutionEnd.mock.calls[0]?.[0]?.status).toBe(499);
     });
 
     it("fails streaming model response when output is reasoning-only", async () => {
@@ -544,9 +588,10 @@ describe("execute_route_handler visible output guard", () => {
         const payload = harness.sendJson.mock.calls[0]?.[2];
         expect(status).toBe(200);
         expect(payload?.type).toBe("success");
-        expect(payload?.newCharEtag).toBe("etag-char-2");
+        expect(payload?.newCharEtag).toBeUndefined();
         const lastAudit = harness.appendLLMAudit.mock.calls.at(-1)?.[0];
         expect(lastAudit?.ok).toBe(true);
+        expect(lastAudit?.response?.newCharEtag).toBeUndefined();
         expect(harness.logLLMExecutionEnd).toHaveBeenCalledTimes(1);
         expect(harness.logLLMExecutionEnd.mock.calls[0]?.[0]?.status).toBe(200);
     });

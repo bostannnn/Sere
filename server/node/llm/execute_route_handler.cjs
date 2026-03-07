@@ -293,6 +293,7 @@ function createExecuteRouteHandler(arg = {}) {
             await updateGameStateFromMessage(characterId, text);
         } catch (error) {
             console.warn(`[LLMAPI] Failed to update game state for ${characterId}:`, error);
+            return null;
         }
 
         try {
@@ -321,6 +322,58 @@ function createExecuteRouteHandler(arg = {}) {
             const traceAuditPath = normalized.endpoint === 'generate'
                 ? '/data/llm/generate/trace'
                 : (req?.originalUrl || `/data/llm/${normalized.endpoint}`);
+            const persistSuccessOutcome = async ({ durationMs, streaming, response }) => {
+                try {
+                    await appendLLMAudit({
+                        requestId: reqId,
+                        method: req.method,
+                        path: req.originalUrl,
+                        endpoint: normalized.endpoint,
+                        mode: normalized.mode,
+                        provider: normalized.provider,
+                        characterId: normalized.characterId || null,
+                        chatId: normalized.chatId || null,
+                        streaming,
+                        status: 200,
+                        ok: true,
+                        durationMs,
+                        ragMeta: normalized._ragMeta || null,
+                        request: buildExecutionAuditRequest(auditEndpointForRequest, requestBody),
+                        response,
+                    });
+                } catch (auditError) {
+                    console.error('[LLMAPI] Failed to persist success audit:', auditError);
+                }
+                try {
+                    await appendGenerateTraceAudit({
+                        req,
+                        reqId,
+                        normalized,
+                        endpoint: traceAuditEndpoint,
+                        path: traceAuditPath,
+                        durationMs,
+                        status: 200,
+                        ok: true,
+                    });
+                } catch (traceError) {
+                    console.error('[LLMAPI] Failed to persist success trace audit:', traceError);
+                }
+                try {
+                    logLLMExecutionEnd({
+                        reqId,
+                        endpoint: normalized.endpoint,
+                        mode: normalized.mode,
+                        provider: normalized.provider,
+                        characterId: normalized.characterId,
+                        chatId: normalized.chatId,
+                        status: 200,
+                        code: 'OK',
+                        durationMs,
+                    });
+                } catch (logError) {
+                    console.error('[LLMAPI] Failed to write success execution log:', logError);
+                }
+            };
             logLLMExecutionStart({
                 reqId,
                 endpoint: normalized.endpoint,
@@ -357,6 +410,7 @@ function createExecuteRouteHandler(arg = {}) {
                 let openrouterReasoningOpen = false;
                 let sseBuffer = '';
                 let clientDisconnected = false;
+                let terminalStateCommitted = false;
 
                 const markClientDisconnected = () => {
                     clientDisconnected = true;
@@ -544,55 +598,29 @@ function createExecuteRouteHandler(arg = {}) {
                     });
 
                     const newCharEtag = await updateGameStateAndReadEtagSafely(normalized.characterId, fullText);
-                    const durationMs = Date.now() - startedAt;
-
-                    await appendLLMAudit({
+                    const successResponse = {
+                        type: 'success',
                         requestId: reqId,
-                        method: req.method,
-                        path: req.originalUrl,
-                        endpoint: normalized.endpoint,
-                        mode: normalized.mode,
-                        provider: normalized.provider,
-                        characterId: normalized.characterId || null,
-                        chatId: normalized.chatId || null,
+                        result: fullText,
+                        ...(typeof newCharEtag === 'string' && newCharEtag ? { newCharEtag } : {}),
+                    };
+
+                    await writeSSEEvent({
+                        type: 'done',
+                        ...(typeof newCharEtag === 'string' && newCharEtag ? { newCharEtag } : {}),
+                    });
+                    terminalStateCommitted = true;
+                    const durationMs = Date.now() - startedAt;
+                    await persistSuccessOutcome({
+                        durationMs,
                         streaming: true,
-                        status: 200,
-                        ok: true,
-                        durationMs,
-                        ragMeta: normalized._ragMeta || null,
-                        request: buildExecutionAuditRequest(auditEndpointForRequest, requestBody),
-                        response: {
-                            type: 'success',
-                            requestId: reqId,
-                            result: fullText,
-                            newCharEtag,
-                        },
+                        response: successResponse,
                     });
-                    await appendGenerateTraceAudit({
-                        req,
-                        reqId,
-                        normalized,
-                        endpoint: traceAuditEndpoint,
-                        path: traceAuditPath,
-                        durationMs,
-                        status: 200,
-                        ok: true,
-                    });
-
-                    logLLMExecutionEnd({
-                        reqId,
-                        endpoint: normalized.endpoint,
-                        mode: normalized.mode,
-                        provider: normalized.provider,
-                        characterId: normalized.characterId,
-                        chatId: normalized.chatId,
-                        status: 200,
-                        code: 'OK',
-                        durationMs,
-                    });
-
-                    await writeSSEEvent({ type: 'done', newCharEtag });
                 } catch (err) {
+                    if (terminalStateCommitted) {
+                        console.error('[LLMAPI] Post-stream success bookkeeping failed:', err);
+                        return;
+                    }
                     const disconnected = clientDisconnected || err?.code === 'CLIENT_DISCONNECTED';
                     const durationMs = Date.now() - startedAt;
                     const errorResponse = disconnected
@@ -706,72 +734,34 @@ function createExecuteRouteHandler(arg = {}) {
                 typeof executionResult?.model === 'string'
                     ? executionResult.model
                     : null;
-
+            const newCharEtag = await updateGameStateAndReadEtagSafely(normalized.characterId, sanitizedResponseText);
             const successPayload = {
                 type: responseType,
                 requestId: reqId,
                 result: sanitizedResponseText,
                 ...(responseModel ? { model: responseModel } : {}),
+                ...(typeof newCharEtag === 'string' && newCharEtag ? { newCharEtag } : {}),
             };
-
-            const newCharEtag = await updateGameStateAndReadEtagSafely(normalized.characterId, sanitizedResponseText);
-
-            successPayload.newCharEtag = newCharEtag;
-            const durationMs = Date.now() - startedAt;
-
-            await appendLLMAudit({
-                requestId: reqId,
-                method: req.method,
-                path: req.originalUrl,
-                endpoint: normalized.endpoint,
-                mode: normalized.mode,
-                provider: normalized.provider,
-                characterId: normalized.characterId || null,
-                chatId: normalized.chatId || null,
-                streaming: !!normalized.requestedStreaming,
-                status: 200,
-                ok: true,
-                durationMs,
-                ragMeta: normalized._ragMeta || null,
-                request: buildExecutionAuditRequest(auditEndpointForRequest, requestBody),
-                response: successPayload,
-            });
-            await appendGenerateTraceAudit({
-                req,
-                reqId,
-                normalized,
-                endpoint: traceAuditEndpoint,
-                path: traceAuditPath,
-                durationMs,
-                status: 200,
-                ok: true,
-            });
-
-            logLLMExecutionEnd({
-                reqId,
-                endpoint: normalized.endpoint,
-                mode: normalized.mode,
-                provider: normalized.provider,
-                characterId: normalized.characterId,
-                chatId: normalized.chatId,
-                status: 200,
-                code: 'OK',
-                durationMs,
-            });
 
             if (normalized.requestedStreaming) {
                 applySSEHeaders(res);
                 let clientDisconnected = false;
+                let terminalStateCommitted = false;
                 const markClientDisconnected = () => {
                     clientDisconnected = true;
                 };
                 req.on('aborted', markClientDisconnected);
                 req.on('close', markClientDisconnected);
                 res.on('close', markClientDisconnected);
+                const toDisconnectError = () => {
+                    const disconnectError = new Error('Client disconnected during streaming response.');
+                    disconnectError.code = 'CLIENT_DISCONNECTED';
+                    return disconnectError;
+                };
 
                 const writeRawFrame = async (frame) => {
                     if (clientDisconnected || res.writableEnded || res.destroyed) {
-                        return;
+                        throw toDisconnectError();
                     }
                     if (res.write(frame)) {
                         return;
@@ -783,7 +773,7 @@ function createExecuteRouteHandler(arg = {}) {
                         };
                         const onClose = () => {
                             cleanup();
-                            resolve();
+                            reject(toDisconnectError());
                         };
                         const onError = (error) => {
                             cleanup();
@@ -804,11 +794,87 @@ function createExecuteRouteHandler(arg = {}) {
                     if (sanitizedResponseText) {
                         await writeRawFrame(`data: ${JSON.stringify({ type: 'chunk', text: sanitizedResponseText })}\n\n`);
                     }
-                    await writeRawFrame(`data: ${JSON.stringify({ type: 'done', newCharEtag })}\n\n`);
+                    await writeRawFrame(`data: ${JSON.stringify({
+                        type: 'done',
+                        ...(typeof newCharEtag === 'string' && newCharEtag ? { newCharEtag } : {}),
+                    })}\n\n`);
                     await writeRawFrame('data: [DONE]\n\n');
+                    terminalStateCommitted = true;
+                    const durationMs = Date.now() - startedAt;
+                    await persistSuccessOutcome({
+                        durationMs,
+                        streaming: true,
+                        response: successPayload,
+                    });
                 } catch (streamWriteError) {
-                    if (!clientDisconnected) {
-                        console.error('[LLMAPI] Fallback SSE write error:', streamWriteError);
+                    if (terminalStateCommitted) {
+                        console.error('[LLMAPI] Post-stream success bookkeeping failed:', streamWriteError);
+                    } else {
+                        const disconnected = clientDisconnected || streamWriteError?.code === 'CLIENT_DISCONNECTED';
+                        const durationMs = Date.now() - startedAt;
+                        const errorResponse = disconnected
+                            ? {
+                                status: 499,
+                                code: 'CLIENT_DISCONNECTED',
+                                payload: {
+                                    error: 'CLIENT_DISCONNECTED',
+                                    message: 'Client disconnected during streaming response.',
+                                    requestId: reqId,
+                                    endpoint: normalized.endpoint,
+                                    durationMs,
+                                },
+                            }
+                            : toLLMErrorResponse(streamWriteError, {
+                                requestId: reqId,
+                                endpoint: normalized.endpoint,
+                                durationMs,
+                            });
+                        const status = Number.isFinite(Number(errorResponse?.status)) ? Number(errorResponse.status) : 500;
+                        const errorCode = typeof errorResponse?.code === 'string' && errorResponse.code
+                            ? errorResponse.code
+                            : 'STREAM_ERROR';
+                        if (!disconnected) {
+                            console.error('[LLMAPI] Fallback SSE write error:', streamWriteError);
+                        }
+                        logLLMExecutionEnd({
+                            reqId,
+                            endpoint: normalized.endpoint,
+                            mode: normalized.mode,
+                            provider: normalized.provider,
+                            characterId: normalized.characterId,
+                            chatId: normalized.chatId,
+                            status,
+                            code: errorCode,
+                            durationMs,
+                        });
+                        await appendLLMAudit({
+                            requestId: reqId,
+                            method: req.method,
+                            path: req.originalUrl,
+                            endpoint: normalized.endpoint,
+                            mode: normalized.mode,
+                            provider: normalized.provider,
+                            characterId: normalized.characterId || null,
+                            chatId: normalized.chatId || null,
+                            streaming: true,
+                            status,
+                            ok: false,
+                            durationMs,
+                            ragMeta: normalized._ragMeta || null,
+                            request: buildExecutionAuditRequest(auditEndpointForRequest, requestBody),
+                            error: errorResponse.payload,
+                        });
+                        await appendGenerateTraceAudit({
+                            req,
+                            reqId,
+                            normalized,
+                            endpoint: traceAuditEndpoint,
+                            path: traceAuditPath,
+                            durationMs,
+                            status,
+                            ok: false,
+                            error: errorResponse.payload,
+                        });
                     }
                 } finally {
                     req.off('aborted', markClientDisconnected);
@@ -823,6 +889,12 @@ function createExecuteRouteHandler(arg = {}) {
                 return;
             }
 
+            const durationMs = Date.now() - startedAt;
+            await persistSuccessOutcome({
+                durationMs,
+                streaming: false,
+                response: successPayload,
+            });
             sendJson(res, 200, successPayload);
         } catch (error) {
             const durationMs = Date.now() - startedAt;
