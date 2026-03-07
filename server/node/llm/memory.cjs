@@ -233,6 +233,29 @@ function cleanSummaryOutput(summaryText) {
     return text;
 }
 
+function resolveSummaryOutputUserName(settings, chat) {
+    const personas = Array.isArray(settings?.personas) ? settings.personas : [];
+    const boundPersonaId = toStringOrEmpty(chat?.bindedPersona);
+    if (boundPersonaId) {
+        const persona = personas.find((item) => item && typeof item === 'object' && toStringOrEmpty(item.id) === boundPersonaId);
+        const personaName = toStringOrEmpty(persona?.name);
+        if (personaName) return personaName;
+    }
+    return toStringOrEmpty(settings?.username) || 'User';
+}
+
+function replaceSummaryOutputVars(text, settings, character, chat) {
+    const source = toStringOrEmpty(text);
+    if (!source) return '';
+    const charName = toStringOrEmpty(character?.nickname) || toStringOrEmpty(character?.name) || 'Character';
+    const userName = resolveSummaryOutputUserName(settings, chat);
+    return source
+        .replace(/<(?:char|bot)>/gi, charName)
+        .replace(/<user>/gi, userName)
+        .replace(/\{\{\s*char\s*\}\}/gi, charName)
+        .replace(/\{\{\s*user\s*\}\}/gi, userName);
+}
+
 function cosineSimilarity(a, b) {
     if (!Array.isArray(a) || !Array.isArray(b) || a.length === 0 || a.length !== b.length) {
         return 0;
@@ -382,7 +405,12 @@ function planPeriodicHypaV3Summarization(arg = {}) {
 function applyPeriodicHypaV3Summary(arg = {}) {
     const chat = arg.chat || {};
     const plan = arg.plan || {};
-    const summaryText = cleanSummaryOutput(arg.summaryText);
+    const summaryText = replaceSummaryOutputVars(
+        cleanSummaryOutput(arg.summaryText),
+        arg.settings || {},
+        arg.character || {},
+        chat
+    );
     const hypaData = normalizeHypaV3Data(plan.hypaData || chat.hypaV3Data);
     const chunkEndIndex = clampInt(plan.chunkEndIndex, 0, Number.MAX_SAFE_INTEGER, hypaData.lastSummarizedMessageIndex || 0);
 

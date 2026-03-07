@@ -370,6 +370,8 @@ function createGenerateHelpers(arg = {}) {
                     chat,
                     plan,
                     summaryText: '',
+                    settings,
+                    character,
                 });
                 return {
                     updated: advanceResult.updated === true,
@@ -458,6 +460,8 @@ function createGenerateHelpers(arg = {}) {
             plan,
             summaryText,
             summaryEmbedding,
+            settings,
+            character,
         });
 
         if (applyResult?.hypaV3Data && typeof applyResult.hypaV3Data === 'object') {

@@ -366,6 +366,26 @@ async function suiteApply() {
         assert(!('embedding' in chat.hypaV3Data.summaries[0]), 'no embedding key when not provided');
     }
 
+    // Placeholder vars in summary output should resolve to character/persona names
+    {
+        const chat = {
+            bindedPersona: 'persona-1',
+            hypaV3Data: { summaries: [], lastSummarizedMessageIndex: 0, metrics: {} },
+        };
+        const plan = { chunkEndIndex: 3, hypaData: chat.hypaV3Data, summarizable: [] };
+        applyPeriodicHypaV3Summary({
+            chat,
+            plan,
+            summaryText: '{{char}} nudged <user>.',
+            settings: {
+                username: 'Fallback User',
+                personas: [{ id: 'persona-1', name: 'Bound Persona' }],
+            },
+            character: { name: 'Eva' },
+        });
+        assert(chat.hypaV3Data.summaries[0].text === 'Eva nudged Bound Persona.', 'periodic output vars resolved before storing');
+    }
+
     // Multiple calls → summaries accumulate, index advances correctly
     {
         const chat = { hypaV3Data: { summaries: [], lastSummarizedMessageIndex: 0, metrics: {} } };
