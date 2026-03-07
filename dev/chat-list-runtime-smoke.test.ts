@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   alertError: vi.fn(),
   exportChat: vi.fn(),
   importChat: vi.fn(),
+  getNewChatFirstMessageIndex: vi.fn(() => -1),
   changeChatTo: vi.fn(),
 }));
 
@@ -32,6 +33,7 @@ vi.mock(import("src/ts/alert"), () => ({
 vi.mock(import("src/ts/characters"), () => ({
   exportChat: mocks.exportChat,
   importChat: mocks.importChat,
+  getNewChatFirstMessageIndex: mocks.getNewChatFirstMessageIndex,
 }));
 
 vi.mock(import("src/ts/globalApi.svelte"), () => ({
@@ -88,6 +90,8 @@ describe("chat list runtime smoke", () => {
     mocks.alertError.mockClear();
     mocks.exportChat.mockClear();
     mocks.importChat.mockClear();
+    mocks.getNewChatFirstMessageIndex.mockReset();
+    mocks.getNewChatFirstMessageIndex.mockReturnValue(-1);
     mocks.changeChatTo.mockClear();
 
     DBState.db.characters = [
@@ -147,9 +151,12 @@ describe("chat list runtime smoke", () => {
     expect(footerButtons.every((button) => button.type === "button")).toBe(true);
 
     const beforeChatCount = DBState.db.characters[0].chats.length;
+    mocks.getNewChatFirstMessageIndex.mockReturnValueOnce(1);
     footerButtons[0]?.click();
     await flushUi();
     expect(DBState.db.characters[0].chats.length).toBe(beforeChatCount + 1);
+    expect(mocks.getNewChatFirstMessageIndex).toHaveBeenCalledTimes(1);
+    expect(DBState.db.characters[0].chats[0].fmIndex).toBe(1);
     expect(mocks.changeChatTo).toHaveBeenCalledWith(0);
     expect(close).toHaveBeenCalledTimes(1);
 

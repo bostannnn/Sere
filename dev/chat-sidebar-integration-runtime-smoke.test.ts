@@ -60,6 +60,7 @@ const shared = vi.hoisted(() => {
     makeGroupCharacter,
     changeChatTo: vi.fn(),
     chatCopyName: vi.fn(() => "Chat copy"),
+    getNewChatFirstMessageIndex: vi.fn(() => -1),
   };
 });
 
@@ -105,6 +106,7 @@ vi.mock(import("src/ts/characters"), () => ({
   exportChat: async () => {},
   importChat: async () => {},
   exportAllChats: async () => {},
+  getNewChatFirstMessageIndex: shared.getNewChatFirstMessageIndex,
   addCharEmotion: async () => {},
   addingEmotion: () => false,
   getCharImage: async () => "",
@@ -273,6 +275,8 @@ describe("chat sidebar integration runtime smoke", () => {
   beforeEach(() => {
     shared.DBState.db.characters = [shared.makeCharacter()];
     shared.changeChatTo.mockClear();
+    shared.getNewChatFirstMessageIndex.mockReset();
+    shared.getNewChatFirstMessageIndex.mockReturnValue(-1);
     CharConfigSubMenu.set(0);
     consoleWarnSpy = vi.spyOn(console, "warn").mockImplementation((...args) => {
       const message = args.map((entry) => String(entry)).join(" ");
@@ -312,11 +316,14 @@ describe("chat sidebar integration runtime smoke", () => {
     const beforeCount = shared.DBState.db.characters[0].chats.length;
     const newChatButton = document.querySelector(".side-new-chat-button") as HTMLButtonElement | null;
     expect(newChatButton).not.toBeNull();
+    shared.getNewChatFirstMessageIndex.mockReturnValueOnce(2);
 
     newChatButton!.click();
     await flushUi();
 
     expect(shared.DBState.db.characters[0].chats.length).toBe(beforeCount + 1);
+    expect(shared.getNewChatFirstMessageIndex).toHaveBeenCalledTimes(1);
+    expect(shared.DBState.db.characters[0].chats[0].fmIndex).toBe(2);
     expect(changeChatTo).toHaveBeenCalledWith(0);
     expect(DBState.db.characters[0].chats[0].id).toBe("chat-generated-id");
   });

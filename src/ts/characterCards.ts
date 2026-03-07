@@ -575,6 +575,7 @@ function convertOffSpecCards(charaData:OldTavernChar|CharacterCardV2Risu, imgp:s
         personality: data.personality ?? '',
         scenario:data.scenario ?? '',
         firstMsgIndex: -1,
+        randomAltFirstMessageOnNewChat: false,
         replaceGlobalNote: "",
         triggerscript: [],
         additionalText: '',
@@ -882,6 +883,7 @@ async function importCharacterCardSpec(card:CharacterCardV2Risu|CharacterCardV3,
         personality:data.personality ?? '',
         scenario:data.scenario ?? '',
         firstMsgIndex: -1,
+        randomAltFirstMessageOnNewChat: data?.extensions?.risuai?.randomAltFirstMessageOnNewChat ?? false,
         removedQuotes: false,
         loreSettings: loresettings,
         loreExt: loreExt,
@@ -1125,6 +1127,7 @@ function createBaseV2(char:character) {
                     license: char.license,
                     triggerscript: char.triggerscript,
                     additionalText: char.additionalText,
+                    randomAltFirstMessageOnNewChat: char.randomAltFirstMessageOnNewChat ?? false,
                     hypaV3PromptOverride: {
                         summarizationPrompt: typeof char.hypaV3PromptOverride?.summarizationPrompt === 'string'
                             ? char.hypaV3PromptOverride.summarizationPrompt
@@ -1554,6 +1557,7 @@ export function createBaseV3(char:character){
                     license: char.license,
                     triggerscript: char.triggerscript,
                     additionalText: char.additionalText,
+                    randomAltFirstMessageOnNewChat: char.randomAltFirstMessageOnNewChat ?? false,
                     hypaV3PromptOverride: {
                         summarizationPrompt: typeof char.hypaV3PromptOverride?.summarizationPrompt === 'string'
                             ? char.hypaV3PromptOverride.summarizationPrompt
@@ -1657,6 +1661,7 @@ type CharacterCardV2Risu = {
                 triggerscript?:triggerscript[]
                 private?:boolean
                 additionalText?:string
+                randomAltFirstMessageOnNewChat?:boolean
                 hypaV3PromptOverride?:{
                     summarizationPrompt?: string
                     reSummarizationPrompt?: string

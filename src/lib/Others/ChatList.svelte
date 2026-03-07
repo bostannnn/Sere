@@ -5,7 +5,7 @@
     import { DBState } from 'src/ts/stores.svelte';
     import { selectedCharID } from "../../ts/stores.svelte";
     import { DownloadIcon, SquarePenIcon, HardDriveUploadIcon, PlusIcon, TrashIcon, XIcon, ImageIcon } from "@lucide/svelte";
-    import { exportChat, importChat } from "../../ts/characters";
+    import { exportChat, importChat, getNewChatFirstMessageIndex } from "../../ts/characters";
     import { findCharacterbyId } from "../../ts/util";
     import TextInput from "../UI/GUI/TextInput.svelte";
     import { changeChatTo } from "src/ts/globalApi.svelte";
@@ -158,7 +158,7 @@
                     note: '',
                     name: createNewChatName(chats),
                     localLore: [],
-                    fmIndex: -1,
+                    fmIndex: getNewChatFirstMessageIndex(cha),
                     id: v4(),
                 }
                 chats.unshift(newChat)

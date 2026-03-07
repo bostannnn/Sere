@@ -12,7 +12,7 @@
     import TextInput from "../UI/GUI/TextInput.svelte";
     import ChatBackgroundPicker from "../Others/ChatBackgroundPicker.svelte";
 
-    import { exportChat, importChat, exportAllChats } from "src/ts/characters";
+    import { exportChat, importChat, exportAllChats, getNewChatFirstMessageIndex } from "src/ts/characters";
     import { alertChatOptions, alertConfirm, alertError, alertNormal, alertSelect, alertStore } from "src/ts/alert";
     import { findCharacterbyId, sleep, sortableOptions } from "src/ts/util";
     import { language } from "src/lang";
@@ -194,7 +194,7 @@
             note: '',
             name: createNewChatName(chats),
             localLore: [],
-            fmIndex: -1,
+            fmIndex: getNewChatFirstMessageIndex(cha),
             id: v4(),
         }
         chats.unshift(newChat)

@@ -723,18 +723,79 @@
     <div class="char-config-section" role="tabpanel" id="char-config-panel-0" aria-labelledby="char-config-tab-0" tabindex="0">
     {#if DBState.db.characters[$selectedCharID]!.type !== 'group' && licensed !== 'private'}
         <TextInput size="xl" placeholder="Character Name" bind:value={DBState.db.characters[$selectedCharID]!.name} />
+        <span class="char-config-label">{language.systemPrompt} <Help key="systemPrompt"/></span>
+        <TextAreaInput highlight margin="both" autocomplete="off" bind:value={DBState.db.characters[$selectedCharID]!.systemPrompt}></TextAreaInput>
         <span class="char-config-label">{language.description} <Help key="charDesc"/></span>
         <TextAreaInput highlight margin="both" autocomplete="off" bind:value={editorCharacter!.desc}></TextAreaInput>
         <span class="char-config-token-note">{tokens.desc} {language.tokens}</span>
         <span class="char-config-label">{language.personality} <Help key="personality" unrecommended/></span>
         <TextAreaInput highlight margin="both" autocomplete="off" bind:value={DBState.db.characters[$selectedCharID]!.personality}></TextAreaInput>
-        <span class="char-config-label">{language.scenario} <Help key="scenario" unrecommended/></span>
-        <TextAreaInput highlight margin="both" autocomplete="off" bind:value={DBState.db.characters[$selectedCharID]!.scenario}></TextAreaInput>
         <span class="char-config-label">{language.replaceGlobalNote} <Help key="replaceGlobalNote"/></span>
         <TextAreaInput highlight margin="both" autocomplete="off" bind:value={DBState.db.characters[$selectedCharID]!.replaceGlobalNote}></TextAreaInput>
         <span class="char-config-label">{language.firstMessage} <Help key="charFirstMessage"/></span>
         <TextAreaInput highlight margin="both" autocomplete="off" bind:value={DBState.db.characters[$selectedCharID]!.firstMessage}></TextAreaInput>
         <span class="char-config-token-note">{tokens.firstMsg} {language.tokens}</span>
+
+        <span class="char-config-label">{language.altGreet}</span>
+        <div class="char-config-card panel-shell">
+            <table class="char-config-table-contained char-config-table-fixed char-config-table char-config-table-full">
+                <tbody>
+                <tr>
+                    <th class="char-config-table-head">{language.value}</th>
+                    <th class="char-config-table-head char-config-table-action-head">
+                        <button class="char-config-icon-action icon-btn icon-btn--sm char-config-icon-action--success" onclick={() => {
+                            if(DBState.db.characters[$selectedCharID]!.type === 'character'){
+                                const alternateGreetings = DBState.db.characters[$selectedCharID]!.alternateGreetings
+                                alternateGreetings.push('')
+                                DBState.db.characters[$selectedCharID]!.alternateGreetings = alternateGreetings
+                            }
+                        }} type="button" title="Add alternate greeting" aria-label="Add alternate greeting">
+                            <PlusIcon />
+                        </button>
+                    </th>
+                </tr>
+                {#if DBState.db.characters[$selectedCharID]!.alternateGreetings.length === 0}
+                    <tr>
+                        <td class="char-config-empty-cell" colspan="3">{language.noData}</td>
+                    </tr>
+                {/if}
+                {#each DBState.db.characters[$selectedCharID]!.alternateGreetings as _bias, i (i)}
+                    <tr>
+                        <td class="char-config-table-value-cell">
+                            <TextAreaInput highlight bind:value={DBState.db.characters[$selectedCharID]!.alternateGreetings[i]} placeholder="..." fullwidth />
+                        </td>
+                        <th class="char-config-table-action-cell">
+                            <div class="char-config-altgreet-actions action-rail">
+                                <button class="char-config-icon-action icon-btn icon-btn--sm char-config-icon-action--accent char-config-icon-action--compact" onclick={() => moveAlternateGreetingUp(i)} disabled={i === 0} type="button" title="Move greeting up" aria-label={`Move alternate greeting ${i + 1} up`}>
+                                    <ArrowUp size={16} />
+                                </button>
+                                <button class="char-config-icon-action icon-btn icon-btn--sm char-config-icon-action--accent char-config-icon-action--compact" onclick={() => moveAlternateGreetingDown(i)} disabled={i === DBState.db.characters[$selectedCharID]!.alternateGreetings.length - 1} type="button" title="Move greeting down" aria-label={`Move alternate greeting ${i + 1} down`}>
+                                    <ArrowDown size={16} />
+                                </button>
+                                <button class="char-config-icon-action icon-btn icon-btn--sm char-config-icon-action--danger char-config-icon-action--compact" onclick={() => {
+                                    if(DBState.db.characters[$selectedCharID]!.type === 'character'){
+                                        DBState.db.characters[$selectedCharID]!.chats[DBState.db.characters[$selectedCharID]!.chatPage].fmIndex = -1
+                                        const alternateGreetings = DBState.db.characters[$selectedCharID]!.alternateGreetings
+                                        alternateGreetings.splice(i, 1)
+                                        DBState.db.characters[$selectedCharID]!.alternateGreetings = alternateGreetings
+                                    }
+                                }} type="button" title="Remove greeting" aria-label={`Remove alternate greeting ${i + 1}`}>
+                                    <TrashIcon size={16} />
+                                </button>
+                            </div>
+                        </th>
+                    </tr>
+                {/each}
+            </tbody>
+            </table>
+        </div>
+
+        <div class="char-config-check-row">
+            <Check bind:check={DBState.db.characters[$selectedCharID]!.randomAltFirstMessageOnNewChat} name={language.randomAltFirstMessageOnNewChat}/>
+        </div>
+
+        <span class="char-config-label">{language.scenario} <Help key="scenario" unrecommended/></span>
+        <TextAreaInput highlight margin="both" autocomplete="off" bind:value={DBState.db.characters[$selectedCharID]!.scenario}></TextAreaInput>
 
     {:else if licensed !== 'private' && DBState.db.characters[$selectedCharID]!.type === 'group'}
         <TextInput size="xl" placeholder="Group Name" bind:value={DBState.db.characters[$selectedCharID]!.name} />
@@ -1552,9 +1613,6 @@
             DBState.db.characters[$selectedCharID]!.removedQuotes = false
         }}></MultiLangInput>
 
-        <span class="char-config-label">{language.systemPrompt} <Help key="systemPrompt"/></span>
-        <TextAreaInput highlight margin="both" autocomplete="off" bind:value={DBState.db.characters[$selectedCharID]!.systemPrompt}></TextAreaInput>
-
         <span class="char-config-label">{language.additionalText} <Help key="additionalText" /></span>
         <TextAreaInput highlight margin="both" autocomplete="off" bind:value={DBState.db.characters[$selectedCharID]!.additionalText}></TextAreaInput>
 
@@ -1577,60 +1635,6 @@
         <div class="char-config-depth-row">
             <NumberInput size="sm" bind:value={editorCharacter!.depth_prompt.depth} className="char-config-control char-config-depth-number"/>
             <TextInput size="sm" bind:value={editorCharacter!.depth_prompt.prompt} className="char-config-control char-config-depth-text"/>
-        </div>
-
-        <span class="char-config-label">{language.altGreet}</span>
-        <div class="char-config-card panel-shell">
-            <table class="char-config-table-contained char-config-table-fixed char-config-table char-config-table-full">
-                <tbody>
-                <tr>
-                    <th class="char-config-table-head">{language.value}</th>
-                    <th class="char-config-table-head char-config-table-action-head">
-                        <button class="char-config-icon-action icon-btn icon-btn--sm char-config-icon-action--success" onclick={() => {
-                            if(DBState.db.characters[$selectedCharID]!.type === 'character'){
-                                const alternateGreetings = DBState.db.characters[$selectedCharID]!.alternateGreetings
-                                alternateGreetings.push('')
-                                DBState.db.characters[$selectedCharID]!.alternateGreetings = alternateGreetings
-                            }
-                        }} type="button" title="Add alternate greeting" aria-label="Add alternate greeting">
-                            <PlusIcon />
-                        </button>
-                    </th>
-                </tr>
-                {#if DBState.db.characters[$selectedCharID]!.alternateGreetings.length === 0}
-                    <tr>
-                        <td class="char-config-empty-cell" colspan="3">{language.noData}</td>
-                    </tr>
-                {/if}
-                {#each DBState.db.characters[$selectedCharID]!.alternateGreetings as _bias, i (i)}
-                    <tr>
-                        <td class="char-config-table-value-cell">
-                            <TextAreaInput highlight bind:value={DBState.db.characters[$selectedCharID]!.alternateGreetings[i]} placeholder="..." fullwidth />
-                        </td>
-                        <th class="char-config-table-action-cell">
-                            <div class="char-config-altgreet-actions action-rail">
-                                <button class="char-config-icon-action icon-btn icon-btn--sm char-config-icon-action--accent char-config-icon-action--compact" onclick={() => moveAlternateGreetingUp(i)} disabled={i === 0} type="button" title="Move greeting up" aria-label={`Move alternate greeting ${i + 1} up`}>
-                                    <ArrowUp size={16} />
-                                </button>
-                                <button class="char-config-icon-action icon-btn icon-btn--sm char-config-icon-action--accent char-config-icon-action--compact" onclick={() => moveAlternateGreetingDown(i)} disabled={i === DBState.db.characters[$selectedCharID]!.alternateGreetings.length - 1} type="button" title="Move greeting down" aria-label={`Move alternate greeting ${i + 1} down`}>
-                                    <ArrowDown size={16} />
-                                </button>
-                                <button class="char-config-icon-action icon-btn icon-btn--sm char-config-icon-action--danger char-config-icon-action--compact" onclick={() => {
-                                    if(DBState.db.characters[$selectedCharID]!.type === 'character'){
-                                        DBState.db.characters[$selectedCharID]!.chats[DBState.db.characters[$selectedCharID]!.chatPage].fmIndex = -1
-                                        const alternateGreetings = DBState.db.characters[$selectedCharID]!.alternateGreetings
-                                        alternateGreetings.splice(i, 1)
-                                        DBState.db.characters[$selectedCharID]!.alternateGreetings = alternateGreetings
-                                    }
-                                }} type="button" title="Remove greeting" aria-label={`Remove alternate greeting ${i + 1}`}>
-                                    <TrashIcon size={16} />
-                                </button>
-                            </div>
-                        </th>
-                    </tr>
-                {/each}
-            </tbody>
-            </table>
         </div>
 
         <div class="char-config-check-row">

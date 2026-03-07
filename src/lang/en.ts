@@ -777,6 +777,7 @@ export const languageEnglish = {
     chatNotes: "Chat Notes",
     showUnrecommended: "Show Unrecommended Settings",
     altGreet: "Alternative First Messages",
+    randomAltFirstMessageOnNewChat: "Random alt first message on new chat",
     scripts: "Scripts",
     settings: "Settings",
     selective: "Selective",

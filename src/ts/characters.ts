@@ -1,5 +1,5 @@
 import { get, writable } from "svelte/store";
-import { saveImage, setDatabase, type character, type Chat, type loreBook, getDatabase, getCharacterByIndex, setCharacterByIndex } from "./storage/database.svelte";
+import { saveImage, setDatabase, type character, type Chat, type loreBook, getDatabase, getCharacterByIndex, setCharacterByIndex, type groupChat } from "./storage/database.svelte";
 import { alertAddCharacter, alertConfirm, alertError, alertNormal, alertSelect, alertStore, alertWait } from "./alert";
 import { language } from "../lang";
 import { checkNullish, findCharacterbyId, getUserName, selectMultipleFile, selectSingleFile, sleep } from "./util";
@@ -13,6 +13,7 @@ import { isDoingChat } from "./process/index.svelte";
 import { isNodeServer } from "./platform";
 import { saveServerDatabase } from "./storage/serverDb";
 import { importCharacter } from "./characterCards";
+import { getNewChatFirstMessageIndex as resolveNewChatFirstMessageIndex } from "./newChatFirstMessage";
 import { PngChunk } from "./pngChunk";
 const characterLog = (..._args: unknown[]) => {};
 
@@ -54,6 +55,10 @@ export function createNewGroup(){
     setDatabase(db)
     checkCharOrder()
     return db.characters.length - 1
+}
+
+export function getNewChatFirstMessageIndex(chara:character|groupChat){
+    return resolveNewChatFirstMessageIndex(chara)
 }
 
 export async function getCharImage(loc:string, type:'plain'|'css'|'contain'|'lgcss') {
@@ -589,6 +594,7 @@ export function characterFormatUpdate(indexOrCharacter:number|character, arg:{
         cha.personality = cha.personality ?? ''
         cha.scenario = cha.scenario ?? ''
         cha.firstMsgIndex = cha.firstMsgIndex ?? -1
+        cha.randomAltFirstMessageOnNewChat ??= false
         cha.additionalData = cha.additionalData ?? {
             tag: [],
             creator: '',
@@ -727,6 +733,7 @@ export function createBlankChar():character{
         personality:"",
         scenario:"",
         firstMsgIndex: -1,
+        randomAltFirstMessageOnNewChat: false,
         replaceGlobalNote: "",
         triggerscript: [{
             comment: "",

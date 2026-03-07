@@ -1547,6 +1547,7 @@ export interface character{
     personality:string
     scenario:string
     firstMsgIndex:number
+    randomAltFirstMessageOnNewChat?:boolean
     loreSettings?:loreSettings
     ragSettings?:RagSettings
     loreExt?:any
