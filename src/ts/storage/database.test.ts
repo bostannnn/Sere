@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { LLMFormat } from "../model/modellist";
 
 const { changeLanguageMock } = vi.hoisted(() => ({
   changeLanguageMock: vi.fn(),
@@ -299,7 +300,7 @@ describe("normalizer unit coverage", () => {
   });
 
   it("trims chat background image and falls back to inherit", () => {
-    const chat = {
+    const chat: Parameters<typeof normalizeChatBackground>[0] = {
       backgroundMode: "custom",
       backgroundImage: "   ",
     };
@@ -367,21 +368,26 @@ describe("preset helper unit coverage", () => {
       db.fallbackModels as { memory: string[]; emotion: string[]; translate: string[]; otherAx: string[]; model: string[] },
     );
 
-    setPresetOnDatabase(
-      db as unknown as Parameters<typeof setPresetOnDatabase>[0],
-      {
+    const incomingPreset = {
         aiModel: "reverse_proxy",
         subModel: "xcustom:::legacy",
-        reverseProxyOobaArgs: structuredClone(db.reverseProxyOobaArgs),
-        promptSettings: structuredClone(db.promptSettings),
-        customAPIFormat: structuredClone(db.customAPIFormat),
+        reverseProxyOobaArgs: { mode: "instruct" },
+        promptSettings: {
+          assistantPrefill: "",
+          postEndInnerFormat: "",
+          sendChatAsSystem: false,
+          sendName: false,
+          utilOverride: false,
+        },
+        customAPIFormat: LLMFormat.OpenAICompatible,
         customFlags: [],
         seperateModelsForAxModels: false,
         seperateModels: { memory: "new-m", emotion: "new-e", translate: "new-t", otherAx: "new-o" },
         fallbackModels: { memory: ["nm"], emotion: ["ne"], translate: ["nt"], otherAx: ["no"], model: ["nall"] },
         fallbackWhenBlankResponse: false,
-      },
-    );
+      } as unknown as Parameters<typeof setPresetOnDatabase>[1];
+
+    setPresetOnDatabase(db as unknown as Parameters<typeof setPresetOnDatabase>[0], incomingPreset);
 
     expect(db.aiModel).toBe("openrouter");
     expect(db.subModel).toBe("openrouter");

@@ -1,4 +1,4 @@
-import { decryptBuffer } from '../util';
+import { decryptBuffer, encryptBuffer } from '../util';
 import { prebuiltPresets } from '../process/templates/templates';
 import { LLMFormat } from '../model/modellist';
 import { decodeRPack, encodeRPack } from '../rpack/rpack_js';
@@ -6,7 +6,7 @@ import { encode as encodeMsgpack, decode as decodeMsgpack } from 'msgpackr/index
 import * as fflate from 'fflate';
 import { defaultJailbreak, defaultMainPrompt } from './defaultPrompts';
 import { migrateRemovedProviderSelections } from './database.normalizers';
-import type { PromptItem } from '../process/prompt';
+import type { PromptItem, PromptItemPlain } from '../process/prompt';
 import type { AINsettings, Database, botPreset, OobaSettings } from './database.types';
 
 export const REMOVED_PROVIDER_MIGRATION_NOTICE = 'Legacy removed providers were migrated to OpenRouter. Review Bot Settings and re-save any affected presets.';
@@ -128,13 +128,13 @@ type PrebuiltNaiInput = {
 
 type STPromptOrderItem = {
   enabled?: boolean
-  identifier?: number
+  identifier?: string | number
 };
 
 type STPrompt = {
-  identifier: string
+  identifier: string | number
   content?: string
-  role?: string
+  role?: PromptItemRole
 };
 
 type STPresetInput = {
@@ -146,6 +146,15 @@ type STPresetInput = {
   top_p?: number
   assistant_prefill?: string
 };
+
+type PromptItemRole = PromptItemPlain['role'];
+
+function normalizePromptItemRole(role: unknown): PromptItemRole {
+  if (role === 'user' || role === 'bot' || role === 'system') {
+    return role;
+  }
+  return 'system';
+}
 
 function buildSavedPreset(db: Database): botPreset {
   const presets = Array.isArray(db.botPresets) ? db.botPresets : [];
@@ -263,7 +272,7 @@ function toSTPromptTemplate(input: STPresetInput, log: (...args: unknown[]) => v
   const promptTemplate: PromptItem[] = [];
   const order = input.prompt_order?.[0]?.order ?? [];
   const prompts = Array.isArray(input.prompts) ? input.prompts : [];
-  const findPrompt = (identifier: number) => prompts.find((prompt) => prompt.identifier === identifier);
+  const findPrompt = (identifier: string | number) => prompts.find((prompt) => prompt.identifier === identifier);
 
   for (const promptOrderItem of order) {
     if (!promptOrderItem?.enabled) {
@@ -277,11 +286,11 @@ function toSTPromptTemplate(input: STPresetInput, log: (...args: unknown[]) => v
 
     switch (prompt.identifier) {
       case 'main':
-        promptTemplate.push({ type: 'plain', type2: 'main', text: prompt.content ?? '', role: prompt.role ?? 'system' });
+        promptTemplate.push({ type: 'plain', type2: 'main', text: prompt.content ?? '', role: normalizePromptItemRole(prompt.role) });
         break;
       case 'jailbreak':
       case 'nsfw':
-        promptTemplate.push({ type: 'jailbreak', type2: 'normal', text: prompt.content ?? '', role: prompt.role ?? 'system' });
+        promptTemplate.push({ type: 'jailbreak', type2: 'normal', text: prompt.content ?? '', role: normalizePromptItemRole(prompt.role) });
         break;
       case 'dialogueExamples':
       case 'charPersonality':
@@ -302,7 +311,7 @@ function toSTPromptTemplate(input: STPresetInput, log: (...args: unknown[]) => v
         break;
       default:
         log(prompt);
-        promptTemplate.push({ type: 'plain', type2: 'normal', text: prompt.content ?? '', role: prompt.role ?? 'system' });
+        promptTemplate.push({ type: 'plain', type2: 'normal', text: prompt.content ?? '', role: normalizePromptItemRole(prompt.role) });
     }
   }
 
@@ -542,7 +551,7 @@ export function applyImportedPresetToDatabase(db: Database, importedPreset: unkn
     return;
   }
 
-  const generic = preset as botPreset;
+  const generic = preset as unknown as botPreset;
   generic.name ??= 'Imported';
   if (!Array.isArray(db.botPresets)) {
     db.botPresets = [];
