@@ -69,6 +69,7 @@ function registerServerRoutes(arg = {}) {
         normalizePromptOverride: arg.normalizePromptOverride,
         applyPromptOverride: arg.applyPromptOverride,
         resolveManualPromptSource: arg.resolveManualPromptSource,
+        applyStateCommands: arg.applyStateCommands,
         traceRoutes: registerHypaV3TraceRoutes,
         manualRoutes: registerHypaV3ManualRoutes,
         resummaryRoutes: registerHypaV3ResummaryRoutes,
