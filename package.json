@@ -28,6 +28,8 @@
     "check:ui-shell-runtime": "pnpm exec vitest run dev/ui-shell-runtime-smoke.test.ts",
     "check:ui-shell-smoke": "node dev/check-ui-shell-smoke.js",
     "check:settings-smoke": "node dev/check-settings-smoke.js",
+    "check:loc": "node dev/check-file-loc.js --all",
+    "check:loc:staged": "node dev/check-file-loc.js --staged",
     "test": "vitest run",
     "lint": "eslint src server/node dev public/sw.js",
     "tauri": "tauri",

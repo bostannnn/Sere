@@ -145,6 +145,9 @@ pnpm run check:server
 # Server runtime contracts (must pass before commit)
 pnpm run check:server:contracts
 
+# LOC warning check (warns when files exceed 500 lines)
+pnpm run check:loc
+
 # Server unit tests — no server needed, run before every commit that touches server/node/llm/
 node scripts/test-memory-unit.cjs
 
@@ -162,6 +165,14 @@ pnpm build
 For server-first mode locally: run both `pnpm dev` and `pnpm run runserver`. The client at `localhost:5173` proxies API calls to the server at `localhost:6001`.
 
 Memory sidebar note: in embedded right-sidebar Memory mode, manual HypaV3 summarize (`Start/End + Summarize`) always targets the currently active chat (`chatPage`).
+
+### Git Hook Setup (one-time per clone)
+
+Enable repository-managed hooks so the LOC warning check runs on every commit:
+
+```bash
+git config core.hooksPath .githooks
+```
 
 ### Data Safety — Read Before Running Any Server Script
 

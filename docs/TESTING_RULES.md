@@ -13,11 +13,18 @@ pnpm lint                      # ESLint for client + server + dev scripts
 pnpm check                     # TypeScript / Svelte type check
 pnpm run check:strict          # Strict type migration check (tracked debt)
 pnpm test                      # Vitest unit test suite
+pnpm run check:loc             # Warn when files exceed 500 LOC
 pnpm run check:server          # Server static contract checks
 pnpm run check:server:contracts  # Server runtime contract checks
 ```
 
 Both must pass. No exceptions. See `CONVENTIONS.md` section VI for merge requirements.
+
+To run the LOC warning automatically on each commit, set hooks once per clone:
+
+```bash
+git config core.hooksPath .githooks
+```
 
 ---
 
