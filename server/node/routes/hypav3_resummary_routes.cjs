@@ -136,8 +136,7 @@ app.post('/data/memory/hypav3/resummarize-preview', async (req, res) => {
         const promptMessages = buildHypaSummarizationPromptMessages(
             promptSource,
             hypaSettings.reSummarizationPrompt,
-            true,
-            { character, settings, chat }
+            true
         );
         if (!promptMessages) throw new LLMHttpError(400, 'EMPTY_PROMPT_MESSAGES', 'Failed to build re-summarization prompt.');
         promptMessagesForTrace = promptMessages;
@@ -149,6 +148,7 @@ app.post('/data/memory/hypav3/resummarize-preview', async (req, res) => {
             chatId,
             promptMessages,
             isResummarize: true,
+            chat,
             meta: summaryModelMeta,
         });
         if (!summaryText) throw new LLMHttpError(500, 'EMPTY_SUMMARY', 'Re-summarization returned empty output.');

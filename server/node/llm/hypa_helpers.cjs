@@ -22,28 +22,23 @@ function createHypaHelpers(arg = {}) {
     const HYPAV3_DEFAULT_SUMMARIZATION_PROMPT = "[Summarize the ongoing role story, It must also remove redundancy and unnecessary text and content from the output.]";
     const HYPAV3_DEFAULT_RESUMMARIZATION_PROMPT = 'Re-summarize this summaries.';
 
-    function resolveHypaPromptUserName(settings, chat) {
+    function resolveSummaryOutputUserName(settings, chat) {
         const personas = Array.isArray(settings?.personas) ? settings.personas : [];
         const boundPersonaId = toStringOrEmpty(chat?.bindedPersona);
         if (boundPersonaId) {
-            const persona = personas.find((item) => {
-                if (!item || typeof item !== 'object') return false;
-                return toStringOrEmpty(item.id) === boundPersonaId;
-            });
+            const persona = personas.find((item) => item && typeof item === 'object' && toStringOrEmpty(item.id) === boundPersonaId);
             const personaName = toStringOrEmpty(persona?.name);
             if (personaName) return personaName;
         }
         return toStringOrEmpty(settings?.username) || 'User';
     }
 
-    function applyHypaPromptVars(template, context = {}) {
-        const prompt = toStringOrEmpty(template);
-        if (!prompt) return '';
-        const charName = toStringOrEmpty(context?.character?.nickname)
-            || toStringOrEmpty(context?.character?.name)
-            || 'Character';
-        const userName = resolveHypaPromptUserName(context?.settings, context?.chat);
-        return prompt
+    function replaceSummaryOutputVars(text, settings, character, chat) {
+        const source = toStringOrEmpty(text);
+        if (!source) return '';
+        const charName = toStringOrEmpty(character?.nickname) || toStringOrEmpty(character?.name) || 'Character';
+        const userName = resolveSummaryOutputUserName(settings, chat);
+        return source
             .replace(/<(?:char|bot)>/gi, charName)
             .replace(/<user>/gi, userName)
             .replace(/\{\{\s*char\s*\}\}/gi, charName)
@@ -97,7 +92,7 @@ function createHypaHelpers(arg = {}) {
         };
     }
 
-    function buildHypaSummarizationPromptMessages(sourceMessages, promptTemplate, isResummarize = false, context = {}) {
+    function buildHypaSummarizationPromptMessages(sourceMessages, promptTemplate, isResummarize = false) {
         const cleaned = (Array.isArray(sourceMessages) ? sourceMessages : [])
             .filter((msg) => msg && typeof msg === 'object')
             .map((msg) => `${msg.role}: ${toStringOrEmpty(msg.content)}`.trim())
@@ -108,10 +103,7 @@ function createHypaHelpers(arg = {}) {
         const fallbackTemplate = isResummarize
             ? HYPAV3_DEFAULT_RESUMMARIZATION_PROMPT
             : HYPAV3_DEFAULT_SUMMARIZATION_PROMPT;
-        const template = applyHypaPromptVars(
-            toStringOrEmpty(promptTemplate).trim() || fallbackTemplate,
-            context
-        );
+        const template = toStringOrEmpty(promptTemplate).trim() || fallbackTemplate;
         if (template.includes('{{slot}}')) {
             // Template embeds the chat content via {{slot}} — use the combined result
             // as a single user message to avoid duplicating strMessages in both messages.
@@ -207,7 +199,12 @@ function createHypaHelpers(arg = {}) {
             messages: promptMessages,
         });
 
-        return cleanSummaryOutput(result);
+        return replaceSummaryOutputVars(
+            cleanSummaryOutput(result),
+            settings,
+            payload.character,
+            payload.chat
+        );
     }
 
     return {
