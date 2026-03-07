@@ -6,7 +6,6 @@ import { selectSingleFile, sleep } from "../util"
 import { v4 } from "uuid"
 import { convertExternalLorebook } from "./lorebook.svelte"
 import { decodeRPack, encodeRPack } from "../rpack/rpack_js"
-import { convertImage } from "../parser.svelte"
 import { HideIconStore, moduleBackgroundEmbedding, ReloadGUIPointer } from "../stores.svelte"
 import {get} from "svelte/store"
 const moduleLog = (..._args: unknown[]) => {};
@@ -79,6 +78,7 @@ export async function exportModule(module:RisuModule, arg:{
         if(!rData){
             rData = new Uint8Array(0) //blank buffer
         }
+        const { convertImage } = await import("../parser.svelte")
         const encoded = await encodeRPack(Buffer.from(await convertImage(rData)))
         writeLength(encoded.length)
         apb.append(encoded)

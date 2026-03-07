@@ -12,6 +12,11 @@ const mocks = vi.hoisted(() => ({
 vi.mock(import("src/lang"), () => ({
   language: {
     chatList: "Chat List",
+    chatBackground: "Chat Background",
+    chatBackgroundInherit: "Inherit",
+    chatBackgroundDefault: "Default",
+    chatBackgroundCustom: "Custom",
+    chatBackgroundUpload: "Upload",
     removeConfirm: "Remove ",
     errors: {
       onlyOneChat: "Only one chat",
@@ -31,12 +36,26 @@ vi.mock(import("src/ts/characters"), () => ({
 
 vi.mock(import("src/ts/globalApi.svelte"), () => ({
   changeChatTo: mocks.changeChatTo,
+  getFileSrc: async () => "",
 }));
 
 vi.mock(import("src/ts/util"), () => ({
   findCharacterbyId: () => ({
     firstMessage: "hello",
   }),
+  selectSingleFile: async () => null,
+}));
+
+vi.mock(import("src/ts/storage/database.svelte"), () => ({
+  saveImage: async () => "asset-id",
+  resolveChatBackgroundMode: (mode: unknown, backgroundImage: unknown) => {
+    if (mode === "default" || mode === "custom" || mode === "inherit") {
+      return mode;
+    }
+    return typeof backgroundImage === "string" && backgroundImage.trim().length > 0
+      ? "custom"
+      : "inherit";
+  },
 }));
 
 vi.mock(import("src/ts/stores.svelte"), async () => {
@@ -47,6 +66,7 @@ vi.mock(import("src/ts/stores.svelte"), async () => {
         characters: [],
       },
     },
+    selIdState: { selId: 0 },
     selectedCharID: writable(0),
   };
 });
@@ -111,12 +131,12 @@ describe("chat list runtime smoke", () => {
     const rowActionButtons = Array.from(
       firstRow?.querySelectorAll("button.ds-settings-icon-link.icon-btn.icon-btn--sm") ?? [],
     ) as HTMLButtonElement[];
-    expect(rowActionButtons.length).toBe(2);
+    expect(rowActionButtons.length).toBe(3);
     expect(rowActionButtons.every((button) => button.type === "button")).toBe(true);
     expect(firstRow?.getAttribute("role")).toBe("button");
     expect(firstRow?.getAttribute("tabindex")).toBe("0");
 
-    rowActionButtons[0]?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    rowActionButtons[1]?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     await flushUi();
     expect(mocks.exportChat).toHaveBeenCalledWith(0);
 
@@ -154,9 +174,9 @@ describe("chat list runtime smoke", () => {
     const rowActionButtons = Array.from(
       firstRow?.querySelectorAll("button.ds-settings-icon-link.icon-btn.icon-btn--sm") ?? [],
     ) as HTMLButtonElement[];
-    expect(rowActionButtons.length).toBe(2);
+    expect(rowActionButtons.length).toBe(3);
 
-    rowActionButtons[1]?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    rowActionButtons[2]?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     await flushUi();
 
     expect(mocks.alertConfirm).toHaveBeenCalledTimes(1);

@@ -12,7 +12,7 @@ import css, { type CssAtRuleAST } from '@adobe/css-tools'
 import { calcString } from './process/infunctions';
 import { findCharacterbyId, getPersonaPrompt, getUserIcon, getUserName, pickHashRand, replaceAsync} from './util';
 import { getInlayAssetBlob } from './process/files/inlays';
-import { getModuleAssets, getModuleLorebooks, getModules } from './process/modules';
+import { getModuleLorebooks, getModules } from './process/modules';
 import hljs from 'highlight.js/lib/core'
 import 'highlight.js/styles/atom-one-dark.min.css'
 import { language } from 'src/lang';
@@ -446,6 +446,19 @@ export function resetAssetsCache(charAssets: string[][], emoAssets: string[][], 
     emoAssetsCache = charEmoPaths
 }
 
+async function getLiveModuleAssets() {
+    try {
+        const { getModuleAssets } = await import('./process/modules')
+        return getModuleAssets()
+    } catch (error) {
+        if (error instanceof ReferenceError && String(error.message).includes('before initialization')) {
+            parserLog('Skipping module asset cache warmup during module initialization')
+            return null
+        }
+        throw error
+    }
+}
+
 $effect.root(() => {
     $effect(() => {
         const charId = selIdState.selId
@@ -456,9 +469,12 @@ $effect.root(() => {
 
         const charAssets = char.additionalAssets ?? []
         const emoAssets = char.emotionImages ?? []
-        const moduleAssets = getModuleAssets()
-
-        resetAssetsCache(charAssets, emoAssets, moduleAssets)
+        void getLiveModuleAssets().then((moduleAssets) => {
+            if (!moduleAssets) {
+                return
+            }
+            resetAssetsCache(charAssets, emoAssets, moduleAssets)
+        })
     })
 })
 
@@ -467,13 +483,20 @@ const videoExtensions = ['mp4', 'webm', 'avi', 'm4p', 'm4v']
 
 async function parseAdditionalAssets(data:string, char:simpleCharacterArgument|character, mode:'normal'|'back', arg:{ch:number}){
     const assetWidthString = (DBState.db.assetWidth && DBState.db.assetWidth !== -1 || DBState.db.assetWidth === 0) ? `max-width:${DBState.db.assetWidth}rem;` : ''
+    let assetPaths = assetsCache ?? {}
+    let emoPaths = emoAssetsCache ?? {}
 
     if (char.type === 'character' && (!assetsCache || !emoAssetsCache)) {
-        resetAssetsCache(char.additionalAssets ?? [], char.emotionImages, getModuleAssets())
+        const moduleAssets = await getLiveModuleAssets()
+        if (moduleAssets) {
+            resetAssetsCache(char.additionalAssets ?? [], char.emotionImages, moduleAssets)
+            assetPaths = assetsCache ?? {}
+            emoPaths = emoAssetsCache ?? {}
+        } else {
+            getAssetSrc(char.additionalAssets ?? [], assetPaths)
+            getEmoSrc(char.emotionImages, emoPaths)
+        }
     }
-
-    const assetPaths = assetsCache ?? {}
-    const emoPaths = emoAssetsCache ?? {}
 
     let needsSourceAccess = false
     let cx: number|null = null

@@ -156,6 +156,14 @@ vi.mock(import("src/ts/tokenizer"), () => ({
 
 vi.mock(import("src/ts/storage/database.svelte"), () => ({
   saveImage: async () => "asset-id",
+  resolveChatBackgroundMode: (mode: unknown, backgroundImage: unknown) => {
+    if (mode === "default" || mode === "custom" || mode === "inherit") {
+      return mode;
+    }
+    return typeof backgroundImage === "string" && backgroundImage.trim().length > 0
+      ? "custom"
+      : "inherit";
+  },
 }));
 
 vi.mock(import("src/ts/process/tts"), () => ({
@@ -320,7 +328,7 @@ describe("chat sidebar integration runtime smoke", () => {
     expect(newChatButton).not.toBeNull();
     expect(newChatButton?.getAttribute("type")).toBe("button");
 
-    const chatRowButtons = Array.from(document.querySelectorAll('.side-chat-list-root button[data-risu-chat-idx]')) as HTMLButtonElement[];
+    const chatRowButtons = Array.from(document.querySelectorAll(".side-chat-item > button.side-chat-row")) as HTMLButtonElement[];
     expect(chatRowButtons.length).toBeGreaterThan(0);
     expect(chatRowButtons.every((button) => button.getAttribute("type") === "button")).toBe(true);
 
@@ -411,14 +419,14 @@ describe("chat sidebar integration runtime smoke", () => {
     expect(listShell?.classList.contains("list-shell")).toBe(true);
     expect(document.querySelector('[data-testid="side-chat-empty-global"]')).toBeNull();
 
-    const chatRows = Array.from(document.querySelectorAll('[data-risu-chat-idx]')) as HTMLButtonElement[];
+    const chatRows = Array.from(document.querySelectorAll(".side-chat-item > button.side-chat-row")) as HTMLButtonElement[];
     expect(chatRows.length).toBe(120);
     expect(chatRows[0]?.textContent).toContain("Dense Chat 1");
     expect(chatRows[119]?.textContent).toContain("Dense Chat 120");
 
     const selectedRows = document.querySelectorAll(".side-row.side-chat-row.side-row-selected");
     expect(selectedRows.length).toBe(1);
-    expect((selectedRows[0] as HTMLElement | undefined)?.getAttribute("data-risu-chat-idx")).toBe("87");
+    expect((selectedRows[0] as HTMLElement | undefined)?.closest("[data-risu-chat-idx]")?.getAttribute("data-risu-chat-idx")).toBe("87");
 
     chatRows[119]?.click();
     await flushUi();

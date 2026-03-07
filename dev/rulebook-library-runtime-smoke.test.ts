@@ -60,6 +60,8 @@ vi.mock(import("src/ts/stores.svelte"), async () => {
       currentFileIndex: 0,
       totalFiles: 0,
     }),
+    selIdState: { selId: 0 },
+    selectedCharID: writable(0),
   };
 });
 
