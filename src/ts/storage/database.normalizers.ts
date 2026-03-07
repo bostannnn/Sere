@@ -6,7 +6,7 @@ import type {
   ComfyCommanderWorkflow,
   Database,
   RagSettings,
-} from './database.svelte';
+} from './database.types';
 
 const COMFY_COMMANDER_PLUGIN_NAME = 'Comfy Commander';
 const COMFY_COMMANDER_DEFAULT_BASE_URL = 'http://127.0.0.1:8188';

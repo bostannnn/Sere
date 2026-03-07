@@ -6,7 +6,8 @@ import { encode as encodeMsgpack, decode as decodeMsgpack } from 'msgpackr/index
 import * as fflate from 'fflate';
 import { defaultJailbreak, defaultMainPrompt } from './defaultPrompts';
 import { migrateRemovedProviderSelections } from './database.normalizers';
-import type { AINsettings, Database, botPreset, OobaSettings, PromptItem } from './database.svelte';
+import type { PromptItem } from '../process/prompt';
+import type { AINsettings, Database, botPreset, OobaSettings } from './database.types';
 
 export const REMOVED_PROVIDER_MIGRATION_NOTICE = 'Legacy removed providers were migrated to OpenRouter. Review Bot Settings and re-save any affected presets.';
 
