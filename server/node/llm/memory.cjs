@@ -202,7 +202,35 @@ function convertStoredMessageToOpenAI(message) {
     };
 }
 
-function buildSummarizationPromptMessages(sourceMessages, promptTemplate) {
+function resolvePromptUserName(settings, chat) {
+    const personas = Array.isArray(settings?.personas) ? settings.personas : [];
+    const boundPersonaId = toStringOrEmpty(chat?.bindedPersona).trim();
+    if (boundPersonaId) {
+        const persona = personas.find((item) => {
+            if (!item || typeof item !== 'object') return false;
+            return toStringOrEmpty(item.id).trim() === boundPersonaId;
+        });
+        const personaName = toStringOrEmpty(persona?.name).trim();
+        if (personaName) return personaName;
+    }
+    return toStringOrEmpty(settings?.username).trim() || 'User';
+}
+
+function applySummarizationPromptVars(promptTemplate, context = {}) {
+    const template = toStringOrEmpty(promptTemplate);
+    if (!template) return '';
+    const charName = toStringOrEmpty(context?.character?.nickname).trim()
+        || toStringOrEmpty(context?.character?.name).trim()
+        || 'Character';
+    const userName = resolvePromptUserName(context?.settings, context?.chat);
+    return template
+        .replace(/<(?:char|bot)>/gi, charName)
+        .replace(/<user>/gi, userName)
+        .replace(/\{\{\s*char\s*\}\}/gi, charName)
+        .replace(/\{\{\s*user\s*\}\}/gi, userName);
+}
+
+function buildSummarizationPromptMessages(sourceMessages, promptTemplate, context = {}) {
     const cleaned = sourceMessages
         .filter((msg) => msg && typeof msg === 'object')
         .map((msg) => `${msg.role}: ${toStringOrEmpty(msg.content)}`.trim())
@@ -210,7 +238,10 @@ function buildSummarizationPromptMessages(sourceMessages, promptTemplate) {
     const strMessages = cleaned.join('\n');
     if (!strMessages) return null;
 
-    const template = toStringOrEmpty(promptTemplate).trim() || DEFAULT_SUMMARIZATION_PROMPT;
+    const template = applySummarizationPromptVars(
+        toStringOrEmpty(promptTemplate).trim() || DEFAULT_SUMMARIZATION_PROMPT,
+        context
+    );
 
     if (template.includes('{{slot}}')) {
         // Template embeds the chat content via {{slot}} — use the combined result
@@ -355,7 +386,8 @@ function planPeriodicHypaV3Summarization(arg = {}) {
 
     const promptMessages = buildSummarizationPromptMessages(
         summarizable,
-        hypaSettings.summarizationPrompt
+        hypaSettings.summarizationPrompt,
+        { character, settings, chat }
     );
     if (!promptMessages) {
         return {

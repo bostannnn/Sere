@@ -153,7 +153,8 @@ function registerHypaV3ManualRoutes(arg = {}) {
             const promptMessages = buildHypaSummarizationPromptMessages(
                 summarizable,
                 hypaSettings.summarizationPrompt,
-                false
+                false,
+                { character: characterForRequest, settings, chat }
             );
             if (!promptMessages) throw new LLMHttpError(400, 'EMPTY_PROMPT_MESSAGES', 'Failed to build summarization prompt.');
             promptMessagesForTrace = promptMessages;

@@ -57,6 +57,46 @@ describe("hypav3 periodic summarization runtime gating", () => {
     expect(plan.summarizable.length).toBe(2);
   });
 
+  it("maps {{char}}/{{user}} in periodic prompt to character/persona names", () => {
+    const plan = planPeriodicHypaV3Summarization({
+      character: {
+        supaMemory: true,
+        name: "Eva",
+      },
+      settings: {
+        ...baseSettings,
+        username: "FallbackUser",
+        personas: [{ id: "persona-1", name: "Bound Persona" }],
+        hypaV3Presets: [
+          {
+            name: "Default",
+            settings: {
+              periodicSummarizationEnabled: true,
+              periodicSummarizationInterval: 2,
+              summarizationPrompt: "Track {{char}} with {{user}}",
+              reSummarizationPrompt: "",
+              doNotSummarizeUserMessage: false,
+            },
+          },
+        ],
+      },
+      chat: {
+        bindedPersona: "persona-1",
+        message: [
+          { role: "user", data: "Hello", chatId: "m1" },
+          { role: "char", data: "Hi", chatId: "m2" },
+        ],
+        hypaV3Data: {
+          summaries: [],
+          lastSummarizedMessageIndex: 0,
+        },
+      },
+    });
+
+    expect(plan.shouldRun).toBe(true);
+    expect(plan.promptMessages?.[1]?.content).toBe("Track Eva with Bound Persona");
+  });
+
   it("keeps character-level memory toggle as the hard gate", () => {
     const plan = planPeriodicHypaV3Summarization({
       character: {
