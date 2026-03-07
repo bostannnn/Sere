@@ -194,36 +194,219 @@
     }
 
     const tokens = $state({
+        name: 0,
+        systemPrompt: 0,
         desc: 0,
+        personality: 0,
+        replaceGlobalNote: 0,
         firstMsg: 0,
+        scenario: 0,
+        bias: [] as number[],
+        exampleMessage: 0,
+        creatorNotes: 0,
+        additionalText: 0,
+        defaultVariables: 0,
+        translatorNote: 0,
+        creator: 0,
+        charVersion: 0,
+        nickname: 0,
+        depthPrompt: 0,
         localNote: 0,
-        charaNote: 0
+        charaNote: 0,
+        altGreetings: [] as number[],
     })
 
     const lasttokens = {
+        name: '',
+        systemPrompt: '',
         desc: '',
+        personality: '',
+        replaceGlobalNote: '',
         firstMsg: '',
+        scenario: '',
+        bias: [] as string[],
+        exampleMessage: '',
+        creatorNotes: '',
+        additionalText: '',
+        defaultVariables: '',
+        translatorNote: '',
+        creator: '',
+        charVersion: '',
+        nickname: '',
+        depthPrompt: '',
         localNote: '',
-        charaNote: ''
+        charaNote: '',
+        altGreetings: [] as string[],
     }
 
-    async function loadTokenize(
-        desc: string | null,
-        firstMsg: string | null,
-        localNote: string
+    type TokenScalarField =
+        | 'name'
+        | 'systemPrompt'
+        | 'desc'
+        | 'personality'
+        | 'replaceGlobalNote'
+        | 'firstMsg'
+        | 'scenario'
+        | 'exampleMessage'
+        | 'creatorNotes'
+        | 'additionalText'
+        | 'defaultVariables'
+        | 'translatorNote'
+        | 'creator'
+        | 'charVersion'
+        | 'nickname'
+        | 'depthPrompt'
+        | 'localNote'
+
+    const TOKEN_CACHE_LIMIT = 500
+    const tokenCache = new Map<string, number>()
+    let tokenizeRunId = 0
+
+    function getCachedTokenCount(value:string):number|null {
+        const cached = tokenCache.get(value)
+        if (cached === undefined) {
+            return null
+        }
+        // Refresh insertion order for simple LRU behavior.
+        tokenCache.delete(value)
+        tokenCache.set(value, cached)
+        return cached
+    }
+
+    function setCachedTokenCount(value:string, count:number) {
+        if (tokenCache.has(value)) {
+            tokenCache.delete(value)
+        }
+        tokenCache.set(value, count)
+        if (tokenCache.size > TOKEN_CACHE_LIMIT) {
+            const oldestKey = tokenCache.keys().next().value
+            if (typeof oldestKey === 'string') {
+                tokenCache.delete(oldestKey)
+            }
+        }
+    }
+
+    async function tokenizeScalarField(
+        field: TokenScalarField,
+        value:string,
+        runId:number,
     ) {
-        if (desc !== null && lasttokens.desc !== desc) {
-            lasttokens.desc = desc
-            tokens.desc = await tokenizeAccurate(desc)
+        if (lasttokens[field] === value) {
+            return
         }
-        if (firstMsg !== null && lasttokens.firstMsg !== firstMsg) {
-            lasttokens.firstMsg = firstMsg
-            tokens.firstMsg = await tokenizeAccurate(firstMsg)
+        lasttokens[field] = value
+
+        const cached = getCachedTokenCount(value)
+        if (cached !== null) {
+            if (runId === tokenizeRunId && lasttokens[field] === value) {
+                tokens[field] = cached
+            }
+            return
         }
-        if (lasttokens.localNote !== localNote) {
-            lasttokens.localNote = localNote
-            tokens.localNote = await tokenizeAccurate(localNote)
+
+        const count = await tokenizeAccurate(value)
+        setCachedTokenCount(value, count)
+        if (runId !== tokenizeRunId) {
+            return
         }
+        if (lasttokens[field] !== value) {
+            return
+        }
+        tokens[field] = count
+    }
+
+    async function tokenizeIndexedField(
+        field: 'altGreetings' | 'bias',
+        index: number,
+        value: string,
+        runId: number,
+    ) {
+        if (lasttokens[field][index] === value) {
+            return
+        }
+        lasttokens[field][index] = value
+
+        const cached = getCachedTokenCount(value)
+        if (cached !== null) {
+            if (runId === tokenizeRunId && lasttokens[field][index] === value) {
+                tokens[field][index] = cached
+            }
+            return
+        }
+
+        const count = await tokenizeAccurate(value)
+        setCachedTokenCount(value, count)
+        if (runId !== tokenizeRunId) {
+            return
+        }
+        if (lasttokens[field][index] !== value) {
+            return
+        }
+        tokens[field][index] = count
+    }
+
+    async function loadTokenize(chara: character | groupChat | undefined, runId:number) {
+        if (!chara) {
+            return
+        }
+
+        const jobs: Promise<void>[] = []
+        jobs.push(tokenizeScalarField('name', chara.name ?? '', runId))
+
+        if (chara.type !== 'group') {
+            jobs.push(tokenizeScalarField('systemPrompt', chara.systemPrompt ?? '', runId))
+            jobs.push(tokenizeScalarField('desc', chara.desc ?? '', runId))
+            jobs.push(tokenizeScalarField('personality', chara.personality ?? '', runId))
+            jobs.push(tokenizeScalarField('replaceGlobalNote', chara.replaceGlobalNote ?? '', runId))
+            jobs.push(tokenizeScalarField('firstMsg', chara.firstMessage ?? '', runId))
+            jobs.push(tokenizeScalarField('scenario', chara.scenario ?? '', runId))
+            jobs.push(tokenizeScalarField('exampleMessage', chara.exampleMessage ?? '', runId))
+            jobs.push(tokenizeScalarField('creatorNotes', chara.creatorNotes ?? '', runId))
+            jobs.push(tokenizeScalarField('additionalText', chara.additionalText ?? '', runId))
+            jobs.push(tokenizeScalarField('defaultVariables', chara.defaultVariables ?? '', runId))
+            jobs.push(tokenizeScalarField('translatorNote', chara.translatorNote ?? '', runId))
+            jobs.push(tokenizeScalarField('creator', chara.additionalData?.creator ?? '', runId))
+            jobs.push(tokenizeScalarField('charVersion', chara.additionalData?.character_version ?? '', runId))
+            jobs.push(tokenizeScalarField('nickname', chara.nickname ?? '', runId))
+            jobs.push(tokenizeScalarField('depthPrompt', chara.depth_prompt?.prompt ?? '', runId))
+
+            const altGreetings = Array.isArray(chara.alternateGreetings) ? chara.alternateGreetings : []
+            if (tokens.altGreetings.length !== altGreetings.length) {
+                tokens.altGreetings = tokens.altGreetings.slice(0, altGreetings.length)
+            }
+            if (lasttokens.altGreetings.length !== altGreetings.length) {
+                lasttokens.altGreetings = lasttokens.altGreetings.slice(0, altGreetings.length)
+            }
+            for (let i = 0; i < altGreetings.length; i++) {
+                const altGreeting = altGreetings[i] ?? ''
+                jobs.push(tokenizeIndexedField('altGreetings', i, altGreeting, runId))
+            }
+
+            const biasKeywords = Array.isArray(chara.bias) ? chara.bias.map((entry) => entry?.[0] ?? '') : []
+            if (tokens.bias.length !== biasKeywords.length) {
+                tokens.bias = tokens.bias.slice(0, biasKeywords.length)
+            }
+            if (lasttokens.bias.length !== biasKeywords.length) {
+                lasttokens.bias = lasttokens.bias.slice(0, biasKeywords.length)
+            }
+            for (let i = 0; i < biasKeywords.length; i++) {
+                jobs.push(tokenizeIndexedField('bias', i, biasKeywords[i], runId))
+            }
+        } else {
+            if (tokens.altGreetings.length > 0) {
+                tokens.altGreetings = []
+                lasttokens.altGreetings = []
+            }
+            if (tokens.bias.length > 0) {
+                tokens.bias = []
+                lasttokens.bias = []
+            }
+        }
+
+        const localNote = chara.chats?.[chara.chatPage]?.note ?? ''
+        jobs.push(tokenizeScalarField('localNote', localNote, runId))
+
+        await Promise.all(jobs)
     }
 
 
@@ -381,15 +564,9 @@
 
     $effect(() => {
         const chara = DBState.db.characters[$selectedCharID]
-        if(!chara){
-            return
-        }
-        const desc = chara.type !== 'group' ? (chara as character).desc : null
-        const firstMsg = chara.type !== 'group' ? chara.firstMessage : null
-        const localNote = chara.chats?.[chara.chatPage]?.note ?? ''
-
+        const runId = ++tokenizeRunId
         untrack(() => {
-            loadTokenize(desc, firstMsg, localNote)
+            void loadTokenize(chara, runId)
         })
     });
 
@@ -723,15 +900,19 @@
     <div class="char-config-section" role="tabpanel" id="char-config-panel-0" aria-labelledby="char-config-tab-0" tabindex="0">
     {#if DBState.db.characters[$selectedCharID]!.type !== 'group' && licensed !== 'private'}
         <TextInput size="xl" placeholder="Character Name" bind:value={DBState.db.characters[$selectedCharID]!.name} />
+        <span class="char-config-token-note">{tokens.name} {language.tokens}</span>
         <span class="char-config-label">{language.systemPrompt} <Help key="systemPrompt"/></span>
         <TextAreaInput highlight margin="both" autocomplete="off" bind:value={DBState.db.characters[$selectedCharID]!.systemPrompt}></TextAreaInput>
+        <span class="char-config-token-note">{tokens.systemPrompt} {language.tokens}</span>
         <span class="char-config-label">{language.description} <Help key="charDesc"/></span>
         <TextAreaInput highlight margin="both" autocomplete="off" bind:value={editorCharacter!.desc}></TextAreaInput>
         <span class="char-config-token-note">{tokens.desc} {language.tokens}</span>
         <span class="char-config-label">{language.personality} <Help key="personality" unrecommended/></span>
         <TextAreaInput highlight margin="both" autocomplete="off" bind:value={DBState.db.characters[$selectedCharID]!.personality}></TextAreaInput>
+        <span class="char-config-token-note">{tokens.personality} {language.tokens}</span>
         <span class="char-config-label">{language.replaceGlobalNote} <Help key="replaceGlobalNote"/></span>
         <TextAreaInput highlight margin="both" autocomplete="off" bind:value={DBState.db.characters[$selectedCharID]!.replaceGlobalNote}></TextAreaInput>
+        <span class="char-config-token-note">{tokens.replaceGlobalNote} {language.tokens}</span>
         <span class="char-config-label">{language.firstMessage} <Help key="charFirstMessage"/></span>
         <TextAreaInput highlight margin="both" autocomplete="off" bind:value={DBState.db.characters[$selectedCharID]!.firstMessage}></TextAreaInput>
         <span class="char-config-token-note">{tokens.firstMsg} {language.tokens}</span>
@@ -763,6 +944,7 @@
                     <tr>
                         <td class="char-config-table-value-cell">
                             <TextAreaInput highlight bind:value={DBState.db.characters[$selectedCharID]!.alternateGreetings[i]} placeholder="..." fullwidth />
+                            <span class="char-config-token-note">{tokens.altGreetings[i] ?? 0} {language.tokens}</span>
                         </td>
                         <th class="char-config-table-action-cell">
                             <div class="char-config-altgreet-actions action-rail">
@@ -796,9 +978,11 @@
 
         <span class="char-config-label">{language.scenario} <Help key="scenario" unrecommended/></span>
         <TextAreaInput highlight margin="both" autocomplete="off" bind:value={DBState.db.characters[$selectedCharID]!.scenario}></TextAreaInput>
+        <span class="char-config-token-note">{tokens.scenario} {language.tokens}</span>
 
     {:else if licensed !== 'private' && DBState.db.characters[$selectedCharID]!.type === 'group'}
         <TextInput size="xl" placeholder="Group Name" bind:value={DBState.db.characters[$selectedCharID]!.name} />
+        <span class="char-config-token-note">{tokens.name} {language.tokens}</span>
         <span class="char-config-label">{language.character}</span>
         <div class="char-config-group-grid char-config-group-layout panel-shell">
             {#if (DBState.db.characters[$selectedCharID]! as groupChat).characters.length === 0}
@@ -1583,13 +1767,14 @@
 
                 </tr>
             {/if}
-            {#each editorCharacter!.bias as _bias, i (i)}
-                <tr class="char-config-table-center-row">
-                    <td class="char-config-table-value-cell">
-                        <TextInput fullh fullwidth bind:value={editorCharacter!.bias[i][0]} placeholder="string" />
-                    </td> 
-                    <td class="char-config-table-value-cell">
-                        <NumberInput fullh fullwidth bind:value={editorCharacter!.bias[i][1]} max={100} min={-100} />
+                {#each editorCharacter!.bias as _bias, i (i)}
+                    <tr class="char-config-table-center-row">
+                        <td class="char-config-table-value-cell">
+                            <TextInput fullh fullwidth bind:value={editorCharacter!.bias[i][0]} placeholder="string" />
+                            <span class="char-config-token-note">{tokens.bias[i] ?? 0} {language.tokens}</span>
+                        </td> 
+                        <td class="char-config-table-value-cell">
+                            <NumberInput fullh fullwidth bind:value={editorCharacter!.bias[i][1]} max={100} min={-100} />
                     </td>
                     <td class="char-config-table-action-cell">
                         <button class="char-config-icon-action icon-btn icon-btn--sm char-config-icon-action--success" onclick={() => {
@@ -1607,35 +1792,44 @@
 
         <span class="char-config-label">{language.exampleMessage} <Help key="exampleMessage"/></span>
         <TextAreaInput highlight margin="both" autocomplete="off" bind:value={DBState.db.characters[$selectedCharID]!.exampleMessage}></TextAreaInput>
+        <span class="char-config-token-note">{tokens.exampleMessage} {language.tokens}</span>
 
         <span class="char-config-label">{language.creatorNotes} <Help key="creatorQuotes"/></span>
         <MultiLangInput bind:value={DBState.db.characters[$selectedCharID]!.creatorNotes} className="char-config-control" onInput={() => {
             DBState.db.characters[$selectedCharID]!.removedQuotes = false
         }}></MultiLangInput>
+        <span class="char-config-token-note">{tokens.creatorNotes} {language.tokens}</span>
 
         <span class="char-config-label">{language.additionalText} <Help key="additionalText" /></span>
         <TextAreaInput highlight margin="both" autocomplete="off" bind:value={DBState.db.characters[$selectedCharID]!.additionalText}></TextAreaInput>
+        <span class="char-config-token-note">{tokens.additionalText} {language.tokens}</span>
 
         <span class="char-config-label">{language.defaultVariables} <Help key="defaultVariables" /></span>
         <TextAreaInput margin="both" autocomplete="off" bind:value={editorCharacter!.defaultVariables}></TextAreaInput>
+        <span class="char-config-token-note">{tokens.defaultVariables} {language.tokens}</span>
 
         <span class="char-config-label">{language.translatorNote} <Help key="translatorNote" /></span>
         <TextAreaInput margin="both" autocomplete="off" bind:value={editorCharacter!.translatorNote}></TextAreaInput>
+        <span class="char-config-token-note">{tokens.translatorNote} {language.tokens}</span>
 
         <span class="char-config-label">{language.creator}</span>
         <TextInput size="sm" autocomplete="off" bind:value={editorCharacter!.additionalData.creator} />
+        <span class="char-config-token-note">{tokens.creator} {language.tokens}</span>
 
         <span class="char-config-label">{language.CharVersion}</span>
         <TextInput size="sm" bind:value={editorCharacter!.additionalData.character_version}/>
+        <span class="char-config-token-note">{tokens.charVersion} {language.tokens}</span>
 
         <span class="char-config-label">{language.nickname} <Help key="nickname" /></span>
         <TextInput size="sm" bind:value={editorCharacter!.nickname}/>
+        <span class="char-config-token-note">{tokens.nickname} {language.tokens}</span>
 
         <span class="char-config-label">{language.depthPrompt}</span>
         <div class="char-config-depth-row">
             <NumberInput size="sm" bind:value={editorCharacter!.depth_prompt.depth} className="char-config-control char-config-depth-number"/>
             <TextInput size="sm" bind:value={editorCharacter!.depth_prompt.prompt} className="char-config-control char-config-depth-text"/>
         </div>
+        <span class="char-config-token-note">{tokens.depthPrompt} {language.tokens}</span>
 
         <div class="char-config-check-row">
             <Check bind:check={DBState.db.characters[$selectedCharID]!.lowLevelAccess} name={language.lowLevelAccess}/>
