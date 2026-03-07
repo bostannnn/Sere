@@ -123,9 +123,6 @@ async function previewAnthropicExecution(input, ctx = {}) {
         url: built.url,
         body: built.body,
         headers: sanitizeHeaders(built.headers),
-        warnings: [
-            'Phase B1: prompt assembly is still client-side; upstream execution and auth are server-side.',
-        ],
     };
 }
 

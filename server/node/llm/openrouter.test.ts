@@ -124,4 +124,31 @@ describe("openrouter execute response shaping", () => {
             await fs.rm(dataRoot, { recursive: true, force: true });
         }
     });
+
+    it("serves stale cached models when the OpenRouter key is missing", async () => {
+        const dataRoot = await fs.mkdtemp(path.join(os.tmpdir(), "risu-openrouter-cache-test-"));
+        const settingsPath = path.join(dataRoot, "settings.json");
+        const cachePath = path.join(dataRoot, "logs", "openrouter-models-cache.json");
+        await fs.writeFile(settingsPath, JSON.stringify({ data: {} }), "utf-8");
+        await fs.mkdir(path.dirname(cachePath), { recursive: true });
+        await fs.writeFile(cachePath, JSON.stringify({
+            models: [{ id: "openai/gpt-4o-mini", name: "GPT-4o Mini - Free", price: 0, context_length: 128000 }],
+            updatedAt: "2026-03-01T00:00:00.000Z",
+        }), "utf-8");
+
+        try {
+            const { listOpenRouterModels } = await import("./openrouter.cjs");
+            const models = await listOpenRouterModels({ dataRoot, forceRefresh: true });
+            expect(Array.isArray(models?.models)).toBe(true);
+            expect(models?.stale).toBe(true);
+            expect(models?.source).toBe("cache");
+            expect(models?.error).toMatchObject({
+                code: "OPENROUTER_KEY_MISSING",
+                status: 400,
+            });
+            expect(models?.models?.[0]?.id).toBe("openai/gpt-4o-mini");
+        } finally {
+            await fs.rm(dataRoot, { recursive: true, force: true });
+        }
+    });
 });

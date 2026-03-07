@@ -276,6 +276,34 @@ function createExecuteRouteHandler(arg = {}) {
         });
     }
 
+    function applySSEHeaders(res) {
+        res.status(200);
+        res.setHeader('Content-Type', 'text/event-stream');
+        res.setHeader('Cache-Control', 'no-cache');
+        res.setHeader('Connection', 'keep-alive');
+        res.setHeader('X-Accel-Buffering', 'no');
+    }
+
+    async function updateGameStateAndReadEtagSafely(characterId, text) {
+        if (!characterId || !text) {
+            return null;
+        }
+
+        try {
+            await updateGameStateFromMessage(characterId, text);
+        } catch (error) {
+            console.warn(`[LLMAPI] Failed to update game state for ${characterId}:`, error);
+        }
+
+        try {
+            const charPath = path.join(dataDirs.characters, characterId, 'character.json');
+            const { etag } = await readJsonWithEtag(charPath);
+            return etag;
+        } catch {
+            return null;
+        }
+    }
+
     async function handleLLMExecutePost(req, res, requestBody, endpointName = 'execute') {
         const startedAt = Date.now();
         const reqId = getReqIdFromResponse(res);
@@ -320,10 +348,7 @@ function createExecuteRouteHandler(arg = {}) {
             const result = await executeLLM(normalized, { dataRoot: arg.dataRoot });
 
             if (normalized.streaming && result && typeof result.getReader === 'function') {
-                res.status(200);
-                res.setHeader('Content-Type', 'text/event-stream');
-                res.setHeader('Cache-Control', 'no-cache');
-                res.setHeader('Connection', 'keep-alive');
+                applySSEHeaders(res);
 
                 const reader = result.getReader();
                 const decoder = new TextDecoder();
@@ -518,28 +543,8 @@ function createExecuteRouteHandler(arg = {}) {
                         allowReasoningOnly: allowReasoningOnlyOutput,
                     });
 
+                    const newCharEtag = await updateGameStateAndReadEtagSafely(normalized.characterId, fullText);
                     const durationMs = Date.now() - startedAt;
-                    logLLMExecutionEnd({
-                        reqId,
-                        endpoint: normalized.endpoint,
-                        mode: normalized.mode,
-                        provider: normalized.provider,
-                        characterId: normalized.characterId,
-                        chatId: normalized.chatId,
-                        status: 200,
-                        code: 'OK',
-                        durationMs,
-                    });
-
-                    let newCharEtag = null;
-                    if (normalized.characterId && fullText) {
-                        await updateGameStateFromMessage(normalized.characterId, fullText);
-                        try {
-                            const charPath = path.join(dataDirs.characters, normalized.characterId, 'character.json');
-                            const { etag } = await readJsonWithEtag(charPath);
-                            newCharEtag = etag;
-                        } catch {}
-                    }
 
                     await appendLLMAudit({
                         requestId: reqId,
@@ -572,6 +577,18 @@ function createExecuteRouteHandler(arg = {}) {
                         durationMs,
                         status: 200,
                         ok: true,
+                    });
+
+                    logLLMExecutionEnd({
+                        reqId,
+                        endpoint: normalized.endpoint,
+                        mode: normalized.mode,
+                        provider: normalized.provider,
+                        characterId: normalized.characterId,
+                        chatId: normalized.chatId,
+                        status: 200,
+                        code: 'OK',
+                        durationMs,
                     });
 
                     await writeSSEEvent({ type: 'done', newCharEtag });
@@ -669,19 +686,6 @@ function createExecuteRouteHandler(arg = {}) {
                 return;
             }
 
-            const durationMs = Date.now() - startedAt;
-            logLLMExecutionEnd({
-                reqId,
-                endpoint: normalized.endpoint,
-                mode: normalized.mode,
-                provider: normalized.provider,
-                characterId: normalized.characterId,
-                chatId: normalized.chatId,
-                status: 200,
-                code: 'OK',
-                durationMs,
-            });
-
             const executionResult = (result && typeof result === 'object') ? result : null;
             const responseText =
                 typeof executionResult?.result === 'string'
@@ -710,17 +714,10 @@ function createExecuteRouteHandler(arg = {}) {
                 ...(responseModel ? { model: responseModel } : {}),
             };
 
-            let newCharEtag = null;
-            if (normalized.characterId && sanitizedResponseText) {
-                await updateGameStateFromMessage(normalized.characterId, sanitizedResponseText);
-                try {
-                    const charPath = path.join(dataDirs.characters, normalized.characterId, 'character.json');
-                    const { etag } = await readJsonWithEtag(charPath);
-                    newCharEtag = etag;
-                } catch {}
-            }
+            const newCharEtag = await updateGameStateAndReadEtagSafely(normalized.characterId, sanitizedResponseText);
 
             successPayload.newCharEtag = newCharEtag;
+            const durationMs = Date.now() - startedAt;
 
             await appendLLMAudit({
                 requestId: reqId,
@@ -750,11 +747,20 @@ function createExecuteRouteHandler(arg = {}) {
                 ok: true,
             });
 
+            logLLMExecutionEnd({
+                reqId,
+                endpoint: normalized.endpoint,
+                mode: normalized.mode,
+                provider: normalized.provider,
+                characterId: normalized.characterId,
+                chatId: normalized.chatId,
+                status: 200,
+                code: 'OK',
+                durationMs,
+            });
+
             if (normalized.requestedStreaming) {
-                res.status(200);
-                res.setHeader('Content-Type', 'text/event-stream');
-                res.setHeader('Cache-Control', 'no-cache');
-                res.setHeader('Connection', 'keep-alive');
+                applySSEHeaders(res);
                 let clientDisconnected = false;
                 const markClientDisconnected = () => {
                     clientDisconnected = true;

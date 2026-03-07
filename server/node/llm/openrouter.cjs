@@ -301,6 +301,22 @@ async function listOpenRouterModels(ctx = {}) {
     const settings = await loadServerSettings(ctx.dataRoot);
     const apiKey = typeof settings?.openrouterKey === 'string' ? settings.openrouterKey.trim() : '';
     if (!apiKey) {
+        const cached = await readModelsCache(ctx.dataRoot);
+        if (cached && Array.isArray(cached.models) && cached.models.length > 0) {
+            const stalePayload = {
+                models: cached.models,
+                stale: true,
+                source: 'cache',
+                updatedAt: cached.updatedAt || null,
+                error: {
+                    code: 'OPENROUTER_KEY_MISSING',
+                    status: 400,
+                    message: 'OpenRouter key is not configured on server settings.',
+                },
+            };
+            setMemoryModelsCache(ctx.dataRoot, stalePayload);
+            return stalePayload;
+        }
         throw new LLMHttpError(400, 'OPENROUTER_KEY_MISSING', 'OpenRouter key is not configured on server settings.');
     }
 
@@ -459,9 +475,6 @@ async function previewOpenRouterExecution(input, ctx = {}) {
         url: built.url,
         body: built.body,
         headers: sanitizeHeaders(built.headers),
-        warnings: [
-            'Phase B1: prompt assembly is still client-side; upstream execution and auth are server-side.',
-        ],
     };
 }
 

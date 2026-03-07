@@ -361,6 +361,76 @@ describe("generate_helpers", () => {
     expect(applyStateCommands.mock.calls.filter((entry) => entry?.[0]?.[0]?.type === "chat.message.append").length).toBe(1);
   });
 
+  it("refreshes the latest chat snapshot after stale duplicate user-message conflict before prompt assembly", async () => {
+    const { dataRoot, characterId, chatId } = await createDataRoot();
+    cleanup.push(dataRoot);
+    const chatPath = path.join(dataRoot, "characters", characterId, "chats", `${chatId}.json`);
+    let appendAttempts = 0;
+    const applyStateCommands = vi.fn(async (commands: Record<string, unknown>[]) => {
+      const command = commands[0] || {};
+      if (command.type !== "chat.message.append") {
+        return { ok: true, lastEventId: 16, applied: [], conflicts: [] };
+      }
+      appendAttempts += 1;
+      if (appendAttempts === 1) {
+        await writeFile(
+          chatPath,
+          JSON.stringify({
+            chat: {
+              id: chatId,
+              name: "Chat A",
+              message: [
+                { role: "assistant", data: "other device context" },
+                { role: "user", data: "fresh user message" },
+              ],
+              hypaV3Data: {
+                summaries: [{ text: "s1", chatMemos: [] }],
+                metrics: { concurrent: true },
+                lastSummarizedMessageIndex: 0,
+              },
+            },
+          }),
+          "utf-8",
+        );
+        const staleError = new Error("stale");
+        (staleError as Error & { result?: unknown }).result = {
+          ok: false,
+          conflicts: [{ code: "STALE_BASE_EVENT" }],
+        };
+        throw staleError;
+      }
+      return { ok: true, lastEventId: 17, applied: [], conflicts: [] };
+    });
+
+    const helpers = createHelpersHarness({
+      dataRoot,
+      extractLatestUserMessage: () => "fresh user message",
+      buildGeneratePromptMessages: async (payload) => {
+        const chat = (payload.chat || {}) as { message?: Array<Record<string, unknown>>; hypaV3Data?: Record<string, unknown> };
+        expect(Array.isArray(chat.message)).toBe(true);
+        expect(chat.message?.[0]?.data).toBe("other device context");
+        expect(chat.message?.[1]?.data).toBe("fresh user message");
+        expect((chat.hypaV3Data || {}).metrics).toMatchObject({ concurrent: true });
+        return {
+          messages: [{ role: "user", content: "fresh user message" }],
+          promptBlocks: [],
+        };
+      },
+      applyStateCommands,
+      readStateLastEventId: async () => 18,
+    });
+
+    await helpers.buildGenerateExecutionPayload({
+      characterId,
+      chatId,
+      userMessage: "fresh user message",
+      streaming: false,
+      request: { requestBody: {} },
+    });
+
+    expect(appendAttempts).toBe(1);
+  });
+
   it("skips hypa chat.replace when hypa data is unchanged", async () => {
     const { dataRoot, characterId, chatId } = await createDataRoot();
     cleanup.push(dataRoot);

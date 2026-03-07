@@ -26,6 +26,10 @@ function registerLLMRoutes(arg = {}) {
         throw new Error('registerLLMRoutes requires an Express app instance.');
     }
 
+    const truncatePromptMessagesForAudit = typeof promptPipeline?.truncatePromptMessagesForAudit === 'function'
+        ? promptPipeline.truncatePromptMessagesForAudit.bind(promptPipeline)
+        : ((messages) => ({ promptMessages: Array.isArray(messages) ? messages : [], omittedMessageCount: 0 }));
+
     app.post('/data/llm/execute', async (req, res) => {
         await handleLLMExecutePost(req, res, req.body, 'execute');
     });
@@ -234,6 +238,10 @@ function registerLLMRoutes(arg = {}) {
             await assembleLLMServerPrompt(payload, { dataRoot });
             const promptMessages = promptPipeline.buildPromptTrace(payload);
             const durationMs = Date.now() - startedAt;
+            const {
+                promptMessages: promptMessagesForAudit,
+                omittedMessageCount,
+            } = truncatePromptMessagesForAudit(promptMessages);
 
             const responsePayload = {
                 type: 'success',
@@ -241,6 +249,14 @@ function registerLLMRoutes(arg = {}) {
                 endpoint: 'generate_trace',
                 messageCount: promptMessages.length,
                 promptMessages,
+            };
+            const auditResponsePayload = {
+                ...responsePayload,
+                promptMessages: promptMessagesForAudit,
+                truncatedForAudit: promptMessagesForAudit.length !== promptMessages.length
+                    || omittedMessageCount > 0
+                    || promptMessagesForAudit.some((msg) => msg?.contentTruncated === true),
+                omittedMessageCount,
             };
 
             logLLMExecutionEnd({
@@ -268,7 +284,7 @@ function registerLLMRoutes(arg = {}) {
                 ok: true,
                 durationMs,
                 request: buildExecutionAuditRequest('generate', req.body),
-                response: responsePayload,
+                response: auditResponsePayload,
             });
             sendJson(res, 200, responsePayload);
         } catch (error) {

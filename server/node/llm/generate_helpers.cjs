@@ -228,7 +228,10 @@ function createGenerateHelpers(arg = {}) {
         }
         const normalizedUserMessage = toStringOrEmpty(userMessage);
         if (!normalizedUserMessage) {
-            return false;
+            return {
+                appended: false,
+                chat: null,
+            };
         }
         if (typeof applyStateCommands !== 'function') {
             throw new LLMHttpError(
@@ -249,7 +252,11 @@ function createGenerateHelpers(arg = {}) {
                         message: messagePayload,
                     },
                 ], source, { baseEventId });
-                return true;
+                const latestRaw = await readJsonFileWithRetry(resolvedChatPath);
+                return {
+                    appended: true,
+                    chat: toStoredChatObject(latestRaw),
+                };
             } catch (error) {
                 if (!isStaleBaseConflict(error) || attempt >= 1) {
                     throw error;
@@ -257,11 +264,17 @@ function createGenerateHelpers(arg = {}) {
                 const latestRaw = await readJsonFileWithRetry(resolvedChatPath);
                 const latestChat = toStoredChatObject(latestRaw);
                 if (isEquivalentTailUserMessage(latestChat, normalizedUserMessage)) {
-                    return false;
+                    return {
+                        appended: false,
+                        chat: latestChat,
+                    };
                 }
             }
         }
-        return false;
+        return {
+            appended: false,
+            chat: null,
+        };
     }
 
     async function persistHypaDataWithRetry({
@@ -539,24 +552,29 @@ function createGenerateHelpers(arg = {}) {
         const charRaw = await readJsonFileWithRetry(charPath);
         const chatRaw = await readJsonFileWithRetry(chatPath);
         const character = charRaw.character || charRaw.data || charRaw || {};
-        const chat = chatRaw.chat || chatRaw.data || chatRaw || {};
+        let chat = chatRaw.chat || chatRaw.data || chatRaw || {};
         const baselineHypaV3Data = safeJsonClone(chat.hypaV3Data, null);
 
         // Hard invariant: user message must be durable before generation.
         if (!readOnlyTrace && !rawBody.continue && toStringOrEmpty(userMessage)) {
             if (!isEquivalentTailUserMessage(chat, userMessage)) {
                 try {
-                    const appended = await appendUserMessageWithRetry({
+                    const appendResult = await appendUserMessageWithRetry({
                         characterId,
                         chatId,
                         chatPath,
                         userMessage,
                         source: 'llm.generate.user-message',
                     });
-                    if (appended) {
+                    if (appendResult?.chat && typeof appendResult.chat === 'object') {
+                        chat = appendResult.chat;
+                    }
+                    if (appendResult?.appended) {
                         const messages = Array.isArray(chat.message) ? chat.message : [];
-                        messages.push(buildStoredUserMessage(userMessage));
-                        chat.message = messages;
+                        if (!isEquivalentTailUserMessage(chat, userMessage)) {
+                            messages.push(buildStoredUserMessage(userMessage));
+                            chat.message = messages;
+                        }
                     }
                 } catch (persistError) {
                     throw new LLMHttpError(

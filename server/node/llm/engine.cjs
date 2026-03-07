@@ -43,6 +43,22 @@ function shiftPromptBlockIndices(promptBlocks, startIndex, delta) {
     }
 }
 
+function getExecutionRequestPayload(input) {
+    let current = input && typeof input === 'object' && !Array.isArray(input) ? input : null;
+    let depth = 0;
+    while (
+        current &&
+        typeof current.request === 'object' &&
+        current.request &&
+        !Array.isArray(current.request) &&
+        depth < 4
+    ) {
+        current = current.request;
+        depth += 1;
+    }
+    return current && typeof current === 'object' && !Array.isArray(current) ? current : {};
+}
+
 function parseExecutionInput(body, arg = {}) {
     const endpoint = arg.endpoint || 'execute';
     if (!body || typeof body !== 'object' || Array.isArray(body)) {
@@ -101,6 +117,7 @@ function parseExecutionInput(body, arg = {}) {
         streamingPolicy,
         continue: !!body.continue,
         dryRun: !!body.dryRun,
+        promptBlocks: Array.isArray(body.promptBlocks) ? body.promptBlocks : undefined,
         request: body,
     };
 }
@@ -112,9 +129,14 @@ async function assembleServerPrompt(input, ctx) {
     }
     if (!input.characterId) return;
 
-    const preloadedContext = (input?.request && typeof input.request === 'object')
-        ? input.request.__serverContext
-        : null;
+    const requestContainer = (input?.request && typeof input.request === 'object' && !Array.isArray(input.request))
+        ? input.request
+        : {};
+    const requestPayload = getExecutionRequestPayload(requestContainer);
+    const preloadedContext = (
+        (requestContainer && typeof requestContainer.__serverContext === 'object' && requestContainer.__serverContext)
+        || (requestPayload && typeof requestPayload.__serverContext === 'object' && requestPayload.__serverContext)
+    );
 
     let char = null;
     if (preloadedContext && typeof preloadedContext === 'object' && preloadedContext.character && typeof preloadedContext.character === 'object') {
@@ -146,11 +168,11 @@ async function assembleServerPrompt(input, ctx) {
     // Source of truth policy:
     // - Character scope: enabled + selected rulebooks.
     // - Global scope: retrieval tuning (topK/minScore/model/budget).
-    const charRag = (input.request?.ragSettings && typeof input.request.ragSettings === 'object')
-        ? input.request.ragSettings
+    const charRag = (requestContainer.ragSettings && typeof requestContainer.ragSettings === 'object')
+        ? requestContainer.ragSettings
         : (char.ragSettings || {});
-    const globalRag = (input.request?.globalRagSettings && typeof input.request.globalRagSettings === 'object')
-        ? input.request.globalRagSettings
+    const globalRag = (requestContainer.globalRagSettings && typeof requestContainer.globalRagSettings === 'object')
+        ? requestContainer.globalRagSettings
         : (settings.globalRagSettings || {});
     const ragEnabled = charRag.enabled === true;
     const enabledRulebooks = Array.from(new Set(
@@ -165,7 +187,12 @@ async function assembleServerPrompt(input, ctx) {
 
     if (ragEnabled && enabledRulebooks.length > 0) {
         // Find messages in either path
-        const messages = input.request?.request?.requestBody?.messages || input.request?.request?.messages || input.request?.requestBody?.messages || input.request?.messages || [];
+        const messages =
+            requestPayload.requestBody?.messages
+            || requestPayload.messages
+            || requestContainer.requestBody?.messages
+            || requestContainer.messages
+            || [];
 
         // Build RAG query from sliding window of last 3 non-system turns
         // Short user messages like "a)" or "3" are useless for semantic search,
@@ -230,12 +257,16 @@ async function assembleServerPrompt(input, ctx) {
     }
 
     const ensurePromptBlocks = () => {
-        const request = input?.request;
-        if (!request || typeof request !== 'object') return null;
-        if (!Array.isArray(request.promptBlocks)) {
-            request.promptBlocks = [];
+        if (Array.isArray(input?.promptBlocks)) {
+            return input.promptBlocks;
         }
-        return request.promptBlocks;
+        if (requestPayload && typeof requestPayload === 'object' && !Array.isArray(requestPayload)) {
+            if (!Array.isArray(requestPayload.promptBlocks)) {
+                requestPayload.promptBlocks = [];
+            }
+            return requestPayload.promptBlocks;
+        }
+        return null;
     };
 
     // 3. Inject into messages
@@ -244,10 +275,10 @@ async function assembleServerPrompt(input, ctx) {
 
         // Find the messages array — client nests it as payload.request.requestBody.messages
         // After parseExecutionInput, input.request = payload, so messages are at input.request.request.requestBody.messages
-        const messagesArray = input.request?.request?.requestBody?.messages
-            || input.request?.request?.messages
-            || input.request?.requestBody?.messages
-            || input.request?.messages
+        const messagesArray = requestPayload.requestBody?.messages
+            || requestPayload.messages
+            || requestContainer.requestBody?.messages
+            || requestContainer.messages
             || null;
 
         if (messagesArray && Array.isArray(messagesArray) && messagesArray.length > 0) {
@@ -292,10 +323,14 @@ async function assembleServerPrompt(input, ctx) {
         } else if (injectedContext) {
             // No messages found — create a system message in the most likely location
             const newMessages = [{ role: 'system', content: injectedContext }];
-            if (input.request?.request?.requestBody) {
-                input.request.request.requestBody.messages = newMessages;
-            } else if (input.request?.requestBody) {
-                input.request.requestBody.messages = newMessages;
+            if (requestPayload?.requestBody && typeof requestPayload.requestBody === 'object') {
+                requestPayload.requestBody.messages = newMessages;
+            } else if (requestPayload && typeof requestPayload === 'object') {
+                requestPayload.messages = newMessages;
+            } else if (requestContainer?.requestBody && typeof requestContainer.requestBody === 'object') {
+                requestContainer.requestBody.messages = newMessages;
+            } else if (requestContainer && typeof requestContainer === 'object') {
+                requestContainer.messages = newMessages;
             }
             const promptBlocks = ensurePromptBlocks();
             if (promptBlocks) {

@@ -99,6 +99,10 @@ function createStreamFromRead(readImpl: () => Promise<{ done: boolean; value?: U
 function createHarness(arg: {
     normalized?: NormalizedInput;
     executeLLM?: () => Promise<unknown>;
+    existsSync?: (filePath: string) => boolean;
+    readJsonWithEtag?: (filePath: string) => Promise<{ json: Record<string, unknown>; etag: string }>;
+    applyStateCommands?: (...args: unknown[]) => Promise<unknown>;
+    isSafePathSegment?: (segment: string) => boolean;
     toLLMErrorResponse?: (error: unknown, ctx: { requestId: string; endpoint: string; durationMs: number }) => {
         status: number;
         code: string;
@@ -162,11 +166,11 @@ function createHarness(arg: {
         }))),
         sendSSE,
         sendJson,
-        existsSync: vi.fn(() => false),
-        readJsonWithEtag: vi.fn(async () => ({ json: {}, etag: "etag-1" })),
+        existsSync: arg.existsSync ?? vi.fn(() => false),
+        readJsonWithEtag: arg.readJsonWithEtag ?? vi.fn(async () => ({ json: {}, etag: "etag-1" })),
         readStateLastEventId: vi.fn(async () => 0),
-        isSafePathSegment: vi.fn(() => true),
-        applyStateCommands: vi.fn(async () => ({ ok: true, lastEventId: 0, applied: [], conflicts: [] })),
+        isSafePathSegment: arg.isSafePathSegment ?? vi.fn(() => true),
+        applyStateCommands: arg.applyStateCommands ?? vi.fn(async () => ({ ok: true, lastEventId: 0, applied: [], conflicts: [] })),
     });
 
     return {
@@ -250,6 +254,46 @@ describe("execute_route_handler streaming safety", () => {
 
         expect(settled).toBe(true);
         expect(res.writableEnded).toBe(true);
+    });
+
+    it("sets x-accel-buffering=no on native and fallback SSE responses", async () => {
+        const encoder = new TextEncoder();
+        const nativeReq = new MockReq();
+        const nativeRes = new MockRes();
+        const { stream } = createStreamFromRead(async () => ({
+            done: true,
+            value: encoder.encode(""),
+        }));
+        const nativeHarness = createHarness({
+            executeLLM: async () => stream,
+        });
+
+        await nativeHarness.handleLLMExecutePost(nativeReq, nativeRes, {}, "execute");
+
+        expect(nativeRes.getHeader("x-accel-buffering")).toBe("no");
+
+        const fallbackReq = new MockReq();
+        const fallbackRes = new MockRes();
+        const fallbackHarness = createHarness({
+            normalized: {
+                endpoint: "execute",
+                mode: "model",
+                provider: "kobold",
+                characterId: "",
+                chatId: "",
+                requestedStreaming: true,
+                streaming: false,
+                request: {},
+            },
+            executeLLM: async () => ({
+                type: "success",
+                result: "fallback-text",
+            }),
+        });
+
+        await fallbackHarness.handleLLMExecutePost(fallbackReq, fallbackRes, {}, "execute");
+
+        expect(fallbackRes.getHeader("x-accel-buffering")).toBe("no");
     });
 
     it("reassembles partial SSE frames split across chunks", async () => {
@@ -455,6 +499,56 @@ describe("execute_route_handler visible output guard", () => {
         expect(payload?.message || "").toContain("no visible content");
         const lastAudit = harness.appendLLMAudit.mock.calls.at(-1)?.[0];
         expect(lastAudit?.ok).toBe(false);
+    });
+
+    it("returns success when post-generation game-state persistence fails after model completion", async () => {
+        const req = new MockReq();
+        const res = new MockRes();
+        const harness = createHarness({
+            normalized: {
+                endpoint: "generate",
+                mode: "model",
+                provider: "openrouter",
+                characterId: "charA",
+                chatId: "chatA",
+                requestedStreaming: false,
+                streaming: false,
+                request: {},
+            },
+            executeLLM: async () => ({
+                type: "success",
+                result: "Visible response\n[SYSTEM]: [HP: 10]",
+            }),
+            existsSync: () => true,
+            readJsonWithEtag: async (filePath) => {
+                if (String(filePath).endsWith("character.json")) {
+                    return {
+                        json: { character: { gameState: {} } },
+                        etag: "etag-char-2",
+                    };
+                }
+                return {
+                    json: {},
+                    etag: "etag-1",
+                };
+            },
+            applyStateCommands: async () => {
+                throw new Error("state write failed");
+            },
+        });
+
+        await harness.handleLLMExecutePost(req, res, {}, "generate");
+
+        expect(harness.sendJson).toHaveBeenCalledTimes(1);
+        const status = harness.sendJson.mock.calls[0]?.[1];
+        const payload = harness.sendJson.mock.calls[0]?.[2];
+        expect(status).toBe(200);
+        expect(payload?.type).toBe("success");
+        expect(payload?.newCharEtag).toBe("etag-char-2");
+        const lastAudit = harness.appendLLMAudit.mock.calls.at(-1)?.[0];
+        expect(lastAudit?.ok).toBe(true);
+        expect(harness.logLLMExecutionEnd).toHaveBeenCalledTimes(1);
+        expect(harness.logLLMExecutionEnd.mock.calls[0]?.[0]?.status).toBe(200);
     });
 
     it("allows reasoning-only non-stream output for DeepSeek-V3.2-Speciale when toggle is enabled", async () => {

@@ -699,20 +699,50 @@ function buildGenerateProviderRequest(provider, model, messages, maxTokens, stre
     };
 }
 
-function getPayloadMessagesForTrace(payload) {
-    const request = payload?.request;
-    if (Array.isArray(request?.requestBody?.messages)) {
-        return request.requestBody.messages;
+function getNestedRequestCandidates(source) {
+    const candidates = [];
+    let current = source;
+    let depth = 0;
+    while (current && typeof current === 'object' && !Array.isArray(current) && depth < 4) {
+        candidates.push(current);
+        if (!current.request || typeof current.request !== 'object' || Array.isArray(current.request)) {
+            break;
+        }
+        current = current.request;
+        depth += 1;
     }
-    if (Array.isArray(request?.messages)) {
-        return request.messages;
+    return candidates;
+}
+
+function getPayloadMessagesForTrace(payload) {
+    const requestCandidates = getNestedRequestCandidates(payload?.request);
+    for (const request of requestCandidates) {
+        if (Array.isArray(request?.requestBody?.messages)) {
+            return request.requestBody.messages;
+        }
+        if (Array.isArray(request?.messages)) {
+            return request.messages;
+        }
+    }
+    return [];
+}
+
+function getPayloadPromptBlocksForTrace(payload) {
+    if (Array.isArray(payload?.promptBlocks)) {
+        return payload.promptBlocks;
+    }
+    const requestCandidates = getNestedRequestCandidates(payload?.request);
+    for (const request of requestCandidates) {
+        if (Array.isArray(request?.promptBlocks)) {
+            return request.promptBlocks;
+        }
     }
     return [];
 }
 
 function buildPromptTrace(payload) {
     const messages = getPayloadMessagesForTrace(payload);
-    const blocks = Array.isArray(payload?.promptBlocks) ? payload.promptBlocks : [];
+    const blocks = getPayloadPromptBlocksForTrace(payload);
 
     const blocksByIndex = new Map();
     const mergedIntoFirstSystem = [];
