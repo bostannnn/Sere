@@ -4,6 +4,7 @@
     import { saveImage as saveAsset, type character, type groupChat } from "../../ts/storage/database.svelte";
     import { DBState } from 'src/ts/stores.svelte';
     import { tick, untrack } from 'svelte';
+    import { SvelteMap } from "svelte/reactivity";
     import { CharConfigSubMenu, MobileGUI, selectedCharID } from "../../ts/stores.svelte";
     import { PlusIcon, SmileIcon, TrashIcon, UserIcon, ActivityIcon, BookIcon, BookOpenCheckIcon, User, Braces, Volume2Icon, DownloadIcon, HardDriveUploadIcon, Share2Icon, ImageIcon, ImageOffIcon, ArrowUp, ArrowDown } from '@lucide/svelte'
     import Check from "../UI/GUI/CheckInput.svelte";
@@ -259,7 +260,7 @@
         | 'localNote'
 
     const TOKEN_CACHE_LIMIT = 500
-    const tokenCache = new Map<string, number>()
+    const tokenCache = new SvelteMap<string, number>()
     let tokenizeRunId = 0
 
     function getCachedTokenCount(value:string):number|null {
