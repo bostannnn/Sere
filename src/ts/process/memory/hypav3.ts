@@ -10,6 +10,7 @@ import { parseChatML } from "src/ts/parser/chatML";
 import {
   type Chat,
   type character,
+  getCurrentCharacter,
   type groupChat,
   getDatabase,
 } from "src/ts/storage/database.svelte";
@@ -19,6 +20,7 @@ import { chatCompletion, unloadEngine } from "../webllm";
 import { hypaV3ProgressStore } from "src/ts/stores.svelte";
 import { type ChatTokenizer } from "src/ts/tokenizer";
 import { inlayTokenRegex } from "src/ts/util/inlayTokens";
+import { risuChatParser } from "../../parser.svelte";
 
 export interface HypaV3Preset {
   name: string;
@@ -1917,9 +1919,12 @@ export async function summarize(oaiMessages: OpenAIChat[], isResummarize: boolea
     : settings.summarizationPrompt.trim() === ""
       ? "[Summarize the ongoing role story, It must also remove redundancy and unnecessary text and content from the output.]"
       : settings.summarizationPrompt;
+  const parsedSummarizationPrompt = risuChatParser(summarizationPrompt, {
+    chara: getCurrentCharacter(),
+  });
 
   const formated: OpenAIChat[] = parseChatML(
-    summarizationPrompt.replaceAll("{{slot}}", strMessages)
+    parsedSummarizationPrompt.replaceAll("{{slot}}", strMessages)
   ) ?? [
     {
       role: "user",
@@ -1927,7 +1932,7 @@ export async function summarize(oaiMessages: OpenAIChat[], isResummarize: boolea
     },
     {
       role: "system",
-      content: summarizationPrompt,
+      content: parsedSummarizationPrompt,
     },
   ];
 
@@ -1936,7 +1941,7 @@ export async function summarize(oaiMessages: OpenAIChat[], isResummarize: boolea
     timestamp: Date.now(),
     model: resolvedModel,
     isResummarize,
-    prompt: summarizationPrompt,
+    prompt: parsedSummarizationPrompt,
     input: strMessages,
     formatted: formated.map((item) => ({ role: item.role, content: item.content })),
     periodic: previousPeriodic,
