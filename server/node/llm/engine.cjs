@@ -157,14 +157,10 @@ function resolveEffectiveRagSettings(charRag = {}, globalRag = {}) {
     return {
         enabled: charRag.enabled === true,
         enabledRulebooks,
-        topK: Number.isFinite(Number(charRag.topK)) ? Number(charRag.topK)
-            : (Number.isFinite(Number(globalRag.topK)) ? Number(globalRag.topK) : 3),
-        minScore: Number.isFinite(Number(charRag.minScore)) ? Number(charRag.minScore)
-            : (Number.isFinite(Number(globalRag.minScore)) ? Number(globalRag.minScore) : 0.1),
-        budget: Number.isFinite(Number(charRag.budget)) ? Number(charRag.budget)
-            : (Number.isFinite(Number(globalRag.budget)) ? Number(globalRag.budget) : 0),
-        model: (typeof charRag.model === 'string' && charRag.model.trim()) ? charRag.model.trim()
-            : ((typeof globalRag.model === 'string' && globalRag.model.trim()) ? globalRag.model.trim() : 'MiniLM'),
+        topK: Number.isFinite(Number(globalRag.topK)) ? Number(globalRag.topK) : 3,
+        minScore: Number.isFinite(Number(globalRag.minScore)) ? Number(globalRag.minScore) : 0.1,
+        budget: Number.isFinite(Number(globalRag.budget)) ? Number(globalRag.budget) : 0,
+        model: (typeof globalRag.model === 'string' && globalRag.model.trim()) ? globalRag.model.trim() : 'MiniLM',
     };
 }
 

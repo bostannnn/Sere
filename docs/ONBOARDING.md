@@ -33,7 +33,7 @@ The Node.js server owns all LLM execution, prompt assembly, RAG, and memory. The
 │       ├── process/            # Core processing pipeline
 │       │   ├── index.svelte.ts # Chat orchestration (large — active split target)
 │       │   ├── request/        # LLM request handlers (openAI.ts, request.ts, etc.)
-│       │   ├── rag/            # Client-side RAG (rag.ts, chunker.ts, ingest-stream.ts)
+│       │   ├── rag/            # Client RAG delegates (server ingest/search, progress handling)
 │       │   ├── memory/         # HypaV3 memory client
 │       │   ├── mcp/            # MCP integration
 │       │   └── prompt.ts       # Prompt assembly types
@@ -293,7 +293,7 @@ Covers the mandatory server-feature test requirement (Section 4 — unit tests +
 | `src/ts/process/index.svelte.ts` | Chat orchestration — large, active split target |
 | `src/ts/process/request/request.ts` | LLM request router (delegates to server endpoints) |
 | `src/ts/storage/database.svelte.ts` | DB schema, migrations, and reactive DB state |
-| `src/ts/process/rag/rag.ts` | RAG class (delegates to server in server-first mode) |
+| `src/ts/process/rag/rag.ts` | Rulebook RAG client wrapper (server ingest/search only) |
 | `src/lib/SideBars/CharConfig.svelte` | Character config sidebar (Basics/Display/Lorebook/etc.) |
 | `src/lib/ChatScreens/Chat.svelte` | Chat message runtime |
 
@@ -319,6 +319,7 @@ Covers the mandatory server-feature test requirement (Section 4 — unit tests +
 
 ### What is complete
 - **Server-first architecture**: Node.js server handles all LLM execution (15+ providers), prompt assembly, RAG ingestion and search, HypaV3 memory summarization
+- **Template-controlled server RAG**: server builds `<Rules Context>` and injects it only into `rulebookRag` prompt-template slots; if no slot exists, prompt trace records `no_template_slot` instead of hard-prepending
 - **Server decomposition**: `server.cjs` decomposed from 5k+ LOC into 40+ focused modules using DI pattern
 - **Client gating**: `isNodeServer` is forced `true` for server-only runtime
 - **Type/test gates green**: `pnpm check` = 0 errors, `pnpm test` = all passing

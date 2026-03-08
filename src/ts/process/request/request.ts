@@ -18,6 +18,7 @@ import { isNodeServer } from '../../platform';
 import { requestClaude } from './anthropic';
 import { requestGoogleCloudVertex } from './google';
 import { requestOpenAI, requestOpenAILegacyInstruct, requestOpenAIResponseAPI } from "./openAI";
+import { buildCharacterRagPayload, buildGlobalRagPayload } from "./ragPayload";
 
 export type ToolCall = {
     name: string;
@@ -834,16 +835,8 @@ async function requestNovelAI(arg:RequestDataArgumentExtended):Promise<requestDa
         characterId: arg.currentChar?.chaId ?? '',
         chatId: arg.chatId ?? '',
         continue: !!arg.continue,
-        ragSettings: arg.currentChar?.ragSettings ? {
-            enabled: arg.currentChar.ragSettings.enabled === true,
-            enabledRulebooks: Array.isArray(arg.currentChar.ragSettings.enabledRulebooks) ? arg.currentChar.ragSettings.enabledRulebooks : [],
-        } : undefined,
-        globalRagSettings: db.globalRagSettings ? {
-            topK: db.globalRagSettings.topK,
-            minScore: db.globalRagSettings.minScore,
-            budget: db.globalRagSettings.budget,
-            model: db.globalRagSettings.model,
-        } : undefined,
+        ragSettings: buildCharacterRagPayload(arg.currentChar?.ragSettings),
+        globalRagSettings: buildGlobalRagPayload(db.globalRagSettings),
         request: {
             requestBody: body,
             model: body.model,
@@ -980,16 +973,8 @@ async function requestKobold(arg:RequestDataArgumentExtended):Promise<requestDat
         chatId: arg.chatId ?? '',
         continue: !!arg.continue,
         streaming: effectiveStreaming,
-        ragSettings: arg.currentChar?.ragSettings ? {
-            enabled: arg.currentChar.ragSettings.enabled === true,
-            enabledRulebooks: Array.isArray(arg.currentChar.ragSettings.enabledRulebooks) ? arg.currentChar.ragSettings.enabledRulebooks : [],
-        } : undefined,
-        globalRagSettings: db.globalRagSettings ? {
-            topK: db.globalRagSettings.topK,
-            minScore: db.globalRagSettings.minScore,
-            budget: db.globalRagSettings.budget,
-            model: db.globalRagSettings.model,
-        } : undefined,
+        ragSettings: buildCharacterRagPayload(arg.currentChar?.ragSettings),
+        globalRagSettings: buildGlobalRagPayload(db.globalRagSettings),
         request: {
             requestBody: {
                 ...body,
@@ -1177,16 +1162,8 @@ async function requestOllama(arg:RequestDataArgumentExtended):Promise<requestDat
         chatId: arg.chatId ?? '',
         continue: !!arg.continue,
         streaming: !!arg.useStreaming,
-        ragSettings: arg.currentChar?.ragSettings ? {
-            enabled: arg.currentChar.ragSettings.enabled === true,
-            enabledRulebooks: Array.isArray(arg.currentChar.ragSettings.enabledRulebooks) ? arg.currentChar.ragSettings.enabledRulebooks : [],
-        } : undefined,
-        globalRagSettings: db.globalRagSettings ? {
-            topK: db.globalRagSettings.topK,
-            minScore: db.globalRagSettings.minScore,
-            budget: db.globalRagSettings.budget,
-            model: db.globalRagSettings.model,
-        } : undefined,
+        ragSettings: buildCharacterRagPayload(arg.currentChar?.ragSettings),
+        globalRagSettings: buildGlobalRagPayload(db.globalRagSettings),
         request: {
             requestBody: {
                 model: db.ollamaModel,

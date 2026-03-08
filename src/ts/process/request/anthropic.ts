@@ -11,6 +11,7 @@ import type { MultiModal } from "../index.svelte"
 import { extractJSON } from "../templates/jsonSchema"
 import { applyParameters, type RequestDataArgumentExtended, type requestDataResponse, type StreamResponseChunk } from "./request"
 import { callTool, decodeToolCall, encodeToolCall } from "../mcp/mcp"
+import { buildCharacterRagPayload, buildGlobalRagPayload } from "./ragPayload"
 const anthropicLog = (..._args: unknown[]) => {};
 
 interface Claude3TextBlock {
@@ -146,16 +147,8 @@ async function requestAnthropicServerExecution(arg: RequestDataArgumentExtended,
             maxTokens: Number.isFinite(Number(requestBodyForServer.max_tokens))
                 ? Number(requestBodyForServer.max_tokens)
                 : undefined,
-            ragSettings: charRagSettings ? {
-                enabled: charRagSettings.enabled === true,
-                enabledRulebooks: Array.isArray(charRagSettings.enabledRulebooks) ? charRagSettings.enabledRulebooks : [],
-            } : undefined,
-            globalRagSettings: globalRagSettings ? {
-                topK: globalRagSettings.topK,
-                minScore: globalRagSettings.minScore,
-                budget: globalRagSettings.budget,
-                model: globalRagSettings.model,
-            } : undefined,
+            ragSettings: buildCharacterRagPayload(charRagSettings),
+            globalRagSettings: buildGlobalRagPayload(globalRagSettings),
         }
         : {
             mode: arg.mode ?? 'model',
@@ -165,16 +158,8 @@ async function requestAnthropicServerExecution(arg: RequestDataArgumentExtended,
             continue: !!arg.continue,
             streaming: !!arg.useStreaming,
             useClientAssembledRequest: serverExecEndpoint === '/data/llm/generate',
-            ragSettings: charRagSettings ? {
-                enabled: charRagSettings.enabled === true,
-                enabledRulebooks: Array.isArray(charRagSettings.enabledRulebooks) ? charRagSettings.enabledRulebooks : [],
-            } : undefined,
-            globalRagSettings: globalRagSettings ? {
-                topK: globalRagSettings.topK,
-                minScore: globalRagSettings.minScore,
-                budget: globalRagSettings.budget,
-                model: globalRagSettings.model,
-            } : undefined,
+            ragSettings: buildCharacterRagPayload(charRagSettings),
+            globalRagSettings: buildGlobalRagPayload(globalRagSettings),
             request: {
                 requestBody: requestBodyForServer,
                 messages: Array.isArray(requestBodyForServer.messages) ? requestBodyForServer.messages : undefined,

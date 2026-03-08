@@ -83,7 +83,7 @@ describe("server llm rag assembly helpers", () => {
     expect(totalTokens).toBeLessThanOrEqual(budget);
   });
 
-  it("prefers character rag tuning over global defaults", async () => {
+  it("uses only character enablement and selected rulebooks while keeping tuning global", async () => {
     const { __test } = await import("./engine.cjs");
 
     const effective = __test.resolveEffectiveRagSettings(
@@ -107,10 +107,10 @@ describe("server llm rag assembly helpers", () => {
     expect(effective).toMatchObject({
       enabled: true,
       enabledRulebooks: ["book-a"],
-      topK: 3,
-      minScore: 0.2,
-      budget: 800,
-      model: "bgeLargeEnGPU",
+      topK: 7,
+      minScore: 0.6,
+      budget: 1500,
+      model: "MiniLM",
     });
   });
 
@@ -175,6 +175,40 @@ describe("server llm rag assembly helpers", () => {
       source: "server-rag",
       skipped: true,
       reason: "no_template_slot",
+    });
+    expect(promptBlocks.some((block: Record<string, unknown>) => block.mergedInto === "first-system")).toBe(false);
+  });
+
+  it("injects game state into its own template slot and skips fallback prepend", async () => {
+    const { __test } = await import("./engine.cjs");
+
+    const messages = [
+      { role: "system", content: "Main prompt." },
+      { role: "user", content: "Continue the scene." },
+    ];
+    const promptBlocks = [
+      { index: 0, role: "system", title: "Main Prompt", source: "template" },
+      { index: 1, role: "system", title: "Game State", source: "template-slot", slot: "gameState" },
+      { index: 1, role: "user", title: "Chat History", source: "chat" },
+    ];
+
+    __test.injectServerContexts(
+      messages,
+      promptBlocks,
+      "",
+      "[Active Game State]\n[candles: 6]\n[brink: The radio goes silent]\n",
+    );
+
+    expect(messages).toHaveLength(3);
+    expect(messages[0]?.content).toBe("Main prompt.");
+    expect(messages[1]?.content).toContain("[Active Game State]");
+    expect(messages[2]?.content).toBe("Continue the scene.");
+
+    const gameStateBlock = promptBlocks.find((block: Record<string, unknown>) => block.title === "Game State");
+    expect(gameStateBlock).toMatchObject({
+      index: 1,
+      role: "system",
+      source: "server-gamestate",
     });
     expect(promptBlocks.some((block: Record<string, unknown>) => block.mergedInto === "first-system")).toBe(false);
   });

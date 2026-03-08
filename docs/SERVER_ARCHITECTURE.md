@@ -1,6 +1,6 @@
 # Server Architecture
 
-Last updated: 2026-03-02
+Last updated: 2026-03-09
 
 ## Overview
 
@@ -68,6 +68,10 @@ The client (Svelte SPA) is a thin UI that sends high-level intents and renders r
 | GET/PUT/DELETE | `/data/{prompts,themes,color_schemes}/:id` | Prompt/theme/color scheme CRUD |
 
 ### RAG (`server/node/routes/rag_routes.cjs`)
+
+Scope contract:
+- Character-level RAG controls only `enabled` and `enabledRulebooks`.
+- Retrieval tuning (`topK`, `minScore`, `budget`, `model`) is global-only via `globalRagSettings`.
 
 | Method | Path | Description |
 |--------|------|-------------|
@@ -158,10 +162,10 @@ Core ownership note for Comfy Commander:
 
 | File | LOC | Purpose |
 |------|-----|---------|
-| `engine.cjs` | 418 | Core RAG: chunking, cosine similarity search, rulebook caching, metadata updates |
+| `engine.cjs` | 418 | Core RAG: chunking, ranking, semantic search, rulebook caching, metadata updates |
 | `embedding.cjs` | 67 | HuggingFace Transformers embedding pipeline (server-side, CPU) |
 | `aux_transformers.cjs` | — | Server-side summarization and image-caption pipelines |
-| `pdf.cjs` | 322 | PDF text extraction with column awareness, table detection, low-signal line filtering |
+| `pdf.cjs` | 322 | PDF text extraction with column awareness, fragment clustering, table detection, low-signal line filtering |
 | `model.cjs` | 37 | Embedding model name resolution (MiniLM, BGE, Nomic, etc.) |
 
 ## Request Flow
@@ -181,7 +185,7 @@ Client                          Server
   │                               │  ├─ Chat history (token-budgeted)
   │                               │  ├─ Lorebook matching
   │                               │  ├─ HypaV3 memory injection
-  │                               │  ├─ RAG search + context injection
+  │                               │  ├─ RAG search + context injection into `rulebookRag` template slot
   │                               │  ├─ Depth prompts
   │                               │  └─ Format order enforcement
   │                               ├─ Route to provider handler (engine.cjs)
@@ -241,7 +245,7 @@ The client uses server-only runtime (`isNodeServer` is forced `true` in `src/ts/
 |--------|-------------|
 | `request.ts` | Calls `/data/llm/generate` or `/data/llm/execute` |
 | `openAI.ts` | Routes through `requestServerExecution()` |
-| `rag/rag.ts` | Calls `/data/rag/ingest`, `/data/rag/search` |
+| `rag/rag.ts` | Calls `/data/rag/ingest`, `/data/rag/search` (no local chunking/search fallback) |
 | `rag/storage.ts` | Calls `/data/rag/rulebooks` CRUD |
 | `serverDb.ts` | REST wrapper for `/data/*` storage |
 | `index.svelte.ts` | Server flushes chat snapshots, syncs game state |

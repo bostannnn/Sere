@@ -116,7 +116,7 @@ Server normalizes request mode/provider in:
 
 - `/Users/andrewbostan/Documents/RisuAII/server/node/llm/engine.cjs:338`
 
-If character RAG is enabled, it can prepend `<Rules Context>` to the first system/developer message and append `promptBlocks` metadata.
+If character RAG is enabled, the server builds `<Rules Context>` during prompt assembly and injects it into the `rulebookRag` prompt-template slot when one exists. If the active template has no `rulebookRag` slot, prompt trace records the block as skipped with `reason: "no_template_slot"` instead of force-prepending it.
 
 Core code:
 
@@ -157,4 +157,3 @@ When `inlayViewScreen` is active and `viewScreen === 'emotion'`, emotion instruc
   - `/Users/andrewbostan/Documents/RisuAII/server/node/server.cjs:2005`
 - Generate trace is separately stored with truncation:
   - `/Users/andrewbostan/Documents/RisuAII/server/node/server.cjs:1917`
-

@@ -11,6 +11,7 @@ import { applyParameters, type Parameter, type RequestDataArgumentExtended, type
 import { callTool, decodeToolCall, encodeToolCall } from "../mcp/mcp"
 import { alertError } from "src/ts/alert";
 import { isNodeServer } from "src/ts/platform"
+import { buildCharacterRagPayload, buildGlobalRagPayload } from "./ragPayload"
 const googleRequestLog = (..._args: unknown[]) => {};
 
 type GeminiFunctionCall = {
@@ -113,16 +114,8 @@ async function requestGoogleServerExecution(arg: RequestDataArgumentExtended, bo
             maxTokens: Number.isFinite(Number(requestBodyForServer?.generation_config?.maxOutputTokens))
                 ? Number(requestBodyForServer.generation_config.maxOutputTokens)
                 : undefined,
-            ragSettings: charRagSettings ? {
-                enabled: charRagSettings.enabled === true,
-                enabledRulebooks: Array.isArray(charRagSettings.enabledRulebooks) ? charRagSettings.enabledRulebooks : [],
-            } : undefined,
-            globalRagSettings: globalRagSettings ? {
-                topK: globalRagSettings.topK,
-                minScore: globalRagSettings.minScore,
-                budget: globalRagSettings.budget,
-                model: globalRagSettings.model,
-            } : undefined,
+            ragSettings: buildCharacterRagPayload(charRagSettings),
+            globalRagSettings: buildGlobalRagPayload(globalRagSettings),
         }
         : {
             mode: arg.mode ?? 'model',
@@ -132,16 +125,8 @@ async function requestGoogleServerExecution(arg: RequestDataArgumentExtended, bo
             continue: !!arg.continue,
             streaming: !!arg.useStreaming,
             useClientAssembledRequest: serverExecEndpoint === '/data/llm/generate',
-            ragSettings: charRagSettings ? {
-                enabled: charRagSettings.enabled === true,
-                enabledRulebooks: Array.isArray(charRagSettings.enabledRulebooks) ? charRagSettings.enabledRulebooks : [],
-            } : undefined,
-            globalRagSettings: globalRagSettings ? {
-                topK: globalRagSettings.topK,
-                minScore: globalRagSettings.minScore,
-                budget: globalRagSettings.budget,
-                model: globalRagSettings.model,
-            } : undefined,
+            ragSettings: buildCharacterRagPayload(charRagSettings),
+            globalRagSettings: buildGlobalRagPayload(globalRagSettings),
             request: {
                 requestBody: requestBodyForServer,
                 messages: Array.isArray(requestBodyForServer.contents) ? requestBodyForServer.contents : undefined,

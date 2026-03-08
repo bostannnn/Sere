@@ -15,6 +15,7 @@ import { supportsInlayImage } from "../files/inlays"
 import { simplifySchema } from "src/ts/util"
 import { callTool, decodeToolCall, encodeToolCall } from "../mcp/mcp"
 import { alertError } from "src/ts/alert";
+import { buildCharacterRagPayload, buildGlobalRagPayload } from "./ragPayload";
 const openAiRequestLog = (..._args: unknown[]) => {};
 
 
@@ -193,16 +194,8 @@ async function requestServerExecution(
                     : undefined,
                 tools: Array.isArray(requestBodyForServer.tools) ? requestBodyForServer.tools : undefined,
             },
-            ragSettings: charRagSettings ? {
-                enabled: charRagSettings.enabled === true,
-                enabledRulebooks: Array.isArray(charRagSettings.enabledRulebooks) ? charRagSettings.enabledRulebooks : [],
-            } : undefined,
-            globalRagSettings: globalRagSettings ? {
-                topK: globalRagSettings.topK,
-                minScore: globalRagSettings.minScore,
-                budget: globalRagSettings.budget,
-                model: globalRagSettings.model,
-            } : undefined,
+            ragSettings: buildCharacterRagPayload(charRagSettings),
+            globalRagSettings: buildGlobalRagPayload(globalRagSettings),
         }
         : {
             mode: arg.mode ?? 'model',
@@ -212,16 +205,8 @@ async function requestServerExecution(
             continue: !!arg.continue,
             streaming: !!arg.useStreaming,
             allowReasoningOnlyForDeepSeekV32Speciale,
-            ragSettings: charRagSettings ? {
-                enabled: charRagSettings.enabled === true,
-                enabledRulebooks: Array.isArray(charRagSettings.enabledRulebooks) ? charRagSettings.enabledRulebooks : [],
-            } : undefined,
-            globalRagSettings: globalRagSettings ? {
-                topK: globalRagSettings.topK,
-                minScore: globalRagSettings.minScore,
-                budget: globalRagSettings.budget,
-                model: globalRagSettings.model,
-            } : undefined,
+            ragSettings: buildCharacterRagPayload(charRagSettings),
+            globalRagSettings: buildGlobalRagPayload(globalRagSettings),
             request: {
                 requestBody: requestBodyForServer,
                 messages: Array.isArray(requestBodyForServer.messages) ? requestBodyForServer.messages : undefined,
