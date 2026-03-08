@@ -119,6 +119,18 @@ const PHASE4_UNCOVERED_MATRIX = [
     ],
   },
   {
+    file: "src/lib/Others/ChatBackgroundPicker.svelte",
+    classification: "migrate",
+    owner: "ui-shell-contract",
+    rationale: "Per-chat background controls use explicit button semantics and a dedicated tile-grid surface for shell consistency.",
+    requiredPatterns: [
+      "class=\"chat-bg-picker\"",
+      "class=\"chat-bg-grid\"",
+      "class=\"chat-bg-tile\"",
+      "type=\"button\"",
+    ],
+  },
+  {
     file: "src/lib/Others/HypaV3Progress.svelte",
     classification: "migrate",
     owner: "ui-shell-contract",

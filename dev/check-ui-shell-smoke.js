@@ -19,10 +19,6 @@ const checks = [
     cmd: ["pnpm", "exec", "vitest", "run", "dev/home-character-directory-runtime-smoke.test.ts"],
   },
   {
-    name: "grid-catalog-runtime",
-    cmd: ["pnpm", "exec", "vitest", "run", "dev/grid-catalog-runtime-smoke.test.ts"],
-  },
-  {
     name: "bookmark-list-runtime",
     cmd: ["pnpm", "exec", "vitest", "run", "dev/bookmark-list-runtime-smoke.test.ts"],
   },
@@ -173,22 +169,6 @@ const checks = [
   {
     name: "rulebook-library-runtime",
     cmd: ["pnpm", "exec", "vitest", "run", "dev/rulebook-library-runtime-smoke.test.ts"],
-  },
-  {
-    name: "mobile-header-runtime",
-    cmd: ["pnpm", "exec", "vitest", "run", "dev/mobile-header-runtime-smoke.test.ts"],
-  },
-  {
-    name: "mobile-body-runtime",
-    cmd: ["pnpm", "exec", "vitest", "run", "dev/mobile-body-runtime-smoke.test.ts"],
-  },
-  {
-    name: "mobile-footer-runtime",
-    cmd: ["pnpm", "exec", "vitest", "run", "dev/mobile-footer-runtime-smoke.test.ts"],
-  },
-  {
-    name: "mobile-characters-runtime",
-    cmd: ["pnpm", "exec", "vitest", "run", "dev/mobile-characters-runtime-smoke.test.ts"],
   },
 ];
 

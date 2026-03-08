@@ -143,8 +143,11 @@ ensureNotIncludes(hostContent, hostFile, "data-testid=\"chat-sidebar-close\"", f
 
 ensureIncludes(sideChatListContent, sideChatListFile, "class=\"side-chat-list-scroll list-shell\"", failures);
 ensureIncludes(sideChatListContent, sideChatListFile, "<Button className=\"side-new-chat-button\" type=\"button\" onclick={() => {", failures);
-ensureIncludes(sideChatListContent, sideChatListFile, "<button type=\"button\" data-risu-chat-idx={chara.chats.indexOf(chat)} onclick={() => {", failures);
-ensureIncludes(sideChatListContent, sideChatListFile, "<button type=\"button\" data-risu-chat-idx={i} onclick={() => {", failures);
+ensureIncludes(sideChatListContent, sideChatListFile, "{#snippet chatRow(chat, chatIndex)}", failures);
+ensureIncludes(sideChatListContent, sideChatListFile, "<div class=\"side-chat-item\" data-risu-chat-idx={chatIndex}>", failures);
+ensureIncludes(sideChatListContent, sideChatListFile, "changeChatTo(chatIndex)", failures);
+ensureIncludes(sideChatListContent, sideChatListFile, "{@render chatRow(chat, chara.chats.indexOf(chat))}", failures);
+ensureIncludes(sideChatListContent, sideChatListFile, "{#if chat.folderId == null}", failures);
 ensureIncludes(sideChatListContent, sideChatListFile, "type=\"button\" aria-label=\"Export all chats\"", failures);
 ensureIncludes(sideChatListContent, sideChatListFile, "type=\"button\" aria-label=\"Add folder\"", failures);
 ensureIncludes(sideChatListContent, sideChatListFile, "class=\"no-sort side-chat-empty empty-state\"", failures);
