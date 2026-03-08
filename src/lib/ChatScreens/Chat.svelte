@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { ArrowLeft, ArrowLeftRightIcon, ArrowRight, BookmarkIcon, BotIcon, CopyIcon, PowerOff, GitBranch, LanguagesIcon, PencilIcon, RefreshCcwIcon, SplitIcon, TrashIcon, UserIcon, Volume2Icon, Scissors } from "@lucide/svelte"
+    import { ArrowLeft, ArrowRight, BookmarkIcon, BotIcon, CopyIcon, PowerOff, GitBranch, LanguagesIcon, PencilIcon, RefreshCcwIcon, SplitIcon, TrashIcon, Volume2Icon, Scissors } from "@lucide/svelte"
     import { aiLawApplies, changeChatTo, foldChatToMessage, getFileSrc, createChatCopyName } from "src/ts/globalApi.svelte"
     import { ColorSchemeTypeStore } from "src/ts/gui/colorscheme"
     import { longpress } from "src/ts/gui/longtouch"
@@ -900,29 +900,18 @@
 
 {#snippet senderIcon(options:{rounded?:boolean,styleFix?:string} = {})}
     {#if !blankMessage && !$HideIconStore}
-        {#if DBState.db.characters[selIdState.selId]?.chaId === "§playground"}
-        <div class="ds-chat-sender-icon ds-chat-sender-icon-placeholder" style={options?.styleFix ?? `height:${DBState.db.iconsize * 3.5 / 100}rem;width:${DBState.db.iconsize * 3.5 / 100}rem;min-width:${DBState.db.iconsize * 3.5 / 100}rem`}
-            class:ds-chat-rounded-md={options?.rounded} class:ds-chat-rounded-full={options?.rounded}>
-                {#if name === 'assistant'}
-                    <BotIcon />
-                {:else}
-                    <UserIcon />
-                {/if}
-            </div>
-        {:else}
-            {#await img}
-                <div class="ds-chat-sender-icon ds-chat-sender-icon-fill" style={options?.styleFix ??`height:${DBState.db.iconsize * 3.5 / 100}rem;width:${DBState.db.iconsize * 3.5 / 100}rem;min-width:${DBState.db.iconsize * 3.5 / 100}rem`}
+        {#await img}
+            <div class="ds-chat-sender-icon ds-chat-sender-icon-fill" style={options?.styleFix ??`height:${DBState.db.iconsize * 3.5 / 100}rem;width:${DBState.db.iconsize * 3.5 / 100}rem;min-width:${DBState.db.iconsize * 3.5 / 100}rem`}
+            class:ds-chat-rounded-md={!options?.rounded} class:ds-chat-rounded-full={options?.rounded}></div>
+        {:then m}
+            {#if largePortrait && (!options?.rounded)}
+                <div class="ds-chat-sender-icon ds-chat-sender-icon-fill" style={m + (options?.styleFix ?? `height:${DBState.db.iconsize * 3.5 / 100 / 0.75}rem;width:${DBState.db.iconsize * 3.5 / 100}rem;min-width:${DBState.db.iconsize * 3.5 / 100}rem`)}
                 class:ds-chat-rounded-md={!options?.rounded} class:ds-chat-rounded-full={options?.rounded}></div>
-            {:then m}
-                {#if largePortrait && (!options?.rounded)}
-                    <div class="ds-chat-sender-icon ds-chat-sender-icon-fill" style={m + (options?.styleFix ?? `height:${DBState.db.iconsize * 3.5 / 100 / 0.75}rem;width:${DBState.db.iconsize * 3.5 / 100}rem;min-width:${DBState.db.iconsize * 3.5 / 100}rem`)}
-                    class:ds-chat-rounded-md={!options?.rounded} class:ds-chat-rounded-full={options?.rounded}></div>
-                {:else}
-                    <div class="ds-chat-sender-icon ds-chat-sender-icon-fill" style={m + (options?.styleFix ?? `height:${DBState.db.iconsize * 3.5 / 100}rem;width:${DBState.db.iconsize * 3.5 / 100}rem;min-width:${DBState.db.iconsize * 3.5 / 100}rem`)}
-                    class:ds-chat-rounded-md={!options?.rounded} class:ds-chat-rounded-full={options?.rounded}></div>
-                {/if}
-            {/await}
-        {/if}
+            {:else}
+                <div class="ds-chat-sender-icon ds-chat-sender-icon-fill" style={m + (options?.styleFix ?? `height:${DBState.db.iconsize * 3.5 / 100}rem;width:${DBState.db.iconsize * 3.5 / 100}rem;min-width:${DBState.db.iconsize * 3.5 / 100}rem`)}
+                class:ds-chat-rounded-md={!options?.rounded} class:ds-chat-rounded-full={options?.rounded}></div>
+            {/if}
+        {/await}
     {/if}
 {/snippet}
 
@@ -1133,24 +1122,7 @@
             {@render senderIcon({rounded: DBState.db.roundIcons})}
             <span class="ds-chat-message-body">
                 <div class="ds-chat-width ds-ui-list-row">
-                    {#if DBState.db.characters[selIdState.selId]?.chaId === "§playground" && !blankMessage && DBState.db.characters[selIdState.selId]?.chats?.[DBState.db.characters[selIdState.selId]?.chatPage]?.message?.[idx]}
-                        <span class="ds-chat-width ds-chat-message-title-row">
-                            <span class="ds-chat-message-title-text">{DBState.db.characters[selIdState.selId].chats[DBState.db.characters[selIdState.selId].chatPage].message[idx].role === 'char' ? 'Assistant' : 'User'}</span>
-                            <button
-                                type="button"
-                                class="ds-chat-role-toggle"
-                                title="Toggle role"
-                                aria-label="Toggle role"
-                                onclick={() => {
-                                DBState.db.characters[selIdState.selId].chats[DBState.db.characters[selIdState.selId].chatPage].message[idx].role = DBState.db.characters[selIdState.selId].chats[DBState.db.characters[selIdState.selId].chatPage].message[idx].role === 'char' ? 'user' : 'char'
-                                ReloadChatPointer.update((v) => {
-                                    v[idx] = (v[idx] ?? 0) + 1
-                                    return v
-                                })
-                            }}
-                            ><ArrowLeftRightIcon size="18" /></button>
-                        </span>
-                    {:else if !blankMessage && !$HideIconStore}
+                    {#if !blankMessage && !$HideIconStore}
                         <div class="ds-chat-width ds-chat-message-title-row">
                             <span class="ds-chat-message-title-text" title={name}>{name}</span>
                         </div>

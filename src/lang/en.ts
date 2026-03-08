@@ -241,8 +241,7 @@ export const languageEnglish = {
             "- **Dynamic Assets**: Finding similar asset names when exact match is not found\n" +
             "- **Emotion Images**: When Emotion method is set to 'embedding'\n" +
             "- **Trigger Scripts**: Similarity conditions in trigger scripts\n" +
-            "- **File Attachments**: Searching within PDF/TXT/XML attachments\n" +
-            "- **Playground**: Embedding testing in Playground",
+            "- **File Attachments**: Searching within PDF/TXT/XML attachments",
     },
     setup: {
         chooseProvider: "Choose AI Provider",
@@ -1061,7 +1060,6 @@ export const languageEnglish = {
     chatFormating: "Chat Formating",
     useInstructPrompt: "Use Instruction Prompt",
     hanuraiMemory: "HanuraiMemory",
-    playground: "Playground",
     textAreaSize: "Input Area Size",
     textAreaTextSize: "Input Area Text Size",
     sideBarSize: "Sidebar Size",
@@ -1164,7 +1162,7 @@ export const languageEnglish = {
     enableScrollToActiveChar: "Enable Scroll to Active Character",
     menu: "Menu",
     connectionOpen: "Connection Open",
-    connectionOpenInfo: "Multiuser room is opened. you can share the room code to other users. others can join the room by using the code inside playground > Join Multiuser Room.",
+    connectionOpenInfo: "Multiuser room is opened. you can share the room code to other users so they can join the room.",
     createMultiuserRoom: "Create Multiuser Room",
     connectionHost: "You are the host of the room.",
     connectionGuest: "You are the guest of the room.",

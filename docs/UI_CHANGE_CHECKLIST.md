@@ -9,12 +9,11 @@ Run `pnpm run check:prototype` first — it automates ~70 of these checks. Only 
 ## A) Shell and navigation — verify against DESIGN_RULES sections 1, 2, 3, 11
 
 - Home/Rulebooks/Settings navigation works from topbar primary icon controls.
-- Playground navigation works from topbar `More` overflow.
 - Character card click enters chat. Title click returns to home.
 - `More` overflow opens/closes deterministically and closes on outside click or `Escape`.
 - Right workspace sidebar toggle in Chat opens/closes deterministically and persists state.
 - Right workspace sidebar toggle in Library opens/closes deterministically and persists state independently from Chat.
-- Topbar search is visible in Home and Library, hidden in Chat/Playground/Settings.
+- Topbar search is visible in Home and Library, hidden in Chat/Settings.
 - Library stage contains no second title/search/toolbar lane; shared topbar search is the only search field.
 - Library topbar right controls are present and functional: `grid/list`, `Add Documents`, sidebar toggle.
 - Library right sidebar exposes `Library` and `Settings` tabs and both panes render correctly.

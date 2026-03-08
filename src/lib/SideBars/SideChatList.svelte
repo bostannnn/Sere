@@ -488,9 +488,7 @@
             </button>
         </div>
 
-        {#if DBState.db.characters[$selectedCharID]?.chaId !== '§playground'}            
-            <Toggles chara={chara} />
-        {/if}
+        <Toggles chara={chara} />
     </div>
     {#if chara.type === 'group'}
     <div class="side-order-row">

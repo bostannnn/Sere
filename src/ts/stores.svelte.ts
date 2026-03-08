@@ -36,7 +36,7 @@ export const SizeStore = writable({
     h: 0
 })
 
-export type AppWorkspace = "home" | "characters" | "chats" | "library" | "playground" | "settings"
+export type AppWorkspace = "home" | "characters" | "chats" | "library" | "settings"
 export type AppInspector = "none" | "details" | "chat" | "character" | "memory"
 
 export interface AppRoute {
@@ -71,7 +71,6 @@ export const SettingsMenuIndex = writable(-1)
 export const ReloadGUIPointer = writable(0)
 export const ReloadChatPointer = writable({} as Record<number, number>)
 export const ScrollToMessageStore = $state({ value: -1 })
-export const PlaygroundStore = writable(0)
 export const HideIconStore = writable(false)
 export const CustomCSSStore = writable('')
 export const SafeModeStore = writable(false)

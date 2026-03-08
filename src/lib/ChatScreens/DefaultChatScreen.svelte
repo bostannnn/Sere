@@ -3,7 +3,7 @@
 
     import Suggestion from './Suggestion.svelte';
     import { CameraIcon, DatabaseIcon, DicesIcon, GlobeIcon, ImagePlusIcon, LanguagesIcon, Laugh, MenuIcon, MicOffIcon, PackageIcon, RefreshCcwIcon, ReplyIcon, Send, StepForwardIcon, XIcon, ArrowDown } from "@lucide/svelte";
-    import { selectedCharID, PlaygroundStore, createSimpleCharacter, ScrollToMessageStore, additionalChatMenu, additionalFloatingActionButtons, pluginProgressStore, comfyProgressStore } from "../../ts/stores.svelte";
+    import { selectedCharID, createSimpleCharacter, ScrollToMessageStore, additionalChatMenu, additionalFloatingActionButtons, pluginProgressStore, comfyProgressStore } from "../../ts/stores.svelte";
     import { tick } from 'svelte';
     import Chat from "./Chat.svelte";
     import { getDatabase, type Message } from "../../ts/storage/database.svelte";
@@ -36,8 +36,6 @@
     import GameStateHud from '../SideBars/GameStateHUD.svelte';
     import { runComfyTemplateById } from 'src/ts/integrations/comfy/execute';
     const defaultChatScreenLog = (..._args: unknown[]) => {};
-
-    const loadPlaygroundMenu = () => import('../Playground/PlaygroundMenu.svelte').then(m => m.default);
     
     interface Props {
         onOpenModuleList?: () => void;
@@ -703,13 +701,7 @@
         </div>
     {/if}
     {#if $selectedCharID < 0}
-        {#if $PlaygroundStore === 0}
-            <MainMenu />
-        {:else}
-            {#await loadPlaygroundMenu() then PlaygroundMenu}
-                <PlaygroundMenu />
-            {/await}
-        {/if}
+        <MainMenu />
     {:else}
         <div class="ds-chat-main-shell">
             <div class="ds-chat-scroll-shell default-chat-screen"
@@ -752,7 +744,7 @@
                     {/if}
                 </div>
             {/if}
-            {#if DBState.db.useAutoTranslateInput && DBState.db.characters[$selectedCharID]?.chaId !== '§playground'}
+            {#if DBState.db.useAutoTranslateInput}
                 <div class="ds-chat-translate-shell">
                     <label for='messageInputTranslate' class="ds-chat-translate-label">
                         <LanguagesIcon />

@@ -147,7 +147,7 @@ Acceptance criteria:
 3. Trace references include retrieval/prompt block provenance.
 
 ## 5) Shell and Navigation Contract
-1. Global left nav includes: `Characters`, `Chats`, `Library`, `Playground`, `Settings`.
+1. Global left nav includes: `Characters`, `Chats`, `Library`, `Settings`.
 2. Top-level workspace switch clears transient overlays.
 3. Each workspace follows one page contract:
 - Header
@@ -191,7 +191,7 @@ P1:
 
 P2:
 1. Settings convergence
-2. Playground convergence under shared shell
+2. Settings convergence under shared shell
 
 ## 9) Definition of “Core Complete”
 Core complete is achieved when:

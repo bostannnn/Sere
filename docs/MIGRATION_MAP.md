@@ -21,7 +21,6 @@ Purpose: map prototype UI to actual app surfaces before coding production integr
 - Character select opens last selected chat.
 - Inspector panel is chat-only.
 - Library stays unified in one workspace surface.
-- Playground ships with full current toolset in migration.
 - Settings stays single-workspace with internal tabs.
 - Rollout uses `ui_shell_v2` staged enablement (dev -> QA -> beta -> default-on).
 

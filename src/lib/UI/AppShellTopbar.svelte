@@ -10,20 +10,18 @@
         PanelRightIcon,
         PlusIcon,
         SettingsIcon,
-        ShellIcon,
     } from "@lucide/svelte";
     import { onDestroy, onMount } from "svelte";
     import type { MenuDef } from "src/ts/stores.svelte";
     import PluginDefinedIcon from "../Others/PluginDefinedIcon.svelte";
     import "./AppShellTopbar.css";
 
-    type Workspace = "home" | "characters" | "chats" | "library" | "playground" | "settings";
+    type Workspace = "home" | "characters" | "chats" | "library" | "settings";
     type MobileVariant = "desktop" | "mobile-chat" | "mobile-settings-subpage" | "mobile-library" | "mobile-root";
 
     interface Props {
         workspace: Workspace;
         onOpenHome?: () => void;
-        onOpenPlayground?: () => void;
         onOpenRulebooks?: () => void;
         onOpenSettings?: () => void;
         primaryNavPlacement?: "top" | "bottom";
@@ -65,7 +63,6 @@
     let {
         workspace,
         onOpenHome = () => {},
-        onOpenPlayground = () => {},
         onOpenRulebooks = () => {},
         onOpenSettings = () => {},
         primaryNavPlacement = "top",
@@ -107,22 +104,23 @@
     let overflowWrapEl = $state<HTMLElement | null>(null);
 
     const homeActive = $derived(workspace === "characters");
-    const playgroundActive = $derived(workspace === "playground");
     const rulebooksActive = $derived(workspace === "library");
     const settingsActive = $derived(workspace === "settings");
+    const hasOverflowItems = $derived(overflowItems.length > 0);
 
     const effectiveShowTopbarBack = $derived.by(() => {
         return showTopbarBack || (primaryNavPlacement === "bottom" && mobileBackToMenuVisible);
     });
 
+    $effect(() => {
+        if (!hasOverflowItems && overflowOpen) {
+            overflowOpen = false;
+        }
+    });
+
     const openHome = () => {
         overflowOpen = false;
         onOpenHome();
-    };
-
-    const openPlayground = () => {
-        overflowOpen = false;
-        onOpenPlayground();
     };
 
     const openRulebooks = () => {
@@ -233,40 +231,28 @@
                     data-testid="topbar-nav-settings"
                 ><SettingsIcon size={18} /></button>
 
-                <div class="ds-app-v2-topbar-overflow-wrap" bind:this={overflowWrapEl}>
-                    <button
-                        type="button"
-                        class="ds-app-v2-topbar-btn ds-app-v2-topbar-icon-btn ds-app-v2-topbar-nav-btn icon-btn icon-btn--md icon-btn--bordered"
-                        aria-label="More navigation actions"
-                        title="More"
-                        aria-pressed={overflowOpen}
-                        aria-expanded={overflowOpen}
-                        aria-controls="topbar-overflow-menu"
-                        data-pressed={overflowOpen || playgroundActive ? "1" : "0"}
-                        onclick={toggleOverflow}
-                        data-testid="topbar-nav-more"
-                    ><EllipsisIcon size={18} /></button>
-
-                    {#if overflowOpen}
-                        <div
-                            id="topbar-overflow-menu"
-                            class="ds-app-v2-topbar-overflow panel-shell ds-ui-menu"
+                {#if hasOverflowItems}
+                    <div class="ds-app-v2-topbar-overflow-wrap" bind:this={overflowWrapEl}>
+                        <button
+                            type="button"
+                            class="ds-app-v2-topbar-btn ds-app-v2-topbar-icon-btn ds-app-v2-topbar-nav-btn icon-btn icon-btn--md icon-btn--bordered"
                             aria-label="More navigation actions"
-                            data-testid="topbar-nav-more-menu"
-                        >
-                            <button
-                                type="button"
-                                class="ds-app-v2-topbar-overflow-item ds-ui-menu-item"
-                                data-active={playgroundActive ? "1" : "0"}
-                                onclick={openPlayground}
-                                data-testid="topbar-nav-overflow-playground"
-                            >
-                                <ShellIcon size={16} />
-                                <span>Playground</span>
-                            </button>
+                            title="More"
+                            aria-pressed={overflowOpen}
+                            aria-expanded={overflowOpen}
+                            aria-controls="topbar-overflow-menu"
+                            data-pressed={overflowOpen ? "1" : "0"}
+                            onclick={toggleOverflow}
+                            data-testid="topbar-nav-more"
+                        ><EllipsisIcon size={18} /></button>
 
-                            {#if overflowItems.length > 0}
-                                <div class="ds-app-v2-topbar-overflow-separator"></div>
+                        {#if overflowOpen}
+                            <div
+                                id="topbar-overflow-menu"
+                                class="ds-app-v2-topbar-overflow panel-shell ds-ui-menu"
+                                aria-label="More navigation actions"
+                                data-testid="topbar-nav-more-menu"
+                            >
                                 {#each overflowItems as item (`${item.id}-${item.name}`)}
                                     <button
                                         type="button"
@@ -277,10 +263,10 @@
                                         <span>{item.name}</span>
                                     </button>
                                 {/each}
-                            {/if}
-                        </div>
-                    {/if}
-                </div>
+                            </div>
+                        {/if}
+                    </div>
+                {/if}
             </nav>
         {/if}
     </div>
@@ -511,40 +497,28 @@
                 data-testid="topbar-nav-settings"
             ><SettingsIcon size={18} /></button>
 
-            <div class="ds-app-v2-topbar-overflow-wrap" bind:this={overflowWrapEl}>
-                <button
-                    type="button"
-                    class="ds-app-v2-topbar-btn ds-app-v2-topbar-icon-btn ds-app-v2-topbar-nav-btn icon-btn icon-btn--md icon-btn--bordered"
-                    aria-label="More navigation actions"
-                    title="More"
-                    aria-pressed={overflowOpen}
-                    aria-expanded={overflowOpen}
-                    aria-controls="topbar-overflow-menu"
-                    data-pressed={overflowOpen || playgroundActive ? "1" : "0"}
-                    onclick={toggleOverflow}
-                    data-testid="topbar-nav-more"
-                ><EllipsisIcon size={18} /></button>
-
-                {#if overflowOpen}
-                    <div
-                        id="topbar-overflow-menu"
-                        class="ds-app-v2-topbar-overflow panel-shell ds-ui-menu"
+            {#if hasOverflowItems}
+                <div class="ds-app-v2-topbar-overflow-wrap" bind:this={overflowWrapEl}>
+                    <button
+                        type="button"
+                        class="ds-app-v2-topbar-btn ds-app-v2-topbar-icon-btn ds-app-v2-topbar-nav-btn icon-btn icon-btn--md icon-btn--bordered"
                         aria-label="More navigation actions"
-                        data-testid="topbar-nav-more-menu"
-                    >
-                        <button
-                            type="button"
-                            class="ds-app-v2-topbar-overflow-item ds-ui-menu-item"
-                            data-active={playgroundActive ? "1" : "0"}
-                            onclick={openPlayground}
-                            data-testid="topbar-nav-overflow-playground"
-                        >
-                            <ShellIcon size={16} />
-                            <span>Playground</span>
-                        </button>
+                        title="More"
+                        aria-pressed={overflowOpen}
+                        aria-expanded={overflowOpen}
+                        aria-controls="topbar-overflow-menu"
+                        data-pressed={overflowOpen ? "1" : "0"}
+                        onclick={toggleOverflow}
+                        data-testid="topbar-nav-more"
+                    ><EllipsisIcon size={18} /></button>
 
-                        {#if overflowItems.length > 0}
-                            <div class="ds-app-v2-topbar-overflow-separator"></div>
+                    {#if overflowOpen}
+                        <div
+                            id="topbar-overflow-menu"
+                            class="ds-app-v2-topbar-overflow panel-shell ds-ui-menu"
+                            aria-label="More navigation actions"
+                            data-testid="topbar-nav-more-menu"
+                        >
                             {#each overflowItems as item (`${item.id}-${item.name}`)}
                                 <button
                                     type="button"
@@ -555,10 +529,10 @@
                                     <span>{item.name}</span>
                                 </button>
                             {/each}
-                        {/if}
-                    </div>
-                {/if}
-            </div>
+                        </div>
+                    {/if}
+                </div>
+            {/if}
         </nav>
     </div>
 {/if}

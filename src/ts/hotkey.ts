@@ -1,7 +1,7 @@
 import { get } from "svelte/store"
 import { alertMd, alertSelect, alertToast, alertWait, doingAlert, alertRequestLogs, alertError } from "./alert"
 import { changeToPreset as changeToPreset2, getDatabase  } from "./storage/database.svelte"
-import { alertStore, openPersonaList, openPresetList, PlaygroundStore, QuickSettings, SafeModeStore, selectedCharID, settingsOpen } from "./stores.svelte"
+import { alertStore, openPersonaList, openPresetList, QuickSettings, SafeModeStore, selectedCharID, settingsOpen } from "./stores.svelte"
 import { language } from "src/lang"
 import { updateTextThemeAndCSS } from "./gui/colorscheme"
 import { defaultHotkeys } from "./defaulthotkeys"
@@ -130,7 +130,6 @@ export function initHotkey(){
                         return
                     }
                     selectedCharID.set(sorted[currentIndex - 1].i)
-                    PlaygroundStore.set(0)
                     break
                 }
                 case 'nextChar':{
@@ -145,7 +144,6 @@ export function initHotkey(){
                         return
                     }
                     selectedCharID.set(sorted[currentIndex + 1].i)
-                    PlaygroundStore.set(0)
                     break
                 }
                 case 'quickMenu':{

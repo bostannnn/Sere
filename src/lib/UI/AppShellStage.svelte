@@ -5,7 +5,7 @@
     import RulebookLibrary from "../Others/RulebookManager/RulebookLibrary.svelte";
     import HomeCharacterDirectory from "./HomeCharacterDirectory.svelte";
 
-    type Workspace = "home" | "characters" | "chats" | "library" | "playground" | "settings";
+    type Workspace = "home" | "characters" | "chats" | "library" | "settings";
 
     type LibraryFilterSnapshot = {
         systems: string[];

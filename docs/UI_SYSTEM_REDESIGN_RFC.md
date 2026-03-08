@@ -5,7 +5,7 @@ Status: Draft for approval
 
 ## 1. Problem Statement
 The current app behaves like multiple unrelated products stitched together:
-- Characters, Chats, Library, Playground, and Settings use different layout and interaction models.
+- Characters, Chats, Library, and Settings use different layout and interaction models.
 - Selection and navigation contracts differ per surface (modal/overlay/full-page/hybrid).
 - Cross-surface state is not governed by one canonical route model.
 
@@ -24,8 +24,7 @@ Top-level workspaces:
 2. Characters
 3. Chats
 4. Library (RAG)
-5. Playground
-6. Settings
+5. Settings
 
 Single shell layout:
 1. Left rail: global workspace navigation + quick context status.
@@ -40,7 +39,7 @@ Define one app-route store used by all surfaces.
 
 ```ts
 interface AppRoute {
-  workspace: "home" | "characters" | "chats" | "library" | "playground" | "settings";
+  workspace: "home" | "characters" | "chats" | "library" | "settings";
   selectedCharacterId: string | null;
   selectedChatId: string | null;
   inspector: "none" | "details" | "chat" | "character";
@@ -78,11 +77,7 @@ Entity pages should differ by content only, not by control semantics.
 - Rulebook collection, ingest jobs, and retrieval settings in one workspace.
 - No separate hidden panel for core RAG controls.
 
-### 6.4 Playground
-- Treated as a workspace with the same header/toolbar/content primitives.
-- Tool cards/pages share page structure, not standalone styling islands.
-
-### 6.5 Settings
+### 6.4 Settings
 - Keep current sections, but render through shared workspace primitives.
 - Settings remains top-level workspace, not a separate shell paradigm.
 
@@ -117,15 +112,11 @@ Prohibited in new slices:
 - Move rulebook/RAG controls into unified workspace scaffolding.
 - Acceptance: no detached flows for ingest/search/settings.
 
-### Slice 4: Playground convergence
-- Recompose playground tools under shared page model.
-- Acceptance: visual and interaction parity with other workspaces.
-
-### Slice 5: Settings convergence
+### Slice 4: Settings convergence
 - Render sections using same shell/page primitives.
 - Acceptance: settings no longer feel like a separate app.
 
-### Slice 6: Legacy removal
+### Slice 5: Legacy removal
 - Remove orphaned/duplicate navigation and overlay paths.
 - Add regression smoke coverage for route transitions.
 
@@ -147,7 +138,6 @@ Prohibited in new slices:
 2. Character select behavior: auto-open latest chat (`yes`).
 3. Right inspector scope: chat-only.
 4. Library composition: unified (ingest + retrieval config + list).
-5. Playground rollout scope: full current toolset (UI transplant only).
-6. Settings composition: single workspace with internal section tabs.
-7. Migration constraint: no logic/feature changes, UI transplant only.
-8. Rollout mode: `ui_shell_v2` staged (dev -> QA -> optional beta -> default-on).
+5. Settings composition: single workspace with internal section tabs.
+6. Migration constraint: no logic/feature changes, UI transplant only.
+7. Rollout mode: `ui_shell_v2` staged (dev -> QA -> optional beta -> default-on).

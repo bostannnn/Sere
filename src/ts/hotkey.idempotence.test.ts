@@ -25,7 +25,6 @@ vi.mock("src/ts/stores.svelte", () => ({
   alertStore: writable({ type: "none", msg: "n" }),
   openPersonaList: writable(false),
   openPresetList: writable(false),
-  PlaygroundStore: writable(0),
   QuickSettings: { open: false, index: 0 },
   SafeModeStore: writable(false),
   selectedCharID: writable(-1),

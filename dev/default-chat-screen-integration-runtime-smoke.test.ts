@@ -63,7 +63,6 @@ vi.mock(import("src/ts/stores.svelte"), async () => {
   return {
     selectedCharID: writable(0),
     SizeStore: writable({ w: 1280, h: 900 }),
-    PlaygroundStore: writable(0),
     createSimpleCharacter: (character: unknown) => character,
     hypaV3ModalOpen: writable(false),
     ScrollToMessageStore: { value: -1 },

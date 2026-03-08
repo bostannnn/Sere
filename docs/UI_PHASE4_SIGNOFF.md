@@ -23,7 +23,7 @@ Reference: `docs/MIGRATION_PLAN.md` (Phase 4) and `plan.md` (`§2`–`§8`, `§1
 | Raw control semantics (`type="button"`, icon labels, toggle state attrs where applicable) | PASS | Runtime smoke + contract assertions across chat/sidebar/settings/mobile/shared UI wrappers |
 | Chat runtime long-content/header/composer stability | PASS | `dev/default-chat-screen-runtime-smoke.test.ts`, `dev/default-chat-screen-integration-runtime-smoke.test.ts`, `dev/chats-stack-runtime-smoke.test.ts`, `dev/chat-message-actions-runtime-smoke.test.ts` |
 | Sidebar interaction consistency and responsive behavior | PASS | `dev/chat-sidebar-runtime-smoke.test.ts`, `dev/chat-sidebar-integration-runtime-smoke.test.ts`, `dev/ui-shell-runtime-smoke.test.ts` |
-| Settings/playground/feature-local convergence sweeps | PASS | settings smoke pack + phase4 coverage contract + per-surface contract patterns |
+| Settings/feature-local convergence sweeps | PASS | settings smoke pack + phase4 coverage contract + per-surface contract patterns |
 
 ## Surface Coverage Closure Evidence
 
@@ -55,4 +55,4 @@ Current state: **CONDITIONAL PASS (PENDING OWNER APPROVAL)**
 4. Right sidebar: open/close/toggle/tab switching works; desktop/tablet collapse/reopen behavior is deterministic.
 5. Quick settings icon tabs: click + keyboard (`ArrowLeft/ArrowRight/Home/End`) switch tabs correctly.
 6. Mobile characters: row click opens character, no nested-button interaction glitches, add-character FAB still works.
-7. Settings/playground touched surfaces: no behavior drift while using updated primitives/tokens.
+7. Settings-touched surfaces: no behavior drift while using updated primitives/tokens.

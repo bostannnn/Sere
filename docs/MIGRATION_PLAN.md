@@ -24,7 +24,6 @@
 - Character card click behavior: open last selected chat for that character.
 - Right inspector availability: chats only.
 - Library surface: unified page (ingest + retrieval config + list).
-- Playground rollout scope: full current toolset (UI transplant only).
 - Settings model: single workspace with internal section tabs.
 - Rollout mode for `ui_shell_v2`: dev-only -> internal QA -> optional beta -> default-on after stability.
 
@@ -115,7 +114,7 @@
 - Focus specifically on mobile shell/navigation/layout parity across core workspaces.
 - Align mobile drawer behavior, touch targets, spacing, and workspace entry/exit flows with the migrated shell model.
 - Exit criteria:
-  - mobile navigation model is consistent across Home, Chats, Library, Playground, and Settings
+- mobile navigation model is consistent across Home, Chats, Library, and Settings
   - mobile drawer open/close/scrim/back behavior is deterministic
   - touch target sizing and spacing meet usability baseline on phone viewports
   - no mobile-only blocking regressions in composer/sidebar/workspace transitions

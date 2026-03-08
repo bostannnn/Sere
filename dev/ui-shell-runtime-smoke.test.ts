@@ -2,8 +2,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mount, tick, unmount } from "svelte";
 import { get } from "svelte/store";
 
-const { addCharacterMock } = vi.hoisted(() => ({
+const { addCharacterMock, overflowMenuActionMock } = vi.hoisted(() => ({
   addCharacterMock: vi.fn(async () => {}),
+  overflowMenuActionMock: vi.fn(),
 }));
 
 vi.mock(import("src/ts/stores.svelte"), async () => {
@@ -19,10 +20,17 @@ vi.mock(import("src/ts/stores.svelte"), async () => {
   const alertStore = writable({ type: "none", msg: "" });
   const bookmarkListOpen = writable(false);
   const selectedCharID = writable(-1);
-  const PlaygroundStore = writable(0);
   const uiShellV2Enabled = writable(true);
   const openRulebookManager = writable(false);
-  const additionalHamburgerMenu: Array<{ name: string; icon: string; iconType: "html" | "img" | "none"; callback: () => void; id: string }> = [];
+  const additionalHamburgerMenu: Array<{ name: string; icon: string; iconType: "html" | "img" | "none"; callback: () => void; id: string }> = [
+    {
+      id: "plugin-overflow-action",
+      name: "Plugin Action",
+      icon: "",
+      iconType: "none",
+      callback: overflowMenuActionMock,
+    },
+  ];
   const hypaV3ModalOpen = writable(false);
   const hypaV3ProgressStore = writable({
     open: false,
@@ -74,7 +82,6 @@ vi.mock(import("src/ts/stores.svelte"), async () => {
     bookmarkListOpen,
     popupStore,
     selectedCharID,
-    PlaygroundStore,
     DBState,
     uiShellV2Enabled,
     appRouteStore,
@@ -173,6 +180,7 @@ import {
   DBState,
   MobileGUI,
   SettingsMenuIndex,
+  additionalHamburgerMenu,
   appRouteStore,
   bookmarkListOpen,
   hypaV3ModalOpen,
@@ -215,6 +223,7 @@ async function flushUi() {
 describe("ui shell runtime smoke", () => {
   beforeEach(async () => {
     addCharacterMock.mockClear();
+    overflowMenuActionMock.mockClear();
     runtimeMessages = [];
     window.addEventListener("error", onError);
     window.addEventListener("unhandledrejection", onUnhandledRejection);
@@ -232,6 +241,14 @@ describe("ui shell runtime smoke", () => {
     openPersonaList.set(false);
     bookmarkListOpen.set(false);
     hypaV3ModalOpen.set(false);
+    additionalHamburgerMenu.length = 0;
+    additionalHamburgerMenu.push({
+      id: "plugin-overflow-action",
+      name: "Plugin Action",
+      icon: "",
+      iconType: "none",
+      callback: overflowMenuActionMock,
+    });
     DBState.db.characters = [
       {
         chaId: "char-1",
@@ -694,12 +711,13 @@ describe("ui shell runtime smoke", () => {
 
     moreBtn!.click();
     await flushUi();
-    const playgroundOverflowBtn = document.querySelector('[data-testid="topbar-nav-overflow-playground"]') as HTMLButtonElement | null;
-    expect(playgroundOverflowBtn).not.toBeNull();
-    playgroundOverflowBtn!.click();
-    await flushUi();
-    expect(get(appRouteStore).workspace).toBe("playground");
     expect((document.querySelector('[data-testid="topbar-nav-more"]') as HTMLButtonElement | null)?.dataset.pressed).toBe("1");
+    expect((document.querySelector('[data-testid="topbar-nav-more-menu"]') as HTMLElement | null)).not.toBeNull();
+    expect(document.querySelector('[data-testid="topbar-nav-overflow-playground"]')).toBeNull();
+
+    moreBtn!.click();
+    await flushUi();
+    expect((document.querySelector('[data-testid="topbar-nav-more"]') as HTMLButtonElement | null)?.dataset.pressed).toBe("0");
     expect((document.querySelector('[data-testid="topbar-nav-more-menu"]') as HTMLElement | null)).toBeNull();
 
     settingsBtn!.click();
@@ -716,6 +734,22 @@ describe("ui shell runtime smoke", () => {
     await flushUi();
     expect(get(appRouteStore).workspace).toBe("characters");
     expect((document.getElementById("globalMenuBtn") as HTMLButtonElement | null)?.dataset.pressed).toBe("1");
+  });
+
+  it("hides the topbar overflow trigger when no overflow items exist", async () => {
+    additionalHamburgerMenu.length = 0;
+
+    await unmount(app);
+    app = undefined;
+
+    document.body.innerHTML = "";
+    const target = document.createElement("div");
+    document.body.appendChild(target);
+    app = mount(AppComponent, { target });
+    await flushUi();
+
+    expect(document.querySelector('[data-testid="topbar-nav-more"]')).toBeNull();
+    expect(document.querySelector('[data-testid="topbar-nav-more-menu"]')).toBeNull();
   });
 
   it("syncs appRoute and clears transient overlays on workspace change", async () => {

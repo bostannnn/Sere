@@ -9,7 +9,6 @@
         bookmarkListOpen,
         MobileGUI,
         selectedCharID,
-        PlaygroundStore,
         DBState,
         appRouteStore,
         openRulebookManager,
@@ -103,9 +102,6 @@
         if ($selectedCharID >= 0) {
             return "chats";
         }
-        if ($PlaygroundStore === 1) {
-            return "playground";
-        }
         return "characters";
     }
 
@@ -196,8 +192,7 @@
         }
         return resolvedAppRoute.workspace === "characters"
             || resolvedAppRoute.workspace === "library"
-            || resolvedAppRoute.workspace === "settings"
-            || resolvedAppRoute.workspace === "playground";
+            || resolvedAppRoute.workspace === "settings";
     });
 
     const showTopbarBack = $derived.by(() => {
@@ -314,17 +309,6 @@
         clearTransientOverlays();
         $settingsOpen = false;
         $openRulebookManager = false;
-        PlaygroundStore.set(0);
-        selectedCharID.set(-1);
-        mobileChatPanelOpen = false;
-        topbarOverflowOpen = false;
-    }
-
-    function openPlaygroundFromTopbar() {
-        clearTransientOverlays();
-        $settingsOpen = false;
-        openRulebookManager.set(false);
-        PlaygroundStore.set(1);
         selectedCharID.set(-1);
         mobileChatPanelOpen = false;
         topbarOverflowOpen = false;
@@ -334,7 +318,6 @@
         clearTransientOverlays();
         settingsOpen.set(false);
         openRulebookManager.set(true);
-        PlaygroundStore.set(0);
         selectedCharID.set(-1);
         mobileChatPanelOpen = false;
         topbarOverflowOpen = false;
@@ -344,7 +327,6 @@
         clearTransientOverlays();
         openRulebookManager.set(false);
         settingsOpen.set(true);
-        PlaygroundStore.set(0);
         selectedCharID.set(-1);
         mobileChatPanelOpen = false;
         topbarOverflowOpen = false;
@@ -567,7 +549,6 @@
     <AppShellTopbar
         workspace={resolvedAppRoute.workspace}
         onOpenHome={openHomeFromTopbar}
-        onOpenPlayground={openPlaygroundFromTopbar}
         onOpenRulebooks={openRulebooksFromTopbar}
         onOpenSettings={openSettingsFromTopbar}
         primaryNavPlacement={showBottomPrimaryNav ? "bottom" : "top"}

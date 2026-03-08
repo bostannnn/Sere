@@ -33,7 +33,6 @@ vi.mock(import("src/ts/stores.svelte"), async () => {
   const { writable } = await import("svelte/store");
   return {
     selectedCharID: writable(0),
-    PlaygroundStore: writable(0),
     createSimpleCharacter: (character: unknown) => character,
     hypaV3ModalOpen: writable(false),
     ScrollToMessageStore: { value: -1 },
@@ -248,7 +247,7 @@ vi.mock(import("src/lib/SideBars/GameStateHUD.svelte"), async () => ({
 }));
 
 import DefaultChatScreen from "src/lib/ChatScreens/DefaultChatScreen.svelte";
-import { DBState } from "src/ts/stores.svelte";
+import { DBState, selectedCharID } from "src/ts/stores.svelte";
 
 let app: Record<string, unknown> | undefined;
 
@@ -262,6 +261,7 @@ describe("default chat screen runtime smoke", () => {
   beforeEach(() => {
     mocks.floatingActionCallback.mockClear();
     mocks.sendChat.mockClear();
+    selectedCharID.set(0);
     DBState.db.fixedChatTextarea = false;
     DBState.db.newMessageButtonStyle = "floating-circle";
     DBState.db.useAutoTranslateInput = true;
@@ -361,6 +361,18 @@ describe("default chat screen runtime smoke", () => {
     expect(floatingJumpButton).not.toBeNull();
     expect(floatingJumpButton?.getAttribute("type")).toBe("button");
     expect(floatingJumpButton?.getAttribute("aria-label")).toBe("New message");
+  });
+
+  it("renders the main menu when no character is selected", async () => {
+    const { selectedCharID } = await import("src/ts/stores.svelte");
+    selectedCharID.set(-1);
+
+    const target = document.createElement("div");
+    document.body.appendChild(target);
+    app = mount(DefaultChatScreen, { target });
+    await flushUi();
+
+    expect(document.querySelector('[data-testid="simple-panel-stub"]')).not.toBeNull();
   });
 
   it("keeps fixed composer and top-bar jump stable with long input/send flow", async () => {

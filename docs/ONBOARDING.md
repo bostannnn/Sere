@@ -28,7 +28,6 @@ The Node.js server owns all LLM execution, prompt assembly, RAG, and memory. The
 │   │   ├── SideBars/           # Right sidebar (CharConfig, SideChatList, GameState, LoreBook)
 │   │   ├── Setting/            # Settings pages
 │   │   ├── Others/             # Modals, RulebookManager, AlertComp, etc.
-│   │   ├── Playground/         # Playground tools
 │   │   └── UI/                 # Shared UI primitives
 │   └── ts/                     # TypeScript logic
 │       ├── process/            # Core processing pipeline

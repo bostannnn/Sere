@@ -91,8 +91,8 @@ Enforces ~70 named design contract rules across 11 categories. Rules are checked
 **Layout Invariants**
 - No `style.display =` assignments anywhere in `app.js` — use `.hidden` class toggles only
 - No inline `style="... display: ..."` attributes in `index.html` or JS templates
-- `enterHomeView()`, `enterChatView()`, `enterLibraryView()`, `enterPlaygroundView()`, `enterSettingsView()` must each be the only place that shows/hides the 5 top-level views
-- Exactly 25 top-level hidden add/remove operations are expected (5 views × 5 `enterXView` functions) — any more or fewer means view toggle logic has leaked out
+- `enterHomeView()`, `enterChatView()`, `enterLibraryView()`, `enterSettingsView()` must each be the only place that shows/hides the 4 top-level views
+- Exactly 16 top-level hidden add/remove operations are expected (4 views × 4 `enterXView` functions) — any more or fewer means view toggle logic has leaked out
 
 **Rendering Boundaries**
 - `innerHTML =` assignment is only permitted on `template` — all other targets are forbidden
@@ -125,20 +125,20 @@ Enforces ~70 named design contract rules across 11 categories. Rules are checked
 - `panel-shell`, `control-field`, `control-chip`, `drawer-elevation--left`, `drawer-elevation--right` must be defined in `styles.css`
 - All 9 primitive fallback classes (`panel-shell`, `control-field`, `control-chip`, `icon-btn`, `seg-tabs`, `seg-tab`, `list-shell`, `empty-state`, `action-rail`) must be defined in `shared/base.css`
 - ~40 feature class / primitive composition pairs are checked — e.g. every `side-action-btn` must co-occur with `icon-btn`, every `ds-settings-tab` with `seg-tab`, every `ds-settings-card` with `panel-shell`, etc.
-- Chat and playground root surfaces must include `panel-shell`
+- Chat root surfaces must include `panel-shell`
 - Drawers must include `drawer-elevation--left` / `drawer-elevation--right` modifier classes
 
 **Token Contracts**
 - `--ds-radius-xl` and `--avatar-placeholder-bg` must exist in `styles.css`
-- Major shell containers (`.playground-frame`, `.home-header`, `.character-card`, `.chat-core`) must use tokenized radii (`--ds-radius-lg` / `--ds-radius-xl`)
-- Core controls (`.chrome-btn`, `.control-field`, `.playground-tool-card`, `.playground-panel`) must use tokenized radii
+- Major shell containers (`.home-header`, `.character-card`, `.chat-core`) must use tokenized radii (`--ds-radius-lg` / `--ds-radius-xl`)
+- Core controls (`.chrome-btn`, `.control-field`) must use tokenized radii
 - Avatar placeholder surfaces (`.character-avatar`, `.sidebar-profile-avatar`, `.sidebar-portrait-tile`, `.sidebar-thumb`, `.char-config-icon-tile`) must use `--avatar-placeholder-bg`
 - Portrait tile active state must use outer ring (`box-shadow: 0 0 0 2px var(--accent-strong)`)
 - Sidebar table header must use `--ds-surface-3` / `--ds-text-secondary`
 - Char-config icon action hover states must use `--ds-text-danger`, `--ds-text-success`, `--ds-accent-strong`
 - `body` font stack must be identical in both `shared/base.css` and `styles.css`
 - `--topbar-h: 66px` must be defined exactly once; `66px` raw value must not appear elsewhere in CSS
-- `--topbar-h` must be used in grid row, view height, chat-core height, and playground-frame height calculations
+- `--topbar-h` must be used in grid row, view height, and chat-core height calculations
 - Z-index tokens must exist: `--z-view`, `--z-scrim`, `--z-topbar`, `--z-drawer`, `--z-overlay`, `--z-toast`
 - Topbar, drawer, scrim, and view shells must use z-index tokens
 
@@ -147,7 +147,7 @@ Enforces ~70 named design contract rules across 11 categories. Rules are checked
 - Shared shell search config (`SHELL_SEARCH_CONFIG`, `setShellSearchMode()`) must exist; `enterXView` functions must call it correctly
 - Sidebar mode switch must not use `.seg-tabs`; only tab strip uses `.seg-tabs`
 - Sidebar mode switch grid must use `repeat(auto-fit, minmax(0, 1fr))`
-- Global drawer nav buttons must declare `data-workspace-view` targets for `characters`, `library`, `playground`, `settings`
+- Global drawer nav buttons must declare `data-workspace-view` targets for `characters`, `library`, `settings`
 - Global drawer click handler must route via `dataset.workspaceView` — no text/order-based routing
 - Drawer header asymmetry must be preserved (global: `drawer-head-left` / `drawer-close-left`; context: `drawer-head-right` / `drawer-close-right`)
 

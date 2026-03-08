@@ -7,7 +7,6 @@ These rules are mandatory for every next iteration in this concept.
 - `Home` view shows the Character Library only.
 - Shell topbar is the only title bar; do not add a second per-view title/header bar in content.
 - Top-level navigation lives in shell topbar icon controls (`Home`, `Rulebooks`, `Settings`) plus `More` overflow.
-- `Playground` is routed from `More` overflow and must not duplicate as a separate primary topbar icon.
 - Search for `Home` and `Library` lives in a shared shell topbar component, not inside per-view content.
 - `Chat` view shows message runtime only.
 - Shell-level cross-workspace navigation is topbar-only (`Home`, `Rulebooks`, `Settings`, `More` overflow); no left global drawer.
@@ -29,7 +28,7 @@ These rules are mandatory for every next iteration in this concept.
 - All view sections must be exclusively toggled via `hidden` class through dedicated `enterXView()` functions.
 - No view may be shown/hidden outside `enterXView()` functions.
 - View visibility is controlled only via `.hidden` class toggles; inline `display` styles are forbidden in HTML/templates and JS.
-- Top-level view show/hide operations (`homeView`, `chatView`, `libraryView`, `playgroundView`, `settingsView`) must occur only inside `enterXView()` functions.
+- Top-level view show/hide operations (`homeView`, `chatView`, `libraryView`, `settingsView`) must occur only inside `enterXView()` functions.
 - `enterXView()` is the single place responsible for subtitle text, `topSidebarBtn` visibility, drawer state, and `setWorkspaceNavActive()` call.
 - Shell layering order is tokenized and documented: `--z-view` < `--z-scrim` < `--z-topbar` < `--z-drawer` < `--z-overlay` < `--z-toast`.
 - `#scrim` remains in `.app-shell` and must visually sit above stage content but below topbar and drawers.
@@ -69,7 +68,6 @@ Behavior rules:
 - Tab switch does not mutate character/chat selection.
 - Per-tab sub-panel state (for example `sidebarDisplayViewSubmenu`, `sidebarLorebookSubmenu`, `sidebarTriggerMode`, `sidebarVoiceMode`) must reset to defaults whenever `selectedCharacterId` changes.
 - `sidebarChatQuery` must be reset to `''` whenever `selectedCharacterId` changes, and is part of `resetSidebarCharacterSubpanels()`.
-- `selectedPlaygroundTool` persists across view transitions and is reset only by explicit user action (Back button). `enterPlaygroundView()` must not reset it.
 - Context drawer open/closed preference is persisted in `sessionStorage` under `moescape.contextDrawerOpen`.
 - All drawer open/close operations must go through `openDrawer()` / `closeDrawer()`; never direct `classList` open/close mutations.
 - `closeAllDrawers()` must call `closeDrawer()` for each drawer and must not bypass preference/scrim logic.
@@ -136,20 +134,13 @@ Any layout-affecting change must include:
 - `replaceMarkup()` must silently no-op on a null target.
 - `enterXView()` functions must guard against null `selectedCharacterId` before entering views that require character context.
 
-## 14) Playground state contract
-
-- Playground tool selection (`selectedPlaygroundTool`) is preserved across view transitions.
-- `enterPlaygroundView()` does not reset `selectedPlaygroundTool`.
-- The Back button inside Playground is the only mechanism that returns tool selection to `'menu'`.
-- Tool panel content is stateless and fully re-rendered on every `renderPlaygroundView()` call.
-
-## 15) Label resolution contract
+## 14) Label resolution contract
 
 - All user-visible labels derived from data keys must be resolved through `settingLabel(key)` or an equivalent label map before rendering.
 - This applies to `SETTINGS_ADVANCED_INPUTS`, `SETTINGS_ADVANCED_TOGGLES`, `SETTINGS_ACCESSIBILITY_TOGGLES`, and `HOTKEY_ROWS[].action`.
 - Raw `camelCase` or `snake_case` keys must never appear in rendered HTML as user-facing text.
 
-## 16) Layer token contract
+## 15) Layer token contract
 
 - Shell depth must use layer tokens only: `--surface-topbar`, `--surface`, `--surface-raised`, `--surface-overlay`, `--surface-recessed`.
 - Layer/chat tokens must exist in both `shared/base.css` (fallback baseline) and `styles.css` (concept-owned final values).
@@ -158,7 +149,7 @@ Any layout-affecting change must include:
 - New components must not introduce hardcoded white/blue surface fills for shell layers.
 - Shell chrome highlights (borders, divider glints, inset sheens) must be token-derived (`var(--ds-*)` + `color-mix`), not hardcoded `rgb(255 255 255 / ...)` literals.
 
-## 17) Active-state contract
+## 16) Active-state contract
 
 - Two active-state patterns are allowed and must not be mixed within the same control family:
   - `tab-pattern`: accent edge treatment (inset underline/bar), optional subtle fill.
@@ -169,7 +160,7 @@ Any layout-affecting change must include:
 - Hover and active states must be visually distinct for both patterns.
 - Visual tile selections (for example portrait tiles) use an outer selection ring, not a tab-style inset underline.
 
-## 18) Primitive contract (layout controls)
+## 17) Primitive contract (layout controls)
 
 - Use shared primitives before creating feature-scoped variants: `.panel-shell`, `.control-field`, `.control-chip`, `.drawer-elevation--left`, `.drawer-elevation--right`.
 - If a shared primitive exists for a UI pattern, it is mandatory in markup (for example `.icon-btn`, `.item-btn`, `.seg-tabs`/`.seg-tab`, `.list-shell`, `.empty-state`, `.action-rail`, `.panel-shell`, `.control-field`, `.control-chip`); feature classes are modifiers only.
@@ -181,15 +172,15 @@ Any layout-affecting change must include:
 - New shell/card containers should include `.panel-shell`; new form controls should include `.control-field`; chip/toggle buttons should include `.control-chip` where applicable.
 - Text inputs and dropdowns must share the same control height through `.control-field` (`input`/`select` parity); do not style one-off select heights per feature.
 
-## 19) Shell alignment contract
+## 18) Shell alignment contract
 
 - Topbar is a single control lane: no second content header bars for Home or other views.
 - Topbar must keep fixed control geometry across workspace switches; avoid dynamic title blocks that shift navigation controls.
 - In the topbar lane, interactive controls align to a shared height token (`--chrome-btn-h`).
 - Topbar search (`.topbar-search`) must match chrome control height, be centered in the right topbar lane, and use constrained width (`clamp(...)`) so it stays smaller than full-lane width on desktop.
-- Topbar shared search visibility is view-driven: visible in `Home` (character filter) and `Library` (rulebook filter), hidden in `Chat`, `Playground`, and `Settings`.
+- Topbar shared search visibility is view-driven: visible in `Home` (character filter) and `Library` (rulebook filter), hidden in `Chat` and `Settings`.
 
-## 20) Tokens reference (required)
+## 19) Tokens reference (required)
 
 Required CSS custom properties for shell contracts:
 
@@ -206,14 +197,14 @@ Definition ownership:
 - `shared/base.css` must include fallback definitions for required layer and chat tokens.
 - `styles.css` is the concept-owned source of final token values and visual tuning.
 
-## 21) Color scheme contract
+## 20) Color scheme contract
 
 - Prototype color-scheme switching must mirror the original app scheme set: `default`, `dark`, `light`, `cherry`, `galaxy`, `nature`, `realblack`, `monokai-light`, `monokai-black`, `lite`.
 - Color-scheme selection source of truth is the `Display -> Theme -> Color Scheme` control.
 - Scheme changes must be applied through CSS custom properties (root token updates), not feature-local hardcoded color swaps.
 - Scheme preference is persisted in `sessionStorage` under `moescape.colorScheme` and hydrated on startup.
 
-## 22) Expanded palette contract
+## 21) Expanded palette contract
 
 - The 9 seed color fields are inputs; runtime must generate full ramps for `primary`, `secondary`, `danger`, `success`, `warning`, and `neutral` (`50..900` steps).
 - Generated ramps must be exposed as both `--theme-<family>-<step>` and `--color-<family>-<step>` CSS variables.
