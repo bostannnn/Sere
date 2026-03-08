@@ -115,6 +115,33 @@ test('does not merge soft-wrapped lines across column boundaries', () => {
     ]);
 });
 
+test('clusters distant text fragments on the same pdf row', () => {
+    const clusters = __test.clusterLineItems([
+        { str: 'Lastly,', transform: [0, 0, 0, 0, 24, 500], width: 40 },
+        { str: 'create', transform: [0, 0, 0, 0, 70, 500], width: 36 },
+        { str: 'an', transform: [0, 0, 0, 0, 110, 500], width: 14 },
+        { str: 'Immortal.', transform: [0, 0, 0, 0, 130, 500], width: 54 },
+        { str: 'abbey;', transform: [0, 0, 0, 0, 225, 500], width: 38 },
+        { str: 'To', transform: [0, 0, 0, 0, 330, 500], width: 16 },
+        { str: 'play', transform: [0, 0, 0, 0, 352, 500], width: 24 },
+        { str: 'TYOV', transform: [0, 0, 0, 0, 382, 500], width: 30 },
+    ]);
+    assert.equal(clusters.length, 3);
+    assert.deepEqual(clusters.map((cluster) => cluster.text), [
+        'Lastly, create an Immortal.',
+        'abbey;',
+        'To play TYOV',
+    ]);
+});
+
+test('prefers the dominant cluster when a column row has stray fragments', () => {
+    const chosen = __test.selectRepresentativeClusterText([
+        { text: 'Lastly, create an Immortal.' },
+        { text: 'abbey;' },
+    ]);
+    assert.equal(chosen, 'Lastly, create an Immortal.');
+});
+
 if (process.exitCode && process.exitCode !== 0) {
     process.exit(process.exitCode);
 }

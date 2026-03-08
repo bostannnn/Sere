@@ -158,6 +158,63 @@ function dedupeNearbyLines(lines, windowSize = 10) {
     return output;
 }
 
+function clusterLineItems(items, gapThreshold = 18) {
+    if (!Array.isArray(items) || items.length === 0) return [];
+
+    const sorted = [...items].sort((a, b) => a.transform[4] - b.transform[4]);
+    const clusters = [];
+    let current = [sorted[0]];
+
+    for (let i = 1; i < sorted.length; i++) {
+        const previous = current[current.length - 1];
+        const next = sorted[i];
+        const gap = next.transform[4] - (previous.transform[4] + (previous.width || 0));
+        if (gap > gapThreshold) {
+            clusters.push(current);
+            current = [next];
+            continue;
+        }
+        current.push(next);
+    }
+    if (current.length > 0) {
+        clusters.push(current);
+    }
+
+    return clusters.map((cluster) => {
+        const minX = cluster[0].transform[4];
+        const maxX = cluster.reduce((value, item) => {
+            return Math.max(value, item.transform[4] + (item.width || 0));
+        }, minX);
+        return {
+            items: cluster,
+            text: normalizeLineText(cluster.map((item) => item.str).join(' ')),
+            minX,
+            maxX,
+            centerX: (minX + maxX) / 2,
+        };
+    }).filter((cluster) => cluster.text);
+}
+
+function scoreClusterText(text) {
+    const normalized = normalizeLineText(text);
+    if (!normalized) return -1;
+    const alphaNumericCount = countLettersAndDigits(normalized);
+    let score = alphaNumericCount;
+    if (looksLikeHeadingLine(normalized)) score += 10;
+    if (/[.!?:]$/.test(normalized)) score += 4;
+    if (normalized.length >= 24) score += 6;
+    if (/^[a-z]/.test(normalized)) score -= 3;
+    return score;
+}
+
+function selectRepresentativeClusterText(clusters) {
+    if (!Array.isArray(clusters) || clusters.length === 0) return '';
+    if (clusters.length === 1) return normalizeLineText(clusters[0]?.text || '');
+
+    const sorted = [...clusters].sort((a, b) => scoreClusterText(b.text) - scoreClusterText(a.text));
+    return normalizeLineText(sorted[0]?.text || '');
+}
+
 function mergeHyphenatedWraps(lines) {
     const output = [];
     for (let i = 0; i < lines.length; i++) {
@@ -361,24 +418,23 @@ async function extractTextFromPdf(buffer) {
             const rightColumn = [];
 
             lines.forEach((line) => {
-                const lineText = normalizeLineText(line.map((item) => item.str).join(' '));
+                const clusters = clusterLineItems(line);
+                const lineText = normalizeLineText(clusters.map((cluster) => cluster.text).join(' '));
                 if (!lineText) return;
 
                 const gaps = [];
                 for (let j = 1; j < line.length; j++) {
                     gaps.push(line[j].transform[4] - (line[j-1].transform[4] + (line[j-1].width || 0)));
                 }
-                const leftItems = line.filter((item) => item.transform[4] < midX);
-                const rightItems = line.filter((item) => item.transform[4] >= midX);
-                const hasBothColumns = leftItems.length > 0 && rightItems.length > 0;
+                const leftClusters = clusters.filter((cluster) => cluster.centerX < midX);
+                const rightClusters = clusters.filter((cluster) => cluster.centerX >= midX);
+                const hasBothColumns = leftClusters.length > 0 && rightClusters.length > 0;
                 const largeGapCount = gaps.filter((gap) => gap > 24).length;
                 const isTableRow = !hasBothColumns && line.length >= 4 && largeGapCount >= 2;
 
-                const isSpanning = line.some(item => {
-                    const x = item.transform[4];
-                    const width = item.width || 0;
-                    return (x < midX - 50 && (x + width) > midX + 50);
-                }) || (line.length > 1 && line[0].transform[4] < midX - 100 && line[line.length-1].transform[4] > midX + 100);
+                const isSpanning = clusters.some((cluster) => {
+                    return cluster.minX < midX - 50 && cluster.maxX > midX + 50;
+                }) || (clusters.length === 1 && clusters[0].minX < midX - 100 && clusters[0].maxX > midX + 100);
 
                 if (isTableRow) {
                     if (leftColumn.length > 0 || rightColumn.length > 0) {
@@ -386,7 +442,7 @@ async function extractTextFromPdf(buffer) {
                         leftColumn.length = 0;
                         rightColumn.length = 0;
                     }
-                    const row = normalizeTableRowText(line.map((it) => it.str));
+                    const row = normalizeTableRowText(clusters.map((cluster) => cluster.text));
                     if (row) pageText += `${row}\n`;
                 } else if (isSpanning) {
                     if (leftColumn.length > 0 || rightColumn.length > 0) {
@@ -396,12 +452,12 @@ async function extractTextFromPdf(buffer) {
                     }
                     pageText += `${lineText}\n`;
                 } else {
-                    if (leftItems.length > 0) {
-                        const leftText = normalizeLineText(leftItems.map((it) => it.str).join(' '));
+                    if (leftClusters.length > 0) {
+                        const leftText = selectRepresentativeClusterText(leftClusters);
                         if (leftText) leftColumn.push(leftText);
                     }
-                    if (rightItems.length > 0) {
-                        const rightText = normalizeLineText(rightItems.map((it) => it.str).join(' '));
+                    if (rightClusters.length > 0) {
+                        const rightText = selectRepresentativeClusterText(rightClusters);
                         if (rightText) rightColumn.push(rightText);
                     }
                 }
@@ -438,8 +494,10 @@ module.exports = {
         COLUMN_BREAK_MARKER,
         detectRecurringMarginLines,
         dedupeNearbyLines,
+        clusterLineItems,
         mergeHyphenatedWraps,
         mergeSoftWrappedLines,
         isLowSignalLine,
+        selectRepresentativeClusterText,
     },
 };
