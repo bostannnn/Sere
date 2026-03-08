@@ -5,7 +5,7 @@
     import { DownloadIcon, PencilIcon, HardDriveUploadIcon, MenuIcon, TrashIcon, SplitIcon, FolderPlusIcon, BookmarkCheckIcon, ImageIcon } from "@lucide/svelte";
 
     import { type Chat, type ChatFolder, type character, type groupChat, resolveChatBackgroundMode } from "src/ts/storage/database.svelte";
-    import { DBState, ReloadGUIPointer, bookmarkListOpen, selectedCharID } from 'src/ts/stores.svelte';
+    import { DBState, ReloadGUIPointer, bookmarkListOpen } from 'src/ts/stores.svelte';
 
     import CheckInput from "../UI/GUI/CheckInput.svelte";
     import Button from "../UI/GUI/Button.svelte";

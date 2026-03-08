@@ -14,8 +14,6 @@ function registerContentRoutes(arg = {}) {
         sendConflict,
         sendJson,
         requireSafeSegment,
-        computeEtag,
-        isSafePathSegment,
     } = arg;
     const withAsyncRoute = (routeLabel, handler) => async (req, res, next) => {
         try {
