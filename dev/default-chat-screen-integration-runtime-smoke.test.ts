@@ -3,7 +3,6 @@ import { mount, tick, unmount } from "svelte";
 
 const mocks = vi.hoisted(() => ({
   longModelLabel: "Openrouter-moonshotai/kim-k2.5",
-  floatingActionCallback: vi.fn(),
   sendChat: vi.fn(async () => {}),
 }));
 
@@ -66,18 +65,6 @@ vi.mock(import("src/ts/stores.svelte"), async () => {
     createSimpleCharacter: (character: unknown) => character,
     hypaV3ModalOpen: writable(false),
     ScrollToMessageStore: { value: -1 },
-    additionalChatMenu: [],
-    additionalFloatingActionButtons: [
-      {
-        name: "Plugin Action",
-        callback: mocks.floatingActionCallback,
-      },
-    ],
-    pluginProgressStore: writable({
-      active: false,
-      label: "",
-      color: "#64748b",
-    }),
     comfyProgressStore: writable({
       active: false,
       label: "",
@@ -334,10 +321,6 @@ vi.mock(import("src/lib/ChatScreens/AssetInput.svelte"), async () => ({
   default: (await import("./test-stubs/SimplePanelStub.svelte")).default,
 }));
 
-vi.mock(import("src/lib/Others/PluginDefinedIcon.svelte"), async () => ({
-  default: (await import("./test-stubs/SimplePanelStub.svelte")).default,
-}));
-
 vi.mock(import("src/lib/SideBars/GameStateHUD.svelte"), async () => ({
   default: (await import("./test-stubs/SimplePanelStub.svelte")).default,
 }));
@@ -359,7 +342,6 @@ function createLongMessage(seed: string) {
 
 describe("default chat screen integration runtime smoke", () => {
   beforeEach(() => {
-    mocks.floatingActionCallback.mockClear();
     mocks.sendChat.mockClear();
     DBState.db.fixedChatTextarea = true;
     DBState.db.newMessageButtonStyle = "top-bar";

@@ -1,16 +1,16 @@
 # Comfy Commander (Core Feature)
 
-Last updated: 2026-03-02
+Last updated: 2026-03-08
 
-Comfy Commander is now a first-class core feature in RisuAI.
+Comfy Commander is a first-class core feature in RisuAI.
 
-## What changed
+## Overview
 
 - `/cw` and `/comfy` are built-in commands.
-- Comfy settings/workflows/templates are managed in core settings (no plugin iframe).
+- Comfy settings, workflows, and templates are managed in core settings.
 - Comfy progress uses a dedicated core progress store.
-- Existing plugin data is migrated one-time into core state.
-- If migration succeeds and the legacy plugin is enabled, the plugin is automatically disabled to prevent duplicate command handlers.
+- Plugin-based Comfy Commander is no longer supported.
+- Old plugin-managed Comfy data is not migrated by current builds.
 
 ## Commands
 
@@ -41,29 +41,12 @@ Available configuration:
 
 Templates with `Show in Chat Menu` enabled appear in the chat overflow menu.
 
-## Migration details
+## Compatibility
 
-One-time migration source:
-
-- `db.pluginCustomStorage.templates`
-- `db.pluginCustomStorage.workflows`
-- `db.pluginCustomStorage.config`
-
-Migration gates:
-
-- Runs only when plugin presence is detected (`name === "Comfy Commander"`).
-- Runs only if `db.comfyCommander.migratedFromPlugin !== true`.
-
-Mapping:
-
-- `config.comfy_url -> comfyCommander.config.baseUrl`
-- `config.debug -> comfyCommander.config.debug`
-- Plugin-only `use_proxy` / `proxy_auth` are ignored in core.
-
-Fallback seeding:
-
-- Base URL falls back to legacy `db.comfyUiUrl` (or `http://127.0.0.1:8188`).
-- If no migrated workflows but legacy `db.comfyConfig.workflow` exists, a `Legacy Workflow` is created.
+- Comfy Commander now reads and writes only core `comfyCommander` state.
+- Legacy plugin storage keys such as `pluginCustomStorage` are obsolete.
+- If you still have plugin-era Comfy Commander data in an old save, current builds will not import it automatically.
+- Base URL still falls back to legacy `db.comfyUiUrl` defaults where applicable.
 
 ## Server proxy contract
 

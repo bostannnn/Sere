@@ -4,9 +4,8 @@
     import DisplaySettings from "./Pages/DisplaySettings.svelte";
     import BotSettings from "./Pages/BotSettings.svelte";
     import OtherBotSettings from "./Pages/OtherBotSettings.svelte";
-    import PluginSettings from "./Pages/PluginSettings.svelte";
     import AdvancedSettings from "./Pages/AdvancedSettings.svelte";
-    import { additionalSettingsMenu, MobileGUI, SettingsMenuIndex, SizeStore } from "src/ts/stores.svelte";
+    import { MobileGUI, SettingsMenuIndex, SizeStore } from "src/ts/stores.svelte";
     import AccessibilitySettings from "./Pages/AccessibilitySettings.svelte";
     import PersonaSettings from "./Pages/PersonaSettings.svelte";
     import PromptSettings from "./Pages/PromptSettings.svelte";
@@ -15,12 +14,11 @@
     import HotkeySettings from "./Pages/HotkeySettings.svelte";
     import ComfyCommanderPage from "./Pages/ComfyCommanderPage.svelte";
     import LogsSettingsPage from "./Pages/LogsSettingsPage.svelte";
-    import PluginDefinedIcon from "../Others/PluginDefinedIcon.svelte";
     import { isWebKit } from "src/ts/platform";
 
     const isDesktopSettings = $derived($SizeStore.w >= 700 && !$MobileGUI)
     const isStackedSettings = $derived(!isDesktopSettings)
-    const allowedSettingsMenus = new Set([-1, 1, 2, 3, 4, 6, 11, 12, 13, 14, 15, 16, 17]);
+    const allowedSettingsMenus = new Set([-1, 1, 2, 3, 6, 11, 12, 13, 14, 15, 16, 17]);
 
     function selectMenu(index: number) {
         if ($SettingsMenuIndex === index) {
@@ -181,20 +179,6 @@
                         <PackageIcon />
                         <span>{language.modules}</span>
                     </button>
-                    <button
-                        type="button"
-                        class="ds-settings-nav-item"
-                        title={language.plugin}
-                        aria-label={language.plugin}
-                        aria-pressed={$SettingsMenuIndex === 4}
-                        onkeydown={handleNavListKeydown}
-                        class:is-active={$SettingsMenuIndex === 4}
-                        onclick={() => {
-                        selectMenu(4)
-                    }}>
-                        <CodeIcon />
-                        <span>{language.plugin}</span>
-                    </button>
                 {/if}
                 {#if $SizeStore.w >= 768}
                         <button
@@ -255,20 +239,6 @@
                         <CodeIcon />
                         <span>{language.logs}</span>
                     </button>
-                    {#each additionalSettingsMenu as menu, index (`${menu.name}-${index}`)}
-                        <button
-                            type="button"
-                            class="ds-settings-nav-item"
-                            title={menu.name}
-                            aria-label={menu.name}
-                            onkeydown={handleNavListKeydown}
-                            onclick={() => {
-                                menu.callback()
-                        }}>
-                            <PluginDefinedIcon ico={menu} />
-                            <span>{menu.name}</span>
-                        </button>
-                    {/each}
                 {/if}
             </div>
         {/if}
@@ -284,8 +254,6 @@
                         <OtherBotSettings />
                     {:else if $SettingsMenuIndex === 3}
                         <DisplaySettings />
-                    {:else if $SettingsMenuIndex === 4}
-                        <PluginSettings />
                     {:else if $SettingsMenuIndex === 6}
                         <AdvancedSettings />
                     {:else if $SettingsMenuIndex === 11}

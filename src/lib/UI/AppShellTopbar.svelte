@@ -2,7 +2,6 @@
     import {
         ArrowLeft,
         BookIcon,
-        EllipsisIcon,
         HomeIcon,
         LayoutGridIcon,
         ListIcon,
@@ -11,9 +10,6 @@
         PlusIcon,
         SettingsIcon,
     } from "@lucide/svelte";
-    import { onDestroy, onMount } from "svelte";
-    import type { MenuDef } from "src/ts/stores.svelte";
-    import PluginDefinedIcon from "../Others/PluginDefinedIcon.svelte";
     import "./AppShellTopbar.css";
 
     type Workspace = "home" | "characters" | "chats" | "library" | "settings";
@@ -33,8 +29,6 @@
         onTopbarBack?: () => void;
         showMobileMenuAction?: boolean;
         onMobileMenuAction?: () => void;
-        overflowItems?: MenuDef[];
-        overflowOpen?: boolean;
         showShellSearch?: boolean;
         shellSearchQuery?: string;
         showRightSidebarToggle?: boolean;
@@ -74,8 +68,6 @@
         onTopbarBack = () => {},
         showMobileMenuAction = false,
         onMobileMenuAction = () => {},
-        overflowItems = [],
-        overflowOpen = $bindable(false),
         showShellSearch = false,
         shellSearchQuery = $bindable(""),
         showRightSidebarToggle = false,
@@ -101,35 +93,23 @@
         onResetLibraryFilters = () => {},
     }: Props = $props();
 
-    let overflowWrapEl = $state<HTMLElement | null>(null);
-
     const homeActive = $derived(workspace === "characters");
     const rulebooksActive = $derived(workspace === "library");
     const settingsActive = $derived(workspace === "settings");
-    const hasOverflowItems = $derived(overflowItems.length > 0);
 
     const effectiveShowTopbarBack = $derived.by(() => {
         return showTopbarBack || (primaryNavPlacement === "bottom" && mobileBackToMenuVisible);
     });
 
-    $effect(() => {
-        if (!hasOverflowItems && overflowOpen) {
-            overflowOpen = false;
-        }
-    });
-
     const openHome = () => {
-        overflowOpen = false;
         onOpenHome();
     };
 
     const openRulebooks = () => {
-        overflowOpen = false;
         onOpenRulebooks();
     };
 
     const openSettings = () => {
-        overflowOpen = false;
         onOpenSettings();
     };
 
@@ -140,37 +120,6 @@
         }
         onMobileBackToMenu();
     };
-
-    const toggleOverflow = () => {
-        overflowOpen = !overflowOpen;
-    };
-
-    const runOverflowAction = (item: MenuDef) => {
-        item.callback();
-        overflowOpen = false;
-    };
-
-    const onDocumentPointerDown = (event: PointerEvent) => {
-        if (!overflowOpen) {
-            return;
-        }
-        const target = event.target;
-        if (!(target instanceof Node)) {
-            return;
-        }
-        if (overflowWrapEl?.contains(target)) {
-            return;
-        }
-        overflowOpen = false;
-    };
-
-    onMount(() => {
-        document.addEventListener("pointerdown", onDocumentPointerDown);
-    });
-
-    onDestroy(() => {
-        document.removeEventListener("pointerdown", onDocumentPointerDown);
-    });
 </script>
 
 <header
@@ -230,43 +179,6 @@
                     onclick={openSettings}
                     data-testid="topbar-nav-settings"
                 ><SettingsIcon size={18} /></button>
-
-                {#if hasOverflowItems}
-                    <div class="ds-app-v2-topbar-overflow-wrap" bind:this={overflowWrapEl}>
-                        <button
-                            type="button"
-                            class="ds-app-v2-topbar-btn ds-app-v2-topbar-icon-btn ds-app-v2-topbar-nav-btn icon-btn icon-btn--md icon-btn--bordered"
-                            aria-label="More navigation actions"
-                            title="More"
-                            aria-pressed={overflowOpen}
-                            aria-expanded={overflowOpen}
-                            aria-controls="topbar-overflow-menu"
-                            data-pressed={overflowOpen ? "1" : "0"}
-                            onclick={toggleOverflow}
-                            data-testid="topbar-nav-more"
-                        ><EllipsisIcon size={18} /></button>
-
-                        {#if overflowOpen}
-                            <div
-                                id="topbar-overflow-menu"
-                                class="ds-app-v2-topbar-overflow panel-shell ds-ui-menu"
-                                aria-label="More navigation actions"
-                                data-testid="topbar-nav-more-menu"
-                            >
-                                {#each overflowItems as item (`${item.id}-${item.name}`)}
-                                    <button
-                                        type="button"
-                                        class="ds-app-v2-topbar-overflow-item ds-ui-menu-item"
-                                        onclick={() => runOverflowAction(item)}
-                                    >
-                                        <PluginDefinedIcon ico={item} />
-                                        <span>{item.name}</span>
-                                    </button>
-                                {/each}
-                            </div>
-                        {/if}
-                    </div>
-                {/if}
             </nav>
         {/if}
     </div>
@@ -497,42 +409,6 @@
                 data-testid="topbar-nav-settings"
             ><SettingsIcon size={18} /></button>
 
-            {#if hasOverflowItems}
-                <div class="ds-app-v2-topbar-overflow-wrap" bind:this={overflowWrapEl}>
-                    <button
-                        type="button"
-                        class="ds-app-v2-topbar-btn ds-app-v2-topbar-icon-btn ds-app-v2-topbar-nav-btn icon-btn icon-btn--md icon-btn--bordered"
-                        aria-label="More navigation actions"
-                        title="More"
-                        aria-pressed={overflowOpen}
-                        aria-expanded={overflowOpen}
-                        aria-controls="topbar-overflow-menu"
-                        data-pressed={overflowOpen ? "1" : "0"}
-                        onclick={toggleOverflow}
-                        data-testid="topbar-nav-more"
-                    ><EllipsisIcon size={18} /></button>
-
-                    {#if overflowOpen}
-                        <div
-                            id="topbar-overflow-menu"
-                            class="ds-app-v2-topbar-overflow panel-shell ds-ui-menu"
-                            aria-label="More navigation actions"
-                            data-testid="topbar-nav-more-menu"
-                        >
-                            {#each overflowItems as item (`${item.id}-${item.name}`)}
-                                <button
-                                    type="button"
-                                    class="ds-app-v2-topbar-overflow-item ds-ui-menu-item"
-                                    onclick={() => runOverflowAction(item)}
-                                >
-                                    <PluginDefinedIcon ico={item} />
-                                    <span>{item.name}</span>
-                                </button>
-                            {/each}
-                        </div>
-                    {/if}
-                </div>
-            {/if}
         </nav>
     </div>
 {/if}

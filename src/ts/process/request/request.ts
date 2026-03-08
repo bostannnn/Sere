@@ -3,7 +3,6 @@ import { language } from "../../../lang";
 import { fetchNative, globalFetch, textifyReadableStream } from "../../globalApi.svelte";
 import { getModelInfo, LLMFlags, LLMFormat, LLMProvider, type LLMModel } from "../../model/modellist";
 import { risuEscape, risuUnescape } from "../../parser.svelte";
-import { pluginV2 } from "../../plugins/plugins.svelte";
 import { getCurrentCharacter, getCurrentChat, getDatabase, type character } from "../../storage/database.svelte";
 import { tokenizeNum } from "../../tokenizer";
 import { sleep } from "../../util";
@@ -138,7 +137,6 @@ function isCanonicalServerRuntimeModel(aiModel?: string, modelInfo?: LLMModel): 
             modelInfo.format === LLMFormat.VertexAIGemini ||
             modelInfo.format === LLMFormat.NovelList ||
             modelInfo.format === LLMFormat.WebLLM ||
-            modelInfo.format === LLMFormat.Plugin ||
             modelInfo.format === LLMFormat.Echo ||
             modelInfo.format === LLMFormat.Cohere ||
             modelInfo.format === LLMFormat.Horde ||
@@ -429,12 +427,6 @@ export async function requestChatData(arg:requestDataArgument, model:ModelModeEx
                     result: 'Aborted'
                 }
             }
-    
-            if(pluginV2.replacerbeforeRequest.size > 0){
-                for(const replacer of pluginV2.replacerbeforeRequest){
-                    arg.formated = await replacer(arg.formated, model)
-                }
-            }
             
             try{
                 const currentChar = getCurrentCharacter()
@@ -477,12 +469,6 @@ export async function requestChatData(arg:requestDataArgument, model:ModelModeEx
                 da.result = risuEscape(da.result)
             }
     
-            if(da.type === 'success' && pluginV2.replacerafterRequest.size > 0){
-                for(const replacer of pluginV2.replacerafterRequest){
-                    da.result = await replacer(da.result, model)
-                }
-            }
-    
             if(da.type === 'success' && db.banCharacterset?.length > 0){
                 let failed = false
                 for(const set of db.banCharacterset){
@@ -523,7 +509,7 @@ export async function requestChatData(arg:requestDataArgument, model:ModelModeEx
             
             trys += 1
             if(trys > db.requestRetrys){
-                if(fallbackIndex === fallBackModels.length-1 || da.model === 'custom'){
+                if(fallbackIndex === fallBackModels.length-1){
                     return da
                 }
                 break

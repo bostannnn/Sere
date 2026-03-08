@@ -1424,10 +1424,6 @@ body {
   font-weight: var(--ds-font-weight-medium);
 }
 
-.ds-settings-plugin-name-wrap {
-  font-weight: var(--ds-font-weight-semibold);
-}
-
 .ds-settings-list-container {
   border: 1px solid var(--ds-border-subtle);
   border-radius: var(--ds-radius-md);
@@ -2121,85 +2117,6 @@ body {
 
 .ds-chatlist-footer {
   margin-top: var(--ds-space-2);
-}
-
-.ds-plugin-alert-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 50;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: 0;
-  margin: 0;
-  padding: var(--ds-space-4);
-  background: rgb(0 0 0 / 0.5);
-}
-
-.ds-plugin-alert-modal {
-  width: min(28rem, 100%);
-  max-height: 100%;
-  overflow-y: auto;
-  padding: var(--ds-space-4);
-  border-radius: var(--ds-radius-md);
-  background: var(--color-orange-800);
-  box-shadow: var(--shadow-xl);
-}
-
-.ds-plugin-alert-title {
-  margin: 0 0 var(--ds-space-4);
-  color: var(--color-gray-100);
-  font-size: var(--ds-font-size-lg);
-  font-weight: var(--ds-font-weight-semibold);
-  line-height: 1.2;
-}
-
-.ds-plugin-alert-list {
-  margin: 0 0 var(--ds-space-4);
-  color: var(--color-gray-300);
-  list-style-position: inside;
-  list-style-type: disc;
-}
-
-.ds-plugin-alert-list-item-detail {
-  margin-left: var(--ds-space-4);
-  color: var(--color-gray-300);
-  font-size: var(--ds-font-size-sm);
-  font-style: italic;
-}
-
-.ds-plugin-alert-details {
-  margin-bottom: var(--ds-space-4);
-  color: var(--color-gray-200);
-}
-
-.ds-plugin-alert-summary {
-  margin-bottom: var(--ds-space-2);
-  color: var(--color-gray-200);
-  cursor: pointer;
-}
-
-.ds-plugin-alert-dev-message {
-  margin: 0 0 var(--ds-space-1);
-  color: var(--color-gray-200);
-}
-
-.ds-plugin-alert-continue {
-  color: var(--color-gray-200);
-}
-
-.ds-plugin-alert-cancel {
-  width: 100%;
-  padding: var(--ds-space-2) var(--ds-space-3);
-  border-radius: var(--ds-radius-sm);
-  background: var(--color-gray-700);
-  color: var(--color-gray-100);
-  font-weight: var(--ds-font-weight-semibold);
-  transition: background-color var(--ds-motion-fast) var(--ds-ease-standard);
-}
-
-.ds-plugin-alert-cancel:hover {
-  background: var(--color-gray-600);
 }
 
 .ds-hypa-modal-overlay {
@@ -4590,7 +4507,7 @@ body {
   border-bottom-right-radius: var(--ds-radius-md);
 }
 
-.ds-chat-plugin-spinner-inline {
+.ds-chat-task-spinner-inline {
   display: inline-flex;
   align-items: center;
   margin-inline: var(--ds-space-2);
@@ -4709,29 +4626,29 @@ body {
   overflow-y: auto;
 }
 
-.ds-chat-plugin-progress {
+.ds-chat-task-progress {
   margin: var(--ds-space-2) var(--ds-space-4) var(--ds-space-1);
 }
 
-.ds-chat-plugin-progress-track {
+.ds-chat-task-progress-track {
   height: 4px;
   border-radius: var(--ds-radius-pill);
   background: var(--ds-border-subtle);
   overflow: hidden;
 }
 
-.ds-chat-plugin-progress-indicator {
-  width: var(--ds-chat-plugin-progress-value, 0%);
+.ds-chat-task-progress-indicator {
+  width: var(--ds-chat-task-progress-value, 0%);
   height: 100%;
   border-radius: var(--ds-radius-pill);
-  background: var(--ds-chat-plugin-progress-color, var(--ds-border-strong));
+  background: var(--ds-chat-task-progress-color, var(--ds-border-strong));
   animation: ds-chat-progress-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 
-.ds-chat-plugin-progress-label {
+.ds-chat-task-progress-label {
   margin-top: var(--ds-space-1);
   font-size: var(--ds-font-size-xs);
-  color: var(--ds-chat-plugin-progress-color, var(--ds-text-secondary));
+  color: var(--ds-chat-task-progress-color, var(--ds-text-secondary));
 }
 
 @keyframes ds-chat-progress-pulse {
@@ -5254,7 +5171,7 @@ body {
 
 .ds-chat-screen-shell[data-reading-mode='focus'] .default-chat-screen > :is(
     .ds-chat-composer-shell,
-    .ds-chat-plugin-progress,
+    .ds-chat-task-progress,
     .ds-chat-translate-shell,
     .ds-chat-inlay-list,
     .ds-chat-sticker-strip,
@@ -6432,7 +6349,7 @@ body,
   transition: border-color var(--ds-motion-base) var(--ds-ease-standard);
 }
 
-.ds-chat-spinner-plugin {
+.ds-chat-spinner-aux {
   --ds-chat-spinner-color: var(--ds-border-strong);
 }
 

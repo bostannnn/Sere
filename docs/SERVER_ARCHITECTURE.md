@@ -65,10 +65,6 @@ The client (Svelte SPA) is a thin UI that sends high-level intents and renders r
 |--------|------|-------------|
 | POST | `/data/assets` | Upload asset |
 | GET | `/data/assets/*` | Serve asset file |
-| GET/PUT | `/data/plugins/manifest` | Plugin manifest CRUD |
-| GET/PUT/DELETE | `/data/plugins/:name` | Individual plugin CRUD |
-| DELETE | `/data/plugins/by-name/:name` | Delete plugin by name |
-| POST | `/data/plugins/log` | Plugin log entry |
 | GET/PUT/DELETE | `/data/{prompts,themes,color_schemes}/:id` | Prompt/theme/color scheme CRUD |
 
 ### RAG (`server/node/routes/rag_routes.cjs`)
@@ -226,7 +222,6 @@ data/
 │   │       └── chats/
 │   │           └── {chatId}.json
 │   ├── assets/other/          # Uploaded images/files
-│   ├── plugins/               # Plugin files
 │   ├── prompts/               # Prompt presets
 │   ├── themes/                # UI themes
 │   ├── color_schemes/         # Color schemes

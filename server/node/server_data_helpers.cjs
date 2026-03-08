@@ -33,7 +33,6 @@ function createServerDataHelpers(arg = {}) {
         await ensureDir(`${dataDirs.assets}/backgrounds`);
         await ensureDir(`${dataDirs.assets}/generated`);
         await ensureDir(`${dataDirs.assets}/other`);
-        await ensureDir(dataDirs.plugins);
         await ensureDir(dataDirs.prompts);
         await ensureDir(dataDirs.themes);
         await ensureDir(dataDirs.color_schemes);

@@ -72,7 +72,6 @@ export const presetTemplate:botPreset = {
   formatingOrder: ['main', 'description', 'personaPrompt', 'chats', 'lastChat', 'jailbreak', 'lorebook', 'globalNote', 'authorNote'],
   aiModel: 'gemini-3-flash-preview',
   subModel: 'gemini-3-flash-preview',
-  currentPluginProvider: '',
   textgenWebUIStreamURL: '',
   textgenWebUIBlockingURL: '',
   forceReplaceUrl: '',
@@ -173,7 +172,6 @@ function buildSavedPreset(db: Database): botPreset {
     formatingOrder: db.formatingOrder,
     aiModel: db.aiModel,
     subModel: db.subModel,
-    currentPluginProvider: db.currentPluginProvider,
     textgenWebUIStreamURL: db.textgenWebUIStreamURL,
     textgenWebUIBlockingURL: db.textgenWebUIBlockingURL,
     forceReplaceUrl: db.forceReplaceUrl,
@@ -359,7 +357,6 @@ export function setPresetOnDatabase(db: Database, newPres: botPreset) {
   db.formatingOrder = newPres.formatingOrder ?? db.formatingOrder;
   db.aiModel = newPres.aiModel ?? db.aiModel;
   db.subModel = newPres.subModel ?? db.subModel;
-  db.currentPluginProvider = newPres.currentPluginProvider ?? db.currentPluginProvider;
   db.textgenWebUIStreamURL = newPres.textgenWebUIStreamURL ?? db.textgenWebUIStreamURL;
   db.textgenWebUIBlockingURL = newPres.textgenWebUIBlockingURL ?? db.textgenWebUIBlockingURL;
   db.forceReplaceUrl = newPres.forceReplaceUrl ?? db.forceReplaceUrl;

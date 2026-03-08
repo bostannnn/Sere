@@ -24,7 +24,6 @@ import {
     DEFAULT_GLOBAL_RAG_SETTINGS,
     DEFAULT_OPENROUTER_REQUEST_MODEL,
     ensureComfyCommanderStateShape,
-    migrateComfyCommanderFromPluginStorage,
     migrateRemovedProviderSelections,
     normalizeChatBackground,
     resolveChatBackgroundMode,
@@ -171,12 +170,6 @@ export function setDatabase(data:Database){
     }
     if(checkNullish(data.translatorMaxResponse)){
         data.translatorMaxResponse = 1000
-    }
-    if(checkNullish(data.currentPluginProvider)){
-        data.currentPluginProvider = ''
-    }
-    if(checkNullish(data.plugins)){
-        data.plugins = []
     }
     if(checkNullish(data.zoomsize)){
         data.zoomsize = 100
@@ -494,7 +487,6 @@ export function setDatabase(data:Database){
     data.stabilityModel ??= 'sd3-large'
     data.stabllityStyle ??= ''
     data.legacyTranslation ??= false
-    data.pluginCustomStorage ??= {}
     data.comfyUiUrl ??= 'http://localhost:8188'
     data.comfyConfig ??= {
         workflow: '',
@@ -655,8 +647,12 @@ export function setDatabase(data:Database){
         data.promptInfoInsideChat = false
     }
     data.createFolderOnBranch ??= true
-    migrateComfyCommanderFromPluginStorage(data)
     ensureComfyCommanderStateShape(data)
+    const legacyPluginCleanup = data as unknown as Record<string, unknown>
+    delete legacyPluginCleanup.plugins
+    delete legacyPluginCleanup.currentPluginProvider
+    delete legacyPluginCleanup.pluginV2
+    delete legacyPluginCleanup.pluginCustomStorage
     changeLanguage(data.language)
     setDatabaseLite(data)
 }

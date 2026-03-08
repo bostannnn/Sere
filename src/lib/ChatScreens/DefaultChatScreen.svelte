@@ -3,7 +3,7 @@
 
     import Suggestion from './Suggestion.svelte';
     import { CameraIcon, DatabaseIcon, DicesIcon, GlobeIcon, ImagePlusIcon, LanguagesIcon, Laugh, MenuIcon, MicOffIcon, PackageIcon, RefreshCcwIcon, ReplyIcon, Send, StepForwardIcon, XIcon, ArrowDown } from "@lucide/svelte";
-    import { selectedCharID, createSimpleCharacter, ScrollToMessageStore, additionalChatMenu, additionalFloatingActionButtons, pluginProgressStore, comfyProgressStore } from "../../ts/stores.svelte";
+    import { selectedCharID, createSimpleCharacter, ScrollToMessageStore, comfyProgressStore } from "../../ts/stores.svelte";
     import { tick } from 'svelte';
     import Chat from "./Chat.svelte";
     import { getDatabase, type Message } from "../../ts/storage/database.svelte";
@@ -32,7 +32,6 @@
     import { resolveServerAuthToken } from "src/ts/storage/serverAuth";
     import Chats from './Chats.svelte';
     import Button from '../UI/GUI/Button.svelte';
-    import PluginDefinedIcon from '../Others/PluginDefinedIcon.svelte';
     import GameStateHud from '../SideBars/GameStateHUD.svelte';
     import { runComfyTemplateById } from 'src/ts/integrations/comfy/execute';
     const defaultChatScreenLog = (..._args: unknown[]) => {};
@@ -720,27 +719,15 @@
             }
         }}>
             <GameStateHud />
-            {#if $pluginProgressStore.active}
-                <div class="ds-chat-plugin-progress" style:--ds-chat-plugin-progress-color={$pluginProgressStore.color}>
-                    <div class="ds-chat-plugin-progress-track">
-                        <div class="ds-chat-plugin-progress-indicator"
-                            style:--ds-chat-plugin-progress-value="60%"
-                        ></div>
-                    </div>
-                    {#if $pluginProgressStore.label}
-                        <div class="ds-chat-plugin-progress-label">{$pluginProgressStore.label}</div>
-                    {/if}
-                </div>
-            {/if}
             {#if $comfyProgressStore.active}
-                <div class="ds-chat-plugin-progress" style:--ds-chat-plugin-progress-color={$comfyProgressStore.color}>
-                    <div class="ds-chat-plugin-progress-track">
-                        <div class="ds-chat-plugin-progress-indicator"
-                            style:--ds-chat-plugin-progress-value="60%"
+                <div class="ds-chat-task-progress" style:--ds-chat-task-progress-color={$comfyProgressStore.color}>
+                    <div class="ds-chat-task-progress-track">
+                        <div class="ds-chat-task-progress-indicator"
+                            style:--ds-chat-task-progress-value="60%"
                         ></div>
                     </div>
                     {#if $comfyProgressStore.label}
-                        <div class="ds-chat-plugin-progress-label">{$comfyProgressStore.label}</div>
+                        <div class="ds-chat-task-progress-label">{$comfyProgressStore.label}</div>
                     {/if}
                 </div>
             {/if}
@@ -1010,22 +997,6 @@
                         </button>
                     {/each}
 
-                    {#each additionalChatMenu as menu, i (`${menu.name}-${i}`)}
-                        <div class="ds-chat-side-menu-divider"></div>
-                        <button
-                            type="button"
-                            class="ds-chat-side-menu-item ds-ui-menu-item"
-                            title={menu.name}
-                            aria-label={menu.name}
-                            onclick={() => {
-                            menu.callback()
-                            openMenu = false
-                        }}>
-                            <PluginDefinedIcon ico={menu} />
-                            <span class="ds-chat-side-menu-label">{menu.name}</span>
-                        </button>
-                    {/each}
-
                     {#if DBState.db.translator !== ''}
                         <button
                             type="button"
@@ -1233,16 +1204,9 @@
                         <Send />
                     </button>
                 {/if}
-                {#if $pluginProgressStore.active}
-                    <div class="ds-chat-plugin-spinner-inline">
-                        <div class="ds-chat-spinner ds-chat-spinner-plugin"
-                            style:--ds-chat-spinner-color={$pluginProgressStore.color}
-                        ></div>
-                    </div>
-                {/if}
                 {#if $comfyProgressStore.active}
-                    <div class="ds-chat-plugin-spinner-inline">
-                        <div class="ds-chat-spinner ds-chat-spinner-plugin"
+                    <div class="ds-chat-task-spinner-inline">
+                        <div class="ds-chat-spinner ds-chat-spinner-aux"
                             style:--ds-chat-spinner-color={$comfyProgressStore.color}
                         ></div>
                     </div>
@@ -1268,20 +1232,3 @@
         </div>
     {/if}
 </div>
-
-{#if additionalFloatingActionButtons.length > 0}
-    <div class="ds-chat-floating-actions action-rail">
-        {#each additionalFloatingActionButtons as button, i (`${button.name}-${i}`)}
-            <button
-                type="button"
-                class="ds-chat-floating-action-btn icon-btn icon-btn--sm"
-                title={button.name}
-                aria-label={button.name}
-                onclick={() => {
-                button.callback()
-            }}>
-                <PluginDefinedIcon ico={button} />
-            </button>
-        {/each}
-    </div>
-{/if}

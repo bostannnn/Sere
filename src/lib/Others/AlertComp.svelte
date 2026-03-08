@@ -424,8 +424,6 @@
                 <h2 class="alert-heading alert-heading-error">Error</h2>
             {:else if $alertStore.type === 'ask'}
                 <h2 class="alert-heading">Confirm</h2>
-            {:else if $alertStore.type === 'pluginconfirm'}
-                <h2 class="alert-heading">Plugin Import</h2>
             {:else if $alertStore.type === 'selectChar'}
                 <h2 class="alert-heading">Select</h2>
             {:else if $alertStore.type === 'input'}
@@ -445,24 +443,6 @@
                     e.preventDefault();
                     openURL('https://sv.risuai.xyz/hub/tos');
                 }}>Terms of Service</a> to continue</div>
-            {:else if $alertStore.type === 'pluginconfirm'}
-                {@const parts = $alertStore.msg.split('\n\n')}
-                {@const mainPart = parts[0]}
-                {@const confirmMessage = parts[1]}
-                {@const mainParts = mainPart.split('\n')}
-                {@const pluginName = mainParts[0]}
-                {@const warnings = mainParts.slice(1)}
-                <div class="plugin-confirm-content">
-                    <p class="plugin-name">{pluginName}</p>
-                    {#if warnings.length > 0}
-                        <ul class="warnings-list">
-                            {#each warnings as warning (warning)}
-                                <li class="warning-item">{warning}</li>
-                            {/each}
-                        </ul>
-                    {/if}
-                    <p class="confirm-message">{confirmMessage}</p>
-                </div>
             {:else if $alertStore.type !== 'select' && $alertStore.type !== 'requestdata' && $alertStore.type !== 'addchar' && $alertStore.type !== 'hypaV2' && $alertStore.type !== 'chatOptions'}
                 <span class="alert-body-message alert-prewrap">{$alertStore.msg}</span>
                 {#if $alertStore.submsg && $alertStore.type !== 'progress'}
@@ -503,7 +483,7 @@
                 </div>
             {/if}
 
-            {#if $alertStore.type === 'ask' || $alertStore.type === 'pluginconfirm'}
+            {#if $alertStore.type === 'ask'}
                 <div class="alert-action-row">
                     <Button className="alert-action-button" onclick={() => {
                         alertStore.set({
@@ -1800,28 +1780,6 @@
 
     .alert-branch-line-primary {
         border-color: color-mix(in srgb, var(--alert-info-primary) 72%, var(--ds-text-primary) 28%);
-    }
-
-
-    .plugin-confirm-content .plugin-name {
-        font-size: 1.25rem;
-        font-weight: bold;
-        color: var(--ds-text-primary);
-    }
-    .plugin-confirm-content .warnings-list {
-        list-style-type: disc;
-        list-style-position: inside;
-        margin-top: 0.5rem;
-        margin-bottom: 0.5rem;
-        padding-left: 1rem;
-        color: var(--alert-info-danger);
-    }
-    .plugin-confirm-content .warning-item {
-        margin-bottom: 0.25rem;
-    }
-    .plugin-confirm-content .confirm-message {
-        margin-top: 1rem;
-        color: var(--ds-text-secondary);
     }
     .break-any{
         word-break: normal;

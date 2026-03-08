@@ -152,27 +152,6 @@ const PHASE4_UNCOVERED_MATRIX = [
     ],
   },
   {
-    file: "src/lib/Others/PluginAlertModal.svelte",
-    classification: "migrate",
-    owner: "ui-shell-contract",
-    rationale: "Plugin risk modal actions now use explicit button semantics and action-rail composition.",
-    requiredPatterns: [
-      "class=\"ds-plugin-alert-actions action-rail\"",
-      "type=\"button\"",
-      "aria-label={language.continueAnyway}",
-      "aria-label={language.doNotInstall}",
-    ],
-  },
-  {
-    file: "src/lib/Others/PluginDefinedIcon.svelte",
-    classification: "infra",
-    owner: "ui-shell-contract",
-    rationale: "Plugin icon sanitizer/renderer is infrastructure-only and not a user-facing primitive shell.",
-    requiredPatterns: [
-      "DOMPurify.sanitize",
-    ],
-  },
-  {
     file: "src/lib/Others/SavePopupIcon.svelte",
     classification: "migrate",
     owner: "ui-shell-contract",

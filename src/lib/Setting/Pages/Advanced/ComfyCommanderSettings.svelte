@@ -22,7 +22,6 @@
             },
             workflows: [],
             templates: [],
-            migratedFromPlugin: false,
         };
         DBState.db.comfyCommander.version = 1;
         DBState.db.comfyCommander.config ??= {
@@ -211,12 +210,6 @@
                 </Button>
             </div>
         </div>
-
-        {#if DBState.db.comfyCommander.migratedFromPlugin}
-            <span class="ds-settings-renderer-warning">
-                Migrated from plugin{DBState.db.comfyCommander.migratedAt ? ` (${new Date(DBState.db.comfyCommander.migratedAt).toLocaleString()})` : ""}.
-            </span>
-        {/if}
     </div>
 {/snippet}
 

@@ -51,10 +51,6 @@ vi.mock("src/ts/stores.svelte", async () => {
   };
 });
 
-vi.mock("src/ts/plugins/plugins.svelte", () => ({
-  loadPlugins: vi.fn(async () => {}),
-}));
-
 vi.mock("src/ts/alert", () => ({
   alertError: vi.fn(),
   alertMd: vi.fn(),

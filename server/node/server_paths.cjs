@@ -16,7 +16,6 @@ function createServerPaths(arg = {}) {
         root: dataRoot,
         characters: path.join(dataRoot, 'characters'),
         assets: path.join(dataRoot, 'assets'),
-        plugins: path.join(dataRoot, 'plugins'),
         prompts: path.join(dataRoot, 'prompts'),
         themes: path.join(dataRoot, 'themes'),
         color_schemes: path.join(dataRoot, 'color_schemes'),

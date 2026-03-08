@@ -1,5 +1,4 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import type { RisuPlugin } from '../plugins/plugins.svelte';
 import type { triggerscript as triggerscriptMain } from '../process/triggers';
 import type { NAISettings } from '../process/models/nai';
 import type { ColorScheme } from '../gui/colorscheme';
@@ -57,8 +56,6 @@ export interface Database{
     forceReplaceUrl: string
     language: string
     translator: string
-    plugins: RisuPlugin[]
-    currentPluginProvider: string
     zoomsize:number
     customBackground:string
     textgenWebUIStreamURL:string
@@ -309,7 +306,6 @@ export interface Database{
     geminiStream?:boolean
     assetMaxDifference:number
     menuSideBar:boolean
-    pluginV2: RisuPlugin[]
     showSavingIcon:boolean
     presetRegex: customscript[]
     banCharacterset:string[]
@@ -391,7 +387,6 @@ export interface Database{
     verbosity:number
     dynamicOutput?:DynamicOutput
     hubServerType?:string
-    pluginCustomStorage:{[key:string]:any}
     ImagenModel:string
     ImagenImageSize:string
     ImagenAspectRatio:string
@@ -743,7 +738,6 @@ export interface botPreset{
     aiModel?: string
     subModel?:string
     removedModelMigrationNotice?: string[]
-    currentPluginProvider?:string
     textgenWebUIStreamURL?:string
     textgenWebUIBlockingURL?:string
     forceReplaceUrl?:string
@@ -882,8 +876,6 @@ export interface ComfyCommanderState {
     config: ComfyCommanderConfig
     workflows: ComfyCommanderWorkflow[]
     templates: ComfyCommanderTemplate[]
-    migratedFromPlugin: boolean
-    migratedAt?: number
 }
 
 export type FormatingOrderItem = 'main'|'jailbreak'|'chats'|'lorebook'|'globalNote'|'authorNote'|'lastChat'|'description'|'postEverything'|'personaPrompt'|'rulebookRag'

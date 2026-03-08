@@ -3,7 +3,6 @@ import type { character, Database, groupChat } from "./storage/database.svelte";
 import { type simpleCharacterArgument } from "./parser.svelte";
 import type { alertData } from "./alert";
 import { resetScriptCache } from "./process/scripts";
-import type { PluginSafetyErrors } from "./plugins/pluginSafety";
 import { comfyProgressDefault } from "./integrations/comfy/types";
 
 function shouldUseMobileGUI(){
@@ -88,11 +87,6 @@ export const hypaV3ProgressStore = writable({
     subMsg: '',
 })
 export const openRulebookManager = writable(false)
-export const pluginProgressStore = writable({
-    active: false,
-    label: '',
-    color: '#22c55e',
-})
 export const comfyProgressStore = writable({
     ...comfyProgressDefault,
 })
@@ -209,25 +203,7 @@ export const QuickSettings = $state({
     index: 0
 })
 
-export const pluginAlertModalStore = $state({
-    open: false,
-    errors: [] as PluginSafetyErrors[]
-})
-
 export const disableHighlight = writable(true)
-
-export type MenuDef = {
-    name: string,
-    icon: string,
-    iconType:'html'|'img'|'none',
-    callback: (...args: unknown[]) => unknown,
-    id: string,
-}
-
-export const additionalSettingsMenu = $state([] as MenuDef[])
-export const additionalFloatingActionButtons = $state([] as MenuDef[])
-export const additionalHamburgerMenu = $state([] as MenuDef[])
-export const additionalChatMenu = $state([] as MenuDef[])
 export const stateEditorActive = writable(false);
 export const popupStore = $state({
     children: null as null | import("svelte").Snippet,
@@ -235,9 +211,6 @@ export const popupStore = $state({
     mouseY: 0,
 openId: 0,
 })
-
-//Set might be more ideal, however since Svelte doesn't support reactive Sets, using array for now
-export const hotReloading = $state<string[]>([])
 
 ReloadGUIPointer.subscribe(() => {
     ReloadChatPointer.set({})

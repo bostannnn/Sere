@@ -8,7 +8,6 @@ vi.mock(import("src/ts/stores.svelte"), async () => {
     MobileGUI: writable(false),
     SettingsMenuIndex: writable(1),
     SizeStore: writable({ w: 1280, h: 900 }),
-    additionalSettingsMenu: [],
   };
 });
 
@@ -21,7 +20,6 @@ vi.mock(import("src/lang"), () => ({
     language: "Language",
     accessibility: "Accessibility",
     modules: "Modules",
-    plugin: "Plugin",
     hotkey: "Hotkey",
     advancedSettings: "Advanced Settings",
     comfyCommander: "Comfy Commander",
@@ -46,9 +44,6 @@ vi.mock(import("src/lib/Setting/Pages/DisplaySettings.svelte"), async () => ({
   default: (await import("./test-stubs/SettingsTabbedStub.svelte")).default,
 }));
 
-vi.mock(import("src/lib/Setting/Pages/PluginSettings.svelte"), async () => ({
-  default: (await import("./test-stubs/SettingsPageStub.svelte")).default,
-}));
 vi.mock(import("src/lib/Setting/Pages/AdvancedSettings.svelte"), async () => ({
   default: (await import("./test-stubs/SettingsPageStub.svelte")).default,
 }));
@@ -79,17 +74,8 @@ vi.mock(import("src/lib/Setting/Pages/ComfyCommanderPage.svelte"), async () => (
 vi.mock(import("src/lib/Setting/Pages/LogsSettingsPage.svelte"), async () => ({
   default: (await import("./test-stubs/SettingsPageStub.svelte")).default,
 }));
-vi.mock(import("src/lib/Others/PluginDefinedIcon.svelte"), async () => ({
-  default: (await import("./test-stubs/SettingsPageStub.svelte")).default,
-}));
-
 import Settings from "src/lib/Setting/Settings.svelte";
-import {
-  MobileGUI,
-  SettingsMenuIndex,
-  SizeStore,
-  additionalSettingsMenu,
-} from "src/ts/stores.svelte";
+import { MobileGUI, SettingsMenuIndex, SizeStore } from "src/ts/stores.svelte";
 
 const NAV_SHELL_SELECTOR = ".ds-settings-nav-shell.ds-settings-nav-panel";
 const CONTENT_SHELL_SELECTOR =
@@ -234,7 +220,6 @@ describe("settings runtime smoke", () => {
     window.addEventListener("error", onError);
     window.addEventListener("unhandledrejection", onUnhandledRejection);
 
-    additionalSettingsMenu.length = 0;
     MobileGUI.set(false);
     SizeStore.set({ w: 1280, h: 900 });
     SettingsMenuIndex.set(1);
@@ -265,7 +250,6 @@ describe("settings runtime smoke", () => {
       "Display",
       "Accessibility",
       "Modules",
-      "Plugin",
       "Hotkey",
       "Advanced Settings",
       "Comfy Commander",

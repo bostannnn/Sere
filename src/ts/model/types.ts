@@ -56,7 +56,6 @@ export enum LLMFormat{
     NovelAI,
     WebLLM,
     OobaLegacy,
-    Plugin,
     Ooba,
     Kobold,
     Ollama,

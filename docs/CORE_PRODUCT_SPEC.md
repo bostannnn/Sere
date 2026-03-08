@@ -175,7 +175,7 @@ Acceptance criteria:
 ## 7) Out of Scope (Until Core Is Stable)
 1. Visual style exploration as primary effort
 2. New social/share/community surfaces
-3. Non-essential plugin UX expansion
+3. Non-essential extension-surface expansion
 4. New backend/provider migrations unrelated to core workflows
 
 ## 8) Delivery Priority

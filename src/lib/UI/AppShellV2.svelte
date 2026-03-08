@@ -1,7 +1,6 @@
 <script lang="ts">
     import { onMount } from "svelte";
     import {
-        additionalHamburgerMenu,
         settingsOpen,
         SettingsMenuIndex,
         openPresetList,
@@ -36,7 +35,6 @@
         getFilterSnapshot: () => LibraryFilterSnapshot;
     };
 
-    let topbarOverflowOpen = $state(false);
     let uiShellRightSidebarTab = $state<RightSidebarTab>("chat");
     let librarySidebarTab = $state<"library" | "settings">("library");
     let mobileChatPanelOpen = $state(false);
@@ -311,7 +309,6 @@
         $openRulebookManager = false;
         selectedCharID.set(-1);
         mobileChatPanelOpen = false;
-        topbarOverflowOpen = false;
     }
 
     function openRulebooksFromTopbar() {
@@ -320,7 +317,6 @@
         openRulebookManager.set(true);
         selectedCharID.set(-1);
         mobileChatPanelOpen = false;
-        topbarOverflowOpen = false;
     }
 
     function openSettingsFromTopbar() {
@@ -329,7 +325,6 @@
         settingsOpen.set(true);
         selectedCharID.set(-1);
         mobileChatPanelOpen = false;
-        topbarOverflowOpen = false;
     }
 
     function handleTopbarBack() {
@@ -506,10 +501,6 @@
             return;
         }
 
-        if (topbarOverflowOpen) {
-            topbarOverflowOpen = false;
-            event.preventDefault();
-        }
     }
 
     let lastWorkspace = $state<AppRoute["workspace"]>(resolveWorkspace());
@@ -558,8 +549,6 @@
         onTopbarBack={handleTopbarBack}
         showMobileMenuAction={isMobileChatWorkspace && !mobileChatPanelOpen}
         onMobileMenuAction={openMobileChatMenu}
-        overflowItems={additionalHamburgerMenu}
-        bind:overflowOpen={topbarOverflowOpen}
         showShellSearch={showShellSearch}
         bind:shellSearchQuery={shellSearch}
         showRightSidebarToggle={showRightSidebarToggle}

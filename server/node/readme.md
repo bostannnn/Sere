@@ -3,7 +3,7 @@
 Last reviewed: 2026-02-15
 
 ## What This Server Handles Today
-- Server-first storage API (`/data/*`) for settings, characters, chats, assets, prompts/themes/color schemes, plugin data.
+- Server-first storage API (`/data/*`) for settings, characters, chats, assets, prompts/themes/color schemes, and rulebooks.
 - LLM migration endpoints (provider rollout phase):
   - `POST /data/llm/preview`
   - `POST /data/llm/execute`

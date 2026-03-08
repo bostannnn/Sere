@@ -87,7 +87,6 @@ app.get('/data/foo/:id', async (req, res) => {
 - Error shape varies (`{ ok: false, error: String(err) }` vs `{ error: 'CODE', message: '...' }`)
 
 **Examples:**
-- `content_routes.cjs` `POST /data/plugins/log` error path: `res.status(500).send({ ok: false, error: String(error) })`
 - Several legacy handlers use raw `res.send()`
 
 **Fix:** Replace direct `res.send()` calls with `sendJson` in all route handlers. Standardise error shape to `{ error: 'CODE', message: '...' }`.
@@ -124,7 +123,7 @@ The ingest handler (~150 lines inline) does: request parsing â†’ PDF detection â
 
 **Location:** Throughout `server/node/`
 
-Logging uses raw `console.log`/`console.error` with ad-hoc prefixes like `[RAG]`, `[PluginLog]`, `[LLM]`. There's no structured log format, no severity levels tied to the prefix, and no way to filter by component in production.
+Logging uses raw `console.log`/`console.error` with ad-hoc prefixes like `[RAG]` and `[LLM]`. There's no structured log format, no severity levels tied to the prefix, and no way to filter by component in production.
 
 The LLM audit trail (`llm/audit.cjs`) is good and writes structured JSONL. The operational logs are not at that standard.
 

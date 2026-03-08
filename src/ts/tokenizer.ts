@@ -7,7 +7,6 @@ import { risuChatParser } from "./parser.svelte";
 import { tokenizeGGUFModel } from "./process/models/local";
 import { globalFetch } from "./globalApi.svelte";
 import { getModelInfo, LLMTokenizer, type LLMModel } from "./model/modellist";
-import { pluginV2 } from "./plugins/plugins.svelte";
 import type { GemmaTokenizer } from "@huggingface/transformers";
 import { LRUMap } from 'mnemonist';
 const tokenizerLog = (..._args: unknown[]) => {};
@@ -20,12 +19,10 @@ function getHash(
     data: string,
     aiModel: string,
     customTokenizer: string,
-    currentPluginProvider: string,
     googleClaudeTokenizing: boolean,
-    modelInfo: LLMModel,
-    pluginTokenizer: string
+    modelInfo: LLMModel
 ): string {
-    const combined = `${data}::${aiModel}::${customTokenizer}::${currentPluginProvider}::${googleClaudeTokenizing ? '1' : '0'}::${modelInfo.tokenizer}::${pluginTokenizer}`;
+    const combined = `${data}::${aiModel}::${customTokenizer}::${googleClaudeTokenizing ? '1' : '0'}::${modelInfo.tokenizer}`;
     return combined;
 }
 
@@ -73,7 +70,6 @@ export async function encodeWithTokenizer(data: string, tokenizerType: string): 
 export async function encode(data:string):Promise<(number[]|Uint32Array|Int32Array)>{
     const db = getDatabase();
     const modelInfo = getModelInfo(db.aiModel);
-    const pluginTokenizer = pluginV2.providerOptions.get(db.currentPluginProvider)?.tokenizer ?? "none";
 
     let cacheKey = ''
     if(db.useTokenizerCaching){
@@ -81,10 +77,8 @@ export async function encode(data:string):Promise<(number[]|Uint32Array|Int32Arr
             data,
             db.aiModel,
             db.customTokenizer,
-            db.currentPluginProvider,
             db.googleClaudeTokenizing,
-            modelInfo,
-            pluginTokenizer
+            modelInfo
         );
         const cachedResult = encodeCache.get(cacheKey);
         if (cachedResult !== undefined) {
@@ -116,33 +110,6 @@ export async function encode(data:string):Promise<(number[]|Uint32Array|Int32Arr
                 result = await tokenizeWebTokenizers(data, 'DeepSeek'); break;
             default:
                 result = await tikJS(data, 'o200k_base'); break;
-        }
-    } else if (db.aiModel === 'custom' && pluginTokenizer) {
-        switch(pluginTokenizer){
-            case 'mistral':
-                result = await tokenizeWebTokenizers(data, 'mistral'); break;
-            case 'llama':
-                result = await tokenizeWebTokenizers(data, 'llama'); break;
-            case 'novelai':
-                result = await tokenizeWebTokenizers(data, 'novelai'); break;
-            case 'claude':
-                result = await tokenizeWebTokenizers(data, 'claude'); break;
-            case 'novellist':
-                result = await tokenizeWebTokenizers(data, 'novellist'); break;
-            case 'llama3':
-                result = await tokenizeWebTokenizers(data, 'llama'); break;
-            case 'gemma':
-                result = await gemmaTokenize(data); break;
-            case 'cohere':
-                result = await tokenizeWebTokenizers(data, 'cohere'); break;
-            case 'o200k_base':
-                result = await tikJS(data, 'o200k_base'); break;
-            case 'cl100k_base':
-                result = await tikJS(data, 'cl100k_base'); break;
-            case 'custom':
-                result = await pluginV2.providerOptions.get(db.currentPluginProvider)?.tokenizerFunc?.(data) ?? [0]; break;
-            default:
-                result = await tikJS(data, 'o200k_base'); break; 
         }
     } 
     

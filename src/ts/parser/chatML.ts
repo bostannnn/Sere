@@ -1,4 +1,5 @@
 import { risuChatParser } from '../parser.svelte'
+import type { OpenAIChat } from '../process/index.svelte'
 
 export function parseChatML(data: string): OpenAIChat[] | null {
   const starter = '<|im_start|>'

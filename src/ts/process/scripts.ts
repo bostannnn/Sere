@@ -9,7 +9,6 @@ import { assetRegex, type CbsConditions, risuChatParser as risuChatParserOrg, ty
 import { getModuleAssets, getModuleRegexScripts } from "./modules";
 import { HypaProcesser } from "./memory/hypamemory";
 import { runLuaEditTrigger } from "./scriptings";
-import { pluginV2 } from "../plugins/plugins.svelte";
 import { runTrigger } from "./triggers";
 const scriptsLog = (..._args: unknown[]) => {};
 
@@ -116,15 +115,6 @@ export async function processScriptFull(char:character|groupChat|simpleCharacter
             }
             catch(e){
                 scriptsLog(e)
-            }
-        }
-    }
-
-    if(pluginV2[mode].size > 0){
-        for(const plugin of pluginV2[mode]){
-            const res = await plugin(data)
-            if(res !== null && res !== undefined){
-                data = res
             }
         }
     }

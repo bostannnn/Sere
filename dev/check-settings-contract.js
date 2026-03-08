@@ -27,7 +27,7 @@ const checks = [
       "title={language.logs}",
       "type=\"button\"",
     ],
-    forbiddenPatterns: ["ds-settings-panel-close-button"],
+    forbiddenPatterns: ["ds-settings-panel-close-button", "selectMenu(4)", "title={language.plugin}"],
   },
   {
     file: path.join(ROOT, "src/lib/Setting/Pages/BotSettings.svelte"),
@@ -72,19 +72,6 @@ const checks = [
       "{#if submenu === 2}",
       "class=\"ds-settings-grow-min ds-settings-inline-actions ds-settings-inline-actions-end action-rail\"",
       "class=\"ds-settings-card\"",
-    ],
-  },
-  {
-    file: path.join(ROOT, "src/lib/Setting/Pages/PluginSettings.svelte"),
-    patterns: [
-      "class=\"ds-settings-inline-actions ds-settings-inline-actions-nowrap ds-settings-shrink-0 action-rail\"",
-      "class=\"ds-settings-label-muted ds-settings-inline-actions ds-settings-inline-actions-nowrap action-rail\"",
-      "class=\"ds-settings-section ds-settings-card\"",
-      "class=\"ds-settings-status-badge control-chip ds-settings-status-badge--warning\"",
-      "className=\"ds-settings-icon-action ds-settings-icon-action-compact icon-btn icon-btn--sm ds-settings-icon-state-warning\"",
-      "class=\"ds-settings-icon-action ds-settings-icon-action-compact icon-btn icon-btn--sm ds-settings-icon-state-muted-hover-primary\"",
-      "className=\"ds-settings-icon-action ds-settings-icon-action-compact icon-btn icon-btn--sm ds-settings-icon-state-success\"",
-      "className={\"ds-settings-icon-action ds-settings-icon-action-compact icon-btn icon-btn--sm \" + (plugin.enabled ? \"ds-settings-icon-state-success\" : \"ds-settings-icon-state-muted\")}",
     ],
   },
   {

@@ -2,9 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mount, tick, unmount } from "svelte";
 import { get } from "svelte/store";
 
-const { addCharacterMock, overflowMenuActionMock } = vi.hoisted(() => ({
+const { addCharacterMock } = vi.hoisted(() => ({
   addCharacterMock: vi.fn(async () => {}),
-  overflowMenuActionMock: vi.fn(),
 }));
 
 vi.mock(import("src/ts/stores.svelte"), async () => {
@@ -22,15 +21,6 @@ vi.mock(import("src/ts/stores.svelte"), async () => {
   const selectedCharID = writable(-1);
   const uiShellV2Enabled = writable(true);
   const openRulebookManager = writable(false);
-  const additionalHamburgerMenu: Array<{ name: string; icon: string; iconType: "html" | "img" | "none"; callback: () => void; id: string }> = [
-    {
-      id: "plugin-overflow-action",
-      name: "Plugin Action",
-      icon: "",
-      iconType: "none",
-      callback: overflowMenuActionMock,
-    },
-  ];
   const hypaV3ModalOpen = writable(false);
   const hypaV3ProgressStore = writable({
     open: false,
@@ -86,7 +76,6 @@ vi.mock(import("src/ts/stores.svelte"), async () => {
     uiShellV2Enabled,
     appRouteStore,
     openRulebookManager,
-    additionalHamburgerMenu,
     hypaV3ModalOpen,
     hypaV3ProgressStore,
     selIdState,
@@ -130,9 +119,6 @@ vi.mock(import("src/lib/Others/HypaV3Modal.svelte"), async () => ({
   default: (await import("./test-stubs/SimplePanelStub.svelte")).default,
 }));
 vi.mock(import("src/lib/Others/HypaV3Progress.svelte"), async () => ({
-  default: (await import("./test-stubs/SimplePanelStub.svelte")).default,
-}));
-vi.mock(import("src/lib/Others/PluginAlertModal.svelte"), async () => ({
   default: (await import("./test-stubs/SimplePanelStub.svelte")).default,
 }));
 vi.mock(import("src/lib/UI/PopupList.svelte"), async () => ({
@@ -180,7 +166,6 @@ import {
   DBState,
   MobileGUI,
   SettingsMenuIndex,
-  additionalHamburgerMenu,
   appRouteStore,
   bookmarkListOpen,
   hypaV3ModalOpen,
@@ -223,7 +208,6 @@ async function flushUi() {
 describe("ui shell runtime smoke", () => {
   beforeEach(async () => {
     addCharacterMock.mockClear();
-    overflowMenuActionMock.mockClear();
     runtimeMessages = [];
     window.addEventListener("error", onError);
     window.addEventListener("unhandledrejection", onUnhandledRejection);
@@ -241,14 +225,6 @@ describe("ui shell runtime smoke", () => {
     openPersonaList.set(false);
     bookmarkListOpen.set(false);
     hypaV3ModalOpen.set(false);
-    additionalHamburgerMenu.length = 0;
-    additionalHamburgerMenu.push({
-      id: "plugin-overflow-action",
-      name: "Plugin Action",
-      icon: "",
-      iconType: "none",
-      callback: overflowMenuActionMock,
-    });
     DBState.db.characters = [
       {
         chaId: "char-1",
@@ -702,23 +678,10 @@ describe("ui shell runtime smoke", () => {
     const homeBtn = document.querySelector('[data-testid="topbar-nav-home"]') as HTMLButtonElement | null;
     const rulebooksBtn = document.querySelector('[data-testid="topbar-nav-rulebooks"]') as HTMLButtonElement | null;
     const settingsBtn = document.querySelector('[data-testid="topbar-nav-settings"]') as HTMLButtonElement | null;
-    const moreBtn = document.querySelector('[data-testid="topbar-nav-more"]') as HTMLButtonElement | null;
 
     expect(homeBtn).not.toBeNull();
     expect(rulebooksBtn).not.toBeNull();
     expect(settingsBtn).not.toBeNull();
-    expect(moreBtn).not.toBeNull();
-
-    moreBtn!.click();
-    await flushUi();
-    expect((document.querySelector('[data-testid="topbar-nav-more"]') as HTMLButtonElement | null)?.dataset.pressed).toBe("1");
-    expect((document.querySelector('[data-testid="topbar-nav-more-menu"]') as HTMLElement | null)).not.toBeNull();
-    expect(document.querySelector('[data-testid="topbar-nav-overflow-playground"]')).toBeNull();
-
-    moreBtn!.click();
-    await flushUi();
-    expect((document.querySelector('[data-testid="topbar-nav-more"]') as HTMLButtonElement | null)?.dataset.pressed).toBe("0");
-    expect((document.querySelector('[data-testid="topbar-nav-more-menu"]') as HTMLElement | null)).toBeNull();
 
     settingsBtn!.click();
     await flushUi();
@@ -734,22 +697,6 @@ describe("ui shell runtime smoke", () => {
     await flushUi();
     expect(get(appRouteStore).workspace).toBe("characters");
     expect((document.getElementById("globalMenuBtn") as HTMLButtonElement | null)?.dataset.pressed).toBe("1");
-  });
-
-  it("hides the topbar overflow trigger when no overflow items exist", async () => {
-    additionalHamburgerMenu.length = 0;
-
-    await unmount(app);
-    app = undefined;
-
-    document.body.innerHTML = "";
-    const target = document.createElement("div");
-    document.body.appendChild(target);
-    app = mount(AppComponent, { target });
-    await flushUi();
-
-    expect(document.querySelector('[data-testid="topbar-nav-more"]')).toBeNull();
-    expect(document.querySelector('[data-testid="topbar-nav-more-menu"]')).toBeNull();
   });
 
   it("syncs appRoute and clears transient overlays on workspace change", async () => {
@@ -852,7 +799,7 @@ describe("ui shell runtime smoke", () => {
     expect(get(appRouteStore).inspector).toBe("none");
   });
 
-  it("closes active overlays and topbar overflow on Escape", async () => {
+  it("closes active overlays on Escape", async () => {
     await flushUi();
 
     openPresetList.set(true);
@@ -878,71 +825,19 @@ describe("ui shell runtime smoke", () => {
     window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
     await flushUi();
     expect(get(hypaV3ModalOpen)).toBe(true);
-
-    const moreBtn = document.querySelector('[data-testid="topbar-nav-more"]') as HTMLButtonElement | null;
-    expect(moreBtn).not.toBeNull();
-    moreBtn!.click();
-    await flushUi();
-    expect((document.querySelector('[data-testid="topbar-nav-more-menu"]') as HTMLElement | null)).not.toBeNull();
-    expect((document.querySelector('[data-testid="topbar-nav-more"]') as HTMLButtonElement | null)?.dataset.pressed).toBe("1");
-
-    window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
-    await flushUi();
-    expect((document.querySelector('[data-testid="topbar-nav-more-menu"]') as HTMLElement | null)).toBeNull();
-    expect((document.querySelector('[data-testid="topbar-nav-more"]') as HTMLButtonElement | null)?.dataset.pressed).toBe("0");
   });
 
-  it("handles Escape even when another listener preventDefault's the event", async () => {
-    await flushUi();
-
-    const moreBtn = document.querySelector('[data-testid="topbar-nav-more"]') as HTMLButtonElement | null;
-    expect(moreBtn).not.toBeNull();
-    moreBtn!.click();
-    await flushUi();
-    expect((document.querySelector('[data-testid="topbar-nav-more"]') as HTMLButtonElement | null)?.dataset.pressed).toBe("1");
-    expect((document.querySelector('[data-testid="topbar-nav-more-menu"]') as HTMLElement | null)).not.toBeNull();
-
-    const blocker = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        event.preventDefault();
-      }
-    };
-
-    document.addEventListener("keydown", blocker);
-    try {
-      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
-      await flushUi();
-      expect((document.querySelector('[data-testid="topbar-nav-more"]') as HTMLButtonElement | null)?.dataset.pressed).toBe("0");
-      expect((document.querySelector('[data-testid="topbar-nav-more-menu"]') as HTMLElement | null)).toBeNull();
-    } finally {
-      document.removeEventListener("keydown", blocker);
-    }
-  });
-
-  it("closes right sidebar on Escape before closing topbar overflow", async () => {
+  it("closes right sidebar on Escape", async () => {
     settingsOpen.set(false);
     openRulebookManager.set(false);
     selectedCharID.set(0);
     await flushUi();
 
-    const moreBtn = document.querySelector('[data-testid="topbar-nav-more"]') as HTMLButtonElement | null;
     const rightSidebarBtn = document.getElementById("workspaceSidebarBtn") as HTMLButtonElement | null;
-    expect(moreBtn).not.toBeNull();
     expect(rightSidebarBtn?.dataset.pressed).toBe("1");
-    moreBtn!.click();
-    await flushUi();
-    expect((document.querySelector('[data-testid="topbar-nav-more"]') as HTMLButtonElement | null)?.dataset.pressed).toBe("1");
-    expect((document.querySelector('[data-testid="topbar-nav-more-menu"]') as HTMLElement | null)).not.toBeNull();
 
     window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
     await flushUi();
     expect((document.getElementById("workspaceSidebarBtn") as HTMLButtonElement | null)?.dataset.pressed).toBe("0");
-    expect((document.querySelector('[data-testid="topbar-nav-more"]') as HTMLButtonElement | null)?.dataset.pressed).toBe("1");
-    expect((document.querySelector('[data-testid="topbar-nav-more-menu"]') as HTMLElement | null)).not.toBeNull();
-
-    window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
-    await flushUi();
-    expect((document.querySelector('[data-testid="topbar-nav-more"]') as HTMLButtonElement | null)?.dataset.pressed).toBe("0");
-    expect((document.querySelector('[data-testid="topbar-nav-more-menu"]') as HTMLElement | null)).toBeNull();
   });
 });

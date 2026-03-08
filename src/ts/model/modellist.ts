@@ -316,17 +316,6 @@ export const LLMModels: LLMModel[] = [
         'google/gemma-2-27b-it',
         'google/gemma-2-9b-it'
     ]),
-    // Plugin and Custom API
-    {
-        id: 'custom',
-        name: "Plugin",
-        provider: LLMProvider.AsIs,
-        format: LLMFormat.Plugin,
-        flags: [LLMFlags.hasFullSystemPrompt],
-        recommended: true,
-        parameters: ['temperature', 'top_p', 'frequency_penalty', 'presence_penalty', 'repetition_penalty', 'min_p', 'top_a', 'top_k', 'thinking_tokens'],
-        tokenizer: LLMTokenizer.Unknown
-    },
     {
         id: 'echo_model',
         name: "Echo",

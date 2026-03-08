@@ -5,7 +5,6 @@
     import Help from "src/lib/Others/Help.svelte";
     
     import { DBState } from 'src/ts/stores.svelte';
-    import { customProviderStore } from "src/ts/plugins/plugins.svelte";
     import { tokenizeAccurate, tokenizerList } from "src/ts/tokenizer";
     import ModelList from "src/lib/UI/ModelList.svelte";
     import DropList from "src/lib/SideBars/DropList.svelte";
@@ -403,18 +402,6 @@ const tokens = $state({
             <Check bind:check={DBState.db.NAIappendName} name={language.appendNameNAI}/>
         {/if}
     </div>
-
-    {#if DBState.db.aiModel === 'custom' || DBState.db.subModel === 'custom'}
-        <div class="ds-settings-section">
-            <span class="ds-settings-label">{language.plugin}</span>
-            <SelectInput bind:value={DBState.db.currentPluginProvider}>
-                <OptionInput value="">None</OptionInput>
-                {#each $customProviderStore as plugin (plugin)}
-                    <OptionInput value={plugin}>{plugin}</OptionInput>
-                {/each}
-            </SelectInput>
-        </div>
-    {/if}
 
     {#if DBState.db.aiModel === "kobold" || DBState.db.subModel === "kobold"}
         <span class="ds-settings-label">Kobold URL</span>

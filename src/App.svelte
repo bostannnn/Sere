@@ -25,7 +25,6 @@
     import { ArrowUpIcon, GlobeIcon, PlusIcon } from '@lucide/svelte';
     import { hypaV3ProgressStore } from "./ts/stores.svelte";
     import HypaV3Progress from './lib/Others/HypaV3Progress.svelte';
-    import PluginAlertModal from './lib/Others/PluginAlertModal.svelte';
     import PopupList from './lib/UI/PopupList.svelte';
     import AppShellV2 from './lib/UI/AppShellV2.svelte';
 
@@ -181,7 +180,6 @@
     {#if $hypaV3ProgressStore.open}
         <HypaV3Progress />
     {/if}
-    <PluginAlertModal />
     {#if popupStore.children}
         <PopupList />
     {/if}

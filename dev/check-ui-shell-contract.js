@@ -212,12 +212,9 @@ ensureIncludes(appShellContent, appShellFile, "selectedCharacter.chatPage = safe
 ensureIncludes(appShellContent, appShellFile, "function toggleRightSidebar() {", failures);
 ensureIncludes(appShellContent, appShellFile, "const showRightSidebarToggle = $derived.by(() => {", failures);
 ensureIncludes(appShellContent, appShellFile, "window.addEventListener(\"keydown\", handleShellKeydown, true)", failures);
-ensureIncludes(appShellContent, appShellFile, "let topbarOverflowOpen = $state(false);", failures);
 ensureIncludes(appShellContent, appShellFile, "function openHomeFromTopbar() {", failures);
 ensureIncludes(appShellContent, appShellFile, "function openRulebooksFromTopbar() {", failures);
 ensureIncludes(appShellContent, appShellFile, "function openSettingsFromTopbar() {", failures);
-ensureIncludes(appShellContent, appShellFile, "overflowItems={additionalHamburgerMenu}", failures);
-ensureIncludes(appShellContent, appShellFile, "bind:overflowOpen={topbarOverflowOpen}", failures);
 ensureIncludes(appContent, appFile, "import AppShellV2 from './lib/UI/AppShellV2.svelte';", failures);
 ensureIncludes(appContent, appFile, "<AppShellV2 />", failures);
 ensureNotIncludes(
@@ -264,16 +261,10 @@ ensureIncludes(topbarContent, topbarFile, "id=\"workspaceSidebarBtn\"", failures
 ensureIncludes(topbarContent, topbarFile, "data-testid=\"topbar-nav-home\"", failures);
 ensureIncludes(topbarContent, topbarFile, "data-testid=\"topbar-nav-rulebooks\"", failures);
 ensureIncludes(topbarContent, topbarFile, "data-testid=\"topbar-nav-settings\"", failures);
-ensureIncludes(topbarContent, topbarFile, "data-testid=\"topbar-nav-more\"", failures);
-ensureIncludes(topbarContent, topbarFile, "data-testid=\"topbar-nav-more-menu\"", failures);
-ensureIncludes(topbarContent, topbarFile, "const hasOverflowItems = $derived(overflowItems.length > 0);", failures);
-ensureIncludes(topbarContent, topbarFile, "if (!hasOverflowItems && overflowOpen) {", failures);
 ensureIncludes(topbarContent, topbarFile, "class=\"ds-app-v2-topbar-nav action-rail\"", failures);
 ensureIncludes(topbarContent, topbarFile, "onOpenHome = () => {}", failures);
 ensureIncludes(topbarContent, topbarFile, "onOpenRulebooks = () => {}", failures);
 ensureIncludes(topbarContent, topbarFile, "onOpenSettings = () => {}", failures);
-ensureIncludes(topbarContent, topbarFile, "overflowOpen = $bindable(false)", failures);
-ensureIncludes(topbarContent, topbarFile, "aria-pressed={overflowOpen}", failures);
 ensureIncludes(topbarContent, topbarFile, "aria-pressed={rightSidebarOpen}", failures);
 ensureIncludes(topbarContent, topbarFile, "rightSidebarPanelId = \"chat-right-sidebar-drawer\"", failures);
 ensureIncludes(topbarContent, topbarFile, "aria-expanded={showRightSidebarToggle ? rightSidebarOpen : undefined}", failures);

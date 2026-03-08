@@ -2,7 +2,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mount, tick, unmount } from "svelte";
 
 const mocks = vi.hoisted(() => ({
-  floatingActionCallback: vi.fn(),
   sendChat: vi.fn(async () => {}),
 }));
 
@@ -36,18 +35,6 @@ vi.mock(import("src/ts/stores.svelte"), async () => {
     createSimpleCharacter: (character: unknown) => character,
     hypaV3ModalOpen: writable(false),
     ScrollToMessageStore: { value: -1 },
-    additionalChatMenu: [],
-    additionalFloatingActionButtons: [
-      {
-        name: "Plugin Action",
-        callback: mocks.floatingActionCallback,
-      },
-    ],
-    pluginProgressStore: writable({
-      active: false,
-      label: "",
-      color: "#64748b",
-    }),
     comfyProgressStore: writable({
       active: false,
       label: "",
@@ -238,10 +225,6 @@ vi.mock(import("src/lib/ChatScreens/Chats.svelte"), async () => ({
   default: (await import("./test-stubs/DefaultChatScreenChatsStub.svelte")).default,
 }));
 
-vi.mock(import("src/lib/Others/PluginDefinedIcon.svelte"), async () => ({
-  default: (await import("./test-stubs/SimplePanelStub.svelte")).default,
-}));
-
 vi.mock(import("src/lib/SideBars/GameStateHUD.svelte"), async () => ({
   default: (await import("./test-stubs/SimplePanelStub.svelte")).default,
 }));
@@ -259,7 +242,6 @@ async function flushUi() {
 
 describe("default chat screen runtime smoke", () => {
   beforeEach(() => {
-    mocks.floatingActionCallback.mockClear();
     mocks.sendChat.mockClear();
     selectedCharID.set(0);
     DBState.db.fixedChatTextarea = false;
@@ -276,7 +258,7 @@ describe("default chat screen runtime smoke", () => {
     }
   });
 
-  it("keeps composer controls and floating actions on primitive classes", async () => {
+  it("keeps composer controls on primitive classes", async () => {
     const target = document.createElement("div");
     document.body.appendChild(target);
     app = mount(DefaultChatScreen, { target });
@@ -340,20 +322,6 @@ describe("default chat screen runtime smoke", () => {
     ) as HTMLButtonElement | undefined;
     expect(autoTranslateButton).toBeDefined();
     expect(autoTranslateButton?.getAttribute("aria-pressed")).toBe("true");
-
-    const floatingActionButton = document.querySelector(
-      ".ds-chat-floating-action-btn.icon-btn.icon-btn--sm",
-    ) as HTMLButtonElement | null;
-    expect(floatingActionButton).not.toBeNull();
-    const floatingActionsRail = document.querySelector(
-      ".ds-chat-floating-actions.action-rail",
-    ) as HTMLElement | null;
-    expect(floatingActionsRail).not.toBeNull();
-    expect(floatingActionButton?.getAttribute("type")).toBe("button");
-    expect(floatingActionButton?.getAttribute("aria-label")).toBe("Plugin Action");
-    floatingActionButton?.click();
-    await flushUi();
-    expect(mocks.floatingActionCallback).toHaveBeenCalledTimes(1);
 
     const floatingJumpButton = document.querySelector(
       ".ds-chat-jump-btn-circle.icon-btn.icon-btn--md",

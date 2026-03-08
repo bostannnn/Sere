@@ -40,10 +40,6 @@ const checks = [
     cmd: ["pnpm", "exec", "vitest", "run", "dev/openrouter-provider-list-runtime-smoke.test.ts"],
   },
   {
-    name: "plugin-settings-runtime",
-    cmd: ["pnpm", "exec", "vitest", "run", "dev/plugin-settings-runtime-smoke.test.ts"],
-  },
-  {
     name: "logs-settings-page-runtime",
     cmd: ["pnpm", "exec", "vitest", "run", "dev/logs-settings-page-runtime-smoke.test.ts"],
   },

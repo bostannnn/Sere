@@ -38,7 +38,6 @@ The Node.js server owns all LLM execution, prompt assembly, RAG, and memory. The
 │       │   ├── mcp/            # MCP integration
 │       │   └── prompt.ts       # Prompt assembly types
 │       ├── storage/            # Storage layer (database.svelte.ts, serverDb.ts, etc.)
-│       ├── plugins/            # Plugin system (API v3, sandbox)
 │       ├── platform.ts         # isNodeServer flag — THE client/server gate
 │       └── globalApi.svelte.ts # globalFetch and shared API helpers
 │
@@ -50,7 +49,7 @@ The Node.js server owns all LLM execution, prompt assembly, RAG, and memory. The
 │   │   ├── llm_routes.cjs      # /data/llm/*
 │   │   ├── storage_routes.cjs  # /data/settings, /data/characters, /data/chats
 │   │   ├── rag_routes.cjs      # /data/rag/* + /data/embeddings + /data/transformers/*
-│   │   ├── content_routes.cjs  # /data/assets, /data/plugins, /data/prompts, etc.
+│   │   ├── content_routes.cjs  # /data/assets, /data/prompts, /data/themes, etc.
 │   │   ├── memory_routes.cjs   # /data/memory/hypav3/*
 │   │   ├── proxy_routes.cjs    # /data/proxy
 │   │   ├── legacy_routes.cjs   # /data/auth/*, /data/storage/* (backward compat)
@@ -80,7 +79,6 @@ The Node.js server owns all LLM execution, prompt assembly, RAG, and memory. The
 ├── data/                       # Runtime data — gitignored (characters, chats, settings)
 ├── CONVENTIONS.md              # Repo-wide development rules — read this
 ├── plan.md                     # Current priorities and task tracking
-└── plugins.md                  # Plugin system developer guide
 ```
 
 ---
@@ -281,8 +279,6 @@ Covers the mandatory server-feature test requirement (Section 4 — unit tests +
 | `docs/MOBILE_NAV_PLAN.md` | Mobile navigation redesign spec |
 | `docs/MIGRATION_SMOKE_CHECKLIST.md` | API smoke pack and export/import regression gates |
 | `docs/EMOTION_GENERATION_SYSTEM_FLOW.md` | Emotion detection pipeline |
-| `plugins.md` | Plugin system developer guide (API v3) |
-| `COMFY_COMMANDER.md` | Comfy Commander plugin setup |
 
 ---
 

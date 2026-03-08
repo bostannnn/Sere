@@ -54,9 +54,7 @@ You can get detailed information on https://github.com/kwaroran/Risuai/wiki (Wor
 - `docs/CORE_PRODUCT_SPEC.md` — product pillars and domain model
 - `docs/UI_SYSTEM_REDESIGN_RFC.md` — unified app shell design spec
 - `docs/MIGRATION_SMOKE_CHECKLIST.md` — API smoke pack and export/import regression gates
-- `plugins.md` — plugin system developer guide (API v3)
-- `COMFY_COMMANDER.md` — Comfy Commander plugin setup
-- `src/ts/plugins/migrationGuide.md` — plugin API v2 → v3 migration guide
+- `COMFY_COMMANDER.md` — Comfy Commander core feature guide
 
 ## Community
 

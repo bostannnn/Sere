@@ -2,7 +2,6 @@ import { v4 as uuidv4 } from 'uuid';
 import { get } from "svelte/store";
 import { setDatabase, getDatabase } from "./storage/database.svelte";
 import { MobileGUI, selectedCharID, loadedStore, DBState, LoadingStatusState } from "./stores.svelte";
-import { loadPlugins } from "./plugins/plugins.svelte";
 import { alertError, alertMd, alertTOS, waitAlert } from "./alert";
 import { defaultJailbreak, defaultMainPrompt, oldJailbreak, oldMainPrompt } from "./storage/defaultPrompts";
 import { updateAnimationSpeed } from "./gui/animation";
@@ -37,10 +36,6 @@ export async function loadData() {
             LoadingStatusState.text = "Loading Server Storage..."
             await loadServerDatabase()
             startServerRealtimeSync()
-            LoadingStatusState.text = "Loading Plugins..."
-            try {
-                await loadPlugins()
-            } catch { }
             try {
                 if (isInStandaloneMode) {
                     await navigator.storage.persist()
