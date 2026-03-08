@@ -62,43 +62,43 @@ function trimResultToBudget(result, budget) {
     if (normalizedBudget <= 0) return null;
 
     const metadata = result.chunk.metadata || {};
-    const header = `[Source: ${formatRulebookCitation(metadata)}]\n`;
-    const availableTokens = normalizedBudget - estimateTextTokens(`<Rules Context>\n</Rules Context>\n${header}\n\n`);
-    if (availableTokens <= 0) return null;
-
     const content = result.chunk.content.trim();
     if (!content) return null;
-    const maxChars = Math.max(80, availableTokens * 4);
-    if (content.length <= maxChars) {
-        return {
+    const truncationMarker = '\n[Context truncated to fit budget]';
+    let maxChars = Math.max(1, normalizedBudget * 4);
+
+    while (maxChars > 0) {
+        let truncated = content.slice(0, maxChars);
+        const sentenceBreak = Math.max(
+            truncated.lastIndexOf('. '),
+            truncated.lastIndexOf('? '),
+            truncated.lastIndexOf('! '),
+            truncated.lastIndexOf('\n')
+        );
+        if (sentenceBreak >= Math.floor(maxChars * 0.6)) {
+            truncated = truncated.slice(0, sentenceBreak + 1);
+        }
+        truncated = truncated.trim();
+        if (!truncated) {
+            maxChars -= 8;
+            continue;
+        }
+
+        const candidate = {
             ...result,
             chunk: {
                 ...result.chunk,
-                content,
+                content: `${truncated}${truncationMarker}`,
             },
         };
+        const totalTokens = estimateTextTokens(`<Rules Context>\n${buildRuleContextBlock(candidate)}</Rules Context>\n`);
+        if (totalTokens <= normalizedBudget) {
+            return candidate;
+        }
+        maxChars = Math.min(maxChars - 8, truncated.length - 1);
     }
 
-    let truncated = content.slice(0, maxChars);
-    const sentenceBreak = Math.max(
-        truncated.lastIndexOf('. '),
-        truncated.lastIndexOf('? '),
-        truncated.lastIndexOf('! '),
-        truncated.lastIndexOf('\n')
-    );
-    if (sentenceBreak >= Math.floor(maxChars * 0.6)) {
-        truncated = truncated.slice(0, sentenceBreak + 1);
-    }
-    truncated = truncated.trim();
-    if (!truncated) return null;
-
-    return {
-        ...result,
-        chunk: {
-            ...result.chunk,
-            content: `${truncated}\n[Context truncated to fit budget]`,
-        },
-    };
+    return null;
 }
 
 function buildUserOnlyRagQuery(messages) {
@@ -145,6 +145,151 @@ function applyRagBudget(results, budget) {
     }
 
     return kept;
+}
+
+function resolveEffectiveRagSettings(charRag = {}, globalRag = {}) {
+    const enabledRulebooks = Array.from(new Set(
+        (Array.isArray(charRag.enabledRulebooks) ? charRag.enabledRulebooks : [])
+            .map((id) => (typeof id === 'string' ? id.trim() : ''))
+            .filter(Boolean)
+    ));
+
+    return {
+        enabled: charRag.enabled === true,
+        enabledRulebooks,
+        topK: Number.isFinite(Number(charRag.topK)) ? Number(charRag.topK)
+            : (Number.isFinite(Number(globalRag.topK)) ? Number(globalRag.topK) : 3),
+        minScore: Number.isFinite(Number(charRag.minScore)) ? Number(charRag.minScore)
+            : (Number.isFinite(Number(globalRag.minScore)) ? Number(globalRag.minScore) : 0.1),
+        budget: Number.isFinite(Number(charRag.budget)) ? Number(charRag.budget)
+            : (Number.isFinite(Number(globalRag.budget)) ? Number(globalRag.budget) : 0),
+        model: (typeof charRag.model === 'string' && charRag.model.trim()) ? charRag.model.trim()
+            : ((typeof globalRag.model === 'string' && globalRag.model.trim()) ? globalRag.model.trim() : 'MiniLM'),
+    };
+}
+
+function renderContextForTemplateSlot(slotBlock, content) {
+    const innerFormat = typeof slotBlock?.innerFormat === 'string' ? slotBlock.innerFormat.trim() : '';
+    if (!innerFormat) return content;
+    if (innerFormat.includes('{{slot}}')) {
+        return innerFormat.replace('{{slot}}', content);
+    }
+    return `${innerFormat}\n${content}`;
+}
+
+function injectContextAtTemplateSlot(messagesArray, promptBlocks, slotName, content, source) {
+    if (!content || !Array.isArray(messagesArray) || !Array.isArray(promptBlocks)) {
+        return false;
+    }
+    const slotBlock = promptBlocks.find((block) => block && block.slot === slotName && Number.isInteger(Number(block.index)));
+    if (!slotBlock) {
+        return false;
+    }
+    const insertIndex = Math.max(0, Math.min(messagesArray.length, Number(slotBlock.index)));
+    shiftPromptBlockIndices(promptBlocks, insertIndex, 1);
+    messagesArray.splice(insertIndex, 0, {
+        role: 'system',
+        content: renderContextForTemplateSlot(slotBlock, content),
+    });
+    slotBlock.index = insertIndex;
+    slotBlock.role = 'system';
+    slotBlock.source = source;
+    delete slotBlock.slot;
+    delete slotBlock.skipped;
+    delete slotBlock.reason;
+    return true;
+}
+
+function hasTemplatePromptBlocks(promptBlocks) {
+    if (!Array.isArray(promptBlocks)) return false;
+    return promptBlocks.some((block) => block && (block.source === 'template' || block.source === 'template-slot'));
+}
+
+function prependInjectedContext(messagesArray, promptBlocks, rulesContext, gameStateContext) {
+    const injectedContext = [rulesContext, gameStateContext].filter(Boolean).join('\n\n');
+    if (!injectedContext) {
+        return;
+    }
+
+    if (messagesArray && Array.isArray(messagesArray) && messagesArray.length > 0) {
+        const systemMsg = messagesArray.find((m) => m.role === 'system' || m.role === 'developer');
+        if (systemMsg) {
+            systemMsg.content = injectedContext + "\n\n" + systemMsg.content;
+            if (Array.isArray(promptBlocks)) {
+                if (rulesContext) {
+                    promptBlocks.push({
+                        role: 'system',
+                        title: 'Rulebook RAG',
+                        source: 'server-rag',
+                        mergedInto: 'first-system',
+                    });
+                }
+                if (gameStateContext) {
+                    promptBlocks.push({
+                        role: 'system',
+                        title: 'Game State',
+                        source: 'server-gamestate',
+                        mergedInto: 'first-system',
+                    });
+                }
+            }
+            return;
+        }
+
+        messagesArray.unshift({ role: 'system', content: injectedContext });
+        if (Array.isArray(promptBlocks)) {
+            shiftPromptBlockIndices(promptBlocks, 0, 1);
+            const title = rulesContext && gameStateContext
+                ? 'Rulebook RAG + Game State'
+                : (rulesContext ? 'Rulebook RAG' : 'Game State');
+            promptBlocks.push({
+                index: 0,
+                role: 'system',
+                title,
+                source: 'server-assembly',
+            });
+        }
+        return;
+    }
+}
+
+function injectServerContexts(messagesArray, promptBlocks, rulesContext, gameStateContext) {
+    const templateDriven = hasTemplatePromptBlocks(promptBlocks);
+    let remainingRulesContext = rulesContext;
+    let remainingGameStateContext = gameStateContext;
+
+    if (Array.isArray(messagesArray) && Array.isArray(promptBlocks)) {
+        if (remainingRulesContext && injectContextAtTemplateSlot(messagesArray, promptBlocks, 'rulebookRag', remainingRulesContext, 'server-rag')) {
+            remainingRulesContext = '';
+        }
+        if (remainingGameStateContext && injectContextAtTemplateSlot(messagesArray, promptBlocks, 'gameState', remainingGameStateContext, 'server-gamestate')) {
+            remainingGameStateContext = '';
+        }
+    }
+
+    if (templateDriven) {
+        if (remainingRulesContext) {
+            promptBlocks.push({
+                role: 'system',
+                title: 'Rulebook RAG',
+                source: 'server-rag',
+                skipped: true,
+                reason: 'no_template_slot',
+            });
+        }
+        if (remainingGameStateContext) {
+            promptBlocks.push({
+                role: 'system',
+                title: 'Game State',
+                source: 'server-gamestate',
+                skipped: true,
+                reason: 'no_template_slot',
+            });
+        }
+        return;
+    }
+
+    prependInjectedContext(messagesArray, promptBlocks, remainingRulesContext, remainingGameStateContext);
 }
 
 function getExecutionRequestPayload(input) {
@@ -278,12 +423,9 @@ async function assembleServerPrompt(input, ctx) {
     const globalRag = (requestContainer.globalRagSettings && typeof requestContainer.globalRagSettings === 'object')
         ? requestContainer.globalRagSettings
         : (settings.globalRagSettings || {});
-    const ragEnabled = charRag.enabled === true;
-    const enabledRulebooks = Array.from(new Set(
-        (Array.isArray(charRag.enabledRulebooks) ? charRag.enabledRulebooks : [])
-            .map((id) => (typeof id === 'string' ? id.trim() : ''))
-            .filter(Boolean)
-    ));
+    const effectiveRag = resolveEffectiveRagSettings(charRag, globalRag);
+    const ragEnabled = effectiveRag.enabled;
+    const enabledRulebooks = effectiveRag.enabledRulebooks;
 
     const DEBUG = process.env.RISU_DEBUG === '1';
     if (DEBUG) console.log(`[Server-Assembly] RAG Check: charRag.enabled=${charRag.enabled}, ragEnabled=${ragEnabled}`);
@@ -303,10 +445,10 @@ async function assembleServerPrompt(input, ctx) {
         if (DEBUG) console.log(`[Server-Assembly] Message Check: msgCount=${messages.length}, ragQuery length=${ragQuery.length}`);
 
         if (ragQuery) {
-            const topK = Number.isFinite(Number(globalRag.topK)) ? Number(globalRag.topK) : 3;
-            const minScore = Number.isFinite(Number(globalRag.minScore)) ? Number(globalRag.minScore) : 0.1;
-            const budget = Number.isFinite(Number(globalRag.budget)) ? Number(globalRag.budget) : 0;
-            const ragModel = (typeof globalRag.model === 'string' && globalRag.model.trim()) ? globalRag.model.trim() : 'MiniLM';
+            const topK = effectiveRag.topK;
+            const minScore = effectiveRag.minScore;
+            const budget = effectiveRag.budget;
+            const ragModel = effectiveRag.model;
 
             const rawResults = await searchRulebooks(
                 ragQuery,
@@ -367,8 +509,6 @@ async function assembleServerPrompt(input, ctx) {
 
     // 3. Inject into messages
     if (rulesContext || gameStateContext) {
-        const injectedContext = [rulesContext, gameStateContext].filter(Boolean).join('\n\n');
-
         // Find the messages array — client nests it as payload.request.requestBody.messages
         // After parseExecutionInput, input.request = payload, so messages are at input.request.request.requestBody.messages
         const messagesArray = requestPayload.requestBody?.messages
@@ -376,47 +516,12 @@ async function assembleServerPrompt(input, ctx) {
             || requestContainer.requestBody?.messages
             || requestContainer.messages
             || null;
+        const promptBlocks = ensurePromptBlocks();
 
         if (messagesArray && Array.isArray(messagesArray) && messagesArray.length > 0) {
-            const systemMsg = messagesArray.find(m => m.role === 'system' || m.role === 'developer');
-            if (systemMsg) {
-                systemMsg.content = injectedContext + "\n\n" + systemMsg.content;
-                const promptBlocks = ensurePromptBlocks();
-                if (promptBlocks) {
-                    if (rulesContext) {
-                        promptBlocks.push({
-                            role: 'system',
-                            title: 'Rulebook RAG',
-                            source: 'server-rag',
-                            mergedInto: 'first-system',
-                        });
-                    }
-                    if (gameStateContext) {
-                        promptBlocks.push({
-                            role: 'system',
-                            title: 'Game State',
-                            source: 'server-gamestate',
-                            mergedInto: 'first-system',
-                        });
-                    }
-                }
-            } else {
-                messagesArray.unshift({ role: 'system', content: injectedContext });
-                const promptBlocks = ensurePromptBlocks();
-                if (promptBlocks) {
-                    shiftPromptBlockIndices(promptBlocks, 0, 1);
-                    const title = rulesContext && gameStateContext
-                        ? 'Rulebook RAG + Game State'
-                        : (rulesContext ? 'Rulebook RAG' : 'Game State');
-                    promptBlocks.push({
-                        index: 0,
-                        role: 'system',
-                        title,
-                        source: 'server-assembly',
-                    });
-                }
-            }
-        } else if (injectedContext) {
+            injectServerContexts(messagesArray, promptBlocks, rulesContext, gameStateContext);
+        } else {
+            const injectedContext = [rulesContext, gameStateContext].filter(Boolean).join('\n\n');
             // No messages found — create a system message in the most likely location
             const newMessages = [{ role: 'system', content: injectedContext }];
             if (requestPayload?.requestBody && typeof requestPayload.requestBody === 'object') {
@@ -428,7 +533,6 @@ async function assembleServerPrompt(input, ctx) {
             } else if (requestContainer && typeof requestContainer === 'object') {
                 requestContainer.messages = newMessages;
             }
-            const promptBlocks = ensurePromptBlocks();
             if (promptBlocks) {
                 const title = rulesContext && gameStateContext
                     ? 'Rulebook RAG + Game State'
@@ -514,5 +618,8 @@ module.exports = {
         buildUserOnlyRagQuery,
         formatRulebookCitation,
         trimResultToBudget,
+        resolveEffectiveRagSettings,
+        injectContextAtTemplateSlot,
+        injectServerContexts,
     },
 };

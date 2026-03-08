@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { estimateTextTokens } from "./tokenizer.cjs";
 
 describe("server llm rag assembly helpers", () => {
   it("builds a retrieval query from user turns only", async () => {
@@ -56,5 +57,125 @@ describe("server llm rag assembly helpers", () => {
     expect(kept).toHaveLength(1);
     expect(kept[0].chunk.content.length).toBeLessThan(results[0].chunk.content.length);
     expect(kept[0].chunk.content).toContain("[Context truncated to fit budget]");
+  });
+
+  it("does not leak oversized content through very small budgets", async () => {
+    const { __test } = await import("./engine.cjs");
+
+    const results = [
+      {
+        chunk: {
+          content: "Sentence one. ".repeat(120),
+          metadata: { source_file: "Core Book", system: "VtM", edition: "5e", page: 22 },
+        },
+      },
+    ];
+
+    const budget = 20;
+    const kept = __test.applyRagBudget(results, budget);
+
+    if (kept.length === 0) {
+        expect(kept).toEqual([]);
+        return;
+    }
+
+    const totalTokens = estimateTextTokens(`<Rules Context>\n${__test.buildRuleContextBlock(kept[0])}</Rules Context>\n`);
+    expect(totalTokens).toBeLessThanOrEqual(budget);
+  });
+
+  it("prefers character rag tuning over global defaults", async () => {
+    const { __test } = await import("./engine.cjs");
+
+    const effective = __test.resolveEffectiveRagSettings(
+      {
+        enabled: true,
+        enabledRulebooks: ["book-a"],
+        topK: 3,
+        minScore: 0.2,
+        budget: 800,
+        model: "bgeLargeEnGPU",
+      },
+      {
+        enabled: false,
+        topK: 7,
+        minScore: 0.6,
+        budget: 1500,
+        model: "MiniLM",
+      },
+    );
+
+    expect(effective).toMatchObject({
+      enabled: true,
+      enabledRulebooks: ["book-a"],
+      topK: 3,
+      minScore: 0.2,
+      budget: 800,
+      model: "bgeLargeEnGPU",
+    });
+  });
+
+  it("injects rulebook context into a template slot instead of prepending it", async () => {
+    const { __test } = await import("./engine.cjs");
+
+    const messages = [
+      { role: "system", content: "Main prompt." },
+      { role: "user", content: "Tell me what is needed to play." },
+    ];
+    const promptBlocks = [
+      { index: 0, role: "system", title: "Main Prompt", source: "template" },
+      { index: 1, role: "system", title: "Rulebook RAG", source: "template-slot", slot: "rulebookRag" },
+      { index: 1, role: "user", title: "Chat History", source: "chat" },
+    ];
+
+    __test.injectServerContexts(
+      messages,
+      promptBlocks,
+      "<Rules Context>\n[Source: TYOV, p. 12]\nPlay the game.\n</Rules Context>\n",
+      "",
+    );
+
+    expect(messages[0]?.content).toBe("Main prompt.");
+    expect(messages[1]?.content).toContain("<Rules Context>");
+    expect(messages[2]?.content).toBe("Tell me what is needed to play.");
+
+    const ragBlock = promptBlocks.find((block: Record<string, unknown>) => block.title === "Rulebook RAG");
+    expect(ragBlock).toMatchObject({
+      index: 1,
+      role: "system",
+      source: "server-rag",
+    });
+    expect(promptBlocks.some((block: Record<string, unknown>) => block.mergedInto === "first-system")).toBe(false);
+  });
+
+  it("does not hard-prepend rag when a prompt template is active but no rulebook slot exists", async () => {
+    const { __test } = await import("./engine.cjs");
+
+    const messages = [
+      { role: "system", content: "Main prompt." },
+      { role: "user", content: "Tell me what is needed to play." },
+    ];
+    const promptBlocks = [
+      { index: 0, role: "system", title: "Main Prompt", source: "template" },
+      { index: 1, role: "user", title: "Chat History", source: "chat" },
+    ];
+
+    __test.injectServerContexts(
+      messages,
+      promptBlocks,
+      "<Rules Context>\n[Source: TYOV, p. 12]\nPlay the game.\n</Rules Context>\n",
+      "",
+    );
+
+    expect(messages).toHaveLength(2);
+    expect(messages[0]?.content).toBe("Main prompt.");
+    expect(messages[0]?.content).not.toContain("<Rules Context>");
+
+    const skippedRag = promptBlocks.find((block: Record<string, unknown>) => block.title === "Rulebook RAG" && block.skipped === true);
+    expect(skippedRag).toMatchObject({
+      source: "server-rag",
+      skipped: true,
+      reason: "no_template_slot",
+    });
+    expect(promptBlocks.some((block: Record<string, unknown>) => block.mergedInto === "first-system")).toBe(false);
   });
 });

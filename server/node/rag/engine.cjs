@@ -231,6 +231,115 @@ function shouldKeepExpandedResult(selectedContents, candidateContent) {
     return true;
 }
 
+const QUERY_STOPWORDS = new Set([
+    'a', 'an', 'and', 'are', 'as', 'at', 'be', 'but', 'by', 'can', 'could',
+    'did', 'do', 'does', 'for', 'from', 'get', 'how', 'i', 'if', 'in', 'into',
+    'is', 'it', 'its', 'me', 'my', 'of', 'on', 'or', 'our', 'please', 'tell',
+    'that', 'the', 'their', 'them', 'there', 'these', 'this', 'to', 'us',
+    'was', 'we', 'what', 'when', 'where', 'which', 'who', 'why', 'with', 'you',
+    'your'
+]);
+
+function tokenizeForRanking(text) {
+    const normalized = normalizeForContentDedupe(text);
+    if (!normalized) return [];
+    return normalized
+        .split(/\s+/)
+        .filter((token) => token.length >= 3 && !QUERY_STOPWORDS.has(token));
+}
+
+function getUniqueRankingTokens(text) {
+    return Array.from(new Set(tokenizeForRanking(text)));
+}
+
+function countPhraseMatches(text, phrases) {
+    if (typeof text !== 'string' || !text || !Array.isArray(phrases) || phrases.length === 0) return 0;
+    const normalized = normalizeForContentDedupe(text);
+    let matches = 0;
+    for (const phrase of phrases) {
+        if (phrase && normalized.includes(phrase)) {
+            matches += 1;
+        }
+    }
+    return matches;
+}
+
+function isSetupStyleQuery(queryText) {
+    if (typeof queryText !== 'string') return false;
+    return /(?:what(?:'s| is)? needed to play|what do i need to play|how (?:do i|to) play|how .* works?|how to start|getting started|learn to play)/i.test(queryText);
+}
+
+function looksLikeInstructionalChunk(content) {
+    if (typeof content !== 'string') return false;
+    return /(?:^|\n)(?:playing the game|getting started|setup|character creation)\b/i.test(content) ||
+        /\b(?:to play|you answer a series of prompts|once you have finished creating|you will have|roll your d10 and d6|answer prompts|create an immortal)\b/i.test(content);
+}
+
+function looksLikeAppendixOrInterviewChunk(content) {
+    if (typeof content !== 'string') return false;
+    const interviewSpeakerCount = (content.match(/(?:^|\n)\s*[A-Z]{2}\s*:/gm) || []).length;
+    if (interviewSpeakerCount >= 2) return true;
+    return /\bappendix\b/i.test(content) ||
+        /\bEN World\b/i.test(content) ||
+        /\bSuggestions for Group Play\b/i.test(content);
+}
+
+function computeLexicalOverlapScore(queryText, content) {
+    const queryTokens = getUniqueRankingTokens(queryText);
+    if (queryTokens.length === 0 || typeof content !== 'string' || !content) {
+        return 0;
+    }
+
+    const contentTokens = new Set(tokenizeForRanking(content));
+    if (contentTokens.size === 0) return 0;
+
+    let tokenMatches = 0;
+    for (const token of queryTokens) {
+        if (contentTokens.has(token)) {
+            tokenMatches += 1;
+        }
+    }
+
+    const queryBigrams = [];
+    for (let i = 0; i < queryTokens.length - 1; i++) {
+        queryBigrams.push(`${queryTokens[i]} ${queryTokens[i + 1]}`);
+    }
+    const bigramMatches = countPhraseMatches(content, queryBigrams);
+    const coverage = tokenMatches / queryTokens.length;
+
+    return (coverage * 0.22) + (Math.min(bigramMatches, 3) * 0.03);
+}
+
+function computeIntentAdjustment(queryText, content) {
+    if (!isSetupStyleQuery(queryText)) return 0;
+
+    let adjustment = 0;
+    if (looksLikeInstructionalChunk(content)) {
+        adjustment += 0.14;
+    }
+    if (looksLikeAppendixOrInterviewChunk(content)) {
+        adjustment -= 0.16;
+    }
+
+    const queryTokens = getUniqueRankingTokens(queryText);
+    if (queryTokens.length > 0) {
+        const tokenSet = new Set(tokenizeForRanking(content));
+        const matchCount = queryTokens.filter((token) => tokenSet.has(token)).length;
+        if (matchCount <= 1) {
+            adjustment -= 0.06;
+        }
+    }
+
+    return adjustment;
+}
+
+function scoreChunkForQuery(queryText, chunk, embeddingScore, bookPriority = 0) {
+    const content = chunk?.content || '';
+    const lexicalBoost = computeLexicalOverlapScore(queryText, content);
+    const intentAdjustment = computeIntentAdjustment(queryText, content);
+    return embeddingScore + lexicalBoost + intentAdjustment + (bookPriority * 0.05);
+}
+
 /**
  * Enhanced chunking logic with column and table awareness.
  */
@@ -412,9 +521,7 @@ async function searchRulebooks(query, bookIds, topK, minScore, modelName, dataDi
                     continue;
                 }
                 const score = similarity(queryEmbedding, chunk.embedding);
-                
-                // Boost score based on priority
-                const finalScore = score + (bookPriority * 0.05);
+                const finalScore = scoreChunkForQuery(queryText, chunk, score, bookPriority);
 
                 if (finalScore >= minScore) {
                     bookResults.push({
@@ -609,6 +716,9 @@ module.exports = {
     updateRulebookMetadata,
     getCachedRulebook,
     __test: {
+        scoreChunkForQuery,
+        computeLexicalOverlapScore,
+        computeIntentAdjustment,
         isChunkContentUsable,
         splitIntoSemanticBlocks,
         expandAndFormat,

@@ -54,4 +54,45 @@ describe("server rag engine", () => {
     expect(secondHead.length).toBeGreaterThan(0);
     expect(firstTail.includes(secondHead.slice(0, 40)) || secondHead.includes(firstTail.slice(-40))).toBe(true);
   });
+
+  it("prefers instructional setup chunks for learn-to-play queries", async () => {
+    const { __test } = await import("./engine.cjs");
+
+    const query = "Tell me what is needed to play a thousand year old vampire?";
+    const introChunk = {
+      content: [
+        "Playing the Game",
+        "To play Thousand Year Old Vampire, you answer a series of Prompts.",
+        "Once you have finished creating your vampire, they will have three Skills, three Resources, at least three Mortals, one Immortal, and one Experience in each of their five Memories.",
+      ].join("\n"),
+    };
+    const noisyPromptChunk = {
+      content: [
+        "HUNTERS",
+        "119. A group of self-described vampire hunters invade your home while they presume you asleep.",
+        "What other trick is up their sleeve? How do you escape? Check a Skill. Lose a Resource.",
+      ].join("\n"),
+    };
+
+    const introScore = __test.scoreChunkForQuery(query, introChunk, 0.76, 0);
+    const noisyScore = __test.scoreChunkForQuery(query, noisyPromptChunk, 0.82, 0);
+
+    expect(introScore).toBeGreaterThan(noisyScore);
+  });
+
+  it("penalizes appendix and interview chunks for setup-style queries", async () => {
+    const { __test } = await import("./engine.cjs");
+
+    const query = "What do I need to play Thousand Year Old Vampire?";
+    const appendixChunk = {
+      content: [
+        "Appendix Five",
+        "Suggestions for Group Play",
+        "TH : I am a quick player.",
+        "SH : Do you foresee this as something players compare notes about?",
+      ].join("\n"),
+    };
+
+    expect(__test.computeIntentAdjustment(query, appendixChunk.content)).toBeLessThan(0);
+  });
 });

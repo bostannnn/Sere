@@ -439,7 +439,17 @@ async function buildMessagesFromPromptTemplate(character, chat, settings, arg = 
                 break;
             }
             case 'rulebookRag':
-            case 'gameState':
+            case 'gameState': {
+                promptBlocks.push({
+                    index: messages.length,
+                    role: 'system',
+                    title: blockTitle,
+                    source: 'template-slot',
+                    slot: cardType,
+                    innerFormat: toStringOrEmpty(card.innerFormat),
+                });
+                break;
+            }
             case 'cache':
             default:
                 break;
