@@ -435,9 +435,9 @@ async function main() {
       console.log('  T4 PASS: manual-summarize/trace — {{slot}} template, messageCount=1 (Bug 2 regression guard)');
     }
 
-    // ── T5: periodicSummarizationEnabled=false → shouldRun=false ─────────────
-    // Regression guard for Bug 3: the gate check was missing from
-    // planPeriodicHypaV3Summarization.
+    // ── T5: periodicSummarizationEnabled=false is ignored for legacy presets ─
+    // Current runtime forces periodic summarization on and uses interval as the
+    // effective gate. Keep this smoke aligned with the runtime/unit contract.
     {
       const overlay = makeTestSettings(origSettings, {
         periodicSummarizationEnabled: false,
@@ -452,14 +452,14 @@ async function main() {
       });
       assert(r.res.status === 200, `T5: expected 200, got ${r.res.status}: ${r.text}`);
       assert(
-        r.json?.shouldRun === false,
-        `T5: expected shouldRun=false when periodicSummarizationEnabled=false, got ${r.json?.shouldRun}`
+        r.json?.shouldRun === true,
+        `T5: expected shouldRun=true when interval is reached, got ${r.json?.shouldRun}`
       );
       assert(
-        r.json?.reason === 'periodic_summarization_disabled',
-        `T5: expected reason='periodic_summarization_disabled', got '${r.json?.reason}'`
+        r.json?.reason === 'ready',
+        `T5: expected reason='ready', got '${r.json?.reason}'`
       );
-      console.log('  T5 PASS: periodic-summarize/trace — periodicSummarizationEnabled=false → shouldRun=false (Bug 3 regression guard)');
+      console.log('  T5 PASS: periodic-summarize/trace — periodicSummarizationEnabled=false does not override interval-based runtime gating');
     }
 
     // ── T6: Input validation — 400 errors ────────────────────────────────────
