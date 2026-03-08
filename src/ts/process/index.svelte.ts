@@ -32,7 +32,6 @@ import { hypaMemoryV3 } from "./memory/hypav3";
 import { getModuleAssets, getModuleToggles } from "./modules";
 import { addFetchLog, readImage } from "../globalApi.svelte";
 import { rulebookRag } from "./rag/rag";
-import { rulebookStorage } from "./rag/storage";
 import { convertInlineImagesToInlays } from "./inlineInlays";
 import { syncGameStateFromServer, updateGameStateFromMessage } from "./gameStateSync";
 import { ensureGenerationMessageTarget } from "./generationMessageTarget";
@@ -1328,15 +1327,6 @@ export async function sendChat(chatProcessIndex = -1,arg:{
             const topK = globalRagSettings.topK;
             const minScore = globalRagSettings.minScore;
             const bookIds = currentChar.ragSettings.enabledRulebooks;
-            // In client mode, we need to ensure vectors are loaded into processor
-            if (!isNodeServer) {
-                for (const bookId of bookIds) {
-                    const book = await rulebookStorage.getRulebook(bookId);
-                    if (book) {
-                        await rulebookRag.loadRulebook(bookId, book.chunks);
-                    }
-                }
-            }
 
             // Search across all enabled rulebooks
             const results = await rulebookRag.search(bookIds, query, topK, minScore);

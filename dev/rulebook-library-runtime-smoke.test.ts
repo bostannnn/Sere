@@ -20,6 +20,19 @@ const mocks = vi.hoisted(() => ({
   deleteRulebook: vi.fn(async () => {}),
   batchIngest: vi.fn(async () => {}),
   cancelIngestion: vi.fn(),
+  ragProgressStore: null as {
+    set: (value: {
+      active: boolean;
+      status: string;
+      file: string;
+      percent: number;
+      current: number;
+      total: number;
+      currentFileIndex: number;
+      totalFiles: number;
+    }) => void;
+    subscribe: (run: (value: unknown) => void) => () => void;
+  } | null,
   openRulebookManager: null as {
     set: (value: boolean) => void;
     subscribe: (run: (value: boolean) => void) => () => void;
@@ -29,7 +42,18 @@ const mocks = vi.hoisted(() => ({
 vi.mock(import("src/ts/stores.svelte"), async () => {
   const { writable } = await import("svelte/store");
   const openRulebookManager = writable(true);
+  const ragProgressStore = writable({
+    active: false,
+    status: "idle",
+    file: "",
+    percent: 0,
+    current: 0,
+    total: 0,
+    currentFileIndex: 0,
+    totalFiles: 0,
+  });
   mocks.openRulebookManager = openRulebookManager;
+  mocks.ragProgressStore = ragProgressStore;
 
   return {
     DBState: {
@@ -50,16 +74,7 @@ vi.mock(import("src/ts/stores.svelte"), async () => {
       },
     },
     openRulebookManager,
-    ragProgressStore: writable({
-      active: false,
-      status: "idle",
-      file: "",
-      percent: 0,
-      current: 0,
-      total: 0,
-      currentFileIndex: 0,
-      totalFiles: 0,
-    }),
+    ragProgressStore,
     selIdState: { selId: 0 },
     selectedCharID: writable(0),
   };
@@ -141,6 +156,16 @@ describe("rulebook library runtime smoke", () => {
     mocks.deleteRulebook.mockClear();
     mocks.batchIngest.mockClear();
     mocks.cancelIngestion.mockClear();
+    mocks.ragProgressStore?.set({
+      active: false,
+      status: "idle",
+      file: "",
+      percent: 0,
+      current: 0,
+      total: 0,
+      currentFileIndex: 0,
+      totalFiles: 0,
+    });
     document.body.innerHTML = "";
   });
 
@@ -397,5 +422,91 @@ describe("rulebook library runtime smoke", () => {
 
     expect(mocks.openRulebookManager).not.toBeNull();
     expect(get(mocks.openRulebookManager!)).toBe(false);
+  });
+
+  it("stages selected files and starts server-side ingestion from the drawer", async () => {
+    mocks.selectMultipleFile.mockResolvedValueOnce([
+      { name: "alpha.pdf", data: new Uint8Array([1, 2, 3]) },
+      { name: "beta.md", data: new Uint8Array([4, 5]) },
+    ]);
+
+    let shellActions: {
+      selectFiles: () => Promise<void>;
+      setSystemFilter: (system: string) => void;
+      setEditionFilter: (system: string, edition: string) => void;
+      clearFilters: () => void;
+      getFilterSnapshot: () => {
+        systems: string[];
+        editionsBySystem: Record<string, string[]>;
+        selectedSystem: string;
+        selectedEdition: string;
+      };
+    } | null = null;
+
+    const target = document.createElement("div");
+    document.body.appendChild(target);
+    app = mount(RulebookLibrary, {
+      target,
+      props: {
+        useShellChrome: true,
+        registerShellActions: (actions) => {
+          shellActions = actions;
+        },
+      },
+    });
+    await flushUi();
+
+    expect(shellActions).not.toBeNull();
+    await shellActions!.selectFiles();
+    await flushUi();
+
+    const stagingDrawer = target.querySelector(".rag-staging-drawer") as HTMLElement | null;
+    expect(stagingDrawer).not.toBeNull();
+    expect(stagingDrawer?.textContent).toContain("2 files pending");
+    expect(stagingDrawer?.textContent).toContain("alpha.pdf");
+    expect(stagingDrawer?.textContent).toContain("beta.md");
+
+    const startButton = Array.from(stagingDrawer?.querySelectorAll("button") ?? []).find((button) =>
+      button.textContent?.includes("Start Ingestion"),
+    ) as HTMLButtonElement | undefined;
+    expect(startButton).toBeDefined();
+
+    startButton?.click();
+    await flushUi();
+
+    expect(mocks.batchIngest).toHaveBeenCalledTimes(1);
+    expect(mocks.batchIngest).toHaveBeenCalledWith([
+      { name: "alpha.pdf", data: new Uint8Array([1, 2, 3]), system: "", edition: "" },
+      { name: "beta.md", data: new Uint8Array([4, 5]), system: "", edition: "" },
+    ]);
+    const closingDrawer = target.querySelector(".rag-staging-drawer") as HTMLElement | null;
+    expect(closingDrawer?.getAttribute("inert")).toBe("");
+  });
+
+  it("routes the progress toast cancel action to rulebookRag.cancelIngestion", async () => {
+    const target = document.createElement("div");
+    document.body.appendChild(target);
+    app = mount(RulebookLibrary, { target });
+    await flushUi();
+
+    mocks.ragProgressStore?.set({
+      active: true,
+      status: "embedding",
+      file: "rules.pdf",
+      percent: 0,
+      current: 3,
+      total: 10,
+      currentFileIndex: 1,
+      totalFiles: 2,
+    });
+    await flushUi();
+
+    const cancelButton = target.querySelector(".rag-status-cancel") as HTMLButtonElement | null;
+    expect(cancelButton).not.toBeNull();
+
+    cancelButton?.click();
+    await flushUi();
+
+    expect(mocks.cancelIngestion).toHaveBeenCalledTimes(1);
   });
 });

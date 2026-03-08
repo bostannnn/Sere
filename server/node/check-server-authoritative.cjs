@@ -30,6 +30,7 @@ function fail(rule, file, message) {
 }
 
 const tsAndSvelteFiles = collectFiles(clientRoot, (abs) => abs.endsWith('.ts') || abs.endsWith('.svelte'));
+const sendChatAssemblyFile = path.join(clientRoot, 'ts', 'process', 'index.svelte.ts');
 
 const forbiddenLegacyPaths = [
   '/data/settings',
@@ -52,6 +53,18 @@ for (const file of tsAndSvelteFiles) {
 
   if (src.includes('sync/multiuser')) {
     fail('AUTH-002', file, 'Found multiuser import/usage. PeerJS multiuser must be removed.');
+  }
+}
+
+if (fs.existsSync(sendChatAssemblyFile)) {
+  const sendChatAssemblySrc = fs.readFileSync(sendChatAssemblyFile, 'utf-8');
+  const hasGuardedClientRagSearch = /if\s*\(\s*query\s*&&\s*!isNodeServer\s*\)\s*\{[\s\S]{0,1200}?rulebookRag\.search\(/.test(sendChatAssemblySrc);
+  if (!hasGuardedClientRagSearch) {
+    fail(
+      'AUTH-008',
+      sendChatAssemblyFile,
+      'Client-side Rulebook RAG search must stay disabled in node-server mode to avoid duplicating server RAG injection.',
+    );
   }
 }
 
