@@ -732,7 +732,7 @@
 {#if selectedCharacter.type === 'character' && !editorCharacter}
     <div class="char-config-empty empty-state">Loading character...</div>
 {:else}
-{#if licensed !== 'private' && !$MobileGUI}
+{#if licensed !== 'private'}
     <div
         class="char-config-tabs seg-tabs"
         role="tablist"
@@ -2187,6 +2187,17 @@
     }
 
     @media (max-width: 1023px) {
+        .char-config-tabs {
+            grid-auto-columns: minmax(2.5rem, max-content);
+            justify-content: start;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        .char-config-tab {
+            min-width: 2.5rem;
+        }
+
         .char-config-root {
             gap: var(--ds-space-3);
             padding-bottom: calc(var(--ds-space-4) + env(safe-area-inset-bottom));

@@ -258,7 +258,7 @@ vi.mock(import("src/lib/Others/HypaV3Modal.svelte"), async () => ({
   default: (await import("./test-stubs/SimplePanelStub.svelte")).default,
 }));
 
-import { CharConfigSubMenu, DBState } from "src/ts/stores.svelte";
+import { CharConfigSubMenu, DBState, MobileGUI } from "src/ts/stores.svelte";
 import { changeChatTo } from "src/ts/globalApi.svelte";
 import ChatRightSidebarHostHarness from "./test-stubs/ChatRightSidebarHostHarness.svelte";
 
@@ -278,6 +278,7 @@ describe("chat sidebar integration runtime smoke", () => {
     shared.getNewChatFirstMessageIndex.mockReset();
     shared.getNewChatFirstMessageIndex.mockReturnValue(-1);
     CharConfigSubMenu.set(0);
+    MobileGUI.set(false);
     consoleWarnSpy = vi.spyOn(console, "warn").mockImplementation((...args) => {
       const message = args.map((entry) => String(entry)).join(" ");
       if (message.includes("binding_property_non_reactive")) {
@@ -553,6 +554,43 @@ describe("chat sidebar integration runtime smoke", () => {
 
     expect(document.querySelector(".side-chat-list-root")).toBeNull();
     expect((document.querySelector('[data-testid="host-right-tab-state"]') as HTMLElement | null)?.dataset.tab).toBe("character");
+  });
+
+  it("keeps character config top tabs available in mobile mode", async () => {
+    MobileGUI.set(true);
+    await flushUi();
+
+    const characterTab = document.querySelector('[data-testid="chat-sidebar-tab-character"]') as HTMLButtonElement | null;
+    expect(characterTab).not.toBeNull();
+    characterTab!.click();
+    await flushUi();
+
+    const topTabs = document.querySelector(".char-config-tabs") as HTMLElement | null;
+    expect(topTabs).not.toBeNull();
+    expect(topTabs?.getAttribute("role")).toBe("tablist");
+
+    const topTabIds = Array.from(document.querySelectorAll(".char-config-tab")).map((tab) => (tab as HTMLElement).id);
+    expect(topTabIds).toEqual([
+      "char-config-tab-0",
+      "char-config-tab-1",
+      "char-config-tab-3",
+      "char-config-tab-8",
+      "char-config-tab-5",
+      "char-config-tab-4",
+      "char-config-tab-2",
+      "char-config-tab-7",
+      "char-config-tab-6",
+    ]);
+
+    const displayTab = document.querySelector('[data-testid="char-config-subtab-1"]') as HTMLButtonElement | null;
+    expect(displayTab).not.toBeNull();
+    displayTab!.click();
+    await flushUi();
+
+    const displayPanel = document.querySelector("#char-config-panel-1") as HTMLElement | null;
+    expect(displayPanel).not.toBeNull();
+    expect(displayTab?.getAttribute("aria-selected")).toBe("true");
+    expect(displayPanel?.querySelector(".char-config-subtabs.seg-tabs")).not.toBeNull();
   });
 
   it("keeps per-tab CharConfig section mapping complete for character mode", async () => {
