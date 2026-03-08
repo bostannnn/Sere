@@ -9,6 +9,7 @@ const { previewOllamaExecution, executeOllama } = require('./ollama.cjs');
 const { previewKoboldExecution, executeKobold } = require('./kobold.cjs');
 const { previewNovelAIExecution, executeNovelAI } = require('./novelai.cjs');
 const { searchRulebooks } = require('../rag/engine.cjs');
+const { estimateTextTokens, extractTextFromMessageContent } = require('./tokenizer.cjs');
 const path = require('path');
 const { existsSync } = require('fs');
 const fs = require('fs/promises');
@@ -41,6 +42,109 @@ function shiftPromptBlockIndices(promptBlocks, startIndex, delta) {
         if (!Number.isInteger(idx) || idx < normalizedStart) continue;
         block.index = idx + normalizedDelta;
     }
+}
+
+function formatRulebookCitation(metadata = {}) {
+    let citation = metadata.source_file || 'Unknown source';
+    if (metadata.system) citation = `${metadata.system} - ${citation}`;
+    if (metadata.edition) citation = `${citation} (${metadata.edition})`;
+    if (metadata.page) citation = `${citation}, p. ${metadata.page}`;
+    return citation;
+}
+
+function buildRuleContextBlock(result) {
+    return `[Source: ${formatRulebookCitation(result?.chunk?.metadata)}]\n${result?.chunk?.content || ''}\n\n`;
+}
+
+function trimResultToBudget(result, budget) {
+    if (!result || !result.chunk || typeof result.chunk.content !== 'string') return null;
+    const normalizedBudget = Number.isFinite(Number(budget)) ? Math.max(0, Math.floor(Number(budget))) : 0;
+    if (normalizedBudget <= 0) return null;
+
+    const metadata = result.chunk.metadata || {};
+    const header = `[Source: ${formatRulebookCitation(metadata)}]\n`;
+    const availableTokens = normalizedBudget - estimateTextTokens(`<Rules Context>\n</Rules Context>\n${header}\n\n`);
+    if (availableTokens <= 0) return null;
+
+    const content = result.chunk.content.trim();
+    if (!content) return null;
+    const maxChars = Math.max(80, availableTokens * 4);
+    if (content.length <= maxChars) {
+        return {
+            ...result,
+            chunk: {
+                ...result.chunk,
+                content,
+            },
+        };
+    }
+
+    let truncated = content.slice(0, maxChars);
+    const sentenceBreak = Math.max(
+        truncated.lastIndexOf('. '),
+        truncated.lastIndexOf('? '),
+        truncated.lastIndexOf('! '),
+        truncated.lastIndexOf('\n')
+    );
+    if (sentenceBreak >= Math.floor(maxChars * 0.6)) {
+        truncated = truncated.slice(0, sentenceBreak + 1);
+    }
+    truncated = truncated.trim();
+    if (!truncated) return null;
+
+    return {
+        ...result,
+        chunk: {
+            ...result.chunk,
+            content: `${truncated}\n[Context truncated to fit budget]`,
+        },
+    };
+}
+
+function buildUserOnlyRagQuery(messages) {
+    if (!Array.isArray(messages)) return '';
+    const userTurns = messages
+        .filter((message) => message?.role === 'user')
+        .map((message) => extractTextFromMessageContent(message.content))
+        .map((content) => content.trim())
+        .filter(Boolean);
+    if (userTurns.length === 0) return '';
+
+    const selected = [];
+    for (let i = userTurns.length - 1; i >= 0 && selected.length < 3; i -= 1) {
+        selected.unshift(userTurns[i]);
+        const combined = selected.join('\n\n');
+        if (estimateTextTokens(combined) >= 48) {
+            break;
+        }
+    }
+    return selected.join('\n\n').slice(0, 1500).trim();
+}
+
+function applyRagBudget(results, budget) {
+    if (!Array.isArray(results) || results.length === 0) return [];
+    const normalizedBudget = Number.isFinite(Number(budget)) ? Math.max(0, Math.floor(Number(budget))) : 0;
+    if (normalizedBudget <= 0) return results;
+
+    const kept = [];
+    let usedTokens = estimateTextTokens('<Rules Context>\n</Rules Context>\n');
+
+    for (const result of results) {
+        const blockTokens = estimateTextTokens(buildRuleContextBlock(result));
+        if (usedTokens + blockTokens > normalizedBudget) {
+            if (kept.length === 0) {
+                const trimmed = trimResultToBudget(result, normalizedBudget);
+                if (trimmed) {
+                    kept.push(trimmed);
+                }
+            }
+            break;
+        }
+        kept.push(result);
+        usedTokens += blockTokens;
+    }
+
+    return kept;
 }
 
 function getExecutionRequestPayload(input) {
@@ -194,24 +298,17 @@ async function assembleServerPrompt(input, ctx) {
             || requestContainer.messages
             || [];
 
-        // Build RAG query from sliding window of last 3 non-system turns
-        // Short user messages like "a)" or "3" are useless for semantic search,
-        // so we pull recent assistant context too.
-        const recentTurns = messages
-            .filter(m => m.role === 'user' || m.role === 'assistant')
-            .slice(-3)
-            .map(m => typeof m.content === 'string' ? m.content.substring(0, 500) : '')
-            .filter(Boolean);
-        const ragQuery = recentTurns.join('\n').trim();
+        const ragQuery = buildUserOnlyRagQuery(messages);
 
         if (DEBUG) console.log(`[Server-Assembly] Message Check: msgCount=${messages.length}, ragQuery length=${ragQuery.length}`);
 
         if (ragQuery) {
             const topK = Number.isFinite(Number(globalRag.topK)) ? Number(globalRag.topK) : 3;
             const minScore = Number.isFinite(Number(globalRag.minScore)) ? Number(globalRag.minScore) : 0.1;
+            const budget = Number.isFinite(Number(globalRag.budget)) ? Number(globalRag.budget) : 0;
             const ragModel = (typeof globalRag.model === 'string' && globalRag.model.trim()) ? globalRag.model.trim() : 'MiniLM';
 
-            const results = await searchRulebooks(
+            const rawResults = await searchRulebooks(
                 ragQuery,
                 enabledRulebooks,
                 topK,
@@ -219,21 +316,20 @@ async function assembleServerPrompt(input, ctx) {
                 ragModel,
                 { ragRulebooks: path.join(ctx.dataRoot, 'rag', 'rulebooks') }
             );
+            const results = applyRagBudget(rawResults, budget);
 
             if (results.length > 0) {
                 rulesContext = "<Rules Context>\n";
                 for (const res of results) {
-                    const meta = res.chunk.metadata;
-                    let citation = meta.source_file;
-                    if (meta.system) citation = `${meta.system} - ${citation}`;
-                    if (meta.page) citation = `${citation}, p. ${meta.page}`;
-                    rulesContext += `[Source: ${citation}]\n${res.chunk.content}\n\n`;
+                    rulesContext += buildRuleContextBlock(res);
                 }
                 rulesContext += "</Rules Context>\n";
 
                 input._ragMeta = {
                     query: ragQuery.substring(0, 200),
                     resultCount: results.length,
+                    trimmedByBudget: rawResults.length > results.length,
+                    budget,
                     sources: results.map(r => r.chunk.metadata.source_file),
                 };
             }
@@ -412,4 +508,11 @@ module.exports = {
     assembleServerPrompt,
     previewExecution,
     execute,
+    __test: {
+        applyRagBudget,
+        buildRuleContextBlock,
+        buildUserOnlyRagQuery,
+        formatRulebookCitation,
+        trimResultToBudget,
+    },
 };

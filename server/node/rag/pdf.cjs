@@ -1,12 +1,18 @@
 /**
  * Enhanced PDF extractor with column awareness and basic filtering for Node.js.
  */
+const COLUMN_BREAK_MARKER = '__RISU_COLUMN_BREAK__';
+
 function normalizeLineText(text) {
     if (typeof text !== 'string') return '';
     return text
         .replace(/\0/g, '')
         .replace(/\s+/g, ' ')
         .trim();
+}
+
+function isColumnBreakMarker(text) {
+    return normalizeLineText(text) === COLUMN_BREAK_MARKER;
 }
 
 function normalizeTableRowText(cells) {
@@ -25,6 +31,15 @@ function canonicalizeForDedupe(text) {
         .trim();
 }
 
+function countLetters(text) {
+    if (typeof text !== 'string') return 0;
+    try {
+        return (text.match(/\p{L}/gu) || []).length;
+    } catch {
+        return (text.match(/[A-Za-z]/g) || []).length;
+    }
+}
+
 function countLettersAndDigits(text) {
     if (typeof text !== 'string') return 0;
     try {
@@ -32,6 +47,43 @@ function countLettersAndDigits(text) {
     } catch {
         return (text.match(/[A-Za-z0-9]/g) || []).length;
     }
+}
+
+function looksLikeListItem(text) {
+    const line = normalizeLineText(text);
+    if (!line) return false;
+    return /^[-*+]\s+/.test(line) || /^\d+[\.\)]\s+/.test(line);
+}
+
+function looksLikeHeadingLine(text) {
+    const line = normalizeLineText(text);
+    if (!line) return false;
+    if (line.length > 90) return false;
+    if (/[.!?]$/.test(line)) return false;
+    if (looksLikeListItem(line)) return false;
+    const words = line.split(/\s+/).filter(Boolean);
+    if (words.length === 0 || words.length > 10) return false;
+    return /^[A-Z0-9]/.test(line);
+}
+
+function looksMostlyUppercase(text) {
+    const line = normalizeLineText(text);
+    const letters = countLetters(line);
+    if (letters < 5) return false;
+    const uppercaseLetters = (line.match(/[A-Z]/g) || []).length;
+    return (uppercaseLetters / letters) >= 0.7;
+}
+
+function isLikelyMarginArtifact(text) {
+    const line = normalizeLineText(text);
+    if (!line) return false;
+    if (line.length > 120) return false;
+    if (/^(page\s+)?\d{1,4}$/.test(line.toLowerCase())) return true;
+    if (line.includes(' ; ')) return false;
+    if (looksMostlyUppercase(line)) return true;
+    if (looksLikeHeadingLine(line)) return true;
+    const words = line.split(/\s+/).filter(Boolean);
+    return words.length <= 10;
 }
 
 function isLowSignalLine(text) {
@@ -111,8 +163,16 @@ function mergeHyphenatedWraps(lines) {
     for (let i = 0; i < lines.length; i++) {
         const current = normalizeLineText(lines[i]);
         if (!current) continue;
+        if (isColumnBreakMarker(current)) {
+            output.push(current);
+            continue;
+        }
 
         const next = i + 1 < lines.length ? normalizeLineText(lines[i + 1]) : '';
+        if (isColumnBreakMarker(next)) {
+            output.push(current);
+            continue;
+        }
         const endsWithHyphen = /[\p{L}\p{N}]-$/u.test(current);
         const nextStartsLower = /^[\p{Ll}]/u.test(next);
 
@@ -127,17 +187,90 @@ function mergeHyphenatedWraps(lines) {
     return output;
 }
 
+function mergeSoftWrappedLines(lines) {
+    const output = [];
+    for (let i = 0; i < lines.length; i++) {
+        let current = normalizeLineText(lines[i]);
+        if (!current) continue;
+
+        while (i + 1 < lines.length) {
+            const next = normalizeLineText(lines[i + 1]);
+            if (!next) {
+                i += 1;
+                continue;
+            }
+            if (isColumnBreakMarker(current) || isColumnBreakMarker(next)) break;
+            if (looksLikeListItem(current) || looksLikeListItem(next)) break;
+            if (looksLikeHeadingLine(current) || looksLikeHeadingLine(next)) break;
+            if (current.includes(' ; ') || next.includes(' ; ')) break;
+
+            const currentEndsSoftly = /[a-z0-9,;:]$/u.test(current);
+            const nextStartsSoftly = /^[a-z(]/u.test(next);
+            const shouldMerge = (
+                currentEndsSoftly &&
+                nextStartsSoftly &&
+                (current.length >= 35 || next.length >= 35)
+            );
+            if (!shouldMerge) break;
+
+            current = `${current} ${next}`;
+            i += 1;
+        }
+
+        output.push(current);
+    }
+    return output;
+}
+
+function detectRecurringMarginLines(pageLineGroups, marginDepth = 3, threshold = null) {
+    const recurring = new Set();
+    if (!Array.isArray(pageLineGroups) || pageLineGroups.length === 0) return recurring;
+
+    const counts = new Map();
+    const seenByPage = new Set();
+    const normalizedThreshold = Number.isFinite(Number(threshold))
+        ? Math.max(2, Math.floor(Number(threshold)))
+        : Math.max(3, Math.ceil(pageLineGroups.length * 0.2));
+
+    for (let pageIndex = 0; pageIndex < pageLineGroups.length; pageIndex++) {
+        const pageLines = Array.isArray(pageLineGroups[pageIndex]) ? pageLineGroups[pageIndex] : [];
+        const candidates = [
+            ...pageLines.slice(0, marginDepth),
+            ...pageLines.slice(Math.max(0, pageLines.length - marginDepth)),
+        ];
+
+        for (const rawLine of candidates) {
+            const normalized = normalizeLineText(rawLine).toLowerCase();
+            if (!normalized || normalized.length < 3) continue;
+            if (!isLikelyMarginArtifact(normalized)) continue;
+            const pageKey = `${pageIndex}:${normalized}`;
+            if (seenByPage.has(pageKey)) continue;
+            seenByPage.add(pageKey);
+            counts.set(normalized, (counts.get(normalized) || 0) + 1);
+        }
+    }
+
+    for (const [line, count] of counts.entries()) {
+        if (count >= normalizedThreshold) {
+            recurring.add(line);
+        }
+    }
+
+    return recurring;
+}
+
 function cleanExtractedLines(lines, recurring) {
     let output = Array.isArray(lines)
         ? lines.map((line) => normalizeLineText(line)).filter((line) => line.length > 0)
         : [];
     const recurringSet = recurring instanceof Set ? recurring : new Set();
-    output = output.filter((line) => !recurringSet.has(line.toLowerCase()));
-    output = output.filter((line) => !isLowSignalLine(line));
+    output = output.filter((line) => isColumnBreakMarker(line) || !recurringSet.has(line.toLowerCase()));
+    output = output.filter((line) => isColumnBreakMarker(line) || !isLowSignalLine(line));
     output = mergeHyphenatedWraps(output);
+    output = mergeSoftWrappedLines(output);
     output = dedupeAdjacentLines(output);
     output = dedupeNearbyLines(output);
-    return output;
+    return output.filter((line) => !isColumnBreakMarker(line));
 }
 
 async function extractTextFromPdf(buffer) {
@@ -175,8 +308,20 @@ async function extractTextFromPdf(buffer) {
     }
 
     const pages = [];
-    const firstLines = [];
-    const lastLines = [];
+    const pageLineGroups = [];
+
+    function flushColumnsToPageText(leftColumn, rightColumn) {
+        if (leftColumn.length > 0 && rightColumn.length > 0) {
+            return `${leftColumn.join("\n")}\n${COLUMN_BREAK_MARKER}\n${rightColumn.join("\n")}\n`;
+        }
+        if (leftColumn.length > 0) {
+            return `${leftColumn.join("\n")}\n`;
+        }
+        if (rightColumn.length > 0) {
+            return `${rightColumn.join("\n")}\n`;
+        }
+        return "";
+    }
 
     for (let i = 1; i <= pdf.numPages; i++) {
         try {
@@ -237,7 +382,7 @@ async function extractTextFromPdf(buffer) {
 
                 if (isTableRow) {
                     if (leftColumn.length > 0 || rightColumn.length > 0) {
-                        pageText += leftColumn.join("\n") + "\n" + rightColumn.join("\n") + "\n";
+                        pageText += flushColumnsToPageText(leftColumn, rightColumn);
                         leftColumn.length = 0;
                         rightColumn.length = 0;
                     }
@@ -245,7 +390,7 @@ async function extractTextFromPdf(buffer) {
                     if (row) pageText += `${row}\n`;
                 } else if (isSpanning) {
                     if (leftColumn.length > 0 || rightColumn.length > 0) {
-                        pageText += leftColumn.join("\n") + "\n" + rightColumn.join("\n") + "\n";
+                        pageText += flushColumnsToPageText(leftColumn, rightColumn);
                         leftColumn.length = 0;
                         rightColumn.length = 0;
                     }
@@ -263,46 +408,21 @@ async function extractTextFromPdf(buffer) {
             });
 
             if (leftColumn.length > 0 || rightColumn.length > 0) {
-                pageText += leftColumn.join("\n") + "\n" + rightColumn.join("\n") + "\n";
+                pageText += flushColumnsToPageText(leftColumn, rightColumn);
             }
 
             const pageLines = pageText
                 .split('\n')
                 .map((line) => normalizeLineText(line))
                 .filter((line) => line.length > 0);
-            if (pageLines.length > 0) {
-                firstLines.push(pageLines[0]);
-                lastLines.push(pageLines[pageLines.length - 1]);
-            }
-
+            pageLineGroups.push(pageLines);
             pages.push({ text: pageLines.join('\n'), page: i });
         } catch (e) {
             console.error(`[PDF] Error on page ${i}:`, e);
         }
     }
 
-    const recurring = new Set();
-    const threshold = Math.max(3, pdf.numPages * 0.20);
-
-    const countOccurrences = (arr) => {
-        const counts = {};
-        arr.forEach(line => {
-            const normalized = line.trim().toLowerCase();
-            if (normalized.length < 3) return;
-            counts[normalized] = (counts[normalized] || 0) + 1;
-        });
-        return counts;
-    };
-
-    const firstLineCounts = countOccurrences(firstLines);
-    const lastLineCounts = countOccurrences(lastLines);
-
-    Object.entries(firstLineCounts).forEach(([line, count]) => {
-        if (count >= threshold) recurring.add(line);
-    });
-    Object.entries(lastLineCounts).forEach(([line, count]) => {
-        if (count >= threshold) recurring.add(line);
-    });
+    const recurring = detectRecurringMarginLines(pageLineGroups);
 
     console.log(`[PDF] Extraction complete. Total pages extracted: ${pages.length}`);
     return pages.map(p => {
@@ -315,8 +435,11 @@ module.exports = {
     extractTextFromPdf,
     __test: {
         cleanExtractedLines,
+        COLUMN_BREAK_MARKER,
+        detectRecurringMarginLines,
         dedupeNearbyLines,
         mergeHyphenatedWraps,
+        mergeSoftWrappedLines,
         isLowSignalLine,
     },
 };

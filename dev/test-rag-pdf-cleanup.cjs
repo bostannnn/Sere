@@ -61,6 +61,60 @@ test('keeps meaningful structured rows', () => {
     assert.deepEqual(cleaned, [meaningful]);
 });
 
+test('detects recurring margin lines beyond only the first or last line', () => {
+    const recurring = __test.detectRecurringMarginLines([
+        ['Vampire: The Masquerade', 'Combat', 'Body line one', 'Page 10'],
+        ['Vampire: The Masquerade', 'Combat', 'Body line two', 'Page 11'],
+        ['Vampire: The Masquerade', 'Combat', 'Body line three', 'Page 12'],
+    ]);
+    assert.equal(recurring.has('vampire: the masquerade'), true);
+    assert.equal(recurring.has('combat'), true);
+});
+
+test('merges softly wrapped paragraph lines', () => {
+    const cleaned = __test.cleanExtractedLines([
+        'A vampire who fails the test becomes ravenous and lashes out at the nearest vessel',
+        'before regaining control over their hunger.',
+    ], new Set());
+    assert.deepEqual(cleaned, [
+        'A vampire who fails the test becomes ravenous and lashes out at the nearest vessel before regaining control over their hunger.',
+    ]);
+});
+
+test('preserves list items instead of merging them together', () => {
+    const cleaned = __test.cleanExtractedLines([
+        '1. Roll initiative',
+        '2. Resolve intent',
+        '3. Apply damage',
+    ], new Set());
+    assert.deepEqual(cleaned, [
+        '1. Roll initiative',
+        '2. Resolve intent',
+        '3. Apply damage',
+    ]);
+});
+
+test('does not treat repeated table headers as recurring margin noise', () => {
+    const recurring = __test.detectRecurringMarginLines([
+        ['Clan ; Discipline ; Bane', 'Brujah ; Celerity ; Short temper', 'Page 10'],
+        ['Clan ; Discipline ; Bane', 'Gangrel ; Fortitude ; Bestial features', 'Page 11'],
+        ['Clan ; Discipline ; Bane', 'Malkavian ; Auspex ; Fractured insight', 'Page 12'],
+    ]);
+    assert.equal(recurring.has('clan ; discipline ; bane'), false);
+});
+
+test('does not merge soft-wrapped lines across column boundaries', () => {
+    const cleaned = __test.cleanExtractedLines([
+        'A vampire who fails the test becomes ravenous and lashes out at the nearest vessel',
+        __test.COLUMN_BREAK_MARKER,
+        'before regaining control over their hunger.',
+    ], new Set());
+    assert.deepEqual(cleaned, [
+        'A vampire who fails the test becomes ravenous and lashes out at the nearest vessel',
+        'before regaining control over their hunger.',
+    ]);
+});
+
 if (process.exitCode && process.exitCode !== 0) {
     process.exit(process.exitCode);
 }
