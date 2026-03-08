@@ -137,7 +137,7 @@ function looksLikeListBlock(text) {
     if (lines.length < 2) return false;
     let structuredLines = 0;
     for (const line of lines) {
-        if (/^[-*+]\s+/.test(line) || /^\d+[\.\)]\s+/.test(line)) {
+        if (/^[-*+]\s+/.test(line) || /^\d+[.)]\s+/.test(line)) {
             structuredLines += 1;
         }
     }

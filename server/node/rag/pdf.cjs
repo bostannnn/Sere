@@ -52,7 +52,7 @@ function countLettersAndDigits(text) {
 function looksLikeListItem(text) {
     const line = normalizeLineText(text);
     if (!line) return false;
-    return /^[-*+]\s+/.test(line) || /^\d+[\.\)]\s+/.test(line);
+    return /^[-*+]\s+/.test(line) || /^\d+[.)]\s+/.test(line);
 }
 
 function looksLikeHeadingLine(text) {

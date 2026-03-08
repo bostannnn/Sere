@@ -61,7 +61,6 @@ function trimResultToBudget(result, budget) {
     const normalizedBudget = Number.isFinite(Number(budget)) ? Math.max(0, Math.floor(Number(budget))) : 0;
     if (normalizedBudget <= 0) return null;
 
-    const metadata = result.chunk.metadata || {};
     const content = result.chunk.content.trim();
     if (!content) return null;
     const truncationMarker = '\n[Context truncated to fit budget]';
