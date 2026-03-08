@@ -702,6 +702,23 @@
     {#if $selectedCharID < 0}
         <MainMenu />
     {:else}
+        <div class="ds-chat-floating-actions action-rail">
+            <button
+                type="button"
+                class="ds-chat-floating-action-btn icon-btn icon-btn--sm"
+                title="Open chat actions"
+                aria-label="Open chat actions"
+                aria-haspopup="menu"
+                aria-expanded={openMenu}
+                aria-controls="ds-chat-side-menu"
+                onclick={(e) => {
+                    openMenu = !openMenu
+                    e.stopPropagation()
+                }}
+            >
+                <MenuIcon size={16} />
+            </button>
+        </div>
         <div class="ds-chat-main-shell">
             <div class="ds-chat-scroll-shell default-chat-screen"
                 onscroll={(e) => {

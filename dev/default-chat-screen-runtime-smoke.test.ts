@@ -281,6 +281,20 @@ describe("default chat screen runtime smoke", () => {
     ) as HTMLTextAreaElement | null;
     expect(translateInput).not.toBeNull();
 
+    const floatingActions = document.querySelector(
+      ".ds-chat-floating-actions.action-rail",
+    ) as HTMLElement | null;
+    expect(floatingActions).not.toBeNull();
+
+    const floatingMenuButton = document.querySelector(
+      ".ds-chat-floating-action-btn.icon-btn.icon-btn--sm",
+    ) as HTMLButtonElement | null;
+    expect(floatingMenuButton).not.toBeNull();
+    expect(floatingMenuButton?.getAttribute("type")).toBe("button");
+    expect(floatingMenuButton?.getAttribute("aria-label")).toBe("Open chat actions");
+    expect(floatingMenuButton?.getAttribute("aria-haspopup")).toBe("menu");
+    expect(floatingMenuButton?.getAttribute("aria-expanded")).toBe("false");
+
     const composerButtons = Array.from(
       document.querySelectorAll(".ds-chat-composer-action.icon-btn.icon-btn--sm"),
     ) as HTMLButtonElement[];
