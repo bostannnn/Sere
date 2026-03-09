@@ -206,14 +206,14 @@ export function useHypaV3Modal(getEmbedded: () => boolean) {
       promptOverrideCharacter,
       chatList,
       effectiveChatIndex,
-      currentCharId: currentChar?.chaId ?? null,
-      activeChatId,
-      characters: DBState.db.characters ?? [],
       uncategorizedLabel: language.hypaV3Modal.unclassified,
       setGlobalDebug: (debug) => {
         DBState.db.hypaV3Debug = debug;
       },
       setHypaV3Data,
+      isTargetActive: (target) =>
+        currentChar?.chaId === target.characterId && activeChatId === target.chatId,
+      getCharacters: () => DBState.db.characters ?? [],
       refreshCollapsedSummaries,
       onError: (error) => hypaV3ModalLog("Manual summarize failed:", error),
     });
@@ -266,7 +266,11 @@ export function useHypaV3Modal(getEmbedded: () => boolean) {
     },
     handleToggleSummarySelection(summaryIndex: number) {
       const selection = new SvelteSet(bulkEditState.selectedSummaries);
-      selection.has(summaryIndex) ? selection.delete(summaryIndex) : selection.add(summaryIndex);
+      if (selection.has(summaryIndex)) {
+        selection.delete(summaryIndex);
+      } else {
+        selection.add(summaryIndex);
+      }
       bulkEditState.selectedSummaries = selection;
     },
     async handleResetData() {
@@ -306,7 +310,11 @@ export function useHypaV3Modal(getEmbedded: () => boolean) {
     },
     handleToggleCollapse(summaryIndex: number) {
       const collapsed = new SvelteSet(uiState.collapsedSummaries);
-      collapsed.has(summaryIndex) ? collapsed.delete(summaryIndex) : collapsed.add(summaryIndex);
+      if (collapsed.has(summaryIndex)) {
+        collapsed.delete(summaryIndex);
+      } else {
+        collapsed.add(summaryIndex);
+      }
       uiState.collapsedSummaries = collapsed;
     },
     onSearch,

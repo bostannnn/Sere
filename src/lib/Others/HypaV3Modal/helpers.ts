@@ -11,7 +11,7 @@ export interface ManualSummarizeTarget {
   chatId: string;
 }
 
-interface HypaModalChatLike extends Record<string, any> {
+interface HypaModalChatLike extends Record<string, unknown> {
   id?: string;
   hypaV3Data?: SerializableHypaV3Data & { lastManualDebug?: SummarizeDebugLog };
   hypaV2Data?: {
@@ -19,7 +19,7 @@ interface HypaModalChatLike extends Record<string, any> {
   } | null;
 }
 
-interface HypaModalCharacterLike extends Record<string, any> {
+interface HypaModalCharacterLike extends Record<string, unknown> {
   chaId?: string;
   chats?: HypaModalChatLike[];
 }
@@ -99,26 +99,22 @@ function findManualSummarizeTargetIndices(
 }
 
 function syncHypaV3DataFromServer(args: {
-  characters: HypaModalCharacterLike[];
-  currentCharId: string | null;
-  activeChatId: string | null;
   data: SerializableHypaV3Data;
   target?: ManualSummarizeTarget;
   setHypaV3Data: (data: SerializableHypaV3Data) => void;
+  isTargetActive: (target: ManualSummarizeTarget) => boolean;
+  getCharacters: () => HypaModalCharacterLike[];
 }): void {
-  const { characters, currentCharId, activeChatId, data, target, setHypaV3Data } =
-    args;
+  const { data, target, setHypaV3Data, isTargetActive, getCharacters } = args;
   if (!target) return;
+  const characters = getCharacters();
   const targetIndices = findManualSummarizeTargetIndices(characters, target);
   if (!targetIndices) return;
   const targetCharacter = characters[targetIndices.characterIndex];
   const targetChat = targetCharacter?.chats?.[targetIndices.chatIndex];
   if (!targetCharacter || !targetChat) return;
   targetChat.hypaV3Data = data;
-  if (
-    currentCharId === target.characterId &&
-    activeChatId === target.chatId
-  ) {
+  if (isTargetActive(target)) {
     setHypaV3Data(data);
   }
   targetCharacter.chats![targetIndices.chatIndex] = { ...targetChat };
@@ -126,24 +122,23 @@ function syncHypaV3DataFromServer(args: {
 }
 
 function persistManualDebugForActiveChat(args: {
-  characters: HypaModalCharacterLike[];
-  currentCharId: string | null;
-  activeChatId: string | null;
   debug: SummarizeDebugLog;
   target?: ManualSummarizeTarget;
   uncategorizedLabel: string;
   setHypaV3Data: (data: SerializableHypaV3Data) => void;
+  isTargetActive: (target: ManualSummarizeTarget) => boolean;
+  getCharacters: () => HypaModalCharacterLike[];
 }): void {
   const {
-    characters,
-    currentCharId,
-    activeChatId,
     debug,
     target,
     uncategorizedLabel,
     setHypaV3Data,
+    isTargetActive,
+    getCharacters,
   } = args;
   if (!target) return;
+  const characters = getCharacters();
   const targetIndices = findManualSummarizeTargetIndices(characters, target);
   if (!targetIndices) return;
   const targetCharacter = characters[targetIndices.characterIndex];
@@ -151,10 +146,7 @@ function persistManualDebugForActiveChat(args: {
   if (!targetCharacter || !targetChat) return;
   targetChat.hypaV3Data ??= createEmptyHypaV3Data(uncategorizedLabel);
   targetChat.hypaV3Data.lastManualDebug = debug;
-  if (
-    currentCharId === target.characterId &&
-    activeChatId === target.chatId
-  ) {
+  if (isTargetActive(target)) {
     setHypaV3Data(targetChat.hypaV3Data as SerializableHypaV3Data);
   }
   targetCharacter.chats![targetIndices.chatIndex] = { ...targetChat };
@@ -172,12 +164,11 @@ export async function manualSummarizeRange(args: {
   } | null;
   chatList: HypaModalChatLike[];
   effectiveChatIndex: number;
-  currentCharId: string | null;
-  activeChatId: string | null;
-  characters: HypaModalCharacterLike[];
   uncategorizedLabel: string;
   setGlobalDebug: (debug: SummarizeDebugLog) => void;
   setHypaV3Data: (data: SerializableHypaV3Data) => void;
+  isTargetActive: (target: ManualSummarizeTarget) => boolean;
+  getCharacters: () => HypaModalCharacterLike[];
   refreshCollapsedSummaries: () => void;
   onError: (error: unknown) => void;
 }): Promise<void> {
@@ -187,12 +178,11 @@ export async function manualSummarizeRange(args: {
     promptOverrideCharacter,
     chatList,
     effectiveChatIndex,
-    currentCharId,
-    activeChatId,
-    characters,
     uncategorizedLabel,
     setGlobalDebug,
     setHypaV3Data,
+    isTargetActive,
+    getCharacters,
     refreshCollapsedSummaries,
     onError,
   } = args;
@@ -244,25 +234,23 @@ export async function manualSummarizeRange(args: {
     );
     if (result.hypaV3Data) {
       syncHypaV3DataFromServer({
-        characters,
-        currentCharId,
-        activeChatId,
         data: result.hypaV3Data as SerializableHypaV3Data,
         target: requestTarget,
         setHypaV3Data,
+        isTargetActive,
+        getCharacters,
       });
     }
     if (result.debug && typeof result.debug === "object") {
       const debugData = result.debug as SummarizeDebugLog;
       setGlobalDebug(debugData);
       persistManualDebugForActiveChat({
-        characters,
-        currentCharId,
-        activeChatId,
         debug: debugData,
         target: requestTarget,
         uncategorizedLabel,
         setHypaV3Data,
+        isTargetActive,
+        getCharacters,
       });
     } else {
       let fallbackDebug: SummarizeDebugLog = {
@@ -329,13 +317,12 @@ export async function manualSummarizeRange(args: {
       }
       setGlobalDebug(fallbackDebug);
       persistManualDebugForActiveChat({
-        characters,
-        currentCharId,
-        activeChatId,
         debug: fallbackDebug,
         target: requestTarget,
         uncategorizedLabel,
         setHypaV3Data,
+        isTargetActive,
+        getCharacters,
       });
     }
     refreshCollapsedSummaries();
