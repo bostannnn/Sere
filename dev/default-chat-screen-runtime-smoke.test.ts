@@ -3,6 +3,43 @@ import { mount, tick, unmount } from "svelte";
 
 const mocks = vi.hoisted(() => ({
   sendChat: vi.fn(async () => {}),
+  createEvolutionProposal: vi.fn(async () => ({
+    proposal: {
+      proposalId: "proposal-1",
+      sourceChatId: "chat-1",
+      proposedState: {
+        relationship: { trustLevel: "higher", dynamic: "warmer after the last exchange" },
+        activeThreads: ["new job nerves"],
+        runningJokes: [],
+        characterLikes: [],
+        characterDislikes: [],
+        characterHabits: [],
+        characterBoundariesPreferences: [],
+        userFacts: [],
+        userRead: [],
+        userLikes: [],
+        userDislikes: [],
+        lastChatEnded: { state: "close", residue: "supportive" },
+        keyMoments: ["user opened up about work"],
+        characterIntimatePreferences: [],
+        userIntimatePreferences: [],
+      },
+      changes: [
+        {
+          sectionKey: "relationship",
+          summary: "The relationship became warmer.",
+          evidence: ["Character said they feel closer now."],
+        },
+      ],
+      createdAt: 1,
+    },
+  })),
+  acceptEvolutionProposal: vi.fn(async (_characterId: string, proposedState: unknown) => ({
+    version: 1,
+    state: proposedState,
+  })),
+  rejectEvolutionProposal: vi.fn(async () => ({ ok: true })),
+  changeChatTo: vi.fn(),
 }));
 
 const platformState = vi.hoisted(() => ({
@@ -103,6 +140,76 @@ vi.mock(import("src/ts/stores.svelte"), async () => {
                 bindedPersona: "",
               },
             ],
+            characterEvolution: {
+              enabled: true,
+              useGlobalDefaults: false,
+              extractionProvider: "openrouter",
+              extractionModel: "anthropic/claude-3.5-haiku",
+              extractionPrompt: "prompt",
+              sectionConfigs: [
+                {
+                  key: "relationship",
+                  label: "Relationship",
+                  enabled: true,
+                  includeInPrompt: true,
+                  instruction: "Track trust shifts.",
+                  kind: "object",
+                  sensitive: false,
+                },
+                {
+                  key: "activeThreads",
+                  label: "Active Threads",
+                  enabled: true,
+                  includeInPrompt: true,
+                  instruction: "Track open threads.",
+                  kind: "list",
+                  sensitive: false,
+                },
+                {
+                  key: "lastChatEnded",
+                  label: "Last Chat Ended",
+                  enabled: true,
+                  includeInPrompt: true,
+                  instruction: "Track ending residue.",
+                  kind: "object",
+                  sensitive: false,
+                },
+                {
+                  key: "keyMoments",
+                  label: "Key Moments",
+                  enabled: true,
+                  includeInPrompt: true,
+                  instruction: "Track key moments.",
+                  kind: "list",
+                  sensitive: false,
+                },
+              ],
+              privacy: {
+                allowCharacterIntimatePreferences: false,
+                allowUserIntimatePreferences: false,
+              },
+              currentStateVersion: 0,
+              currentState: {
+                relationship: { trustLevel: "", dynamic: "" },
+                activeThreads: [],
+                runningJokes: [],
+                characterLikes: [],
+                characterDislikes: [],
+                characterHabits: [],
+                characterBoundariesPreferences: [],
+                userFacts: [],
+                userRead: [],
+                userLikes: [],
+                userDislikes: [],
+                lastChatEnded: { state: "", residue: "" },
+                keyMoments: [],
+                characterIntimatePreferences: [],
+                userIntimatePreferences: [],
+              },
+              pendingProposal: null,
+              lastProcessedChatId: null,
+              stateVersions: [],
+            },
           },
         ],
       },
@@ -163,7 +270,43 @@ vi.mock(import("src/ts/globalApi.svelte"), () => ({
   chatFoldedState: { data: null },
   chatFoldedStateMessageIndex: { index: -1 },
   downloadFile: async () => {},
+  changeChatTo: mocks.changeChatTo,
 }));
+
+vi.mock(import("src/ts/characterEvolution"), () => {
+  const ensureState = (char: Record<string, unknown>) => char.characterEvolution as Record<string, unknown>;
+  return {
+    ensureCharacterEvolution: (char: Record<string, unknown>) => ensureState(char),
+    getEffectiveCharacterEvolutionSettings: (_db: unknown, char: Record<string, unknown>) => ensureState(char),
+  };
+});
+
+vi.mock(import("src/ts/evolution"), async () => {
+  const { DBState } = await import("src/ts/stores.svelte");
+
+  return {
+    createCharacterEvolutionProposal: mocks.createEvolutionProposal,
+    acceptCharacterEvolutionProposal: mocks.acceptEvolutionProposal,
+    rejectCharacterEvolutionProposal: mocks.rejectEvolutionProposal,
+    getCharacterEvolutionErrorMessage: (error: unknown) => String(error ?? "Unknown error"),
+    getPendingCharacterEvolutionProposal: (character: Record<string, unknown> | null | undefined) => character?.characterEvolution?.pendingProposal ?? null,
+    createNewChatAfterEvolution: async (charIndex: number) => {
+      const character = DBState.db.characters[charIndex];
+      character.chats.unshift({
+        id: "chat-2",
+        name: "New Chat 1",
+        fmIndex: -1,
+        message: [],
+        localLore: [],
+        modules: [],
+        note: "",
+        bindedPersona: "",
+      });
+      character.chatPage = 0;
+      mocks.changeChatTo(0);
+    },
+  };
+});
 
 vi.mock(import("src/ts/process/triggers"), () => ({
   runTrigger: async () => null,
@@ -254,6 +397,10 @@ async function flushUi() {
 describe("default chat screen runtime smoke", () => {
   beforeEach(() => {
     mocks.sendChat.mockClear();
+    mocks.createEvolutionProposal.mockClear();
+    mocks.acceptEvolutionProposal.mockClear();
+    mocks.rejectEvolutionProposal.mockClear();
+    mocks.changeChatTo.mockClear();
     platformState.isMobile = false;
     selectedCharID.set(0);
     DBState.db.fixedChatTextarea = false;
@@ -293,20 +440,6 @@ describe("default chat screen runtime smoke", () => {
     ) as HTMLTextAreaElement | null;
     expect(translateInput).not.toBeNull();
 
-    const floatingActions = document.querySelector(
-      ".ds-chat-floating-actions.action-rail",
-    ) as HTMLElement | null;
-    expect(floatingActions).not.toBeNull();
-
-    const floatingMenuButton = document.querySelector(
-      ".ds-chat-floating-action-btn.icon-btn.icon-btn--sm",
-    ) as HTMLButtonElement | null;
-    expect(floatingMenuButton).not.toBeNull();
-    expect(floatingMenuButton?.getAttribute("type")).toBe("button");
-    expect(floatingMenuButton?.getAttribute("aria-label")).toBe("Open chat actions");
-    expect(floatingMenuButton?.getAttribute("aria-haspopup")).toBe("menu");
-    expect(floatingMenuButton?.getAttribute("aria-expanded")).toBe("false");
-
     const composerButtons = Array.from(
       document.querySelectorAll(".ds-chat-composer-action.icon-btn.icon-btn--sm"),
     ) as HTMLButtonElement[];
@@ -328,7 +461,7 @@ describe("default chat screen runtime smoke", () => {
       document.querySelectorAll(".ds-chat-side-menu-item.ds-ui-menu-item"),
     ) as HTMLButtonElement[];
     const sideMenuPanel = document.querySelector(
-      ".ds-chat-side-menu.panel-shell.ds-ui-menu",
+      ".ds-chat-side-menu.ds-chat-side-menu-composer.panel-shell.ds-ui-menu",
     ) as HTMLElement | null;
     expect(sideMenuPanel).not.toBeNull();
     expect(sideMenuPanel?.id).toBe("ds-chat-side-menu");
@@ -561,5 +694,42 @@ describe("default chat screen runtime smoke", () => {
     translateInput!.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", shiftKey: true, bubbles: true }));
     await flushUi();
     expect(mocks.sendChat).toHaveBeenCalledTimes(0);
+  });
+
+  it("accepts an evolution proposal and creates a new chat from the review panel", async () => {
+    const target = document.createElement("div");
+    document.body.appendChild(target);
+    app = mount(DefaultChatScreen, { target });
+    await flushUi();
+
+    const menuButton = document.querySelector(
+      ".ds-chat-composer-action.ds-chat-composer-action-end.icon-btn.icon-btn--sm",
+    ) as HTMLButtonElement | null;
+    expect(menuButton).not.toBeNull();
+    menuButton!.click();
+    await flushUi();
+
+    const handoffButton = Array.from(document.querySelectorAll(".ds-chat-side-menu-item")).find(
+      (element) => (element as HTMLButtonElement).getAttribute("aria-label") === "Character evolution handoff",
+    ) as HTMLButtonElement | undefined;
+    expect(handoffButton).toBeDefined();
+    handoffButton!.click();
+    await flushUi();
+
+    const acceptAndCreateButton = Array.from(document.querySelectorAll("button")).find(
+      (element) => (element as HTMLButtonElement).textContent?.includes("Accept And Create New Chat"),
+    ) as HTMLButtonElement | undefined;
+    expect(acceptAndCreateButton).toBeDefined();
+    acceptAndCreateButton!.click();
+    await flushUi();
+
+    expect(mocks.createEvolutionProposal).toHaveBeenCalledTimes(1);
+    expect(mocks.acceptEvolutionProposal).toHaveBeenCalledTimes(1);
+    expect(DBState.db.characters[0].characterEvolution.currentStateVersion).toBe(1);
+    expect(DBState.db.characters[0].characterEvolution.pendingProposal).toBeNull();
+    expect(DBState.db.characters[0].chats).toHaveLength(2);
+    expect(DBState.db.characters[0].chats[0]?.name).toBe("New Chat 1");
+    expect(DBState.db.characters[0].chatPage).toBe(0);
+    expect(mocks.changeChatTo).toHaveBeenCalledWith(0);
   });
 });

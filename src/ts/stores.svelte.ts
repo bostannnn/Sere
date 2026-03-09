@@ -36,7 +36,7 @@ export const SizeStore = writable({
 })
 
 export type AppWorkspace = "home" | "characters" | "chats" | "library" | "settings"
-export type AppInspector = "none" | "details" | "chat" | "character" | "memory"
+export type AppInspector = "none" | "details" | "chat" | "character" | "memory" | "evolution"
 
 export interface AppRoute {
     workspace: AppWorkspace
@@ -61,6 +61,8 @@ export const CurrentTriggerIdStore = writable<string | null>(null)
 export const CharEmotion = writable({} as {[key:string]: [string, string, number][]})
 export const ViewBoxsize = writable({ width: 12 * 16, height: 12 * 16 }); // Default width and height in pixels
 export const settingsOpen = writable(false)
+export const BotSettingsSubMenuIndex = writable<number | null>(null)
+export const OtherBotSettingsSubMenuIndex = writable<number | null>(null)
 export const moduleBackgroundEmbedding = writable('')
 export const openPresetList = writable(false)
 export const openPersonaList = writable(false)

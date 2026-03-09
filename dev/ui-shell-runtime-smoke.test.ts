@@ -602,6 +602,13 @@ describe("ui shell runtime smoke", () => {
     expect(get(appRouteStore).inspector).toBe("memory");
     expect((document.querySelector('[data-testid="app-chat-screen-stub"]') as HTMLElement | null)?.dataset.rightSidebarTab).toBe("memory");
 
+    const evolutionTab = document.querySelector('[data-testid="app-chat-sidebar-tab-evolution"]') as HTMLButtonElement | null;
+    expect(evolutionTab).not.toBeNull();
+    evolutionTab!.click();
+    await flushUi();
+    expect(get(appRouteStore).inspector).toBe("evolution");
+    expect((document.querySelector('[data-testid="app-chat-screen-stub"]') as HTMLElement | null)?.dataset.rightSidebarTab).toBe("evolution");
+
     const chatTab = document.querySelector('[data-testid="app-chat-sidebar-tab-chat"]') as HTMLButtonElement | null;
     expect(chatTab).not.toBeNull();
     chatTab!.click();

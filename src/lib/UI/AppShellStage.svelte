@@ -27,7 +27,7 @@
         shellSearchQuery?: string;
         characterDirectoryShowTrash?: boolean;
         rightSidebarOpen?: boolean;
-        rightSidebarTab?: "chat" | "character" | "memory";
+        rightSidebarTab?: "chat" | "character" | "memory" | "evolution";
         rightSidebarVisible?: boolean;
         librarySidebarOpen?: boolean;
         librarySidebarTab?: "library" | "settings";

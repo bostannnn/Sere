@@ -3,15 +3,17 @@
     import SideChatList from "../SideBars/SideChatList.svelte";
     import CharConfig from "../SideBars/CharConfig.svelte";
     import HypaV3Modal from "../Others/HypaV3Modal.svelte";
+    import EvolutionSettings from "../SideBars/Evolution/EvolutionSettings.svelte";
     import { DBState, selectedCharID } from "src/ts/stores.svelte";
 
-    type RightPanelTab = "chat" | "character" | "memory";
+    type RightPanelTab = "chat" | "character" | "memory" | "evolution";
 
     interface Props {
         rightSidebarTab?: RightPanelTab;
         chatTabLabel?: string;
         configTabLabel?: string;
         memoryTabLabel?: string;
+        evolutionTabLabel?: string;
         onSelectTab?: (tab: RightPanelTab) => void;
     }
 
@@ -20,17 +22,27 @@
         chatTabLabel = "Chat",
         configTabLabel = "Character",
         memoryTabLabel = "Memory",
+        evolutionTabLabel = "Evolution",
         onSelectTab = () => {},
     }: Props = $props();
 
-    const rightPanelTabs: RightPanelTab[] = ["chat", "character", "memory"];
-    const selectedCharacter = $derived($selectedCharID >= 0 ? DBState.db.characters[$selectedCharID] : null);
+    const rightPanelTabs: RightPanelTab[] = ["chat", "character", "memory", "evolution"];
+    const selectedCharacter = $derived.by(() => {
+        const selectedIndex = Number($selectedCharID);
+        if (!Number.isInteger(selectedIndex) || selectedIndex < 0) {
+            return null;
+        }
+        const characters = Array.isArray(DBState.db.characters) ? DBState.db.characters : [];
+        return characters[selectedIndex] ?? null;
+    });
     const chatPanelId = "chat-sidebar-panel-chat";
     const characterPanelId = "chat-sidebar-panel-character";
     const memoryPanelId = "chat-sidebar-panel-memory";
+    const evolutionPanelId = "chat-sidebar-panel-evolution";
     let chatTabButton: HTMLButtonElement | null = null;
     let characterTabButton: HTMLButtonElement | null = null;
     let memoryTabButton: HTMLButtonElement | null = null;
+    let evolutionTabButton: HTMLButtonElement | null = null;
 
     const selectTab = (nextTab: RightPanelTab) => {
         onSelectTab(nextTab);
@@ -45,7 +57,11 @@
             characterTabButton?.focus();
             return;
         }
-        memoryTabButton?.focus();
+        if (tab === "memory") {
+            memoryTabButton?.focus();
+            return;
+        }
+        evolutionTabButton?.focus();
     };
 
     const selectTabAndFocus = async (nextTab: RightPanelTab) => {
@@ -78,7 +94,7 @@
         }
 
         if (event.key === "End") {
-            await selectTabAndFocus("memory");
+            await selectTabAndFocus("evolution");
             event.preventDefault();
             return;
         }
@@ -168,6 +184,23 @@
             onclick={() => selectTabAndFocus("memory")}
             onkeydown={(event) => handleRightPanelTabKeydown(event, "memory")}
         >{memoryTabLabel}</button>
+        <button
+            type="button"
+            class="ds-chat-right-panel-tab seg-tab"
+            data-testid="chat-sidebar-tab-evolution"
+            data-chat-sidebar-tab="evolution"
+            role="tab"
+            id="chat-sidebar-tab-evolution"
+            bind:this={evolutionTabButton}
+            aria-selected={rightSidebarTab === "evolution"}
+            aria-controls={evolutionPanelId}
+            tabindex={rightSidebarTab === "evolution" ? 0 : -1}
+            class:ds-chat-right-panel-tab-active={rightSidebarTab === "evolution"}
+            class:active={rightSidebarTab === "evolution"}
+            class:is-active={rightSidebarTab === "evolution"}
+            onclick={() => selectTabAndFocus("evolution")}
+            onkeydown={(event) => handleRightPanelTabKeydown(event, "evolution")}
+        >{evolutionTabLabel}</button>
     </div>
     <div class="ds-chat-right-panel-content">
         {#if rightSidebarTab === "chat"}
@@ -205,22 +238,41 @@
                 <CharConfig />
             </div>
         {:else}
+            {#if rightSidebarTab === "memory"}
+                <div
+                    class="ds-chat-right-panel-pane ds-chat-right-panel-pane-memory"
+                    data-testid="chat-sidebar-pane-memory"
+                    role="tabpanel"
+                    id={memoryPanelId}
+                    aria-labelledby="chat-sidebar-tab-memory"
+                    tabindex={0}
+                    onkeydown={(event) => {
+                        if (event.target !== event.currentTarget) {
+                            return
+                        }
+                        handleRightPanelTabKeydown(event, "memory")
+                    }}
+                >
+                    <HypaV3Modal embedded />
+                </div>
+            {:else}
             <div
-                class="ds-chat-right-panel-pane ds-chat-right-panel-pane-memory"
-                data-testid="chat-sidebar-pane-memory"
+                class="ds-chat-right-panel-pane ds-chat-right-panel-pane-evolution"
+                data-testid="chat-sidebar-pane-evolution"
                 role="tabpanel"
-                id={memoryPanelId}
-                aria-labelledby="chat-sidebar-tab-memory"
+                id={evolutionPanelId}
+                aria-labelledby="chat-sidebar-tab-evolution"
                 tabindex={0}
                 onkeydown={(event) => {
                     if (event.target !== event.currentTarget) {
                         return
                     }
-                    handleRightPanelTabKeydown(event, "memory")
+                    handleRightPanelTabKeydown(event, "evolution")
                 }}
             >
-                <HypaV3Modal embedded />
+                <EvolutionSettings />
             </div>
+            {/if}
         {/if}
     </div>
 </aside>

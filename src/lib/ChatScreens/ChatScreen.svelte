@@ -16,7 +16,7 @@
     import { resolveChatBackgroundMode } from "../../ts/storage/database.svelte";
     interface Props {
         rightSidebarOpen?: boolean;
-        rightSidebarTab?: "chat" | "character" | "memory";
+        rightSidebarTab?: "chat" | "character" | "memory" | "evolution";
         rightSidebarVisible?: boolean;
     }
 
@@ -29,8 +29,8 @@
     let openChatList = $state(false)
     let openModuleList = $state(false)
     let viewportWidth = $state(typeof window !== "undefined" ? window.innerWidth : 1440)
-    type RightPanelTab = "chat" | "character" | "memory";
-    type PersistedRightPanelTab = Exclude<RightPanelTab, "memory">;
+    type RightPanelTab = "chat" | "character" | "memory" | "evolution";
+    type PersistedRightPanelTab = Exclude<RightPanelTab, "memory" | "evolution">;
     const rightPanelTabKey = "risu:desktop-right-panel-tab"
     const rightSidebarPanelId = "chat-right-sidebar-drawer"
     const isPersistedRightPanelTab = (value: string | null): value is PersistedRightPanelTab => value === "chat" || value === "character"
@@ -81,8 +81,8 @@
         const savedTab = window.localStorage.getItem(rightPanelTabKey)
         if (isPersistedRightPanelTab(savedTab)) {
             rightSidebarTab = savedTab
-        } else if (savedTab === "memory") {
-            // Memory is intentionally not persisted across sessions; restore a safe explicit default.
+        } else if (savedTab === "memory" || savedTab === "evolution") {
+            // Memory and evolution are intentionally not persisted across sessions; restore a safe explicit default.
             rightSidebarTab = "chat"
             window.localStorage.setItem(rightPanelTabKey, "chat")
         }
@@ -115,7 +115,7 @@
     const setRightPanelTab = (nextTab: RightPanelTab) => {
         rightSidebarTab = nextTab
         if (typeof window !== "undefined") {
-            if (nextTab === "memory") {
+            if (nextTab === "memory" || nextTab === "evolution") {
                 return
             }
             window.localStorage.setItem(rightPanelTabKey, nextTab)
@@ -169,6 +169,7 @@
     )
     let bgImg= $state('')
     let forceDefaultWallpaper = $state(false)
+    let evolutionReviewActive = $state(false)
     let lastBg = ''
     let lastBackgroundMode = ''
     let emotionSrc = $state<string[]>([])
@@ -226,50 +227,64 @@
     class="ds-chat-screen-shell"
     data-reading-mode={effectiveReadingMode}
     data-chat-theme={chatThemeToken}
+    data-review-mode={evolutionReviewActive ? 'evolution' : 'chat'}
 >
     <div class="ds-chat-screen-main">
         {#if DBState.db.theme === 'waifu'}
             <div
                 class="ds-chat-theme-waifu-shell"
+                class:ds-chat-theme-waifu-shell-review={evolutionReviewActive}
                 style="{bgImg.length < 4 ? wallPaper : bgImg}"
                 style:--ds-waifu-chat-width="{42 * (DBState.db.waifuWidth / 100)}rem"
                 style:--ds-waifu-portrait-width="{42 * (DBState.db.waifuWidth2 / 100)}rem"
             >
-                <BackgroundDom />
-                {#if $selectedCharID >= 0}
+                {#if !evolutionReviewActive}
+                    <BackgroundDom />
+                {/if}
+                {#if $selectedCharID >= 0 && !evolutionReviewActive}
                     {#if DBState.db.characters[$selectedCharID].viewScreen !== 'none'}
                         <div class="ds-chat-waifu-side-shell ds-chat-waifu-side-image">
                             <TransitionImage classType="waifu" src={emotionSrc}/>
                         </div>
                     {/if}
                 {/if}
-                <div class="ds-chat-waifu-main-shell" class:ds-chat-waifu-main-half={$selectedCharID >= 0 && DBState.db.characters[$selectedCharID].viewScreen !== 'none'}>
+                <div
+                    class="ds-chat-waifu-main-shell"
+                    class:ds-chat-waifu-main-half={$selectedCharID >= 0 && DBState.db.characters[$selectedCharID].viewScreen !== 'none' && !evolutionReviewActive}
+                    class:ds-chat-waifu-main-shell-review={evolutionReviewActive}
+                >
                     <DefaultChatScreen
-                        customStyle={waifuExternalStyles}
+                        customStyle={evolutionReviewActive ? '' : waifuExternalStyles}
                         onOpenChatList={openGlobalChatList}
                         onOpenModuleList={openGlobalModuleList}
+                        onEvolutionReviewChange={(active) => { evolutionReviewActive = active }}
                     />
                 </div>
             </div>
         {:else if DBState.db.theme === 'waifuMobile'}
             <div
                 class="ds-chat-theme-waifu-mobile-shell"
+                class:ds-chat-theme-waifu-shell-review={evolutionReviewActive}
                 style={bgImg.length < 4 ? wallPaper : bgImg}
                 style:--ds-waifu-chat-width="{42 * (DBState.db.waifuWidth / 100)}rem"
                 style:--ds-waifu-portrait-width="{42 * (DBState.db.waifuWidth2 / 100)}rem"
             >
-                <BackgroundDom />
+                {#if !evolutionReviewActive}
+                    <BackgroundDom />
+                {/if}
                 <div class="ds-chat-waifu-mobile-overlay"
-                    class:ds-chat-waifu-mobile-third={$selectedCharID >= 0 && DBState.db.characters[$selectedCharID].viewScreen !== 'none'}
-                    class:ds-chat-waifu-mobile-full={!($selectedCharID >= 0 && DBState.db.characters[$selectedCharID].viewScreen !== 'none')}
+                    class:ds-chat-waifu-mobile-third={$selectedCharID >= 0 && DBState.db.characters[$selectedCharID].viewScreen !== 'none' && !evolutionReviewActive}
+                    class:ds-chat-waifu-mobile-full={!($selectedCharID >= 0 && DBState.db.characters[$selectedCharID].viewScreen !== 'none') || evolutionReviewActive}
+                    class:ds-chat-waifu-mobile-overlay-review={evolutionReviewActive}
                 >
                     <DefaultChatScreen
-                        customStyle={waifuExternalStyles}
+                        customStyle={evolutionReviewActive ? '' : waifuExternalStyles}
                         onOpenChatList={openGlobalChatList}
                         onOpenModuleList={openGlobalModuleList}
+                        onEvolutionReviewChange={(active) => { evolutionReviewActive = active }}
                     />
                 </div>
-                {#if $selectedCharID >= 0}
+                {#if $selectedCharID >= 0 && !evolutionReviewActive}
                     {#if DBState.db.characters[$selectedCharID].viewScreen !== 'none'}
                         <div class="ds-chat-waifu-mobile-image-shell">
                             <TransitionImage classType="mobile" src={emotionSrc}/>
@@ -279,17 +294,20 @@
             </div>
         {:else}
             <div class="ds-chat-theme-classic-shell">
-                <BackgroundDom />
+                {#if !evolutionReviewActive}
+                    <BackgroundDom />
+                {/if}
                 <div style={forceDefaultWallpaper ? wallPaper : bgImg} class="ds-chat-theme-classic-main" class:ds-chat-theme-classic-main-max={DBState.db.classicMaxWidth}>
-                    {#if $selectedCharID >= 0}
+                    {#if $selectedCharID >= 0 && !evolutionReviewActive}
                         {#if DBState.db.characters[$selectedCharID].viewScreen !== 'none' && (DBState.db.characters[$selectedCharID].type === 'group' || (!DBState.db.characters[$selectedCharID].inlayViewScreen))}
                             <ResizeBox />
                         {/if}
                     {/if}
                     <DefaultChatScreen
-                        customStyle={bgImg.length > 2 ? `${externalStyles}`: ''}
+                        customStyle={evolutionReviewActive ? '' : (bgImg.length > 2 ? `${externalStyles}`: '')}
                         onOpenChatList={openGlobalChatList}
                         onOpenModuleList={openGlobalModuleList}
+                        onEvolutionReviewChange={(active) => { evolutionReviewActive = active }}
                     />
                 </div>
             </div>
@@ -307,6 +325,7 @@
                 chatTabLabel={language.Chat}
                 configTabLabel={configTabLabel}
                 memoryTabLabel={language.memoryTab}
+                evolutionTabLabel="Evolution"
                 onSelectTab={setRightPanelTab}
             />
         </div>

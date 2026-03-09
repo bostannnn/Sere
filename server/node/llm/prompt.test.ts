@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { buildMessagesFromPromptTemplate } from "./prompt.cjs";
+import { buildGeneratePromptMessages, buildMessagesFromPromptTemplate } from "./prompt.cjs";
 
 describe("server prompt template slots", () => {
   it("emits rulebook and game state slot markers without inserting placeholder messages", async () => {
@@ -105,5 +105,64 @@ describe("server prompt template slots", () => {
 
     expect(assembled?.messages?.some((entry: Record<string, unknown>) => String(entry.content || "").includes("Trust level: high"))).toBe(true);
     expect(assembled?.promptBlocks?.some((entry: Record<string, unknown>) => entry.title === "Character State")).toBe(true);
+  });
+
+  it("keeps description and characterState in the legacy fallback path", async () => {
+    const assembled = await buildGeneratePromptMessages({
+      character: {
+        name: "Chronicle Bot",
+        desc: "A careful archivist.",
+        personality: "Dry wit.",
+        characterEvolution: {
+          enabled: true,
+          useGlobalDefaults: false,
+          currentState: {
+            relationship: {
+              trustLevel: "high",
+              dynamic: "warm and teasing",
+            },
+          },
+          sectionConfigs: [
+            {
+              key: "relationship",
+              label: "Relationship",
+              enabled: true,
+              includeInPrompt: true,
+              instruction: "Track relationship",
+              kind: "object",
+              sensitive: false,
+            },
+          ],
+          privacy: {
+            allowCharacterIntimatePreferences: false,
+            allowUserIntimatePreferences: false,
+          },
+        },
+      },
+      chat: {
+        message: [{ role: "user", data: "hello" }],
+      },
+      settings: {
+        mainPrompt: "Main prompt.",
+        globalNote: "Global note.",
+        characterEvolutionDefaults: {
+          extractionProvider: "openrouter",
+          extractionModel: "model",
+          extractionPrompt: "prompt",
+          sectionConfigs: [],
+          privacy: {
+            allowCharacterIntimatePreferences: false,
+            allowUserIntimatePreferences: false,
+          },
+        },
+      },
+      userMessage: "hello",
+    });
+
+    const promptBlocks = assembled?.promptBlocks ?? [];
+    expect(promptBlocks.some((entry: Record<string, unknown>) => entry.title === "Description")).toBe(true);
+    expect(promptBlocks.some((entry: Record<string, unknown>) => entry.title === "Character State")).toBe(true);
+    expect(assembled?.messages?.some((entry: Record<string, unknown>) => String(entry.content || "").includes("A careful archivist."))).toBe(true);
+    expect(assembled?.messages?.some((entry: Record<string, unknown>) => String(entry.content || "").includes("Trust level: high"))).toBe(true);
   });
 });

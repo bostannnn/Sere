@@ -4,7 +4,7 @@
     import { language } from "src/lang";
     import Help from "src/lib/Others/Help.svelte";
     
-    import { DBState } from 'src/ts/stores.svelte';
+    import { BotSettingsSubMenuIndex, DBState } from 'src/ts/stores.svelte';
     import { tokenizeAccurate, tokenizerList } from "src/ts/tokenizer";
     import ModelList from "src/lib/UI/ModelList.svelte";
     import DropList from "src/lib/SideBars/DropList.svelte";
@@ -16,7 +16,7 @@
     import Button from "src/lib/UI/GUI/Button.svelte";
     import SelectInput from "src/lib/UI/GUI/SelectInput.svelte";
     import OptionInput from "src/lib/UI/GUI/OptionInput.svelte";
-    import { openRouterModelsWithState, type OpenRouterModelsState } from "src/ts/model/openrouter";
+    import OpenRouterModelSelect from "src/lib/UI/GUI/OpenRouterModelSelect.svelte";
     import OobaSettings from "./OobaSettings.svelte";
     import OpenrouterSettings from "./OpenrouterSettings.svelte";
     import ChatFormatSettings from "./ChatFormatSettings.svelte";
@@ -27,7 +27,6 @@
     import { allBasicParameterItems } from "src/ts/setting/botSettingsParamsData";
     import SeparateParametersSection from "./SeparateParametersSection.svelte";
     import SettingsSubTabs from "src/lib/Setting/SettingsSubTabs.svelte";
-    import EvolutionDefaultsSettings from "./EvolutionDefaultsSettings.svelte";
     
 const tokens = $state({
         mainPrompt: 0,
@@ -66,95 +65,39 @@ const tokens = $state({
         DBState.db.vertexAccessTokenExpires = 0;
     }
 
-    $effect(() => {
-        if (DBState.db.aiModel === 'openrouter' || DBState.db.subModel === 'openrouter') {
-            openrouterSearchQuery = ""
-            openrouterSubSearchQuery = ""
-        }
-    });
-
-
     const allowedSubmenus = new Set([0, 1, 2, -1]);
     let submenu = $state(0)
     const modelInfo = $derived(getModelInfo(DBState.db.aiModel))
     const subModelInfo = $derived(getModelInfo(DBState.db.subModel))
     const removedModelMigrationNotice = $derived((DBState.db.removedModelMigrationNotice ?? []).join(" "))
-    let openrouterSearchQuery = $state("")
-    let openrouterSubSearchQuery = $state("")
-    let openrouterModelsLoading = $state(false)
-    let openrouterModelState = $state<OpenRouterModelsState>({
-        models: [],
-        status: 0,
-        source: 'server',
-        stale: false,
-        updatedAt: null,
-        error: ''
-    })
-    let openrouterModelLoadStarted = $state(false)
     let showPresetModal = $state(false)
-
-    const fallbackOpenRouterModels = [
-        ['openai/gpt-3.5-turbo', 'GPT 3.5'],
-        ['openai/gpt-3.5-turbo-16k', 'GPT 3.5 16k'],
-        ['openai/gpt-4', 'GPT-4'],
-        ['openai/gpt-4-32k', 'GPT-4 32k'],
-        ['anthropic/claude-2', 'Claude 2'],
-        ['anthropic/claude-instant-v1', 'Claude Instant v1'],
-        ['anthropic/claude-instant-v1-100k', 'Claude Instant v1 100k'],
-        ['anthropic/claude-v1', 'Claude v1'],
-        ['anthropic/claude-v1-100k', 'Claude v1 100k'],
-        ['anthropic/claude-1.2', 'Claude v1.2'],
-    ] as const
     const deepSeekV32SpecialeModelId = 'deepseek/deepseek-v3.2-speciale'
-
-    const openrouterModels = $derived(openrouterModelState.models ?? [])
     const showDeepSeekV32SpecialeReasoningToggle = $derived(
         (DBState.db.aiModel === 'openrouter' && DBState.db.openrouterRequestModel === deepSeekV32SpecialeModelId) ||
         (DBState.db.subModel === 'openrouter' && DBState.db.openrouterSubRequestModel === deepSeekV32SpecialeModelId)
     )
-
-    function formatOpenRouterUpdatedAt(value: string | null): string {
-        if (!value) {
-            return ''
-        }
-        const date = new Date(value)
-        if (Number.isNaN(date.getTime())) {
-            return value
-        }
-        return date.toLocaleString()
-    }
-
-    async function refreshOpenRouterModels(forceRefresh = false) {
-        openrouterModelsLoading = true
-        try {
-            const nextState = await openRouterModelsWithState({ forceRefresh })
-            openrouterModelState = nextState
-        } finally {
-            openrouterModelsLoading = false
-        }
-    }
 
     function dismissRemovedModelMigrationNotice() {
         DBState.db.removedModelMigrationNotice = []
     }
 
     $effect(() => {
-        const needsOpenrouterModels = DBState.db.aiModel === 'openrouter' || DBState.db.subModel === 'openrouter'
-        if (!needsOpenrouterModels) {
-            openrouterModelLoadStarted = false
-            return
-        }
-        if (openrouterModelLoadStarted) {
-            return
-        }
-        openrouterModelLoadStarted = true
-        void refreshOpenRouterModels()
-    })
-
-    $effect(() => {
         if (!allowedSubmenus.has(submenu)) {
             submenu = 0;
         }
+    });
+
+    $effect(() => {
+        const requestedSubmenu = $BotSettingsSubMenuIndex;
+        if (requestedSubmenu === null) {
+            return;
+        }
+        if (!allowedSubmenus.has(requestedSubmenu)) {
+            BotSettingsSubMenuIndex.set(null);
+            return;
+        }
+        submenu = requestedSubmenu;
+        BotSettingsSubMenuIndex.set(null);
     });
 </script>
 <h2 class="ds-settings-page-title ds-settings-inline-actions action-rail">
@@ -268,92 +211,20 @@ const tokens = $state({
         <div class="ds-settings-section">
             <span class="ds-settings-label">Openrouter Key</span>
             <TextInput hideText={DBState.db.hideApiKey} size="sm" bind:value={DBState.db.openrouterKey} />
-            <div class="ds-settings-openrouter-status-row">
-                {#if openrouterModelsLoading}
-                    <span class="ds-settings-label-muted-sm">Loading OpenRouter model list...</span>
-                {:else if openrouterModelState.stale}
-                    <span class="ds-settings-label-muted-sm">
-                        Using cached model list{openrouterModelState.updatedAt ? ` (updated ${formatOpenRouterUpdatedAt(openrouterModelState.updatedAt)})` : ''}.
-                        {openrouterModelState.error ? ` Last refresh failed: ${openrouterModelState.error}` : ''}
-                    </span>
-                {:else if openrouterModelState.error}
-                    <span class="ds-settings-note-danger">{openrouterModelState.error}</span>
-                {:else if openrouterModelState.updatedAt}
-                    <span class="ds-settings-label-muted-sm">
-                        Model list updated {formatOpenRouterUpdatedAt(openrouterModelState.updatedAt)} ({openrouterModelState.source}).
-                    </span>
-                {/if}
-                <Button
-                    size="sm"
-                    styled="outlined"
-                    disabled={openrouterModelsLoading}
-                    onclick={() => {
-                        void refreshOpenRouterModels(true)
-                    }}
-                >
-                    Refresh Models
-                </Button>
-            </div>
 
             {#if DBState.db.aiModel === 'openrouter'}
-                <div class="ds-settings-section">
-                    <span class="ds-settings-label">Openrouter Model</span>
-                    {#if openrouterModels.length > 0}
-                        <TextInput
-                            bind:value={openrouterSearchQuery}
-                            placeholder="Search models..."
-                            size="sm"
-                        />
-                    {/if}
-                    <SelectInput bind:value={DBState.db.openrouterRequestModel}>
-                        {#if openrouterModels.length === 0}
-                            {#each fallbackOpenRouterModels as [modelId, modelName] (modelId)}
-                                <OptionInput value={modelId}>{modelName}</OptionInput>
-                            {/each}
-                        {:else}
-                            <OptionInput value="risu/free">Free Auto</OptionInput>
-                            <OptionInput value="openrouter/auto">Openrouter Auto</OptionInput>
-                            {#each openrouterModels.filter(model => {
-                                if (openrouterSearchQuery === "") return true;
-                                const searchTerms = openrouterSearchQuery.toLowerCase().trim().split(/\s+/);
-                                const modelText = (model.name + " " + model.id).toLowerCase();
-                                return searchTerms.every(term => modelText.includes(term));
-                            }) as model (model.id)}
-                                <OptionInput value={model.id}>{model.name}</OptionInput>
-                            {/each}
-                        {/if}
-                    </SelectInput>
-                </div>
+                <OpenRouterModelSelect
+                    bind:value={DBState.db.openrouterRequestModel}
+                    label="Openrouter Model"
+                    showMeta={true}
+                />
             {/if}
             {#if DBState.db.subModel === 'openrouter'}
-                <div class="ds-settings-section">
-                    <span class="ds-settings-label">Openrouter Model (Aux)</span>
-                    {#if openrouterModels.length > 0}
-                        <TextInput
-                            bind:value={openrouterSubSearchQuery}
-                            placeholder="Search models..."
-                            size="sm"
-                        />
-                    {/if}
-                    <SelectInput bind:value={DBState.db.openrouterSubRequestModel}>
-                        {#if openrouterModels.length === 0}
-                            {#each fallbackOpenRouterModels as [modelId, modelName] (modelId)}
-                                <OptionInput value={modelId}>{modelName}</OptionInput>
-                            {/each}
-                        {:else}
-                            <OptionInput value="risu/free">Free Auto</OptionInput>
-                            <OptionInput value="openrouter/auto">Openrouter Auto</OptionInput>
-                            {#each openrouterModels.filter(model => {
-                                if (openrouterSubSearchQuery === "") return true;
-                                const searchTerms = openrouterSubSearchQuery.toLowerCase().trim().split(/\s+/);
-                                const modelText = (model.name + " " + model.id).toLowerCase();
-                                return searchTerms.every(term => modelText.includes(term));
-                            }) as model (model.id)}
-                                <OptionInput value={model.id}>{model.name}</OptionInput>
-                            {/each}
-                        {/if}
-                    </SelectInput>
-                </div>
+                <OpenRouterModelSelect
+                    bind:value={DBState.db.openrouterSubRequestModel}
+                    label="Openrouter Model (Aux)"
+                    showMeta={DBState.db.aiModel !== 'openrouter'}
+                />
             {/if}
             {#if showDeepSeekV32SpecialeReasoningToggle}
                 <div class="ds-settings-section">
@@ -603,7 +474,6 @@ const tokens = $state({
     {:else if submenu === 2}
         <PromptSettings mode='inline' />
     {/if}
-    <EvolutionDefaultsSettings />
     </div>
 {/if}
 

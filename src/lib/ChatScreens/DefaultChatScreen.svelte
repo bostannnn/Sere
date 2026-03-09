@@ -34,7 +34,7 @@
     import Button from '../UI/GUI/Button.svelte';
     import GameStateHud from '../SideBars/GameStateHUD.svelte';
     import { runComfyTemplateById } from 'src/ts/integrations/comfy/execute';
-    import ProposalPanel from '../Evolution/ProposalPanel.svelte';
+    import ReviewWorkspace from '../Evolution/ReviewWorkspace.svelte';
     import {
         createCharacterEvolutionProposal,
         createNewChatAfterEvolution,
@@ -53,6 +53,7 @@
         onOpenModuleList?: () => void;
         onOpenChatList?: () => void;
         customStyle?: string;
+        onEvolutionReviewChange?: (active: boolean) => void;
     }
 
     let messageInput:string = $state('')
@@ -71,11 +72,13 @@
     let isScrollingToMessage = $state(false)
     let showEvolutionProposal = $state(false)
     let evolutionBusy = $state(false)
+    let evolutionAction: 'handoff' | 'accept' | 'reject' | null = $state(null)
     let evolutionProposalDraft = $state(null)
     let {
         onOpenModuleList = () => {},
         onOpenChatList = () => {},
-        customStyle = ''
+        customStyle = '',
+        onEvolutionReviewChange = () => {},
     }: Props = $props();
     const currentCharacter = $derived(DBState.db.characters[$selectedCharID])
     const currentChat = $derived(currentCharacter?.chats[currentCharacter.chatPage]?.message ?? [])
@@ -95,6 +98,7 @@
         }
         return getEffectiveCharacterEvolutionSettings(DBState.db, character)
     })
+    const isEvolutionReviewVisible = $derived(Boolean(showEvolutionProposal && currentEvolutionSettings?.pendingProposal))
 
     $effect(() => {
         const character = currentCharacter
@@ -242,6 +246,8 @@
             return
         }
         evolutionBusy = true
+        evolutionAction = 'handoff'
+        openMenu = false
         try {
             const payload = await createCharacterEvolutionProposal(currentCharacter.chaId, activeChat.id)
             const proposal = payload.proposal as typeof currentCharacter.characterEvolution.pendingProposal
@@ -253,6 +259,7 @@
             alertError(getCharacterEvolutionErrorMessage(error))
         } finally {
             evolutionBusy = false
+            evolutionAction = null
         }
     }
 
@@ -261,6 +268,7 @@
             return
         }
         evolutionBusy = true
+        evolutionAction = 'reject'
         try {
             await rejectCharacterEvolutionProposal(currentCharacter.chaId)
             currentCharacter.characterEvolution.pendingProposal = null
@@ -271,6 +279,7 @@
             alertError(getCharacterEvolutionErrorMessage(error))
         } finally {
             evolutionBusy = false
+            evolutionAction = null
         }
     }
 
@@ -279,6 +288,7 @@
             return
         }
         evolutionBusy = true
+        evolutionAction = 'accept'
         try {
             const payload = await acceptCharacterEvolutionProposal(currentCharacter.chaId, evolutionProposalDraft)
             currentCharacter.characterEvolution.currentState = payload.state as typeof currentCharacter.characterEvolution.currentState
@@ -294,6 +304,7 @@
             alertError(getCharacterEvolutionErrorMessage(error))
         } finally {
             evolutionBusy = false
+            evolutionAction = null
         }
     }
 
@@ -302,6 +313,36 @@
         if (pending && !evolutionProposalDraft) {
             evolutionProposalDraft = JSON.parse(JSON.stringify(pending.proposedState))
         }
+    })
+
+    $effect(() => {
+        if (showEvolutionProposal && !currentEvolutionSettings?.pendingProposal) {
+            showEvolutionProposal = false
+        }
+    })
+
+    $effect(() => {
+        onEvolutionReviewChange(isEvolutionReviewVisible)
+    })
+
+    $effect(() => {
+        if (isEvolutionReviewVisible) {
+            openMenu = false
+            toggleStickers = false
+        }
+    })
+
+    const evolutionBusyLabel = $derived.by(() => {
+        if (evolutionAction === 'handoff') {
+            return 'Running evolution handoff'
+        }
+        if (evolutionAction === 'accept') {
+            return 'Accepting evolution update'
+        }
+        if (evolutionAction === 'reject') {
+            return 'Rejecting evolution update'
+        }
+        return 'Working'
     })
 
     function shouldSendOnEnter(e: KeyboardEvent){
@@ -754,7 +795,7 @@
     openMenu = false
 }}>
     
-    {#if showNewMessageButton}
+    {#if showNewMessageButton && !isEvolutionReviewVisible}
         {#if (DBState.db.newMessageButtonStyle === 'bottom-center' || !DBState.db.newMessageButtonStyle)}
             <button
                 type="button"
@@ -840,24 +881,24 @@
     {#if $selectedCharID < 0}
         <MainMenu />
     {:else}
-        <div class="ds-chat-floating-actions action-rail">
-            <button
-                type="button"
-                class="ds-chat-floating-action-btn icon-btn icon-btn--sm"
-                title="Open chat actions"
-                aria-label="Open chat actions"
-                aria-haspopup="menu"
-                aria-expanded={openMenu}
-                aria-controls="ds-chat-side-menu"
-                onclick={(e) => {
-                    openMenu = !openMenu
-                    e.stopPropagation()
-                }}
-            >
-                <MenuIcon size={16} />
-            </button>
-        </div>
         <div class="ds-chat-main-shell">
+            {#if isEvolutionReviewVisible && currentEvolutionSettings?.pendingProposal}
+                <div class="ds-chat-review-mode">
+                    <ReviewWorkspace
+                        proposal={currentEvolutionSettings.pendingProposal}
+                        currentState={currentEvolutionSettings.currentState}
+                        sectionConfigs={currentEvolutionSettings.sectionConfigs}
+                        privacy={currentEvolutionSettings.privacy}
+                        bind:bindState={evolutionProposalDraft}
+                        onAccept={() => acceptEvolutionProposal(false)}
+                        onAcceptAndCreate={() => acceptEvolutionProposal(true)}
+                        onReject={rejectEvolutionProposal}
+                        onClose={() => { showEvolutionProposal = false }}
+                        loading={evolutionBusy}
+                        sourceLabel="Only changed sections are shown. Current state is locked on the left, and you can still edit the proposed state on the right before accepting it."
+                    />
+                </div>
+            {:else}
             <div class="ds-chat-scroll-shell default-chat-screen"
                 onscroll={(e) => {
             //@ts-expect-error scrollHeight/clientHeight/scrollTop don't exist on EventTarget, but target is HTMLElement here
@@ -1052,239 +1093,34 @@
                 {/if}
             {/if}
 
-            {#if openMenu}
-                <div class="ds-chat-side-menu panel-shell ds-ui-menu"
-                    id="ds-chat-side-menu"
-                    role="menu"
-                    aria-label="Chat actions"
-                    tabindex="-1"
-                    class:ds-chat-side-menu-fixed={DBState.db.fixedChatTextarea}
-                    class:ds-chat-side-menu-absolute={!DBState.db.fixedChatTextarea}
-                    onclick={(e) => {
-                    e.stopPropagation()
-                }}>
-                    {#if DBState.db.characters[$selectedCharID].type === 'group'}
-                        <button
-                            type="button"
-                            class="ds-chat-side-menu-item ds-ui-menu-item"
-                            title={language.autoMode}
-                            aria-label={language.autoMode}
-                            onclick={runAutoMode}
-                        >
-                            <DicesIcon />
-                            <span class="ds-chat-side-menu-label">{language.autoMode}</span>
-                        </button>
-                    {/if}
-
-                    
-                    {#if DBState.db.characters[$selectedCharID].ttsMode === 'webspeech' || DBState.db.characters[$selectedCharID].ttsMode === 'elevenlab'}
-                        <button
-                            type="button"
-                            class="ds-chat-side-menu-item ds-ui-menu-item"
-                            title={language.ttsStop}
-                            aria-label={language.ttsStop}
-                            onclick={() => {
-                            stopTTS()
-                        }}>
-                            <MicOffIcon />
-                            <span class="ds-chat-side-menu-label">{language.ttsStop}</span>
-                        </button>
-                    {/if}
-
-                    <button
-                        type="button"
-                        class="ds-chat-side-menu-item ds-ui-menu-item"
-                        class:ds-chat-side-menu-item-disabled={!canContinueResponse}
-                        title={language.continueResponse}
-                        aria-label={language.continueResponse}
-                        aria-disabled={!canContinueResponse}
-                        onclick={() => {
-                            if(!canContinueResponse){
-                                return
-                            }
-                            sendContinue();
-                        }}
-                    >
-                        <StepForwardIcon />
-                        <span class="ds-chat-side-menu-label">{language.continueResponse}</span>
-                    </button>
-
-
-                    {#if DBState.db.showMenuChatList}
-                        <button
-                            type="button"
-                            class="ds-chat-side-menu-item ds-ui-menu-item"
-                            title={language.chatList}
-                            aria-label={language.chatList}
-                            onclick={() => {
-                            onOpenChatList()
-                            openMenu = false
-                        }}>
-                            <DatabaseIcon />
-                            <span class="ds-chat-side-menu-label">{language.chatList}</span>
-                        </button>
-                    {/if}
-
-                    {#each comfyMenuTemplates as template (`comfy-template-${template.id}`)}
-                        <div class="ds-chat-side-menu-divider"></div>
-                        <button
-                            type="button"
-                            class="ds-chat-side-menu-item ds-ui-menu-item"
-                            title={template.buttonName || template.trigger}
-                            aria-label={template.buttonName || template.trigger}
-                            onclick={() => {
-                                void runComfyTemplateById(template.id)
-                                openMenu = false
-                            }}
-                        >
-                            <ImagePlusIcon />
-                            <span class="ds-chat-side-menu-label">{template.buttonName || template.trigger}</span>
-                        </button>
-                    {/each}
-
-                    {#if DBState.db.translator !== ''}
-                        <button
-                            type="button"
-                            class="ds-chat-side-menu-item ds-ui-menu-item"
-                            class:ds-chat-side-menu-item-active={DBState.db.useAutoTranslateInput}
-                            title={language.autoTranslateInput}
-                            aria-label={language.autoTranslateInput}
-                            aria-pressed={DBState.db.useAutoTranslateInput}
-                            onclick={() => {
-                            DBState.db.useAutoTranslateInput = !DBState.db.useAutoTranslateInput
-                        }}>
-                            <GlobeIcon />
-                            <span class="ds-chat-side-menu-label">{language.autoTranslateInput}</span>
-                        </button>
-                        
-                    {/if}
-            
-                    <button
-                        type="button"
-                        class="ds-chat-side-menu-item ds-ui-menu-item"
-                        title={language.screenshot}
-                        aria-label={language.screenshot}
-                        onclick={() => {
-                        screenShot()
-                    }}>
-                        <CameraIcon />
-                        <span class="ds-chat-side-menu-label">{language.screenshot}</span>
-                    </button>
-
-                    <button
-                        type="button"
-                        class="ds-chat-side-menu-item ds-ui-menu-item"
-                        title="Character evolution handoff"
-                        aria-label="Character evolution handoff"
-                        onclick={runEvolutionHandoff}
-                        disabled={evolutionBusy || currentCharacter?.type === 'group'}
-                    >
-                        <GitBranch />
-                        <span class="ds-chat-side-menu-label">Handoff</span>
-                    </button>
-
-                    <button
-                        type="button"
-                        class="ds-chat-side-menu-item ds-ui-menu-item"
-                        title={language.postFile}
-                        aria-label={language.postFile}
-                        onclick={async () => {
-                        const results = await postChatFile(messageInput)
-                        if(!results) return
-                        for(const res of results){
-                            if(res?.type === 'asset'){
-                                fileInput.push(res.data)
-                            }
-                            if(res?.type === 'text'){
-                                messageInput += `{{file::${res.name}::${res.data}}}`
-                            }
-                        }
-                        updateInputSizeAll()
-                    }}>
-
-                        <ImagePlusIcon />
-                        <span class="ds-chat-side-menu-label">{language.postFile}</span>
-                    </button>
-
-
-                    <button
-                        type="button"
-                        class="ds-chat-side-menu-item ds-ui-menu-item"
-                        class:ds-chat-side-menu-item-active={DBState.db.useAutoSuggestions}
-                        title={language.autoSuggest}
-                        aria-label={language.autoSuggest}
-                        aria-pressed={DBState.db.useAutoSuggestions}
-                        onclick={async () => {
-                        DBState.db.useAutoSuggestions = !DBState.db.useAutoSuggestions
-                    }}>
-                        <ReplyIcon />
-                        <span class="ds-chat-side-menu-label">{language.autoSuggest}</span>
-                    </button>
-
-
-                    <button
-                        type="button"
-                        class="ds-chat-side-menu-item ds-ui-menu-item"
-                        title={language.modules}
-                        aria-label={language.modules}
-                        onclick={() => {
-                        DBState.db.characters[$selectedCharID].chats[DBState.db.characters[$selectedCharID].chatPage].modules ??= []
-                        onOpenModuleList()
-                        openMenu = false
-                    }}>
-                        <PackageIcon />
-                        <span class="ds-chat-side-menu-label">{language.modules}</span>
-                    </button>
-
-                    {#if DBState.db.sideMenuRerollButton}
-                        <button
-                            type="button"
-                            class="ds-chat-side-menu-item ds-ui-menu-item"
-                            title={language.reroll}
-                            aria-label={language.reroll}
-                            onclick={reroll}
-                        >
-                            <RefreshCcwIcon />
-                            <span class="ds-chat-side-menu-label">{language.reroll}</span>
-                        </button>
-                    {/if}
-                </div>
-
-            {/if}
             </div>
 
-            {#if currentEvolutionSettings?.pendingProposal || showEvolutionProposal}
-                <div class="ds-settings-section">
-                    <div class="ds-settings-card ds-settings-card-stack-start">
-                        <div class="ds-settings-inline-actions action-rail">
-                            <Button styled="outlined" onclick={() => { showEvolutionProposal = !showEvolutionProposal }}>
-                                {showEvolutionProposal ? "Hide Evolution Review" : "Review Evolution Proposal"}
-                            </Button>
-                            {#if !showEvolutionProposal}
-                                <span class="ds-settings-label-muted-sm">A pending proposal is ready.</span>
-                            {/if}
-                        </div>
-                    </div>
-                    {#if showEvolutionProposal && currentEvolutionSettings?.pendingProposal}
-                        <ProposalPanel
-                            proposal={currentEvolutionSettings.pendingProposal}
-                            currentState={currentEvolutionSettings.currentState}
-                            sectionConfigs={currentEvolutionSettings.sectionConfigs}
-                            privacy={currentEvolutionSettings.privacy}
-                            bind:bindState={evolutionProposalDraft}
-                            onAccept={() => acceptEvolutionProposal(false)}
-                            onAcceptAndCreate={() => acceptEvolutionProposal(true)}
-                            onReject={rejectEvolutionProposal}
-                            loading={evolutionBusy}
-                        />
-                    {/if}
-                </div>
-            {/if}
+            <div class="ds-chat-composer-stack">
+                {#if currentEvolutionSettings?.pendingProposal}
+                    <button
+                        type="button"
+                        class="ds-chat-evolution-review-prompt"
+                        onclick={() => { showEvolutionProposal = true }}
+                    >
+                        <span class="ds-settings-label-muted-sm">Pending evolution proposal</span>
+                        <span class="ds-chat-evolution-review-prompt-action">Review</span>
+                    </button>
+                {/if}
 
-            <div class="ds-chat-composer-shell"
-                class:ds-chat-composer-shell-fixed={DBState.db.fixedChatTextarea}
-                class:ds-chat-composer-shell-flow={!DBState.db.fixedChatTextarea}
-            >
+                {#if evolutionBusy}
+                    <div class="ds-chat-evolution-status-inline" role="status" aria-live="polite">
+                        <div class="ds-chat-inline-status">
+                            <div class="ds-chat-spinner ds-chat-spinner-aux"></div>
+                            <span>{evolutionBusyLabel}</span>
+                        </div>
+                        <div class="ds-chat-evolution-status-bar" aria-hidden="true"></div>
+                    </div>
+                {/if}
+
+                <div class="ds-chat-composer-shell"
+                    class:ds-chat-composer-shell-fixed={DBState.db.fixedChatTextarea}
+                    class:ds-chat-composer-shell-flow={!DBState.db.fixedChatTextarea}
+                >
                 {#if DBState.db.useChatSticker && currentCharacter.type !== 'group'}
                     <button
                         type="button"
@@ -1383,24 +1219,306 @@
                         ></div>
                     </div>
                 {/if}
-                <button
-                        type="button"
-                        title="Open chat actions"
-                        aria-label="Open chat actions"
-                        aria-haspopup="menu"
-                        aria-expanded={openMenu}
-                        aria-controls="ds-chat-side-menu"
-                        onclick={(e) => {
-                        openMenu = !openMenu
-                        e.stopPropagation()
-                    }}
-                        class="ds-chat-composer-action ds-chat-composer-action-end icon-btn icon-btn--sm"
-                        class:is-active={openMenu}
-                        style:height={inputHeight}
-                >
-                    <MenuIcon />
-                </button>
+                <div class="ds-chat-composer-menu-anchor">
+                    <button
+                            type="button"
+                            title="Open chat actions"
+                            aria-label="Open chat actions"
+                            aria-haspopup="menu"
+                            aria-expanded={openMenu}
+                            aria-controls="ds-chat-side-menu"
+                            onclick={(e) => {
+                            openMenu = !openMenu
+                            e.stopPropagation()
+                        }}
+                            class="ds-chat-composer-action ds-chat-composer-action-end icon-btn icon-btn--sm"
+                            class:is-active={openMenu}
+                            style:height={inputHeight}
+                    >
+                        <MenuIcon />
+                    </button>
+
+                    {#if !isEvolutionReviewVisible && openMenu}
+                        <div
+                            class="ds-chat-side-menu ds-chat-side-menu-composer panel-shell ds-ui-menu"
+                            id="ds-chat-side-menu"
+                            role="menu"
+                            aria-label="Chat actions"
+                            tabindex="-1"
+                            onclick={(e) => {
+                                e.stopPropagation()
+                            }}
+                        >
+                            {#if DBState.db.characters[$selectedCharID].type === 'group'}
+                                <button
+                                    type="button"
+                                    class="ds-chat-side-menu-item ds-ui-menu-item"
+                                    title={language.autoMode}
+                                    aria-label={language.autoMode}
+                                    onclick={runAutoMode}
+                                >
+                                    <DicesIcon />
+                                    <span class="ds-chat-side-menu-label">{language.autoMode}</span>
+                                </button>
+                            {/if}
+
+                            {#if DBState.db.characters[$selectedCharID].ttsMode === 'webspeech' || DBState.db.characters[$selectedCharID].ttsMode === 'elevenlab'}
+                                <button
+                                    type="button"
+                                    class="ds-chat-side-menu-item ds-ui-menu-item"
+                                    title={language.ttsStop}
+                                    aria-label={language.ttsStop}
+                                    onclick={() => {
+                                        stopTTS()
+                                    }}
+                                >
+                                    <MicOffIcon />
+                                    <span class="ds-chat-side-menu-label">{language.ttsStop}</span>
+                                </button>
+                            {/if}
+
+                            <button
+                                type="button"
+                                class="ds-chat-side-menu-item ds-ui-menu-item"
+                                class:ds-chat-side-menu-item-disabled={!canContinueResponse}
+                                title={language.continueResponse}
+                                aria-label={language.continueResponse}
+                                aria-disabled={!canContinueResponse}
+                                onclick={() => {
+                                    if(!canContinueResponse){
+                                        return
+                                    }
+                                    sendContinue();
+                                }}
+                            >
+                                <StepForwardIcon />
+                                <span class="ds-chat-side-menu-label">{language.continueResponse}</span>
+                            </button>
+
+                            {#if DBState.db.showMenuChatList}
+                                <button
+                                    type="button"
+                                    class="ds-chat-side-menu-item ds-ui-menu-item"
+                                    title={language.chatList}
+                                    aria-label={language.chatList}
+                                    onclick={() => {
+                                        onOpenChatList()
+                                        openMenu = false
+                                    }}
+                                >
+                                    <DatabaseIcon />
+                                    <span class="ds-chat-side-menu-label">{language.chatList}</span>
+                                </button>
+                            {/if}
+
+                            {#each comfyMenuTemplates as template (`comfy-template-${template.id}`)}
+                                <div class="ds-chat-side-menu-divider"></div>
+                                <button
+                                    type="button"
+                                    class="ds-chat-side-menu-item ds-ui-menu-item"
+                                    title={template.buttonName || template.trigger}
+                                    aria-label={template.buttonName || template.trigger}
+                                    onclick={() => {
+                                        void runComfyTemplateById(template.id)
+                                        openMenu = false
+                                    }}
+                                >
+                                    <ImagePlusIcon />
+                                    <span class="ds-chat-side-menu-label">{template.buttonName || template.trigger}</span>
+                                </button>
+                            {/each}
+
+                            {#if DBState.db.translator !== ''}
+                                <button
+                                    type="button"
+                                    class="ds-chat-side-menu-item ds-ui-menu-item"
+                                    class:ds-chat-side-menu-item-active={DBState.db.useAutoTranslateInput}
+                                    title={language.autoTranslateInput}
+                                    aria-label={language.autoTranslateInput}
+                                    aria-pressed={DBState.db.useAutoTranslateInput}
+                                    onclick={() => {
+                                        DBState.db.useAutoTranslateInput = !DBState.db.useAutoTranslateInput
+                                    }}
+                                >
+                                    <GlobeIcon />
+                                    <span class="ds-chat-side-menu-label">{language.autoTranslateInput}</span>
+                                </button>
+                            {/if}
+
+                            <button
+                                type="button"
+                                class="ds-chat-side-menu-item ds-ui-menu-item"
+                                title={language.screenshot}
+                                aria-label={language.screenshot}
+                                onclick={() => {
+                                    screenShot()
+                                }}
+                            >
+                                <CameraIcon />
+                                <span class="ds-chat-side-menu-label">{language.screenshot}</span>
+                            </button>
+
+                            <button
+                                type="button"
+                                class="ds-chat-side-menu-item ds-ui-menu-item"
+                                title="Character evolution handoff"
+                                aria-label="Character evolution handoff"
+                                onclick={runEvolutionHandoff}
+                                disabled={evolutionBusy || currentCharacter?.type === 'group'}
+                            >
+                                <GitBranch />
+                                <span class="ds-chat-side-menu-label">{evolutionAction === 'handoff' ? 'Running Handoff' : 'Handoff'}</span>
+                            </button>
+
+                            <button
+                                type="button"
+                                class="ds-chat-side-menu-item ds-ui-menu-item"
+                                title={language.postFile}
+                                aria-label={language.postFile}
+                                onclick={async () => {
+                                    const results = await postChatFile(messageInput)
+                                    if(!results) return
+                                    for(const res of results){
+                                        if(res?.type === 'asset'){
+                                            fileInput.push(res.data)
+                                        }
+                                        if(res?.type === 'text'){
+                                            messageInput += `{{file::${res.name}::${res.data}}}`
+                                        }
+                                    }
+                                    updateInputSizeAll()
+                                }}
+                            >
+                                <ImagePlusIcon />
+                                <span class="ds-chat-side-menu-label">{language.postFile}</span>
+                            </button>
+
+                            <button
+                                type="button"
+                                class="ds-chat-side-menu-item ds-ui-menu-item"
+                                class:ds-chat-side-menu-item-active={DBState.db.useAutoSuggestions}
+                                title={language.autoSuggest}
+                                aria-label={language.autoSuggest}
+                                aria-pressed={DBState.db.useAutoSuggestions}
+                                onclick={async () => {
+                                    DBState.db.useAutoSuggestions = !DBState.db.useAutoSuggestions
+                                }}
+                            >
+                                <ReplyIcon />
+                                <span class="ds-chat-side-menu-label">{language.autoSuggest}</span>
+                            </button>
+
+                            <button
+                                type="button"
+                                class="ds-chat-side-menu-item ds-ui-menu-item"
+                                title={language.modules}
+                                aria-label={language.modules}
+                                onclick={() => {
+                                    DBState.db.characters[$selectedCharID].chats[DBState.db.characters[$selectedCharID].chatPage].modules ??= []
+                                    onOpenModuleList()
+                                    openMenu = false
+                                }}
+                            >
+                                <PackageIcon />
+                                <span class="ds-chat-side-menu-label">{language.modules}</span>
+                            </button>
+
+                            {#if DBState.db.sideMenuRerollButton}
+                                <button
+                                    type="button"
+                                    class="ds-chat-side-menu-item ds-ui-menu-item"
+                                    title={language.reroll}
+                                    aria-label={language.reroll}
+                                    onclick={reroll}
+                                >
+                                    <RefreshCcwIcon />
+                                    <span class="ds-chat-side-menu-label">{language.reroll}</span>
+                                </button>
+                            {/if}
+                        </div>
+                    {/if}
+                </div>
+                </div>
             </div>
+            {/if}
         </div>
     {/if}
 </div>
+
+<style>
+    .ds-chat-review-mode {
+        display: flex;
+        flex: 1 1 auto;
+        min-height: 0;
+        width: 100%;
+        background: var(--ds-surface-1);
+    }
+
+    .ds-chat-composer-stack {
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+        gap: var(--ds-space-2);
+        width: min(calc(100% - var(--ds-space-5)), 68rem);
+        margin-inline: auto;
+    }
+
+    .ds-chat-evolution-review-prompt {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--ds-space-3);
+        width: 100%;
+        padding: var(--ds-space-2) var(--ds-space-3);
+        border: 1px solid var(--ds-border-subtle);
+        border-radius: var(--ds-radius-md);
+        background: color-mix(in srgb, var(--ds-surface-2) 92%, transparent);
+        color: inherit;
+        cursor: pointer;
+    }
+
+    .ds-chat-evolution-review-prompt-action {
+        color: var(--ds-text-primary);
+        font-weight: var(--ds-font-weight-medium);
+    }
+
+    .ds-chat-evolution-status-inline {
+        width: 100%;
+        display: flex;
+        flex-direction: column;
+        gap: var(--ds-space-2);
+        padding: var(--ds-space-2) var(--ds-space-3);
+        border: 1px solid var(--ds-border-subtle);
+        border-radius: var(--ds-radius-md);
+        background: var(--ds-surface-2);
+    }
+
+    .ds-chat-composer-menu-anchor {
+        position: relative;
+        display: inline-flex;
+        align-items: stretch;
+    }
+
+    .ds-chat-side-menu-composer {
+        position: absolute;
+        right: 0;
+        bottom: calc(100% + var(--ds-space-2));
+        min-width: min(20rem, calc(100vw - (var(--ds-space-4) * 2)));
+        z-index: 35;
+    }
+
+    @media (max-width: 720px) {
+        .ds-chat-composer-stack,
+        .ds-chat-evolution-status-inline,
+        .ds-chat-side-menu-composer,
+        .ds-chat-evolution-review-prompt {
+            width: 100%;
+            min-width: 0;
+        }
+
+        .ds-chat-evolution-review-prompt {
+            align-items: flex-start;
+            flex-direction: column;
+        }
+    }
+</style>

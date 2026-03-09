@@ -2,7 +2,7 @@
     import Check from "src/lib/UI/GUI/CheckInput.svelte";
     import { language } from "src/lang";
     import Help from "src/lib/Others/Help.svelte";
-    import { DBState, selectedCharID } from 'src/ts/stores.svelte';
+    import { DBState, OtherBotSettingsSubMenuIndex, selectedCharID } from 'src/ts/stores.svelte';
     import NumberInput from "src/lib/UI/GUI/NumberInput.svelte";
     import TextInput from "src/lib/UI/GUI/TextInput.svelte";
     import SelectInput from "src/lib/UI/GUI/SelectInput.svelte";
@@ -24,8 +24,9 @@
     import Button from "src/lib/UI/GUI/Button.svelte";
     import type { HypaModel } from "src/ts/process/memory/hypamemory";
     import { DEFAULT_EMOTION_PROMPT } from "src/ts/process/emotion/defaultPrompt";
+    import EvolutionDefaultsSettings from "./EvolutionDefaultsSettings.svelte";
 
-    const allowedSubmenus = new Set([0, 1, 2, -1]);
+    const allowedSubmenus = new Set([0, 1, 2, 3, -1]);
     let submenu = $state(0);
     let emotionEmbeddingModel = $state<HypaModel>("MiniLM");
     let emotionPromptHydrated = $state(false);
@@ -38,6 +39,19 @@
         if (!allowedSubmenus.has(submenu)) {
             submenu = 0;
         }
+    });
+
+    $effect(() => {
+        const requestedSubmenu = $OtherBotSettingsSubMenuIndex;
+        if (requestedSubmenu === null) {
+            return;
+        }
+        if (!allowedSubmenus.has(requestedSubmenu)) {
+            OtherBotSettingsSubMenuIndex.set(null);
+            return;
+        }
+        submenu = requestedSubmenu;
+        OtherBotSettingsSubMenuIndex.set(null);
     });
 
     $effect(() => {
@@ -156,10 +170,12 @@
 
 {#if submenu !== -1}
     <SettingsSubTabs
+        className="other-bots-tabs"
         items={[
-            { id: 0, label: language.longTermMemory },
+            { id: 0, label: "Memory" },
             { id: 1, label: "TTS" },
-            { id: 2, label: language.emotionImage },
+            { id: 2, label: "Emotion" },
+            { id: 3, label: "Evolution" },
         ]}
         selectedId={submenu}
         onSelect={(id) => {
@@ -261,6 +277,10 @@
         <span class="ds-settings-label-muted-sm">No emotion images configured for this character.</span>
     {/if}
     </div>
+{/if}
+
+{#if submenu === 3}
+    <EvolutionDefaultsSettings />
 {/if}
 
 {#if submenu === 0}
@@ -470,3 +490,21 @@
     </div>
 {/if}
 </div>
+
+<style>
+    :global(.other-bots-tabs .ds-settings-tabs) {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        width: 100%;
+    }
+
+    :global(.other-bots-tabs .ds-settings-tab) {
+        min-width: 0;
+    }
+
+    @media (min-width: 900px) {
+        :global(.other-bots-tabs .ds-settings-tabs) {
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+        }
+    }
+</style>

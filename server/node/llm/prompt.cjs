@@ -543,11 +543,36 @@ async function buildGeneratePromptMessages(arg = {}) {
     if (!Array.isArray(messages) || messages.length === 0) {
         messages = [];
         const mainPrompt = resolveServerMainPrompt(character, settings);
+        const description = buildServerDescriptionPrompt(character, settings);
+        const evolutionSettings = getEffectiveCharacterEvolutionSettings(settings, character);
+        const characterState = evolutionSettings.enabled
+            ? renderCharacterEvolutionStateForPrompt(
+                evolutionSettings.currentState,
+                evolutionSettings.sectionConfigs,
+                evolutionSettings.privacy
+            )
+            : '';
         pushPromptMessagesWithTitle(
             messages,
             promptBlocks,
             parsePromptAsMessages(mainPrompt, character, settings, 'system'),
             'Main Prompt',
+            'legacy'
+        );
+
+        pushPromptMessagesWithTitle(
+            messages,
+            promptBlocks,
+            parsePromptAsMessages(description, character, settings, 'system'),
+            'Description',
+            'legacy'
+        );
+
+        pushPromptMessagesWithTitle(
+            messages,
+            promptBlocks,
+            parsePromptAsMessages(characterState, character, settings, 'system'),
+            'Character State',
             'legacy'
         );
 

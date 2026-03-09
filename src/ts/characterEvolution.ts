@@ -27,6 +27,24 @@ const DEFAULT_PRIVACY: CharacterEvolutionPrivacySettings = {
     allowUserIntimatePreferences: false,
 };
 
+export const CHARACTER_EVOLUTION_PROVIDER_SUGGESTIONS = [
+    "openrouter",
+    "openai",
+    "deepseek",
+    "anthropic",
+    "google",
+    "ollama",
+] as const;
+
+export const CHARACTER_EVOLUTION_MODEL_SUGGESTIONS = [
+    "anthropic/claude-3.5-haiku",
+    "anthropic/claude-3.5-sonnet",
+    "openai/gpt-4.1-mini",
+    "openai/gpt-4.1",
+    "google/gemini-2.0-flash-001",
+    "deepseek/deepseek-chat",
+] as const;
+
 const BUILTIN_SECTION_DEFS: Array<{
     key: CharacterEvolutionSectionKey,
     label: string,
