@@ -1,5 +1,5 @@
 #!/usr/bin/env sh
 set -eu
 
-echo "[pre-commit] Running LOC warning check..."
+echo "[pre-commit] Running LOC ratchet check..."
 pnpm run check:loc:staged

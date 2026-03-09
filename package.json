@@ -29,7 +29,7 @@
     "check:ui-shell-smoke": "node dev/check-ui-shell-smoke.js",
     "check:settings-smoke": "node dev/check-settings-smoke.js",
     "check:loc": "node dev/check-file-loc.js --all",
-    "check:loc:staged": "node dev/check-file-loc.js --staged",
+    "check:loc:staged": "node dev/check-file-loc.js --staged --fail-on-violation",
     "test": "vitest run",
     "test:all:core": "node scripts/run-all-tests.cjs",
     "test:all": "bash ./run-all-tests.sh",

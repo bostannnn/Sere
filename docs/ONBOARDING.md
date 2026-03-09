@@ -144,8 +144,11 @@ pnpm run check:server
 # Server runtime contracts (must pass before commit)
 pnpm run check:server:contracts
 
-# LOC warning check (warns when files exceed 500 lines)
+# LOC audit check (warns when tracked files exceed 500 lines)
 pnpm run check:loc
+
+# LOC ratchet check (fails on new oversized files or growth above 500 lines)
+pnpm run check:loc:staged
 
 # Server unit tests — no server needed, run before every commit that touches server/node/llm/
 node scripts/test-memory-unit.cjs
@@ -167,7 +170,7 @@ Memory sidebar note: in embedded right-sidebar Memory mode, manual HypaV3 summar
 
 ### Git Hook Setup (one-time per clone)
 
-Enable repository-managed hooks so the LOC warning check runs on every commit:
+Enable repository-managed hooks so the blocking LOC ratchet runs on every commit:
 
 ```bash
 git config core.hooksPath .githooks
