@@ -1041,6 +1041,18 @@
               />
             {/if}
 
+            {#if currentChar && DBState.db.hypaV3}
+              <div class="ds-hypa-modal-prompt-override panel-shell">
+                <CheckInput
+                  name={language.ToggleHypaMemory}
+                  check={currentChar.supaMemory ?? false}
+                  onChange={(check) => {
+                    currentChar.supaMemory = check;
+                  }}
+                />
+              </div>
+            {/if}
+
             {#if hypaV3Data.summaries.length === 0}
               {#if isHypaV2ConversionPossible()}
                 <div class="ds-hypa-modal-convert-card panel-shell">
@@ -1231,7 +1243,6 @@
                 />
               {/if}
             {/each}
-
           </div>
         {:else if memoryWorkspaceTab === "settings"}
           <div
@@ -1240,17 +1251,6 @@
             id="hypa-memory-panel-settings"
             aria-label="Settings panel"
           >
-            {#if currentChar && DBState.db.hypaV3}
-              <div class="ds-hypa-modal-prompt-override panel-shell">
-                <CheckInput
-                  name={language.ToggleHypaMemory}
-                  check={currentChar.supaMemory ?? false}
-                  onChange={(check) => {
-                    currentChar.supaMemory = check;
-                  }}
-                />
-              </div>
-            {/if}
             {#if promptOverrideCharacter}
               <div class="ds-hypa-modal-prompt-override panel-shell">
                 <div class="ds-hypa-modal-prompt-override-title">Per-character memory prompt override</div>
