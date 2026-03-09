@@ -130,7 +130,7 @@
                 >Terms of Service</a>
                 to continue
             </div>
-        {:else if alert.type !== "select" && alert.type !== "input" && alert.type !== "ask" && alert.type !== "pukmakkurit"}
+        {:else if alert.type !== "select" && alert.type !== "ask" && alert.type !== "pukmakkurit"}
             <span class="alert-body-message alert-prewrap">{alert.msg}</span>
             {#if alert.submsg && alert.type !== "progress"}
                 <span class="alert-body-submessage alert-text-sm">{alert.submsg}</span>

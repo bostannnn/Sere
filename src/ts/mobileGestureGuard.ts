@@ -10,6 +10,7 @@ export interface HorizontalSwipeGuardInput {
 }
 
 const editableTouchTargetSelector = "input, textarea, select, [contenteditable='true']"
+const interactiveTouchTargetSelector = "button, a[href], summary, label, [role='button'], [role='tab'], [role='link'], [role='menuitem'], [data-mobile-gesture-ignore]"
 const horizontalOverflowPattern = /auto|scroll|overlay/
 
 export function isEditableTouchTarget(target: EventTarget | null) {
@@ -18,6 +19,14 @@ export function isEditableTouchTarget(target: EventTarget | null) {
         return false
     }
     return !!element.closest(editableTouchTargetSelector)
+}
+
+export function isInteractiveTouchTarget(target: EventTarget | null) {
+    const element = target as HTMLElement | null
+    if (!element) {
+        return false
+    }
+    return !!element.closest(interactiveTouchTargetSelector)
 }
 
 export function hasHorizontalScrollableAncestor(target: EventTarget | null) {
@@ -48,6 +57,10 @@ export function shouldPreventHorizontalSwipe({
     horizontalThreshold = 16,
 }: HorizontalSwipeGuardInput) {
     if (isEditableTouchTarget(target)) {
+        return false
+    }
+
+    if (isInteractiveTouchTarget(target)) {
         return false
     }
 

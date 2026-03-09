@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
     hasHorizontalScrollableAncestor,
     isEditableTouchTarget,
+    isInteractiveTouchTarget,
     shouldPreventHorizontalSwipe,
 } from "./mobileGestureGuard";
 
@@ -13,6 +14,15 @@ describe("mobileGestureGuard", () => {
 
         expect(isEditableTouchTarget(input)).toBe(true);
         expect(isEditableTouchTarget(wrapper)).toBe(false);
+    });
+
+    it("treats buttons and tab controls as interactive", () => {
+        const button = document.createElement("button");
+        const icon = document.createElement("span");
+        button.appendChild(icon);
+
+        expect(isInteractiveTouchTarget(button)).toBe(true);
+        expect(isInteractiveTouchTarget(icon)).toBe(true);
     });
 
     it("prevents horizontal swipe only when gesture starts near viewport edge", () => {
@@ -79,6 +89,20 @@ describe("mobileGestureGuard", () => {
             currentY: 42,
             viewportWidth: 390,
             target: child,
+        })).toBe(false);
+    });
+
+    it("does not block taps on interactive controls near the edge", () => {
+        const button = document.createElement("button");
+        document.body.appendChild(button);
+
+        expect(shouldPreventHorizontalSwipe({
+            startX: 8,
+            startY: 60,
+            currentX: 44,
+            currentY: 62,
+            viewportWidth: 390,
+            target: button,
         })).toBe(false);
     });
 });
