@@ -11,6 +11,7 @@
         DBState,
         appRouteStore,
         openRulebookManager,
+        popupStore,
         type AppRoute,
     } from "src/ts/stores.svelte";
     import { alertSelect } from "src/ts/alert";
@@ -301,6 +302,8 @@
         $openPresetList = false;
         $openPersonaList = false;
         $bookmarkListOpen = false;
+        popupStore.children = null;
+        popupStore.openId = 0;
     }
 
     function openHomeFromTopbar() {
@@ -396,6 +399,11 @@
         }
         if ($bookmarkListOpen) {
             $bookmarkListOpen = false;
+            return true;
+        }
+        if (popupStore.children || popupStore.openId !== 0) {
+            popupStore.children = null;
+            popupStore.openId = 0;
             return true;
         }
         return false;

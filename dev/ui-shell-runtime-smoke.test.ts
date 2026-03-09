@@ -55,7 +55,7 @@ vi.mock(import("src/ts/stores.svelte"), async () => {
     },
   };
 
-  const popupStore = { children: null };
+  const popupStore = { children: null, openId: 0, mouseX: 0, mouseY: 0 };
   const LoadingStatusState = { text: "" };
   const selIdState = { selId: -1 };
 
@@ -172,6 +172,7 @@ import {
   openPersonaList,
   openPresetList,
   openRulebookManager,
+  popupStore,
   selectedCharID,
   settingsOpen,
   uiShellV2Enabled,
@@ -224,6 +225,8 @@ describe("ui shell runtime smoke", () => {
     openPresetList.set(false);
     openPersonaList.set(false);
     bookmarkListOpen.set(false);
+    popupStore.children = null;
+    popupStore.openId = 0;
     hypaV3ModalOpen.set(false);
     DBState.db.characters = [
       {
@@ -339,6 +342,33 @@ describe("ui shell runtime smoke", () => {
     await flushUi();
     expect(get(selectedCharID)).toBe(-1);
     expect(document.querySelector('[data-testid="app-home-grid-stub"]')).not.toBeNull();
+  });
+
+  it("clears transient overlays and popup menus when leaving mobile chat", async () => {
+    MobileGUI.set(true);
+    uiShellV2Enabled.set(true);
+    settingsOpen.set(false);
+    openRulebookManager.set(false);
+    selectedCharID.set(0);
+    openPresetList.set(true);
+    openPersonaList.set(true);
+    bookmarkListOpen.set(true);
+    popupStore.children = (() => null) as never;
+    popupStore.openId = 42;
+    await flushUi();
+
+    const backBtn = document.querySelector('[data-testid="topbar-mobile-back-to-menu"]') as HTMLButtonElement | null;
+    expect(backBtn).not.toBeNull();
+
+    backBtn?.click();
+    await flushUi();
+
+    expect(get(selectedCharID)).toBe(-1);
+    expect(get(openPresetList)).toBe(false);
+    expect(get(openPersonaList)).toBe(false);
+    expect(get(bookmarkListOpen)).toBe(false);
+    expect(popupStore.children).toBeNull();
+    expect(popupStore.openId).toBe(0);
   });
 
   it("shows mobile settings back button in title bar for settings subpages", async () => {
