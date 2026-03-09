@@ -145,11 +145,58 @@ function registerEvolutionRoutes(arg = {}) {
         try {
             await handler(req, res, reqId, startedAt);
         } catch (error) {
+            const durationMs = Date.now() - startedAt;
+            const audit = (req && typeof req === 'object' && req._characterEvolutionAudit && typeof req._characterEvolutionAudit === 'object')
+                ? req._characterEvolutionAudit
+                : {};
             const response = toLLMErrorResponse(error, {
                 requestId: reqId,
                 endpoint,
-                durationMs: Date.now() - startedAt,
+                durationMs,
             });
+            try {
+                logLLMExecutionEnd({
+                    reqId,
+                    endpoint,
+                    mode: toStringOrEmpty(audit.mode) || '-',
+                    provider: toStringOrEmpty(audit.provider) || '-',
+                    characterId: toStringOrEmpty(audit.characterId) || '-',
+                    chatId: toStringOrEmpty(audit.chatId) || '-',
+                    status: response.status,
+                    code: response.code,
+                    durationMs,
+                });
+            } catch {}
+            try {
+                await appendLLMAudit({
+                    requestId: reqId,
+                    method: req?.method,
+                    path: req?.originalUrl,
+                    endpoint,
+                    mode: toStringOrEmpty(audit.mode) || null,
+                    provider: toStringOrEmpty(audit.provider) || null,
+                    characterId: toStringOrEmpty(audit.characterId) || null,
+                    chatId: toStringOrEmpty(audit.chatId) || null,
+                    streaming: false,
+                    status: response.status,
+                    ok: false,
+                    durationMs,
+                    metadata: (audit.metadata && typeof audit.metadata === 'object') ? audit.metadata : null,
+                    request: buildExecutionAuditRequest(
+                        endpoint,
+                        (audit.requestBody && typeof audit.requestBody === 'object') ? audit.requestBody : req?.body,
+                    ),
+                    ...(typeof audit.rawResult === 'string' && audit.rawResult
+                        ? {
+                            response: {
+                                type: 'raw_text',
+                                result: audit.rawResult,
+                            },
+                        }
+                        : {}),
+                    error: response.payload,
+                });
+            } catch {}
             sendJson(res, response.status, response.payload);
         }
     };
@@ -162,6 +209,15 @@ function registerEvolutionRoutes(arg = {}) {
         const characterId = toStringOrEmpty(body.characterId);
         const chatId = toStringOrEmpty(body.chatId);
         ensureCharacterChatInput(characterId, chatId);
+        req._characterEvolutionAudit = {
+            mode: 'memory',
+            provider: '',
+            model: '',
+            characterId,
+            chatId,
+            requestBody: body,
+            metadata: null,
+        };
 
         logLLMExecutionStart({
             reqId,
@@ -178,6 +234,12 @@ function registerEvolutionRoutes(arg = {}) {
             throw new LLMHttpError(400, 'GROUP_CHAT_UNSUPPORTED', 'Character evolution is only supported for single-character chats.');
         }
         const evolution = resolveEffectiveEvolutionSettings(settings, character);
+        req._characterEvolutionAudit.provider = evolution.extractionProvider;
+        req._characterEvolutionAudit.model = evolution.extractionModel;
+        req._characterEvolutionAudit.metadata = {
+            model: evolution.extractionModel,
+            maxTokens: evolution.extractionMaxTokens,
+        };
         if (evolution.lastProcessedChatId && evolution.lastProcessedChatId === chatId) {
             throw new LLMHttpError(409, 'CHAT_ALREADY_PROCESSED', 'This chat has already been handed off and accepted.');
         }
@@ -200,12 +262,18 @@ function registerEvolutionRoutes(arg = {}) {
             mode: 'memory',
             characterId,
             chatId,
-            maxTokens: 2400,
+            maxTokens: evolution.extractionMaxTokens,
             messages: promptMessages,
             taskLabel: 'character_evolution_handoff',
         });
         const parsed = require('../llm/character_evolution.cjs').safeParseEvolutionJson(rawResult);
         if (!parsed) {
+            req._characterEvolutionAudit.rawResult = rawResult;
+            req._characterEvolutionAudit.metadata = {
+                model: evolution.extractionModel,
+                maxTokens: evolution.extractionMaxTokens,
+                reason: 'parse_failed',
+            };
             throw new LLMHttpError(502, 'EVOLUTION_PARSE_FAILED', 'Extraction model returned invalid JSON.');
         }
         const proposalPayload = normalizeCharacterEvolutionProposal(parsed, evolution);
@@ -253,6 +321,10 @@ function registerEvolutionRoutes(arg = {}) {
             status: 200,
             ok: true,
             durationMs,
+            metadata: {
+                model: evolution.extractionModel,
+                maxTokens: evolution.extractionMaxTokens,
+            },
             request: buildExecutionAuditRequest('character_evolution_handoff', body),
             response: payload,
         });

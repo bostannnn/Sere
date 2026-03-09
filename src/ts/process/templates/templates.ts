@@ -343,6 +343,10 @@ export const prebuiltPresets = {
         "type": "lorebook",
       },
       {
+        "type": "characterState",
+        "innerFormat": "The following state was extracted from previous chats.\nTreat it as persistent background memory about the relationship, {{user}}, and recurring dynamics.\nUse it as context unless the current chat clearly contradicts it.\nYou can quote it directly.\n\n{{slot}}\n"
+      },
+      {
         "type": "plain",
         "text": "### NARRATIVE DEFAULTS\n- **Perspective:** Third-person limited, centered on {{char}}\n- **Tone:** Match the scene — don't default to either clinical or overwrought\n- **Pacing:** Let scenes breathe; don't rush emotional beats\n\n### SPEECH & VOICE\n- Write {{char}}'s dialogue in their established voice\n- Use subtext — what characters don't say matters as much as what they do\n- Avoid exposition dumps in dialogue\n\n### AGENCY RULES\n- Never generate {{user}}'s actions, thoughts, or dialogue\n- {{char}} reacts to what {{user}} does, not what you assume they'll do\n- NPCs may have varied, even negative opinions of {{user}}\n\n### WRITING QUALITY\n- Show internal states through physical cues and behavior, not narration\n- Engage at least 2-3 senses per scene\n- Vary sentence rhythm — mix short punchy lines with longer atmospheric ones\n- End responses on {{char}} action or dialogue, not a summary\n\n### FORBIDDEN\n- No fourth-wall breaks or meta-commentary\n- No unsolicited plot resolution\n- No softening characters to be more likeable or palatable",
         "role": "system",

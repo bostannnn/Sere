@@ -9,6 +9,7 @@
     import OpenRouterModelSelect from "src/lib/UI/GUI/OpenRouterModelSelect.svelte";
     import TextAreaInput from "src/lib/UI/GUI/TextAreaInput.svelte";
     import TextInput from "src/lib/UI/GUI/TextInput.svelte";
+    import NumberInput from "src/lib/UI/GUI/NumberInput.svelte";
     import SectionConfigEditor from "src/lib/Evolution/SectionConfigEditor.svelte";
 
     $effect(() => {
@@ -43,6 +44,12 @@
                     <span class="ds-settings-label">Extraction Model</span>
                     <TextInput bind:value={DBState.db.characterEvolutionDefaults.extractionModel} placeholder="anthropic/claude-3.5-haiku" list="character-evolution-default-model-options" />
                 {/if}
+
+                <span class="ds-settings-label">Extraction Max Response Tokens</span>
+                <NumberInput bind:value={DBState.db.characterEvolutionDefaults.extractionMaxTokens} min={64} placeholder="2400" />
+                <span class="ds-settings-label-muted-sm">
+                    Caps only the extractor response length. Evolution currently does not have a separate transcript/context limit.
+                </span>
 
                 <span class="ds-settings-label">Extraction Prompt</span>
                 <TextAreaInput bind:value={DBState.db.characterEvolutionDefaults.extractionPrompt} height="32" />

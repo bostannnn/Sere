@@ -596,6 +596,7 @@ export interface CharacterEvolutionSettings {
     useGlobalDefaults: boolean
     extractionProvider: string
     extractionModel: string
+    extractionMaxTokens: number
     extractionPrompt: string
     sectionConfigs: CharacterEvolutionSectionConfig[]
     privacy: CharacterEvolutionPrivacySettings
@@ -609,6 +610,7 @@ export interface CharacterEvolutionSettings {
 export interface CharacterEvolutionDefaults {
     extractionProvider: string
     extractionModel: string
+    extractionMaxTokens: number
     extractionPrompt: string
     sectionConfigs: CharacterEvolutionSectionConfig[]
     privacy: CharacterEvolutionPrivacySettings

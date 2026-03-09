@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
@@ -92,7 +92,11 @@ function toLLMErrorResponse(error: unknown, arg: { requestId: string; endpoint: 
   };
 }
 
-function buildHandlers() {
+function buildHandlers(overrides: {
+  appendLLMAudit?: (payload: unknown) => Promise<void>;
+  executeInternalLLMTextCompletion?: () => Promise<string>;
+  logLLMExecutionEnd?: (payload: unknown) => void;
+} = {}) {
   const postHandlers = new Map<string, RegisteredHandler>();
   const getHandlers = new Map<string, RegisteredHandler>();
   const app = {
@@ -127,10 +131,10 @@ function buildHandlers() {
     },
     toLLMErrorResponse,
     logLLMExecutionStart: () => {},
-    logLLMExecutionEnd: () => {},
-    appendLLMAudit: async () => {},
+    logLLMExecutionEnd: overrides.logLLMExecutionEnd ?? (() => {}),
+    appendLLMAudit: overrides.appendLLMAudit ?? (async () => {}),
     buildExecutionAuditRequest: () => ({}),
-    executeInternalLLMTextCompletion: async () => JSON.stringify({
+    executeInternalLLMTextCompletion: overrides.executeInternalLLMTextCompletion ?? (async () => JSON.stringify({
       proposedState: {
         relationship: {
           trustLevel: "high",
@@ -152,7 +156,7 @@ function buildHandlers() {
           evidence: ["Character said they feel more comfortable."],
         },
       ],
-    }),
+    })),
     applyStateCommands: async (commands: Array<Record<string, unknown>>) => {
       const command = commands[0];
       if (command?.type === "character.replace") {
@@ -183,6 +187,7 @@ beforeEach(() => {
       characterEvolutionDefaults: {
         extractionProvider: "openrouter",
         extractionModel: "anthropic/claude-3.5-haiku",
+        extractionMaxTokens: 2400,
         extractionPrompt: "default prompt",
         sectionConfigs: [],
         privacy: {
@@ -228,7 +233,8 @@ afterEach(() => {
 
 describe("registerEvolutionRoutes", () => {
   it("creates a pending proposal on handoff", async () => {
-    const { postHandlers } = buildHandlers();
+    const appendLLMAudit = vi.fn(async () => {});
+    const { postHandlers } = buildHandlers({ appendLLMAudit });
     const handler = postHandlers.get("/data/character-evolution/handoff");
     expect(handler).toBeTruthy();
     const req = createReq({ characterId, chatId });
@@ -239,6 +245,15 @@ describe("registerEvolutionRoutes", () => {
     expect(res.statusCode).toBe(200);
     const payload = res.payload as { proposal?: { sourceChatId?: string } };
     expect(payload.proposal?.sourceChatId).toBe(chatId);
+    expect(appendLLMAudit).toHaveBeenCalledWith(expect.objectContaining({
+      endpoint: "character_evolution_handoff",
+      status: 200,
+      ok: true,
+      metadata: {
+        model: "anthropic/claude-3.5-haiku",
+        maxTokens: 2400,
+      },
+    }));
 
     const characterFile = JSON.parse(readFileSync(path.join(dataDirs.characters, characterId, "character.json"), "utf-8"));
     expect(characterFile.character.characterEvolution.pendingProposal.sourceChatId).toBe(chatId);
@@ -275,5 +290,99 @@ describe("registerEvolutionRoutes", () => {
       }, getRes);
       expect(getRes.statusCode).toBe(200);
     }
+  });
+
+  it("audits raw model output when handoff parse fails", async () => {
+    const appendLLMAudit = vi.fn(async () => {});
+    const logLLMExecutionEnd = vi.fn();
+    const { postHandlers } = buildHandlers({
+      appendLLMAudit,
+      logLLMExecutionEnd,
+      executeInternalLLMTextCompletion: async () => "```json\n{ invalid }\n```",
+    });
+    const handler = postHandlers.get("/data/character-evolution/handoff");
+    expect(handler).toBeTruthy();
+
+    const res = createRes();
+    await handler!(createReq({ characterId, chatId }), res);
+
+    expect(res.statusCode).toBe(502);
+    expect(appendLLMAudit).toHaveBeenCalledTimes(1);
+    expect(appendLLMAudit).toHaveBeenCalledWith(expect.objectContaining({
+      endpoint: "character_evolution_handoff",
+      status: 502,
+      ok: false,
+      metadata: expect.objectContaining({
+        model: "anthropic/claude-3.5-haiku",
+        maxTokens: 2400,
+        reason: "parse_failed",
+      }),
+      response: {
+        type: "raw_text",
+        result: "```json\n{ invalid }\n```",
+      },
+      error: expect.objectContaining({
+        error: "EVOLUTION_PARSE_FAILED",
+      }),
+    }));
+    expect(logLLMExecutionEnd).toHaveBeenCalledWith(expect.objectContaining({
+      endpoint: "character_evolution_handoff",
+      status: 502,
+      code: "EVOLUTION_PARSE_FAILED",
+      provider: "openrouter",
+      characterId,
+      chatId,
+    }));
+  });
+
+  it("renders extractor prompt variables before the LLM call", async () => {
+    writeJson(path.join(dataDirs.root, "settings.json"), {
+      data: {
+        username: "Andrew",
+        characterEvolutionDefaults: {
+          extractionProvider: "openrouter",
+          extractionModel: "anthropic/claude-3.5-haiku",
+          extractionMaxTokens: 2400,
+          extractionPrompt: "Facts about {{user}} as seen by {{char}}.",
+          sectionConfigs: [
+            {
+              key: "userRead",
+              label: "User Read",
+              enabled: true,
+              includeInPrompt: true,
+              instruction: "{{char}} reads {{user}} in a durable way.",
+              kind: "list",
+              sensitive: false,
+            },
+          ],
+          privacy: {
+            allowCharacterIntimatePreferences: false,
+            allowUserIntimatePreferences: false,
+          },
+        },
+      },
+    });
+
+    const executeInternalLLMTextCompletion = vi.fn(async ({ messages }: { messages: Array<{ content: string }> }) => {
+      const combined = messages.map((m) => m.content).join("\n");
+      expect(combined).toContain("Facts about Andrew as seen by Eva.");
+      expect(combined).toContain("Eva reads Andrew in a durable way.");
+      expect(combined).not.toContain("{{char}}");
+      expect(combined).not.toContain("{{user}}");
+      return JSON.stringify({
+        proposedState: {},
+        changes: [],
+      });
+    });
+
+    const { postHandlers } = buildHandlers({ executeInternalLLMTextCompletion });
+    const handler = postHandlers.get("/data/character-evolution/handoff");
+    expect(handler).toBeTruthy();
+
+    const res = createRes();
+    await handler!(createReq({ characterId, chatId }), res);
+
+    expect(res.statusCode).toBe(200);
+    expect(executeInternalLLMTextCompletion).toHaveBeenCalledTimes(1);
   });
 });

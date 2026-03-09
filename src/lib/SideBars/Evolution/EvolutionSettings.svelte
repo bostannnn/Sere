@@ -26,6 +26,7 @@
     import OpenRouterModelSelect from "src/lib/UI/GUI/OpenRouterModelSelect.svelte";
     import TextAreaInput from "src/lib/UI/GUI/TextAreaInput.svelte";
     import TextInput from "src/lib/UI/GUI/TextInput.svelte";
+    import NumberInput from "src/lib/UI/GUI/NumberInput.svelte";
     import Button from "src/lib/UI/GUI/Button.svelte";
 
     type EvolutionWorkspaceTabId = 0 | 1 | 2 | 3 | 4;
@@ -372,6 +373,8 @@
                         <span class="evolution-runtime-value">{effectiveProvider || "Not configured"}</span>
                         <span class="ds-settings-label-muted-sm">Model</span>
                         <span class="evolution-runtime-value">{effectiveModel || "Not configured"}</span>
+                        <span class="ds-settings-label-muted-sm">Max response tokens</span>
+                        <span class="evolution-runtime-value">{evolutionSettings.extractionMaxTokens || 2400}</span>
                     </div>
                     {#if usingGlobalDefaults}
                         <span class="ds-settings-label-muted-sm">
@@ -407,6 +410,9 @@
                         <span class="ds-settings-label">{usingGlobalDefaults ? "Character Override Model" : "Extraction Model"}</span>
                         <TextInput bind:value={currentCharacter.characterEvolution.extractionModel} placeholder="anthropic/claude-3.5-haiku" disabled={usingGlobalDefaults} list="character-evolution-model-options" />
                     {/if}
+                    <span class="ds-settings-label">{usingGlobalDefaults ? "Character Override Max Response Tokens" : "Extraction Max Response Tokens"}</span>
+                    <NumberInput bind:value={currentCharacter.characterEvolution.extractionMaxTokens} min={64} disabled={usingGlobalDefaults} placeholder="2400" />
+                    <span class="ds-settings-label-muted-sm">Caps only the extractor response. Evolution does not currently enforce a separate transcript/context limit.</span>
                     <span class="ds-settings-label">{usingGlobalDefaults ? "Character Override Prompt" : "Extraction Prompt Override"}</span>
                     <TextAreaInput bind:value={currentCharacter.characterEvolution.extractionPrompt} height="32" disabled={usingGlobalDefaults} />
                     <span class="ds-settings-label-muted-sm">This prompt is used only for the extraction/update pass, not for live roleplay prompting.</span>

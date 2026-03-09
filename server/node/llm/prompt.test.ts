@@ -55,6 +55,7 @@ describe("server prompt template slots", () => {
         characterEvolution: {
           enabled: true,
           useGlobalDefaults: false,
+          extractionMaxTokens: 2400,
           currentState: {
             relationship: {
               trustLevel: "high",
@@ -85,6 +86,7 @@ describe("server prompt template slots", () => {
         characterEvolutionDefaults: {
           extractionProvider: "openrouter",
           extractionModel: "model",
+          extractionMaxTokens: 2400,
           extractionPrompt: "prompt",
           sectionConfigs: [],
           privacy: {
@@ -116,6 +118,7 @@ describe("server prompt template slots", () => {
         characterEvolution: {
           enabled: true,
           useGlobalDefaults: false,
+          extractionMaxTokens: 2400,
           currentState: {
             relationship: {
               trustLevel: "high",
@@ -148,6 +151,7 @@ describe("server prompt template slots", () => {
         characterEvolutionDefaults: {
           extractionProvider: "openrouter",
           extractionModel: "model",
+          extractionMaxTokens: 2400,
           extractionPrompt: "prompt",
           sectionConfigs: [],
           privacy: {

@@ -145,6 +145,7 @@ vi.mock(import("src/ts/stores.svelte"), async () => {
               useGlobalDefaults: false,
               extractionProvider: "openrouter",
               extractionModel: "anthropic/claude-3.5-haiku",
+              extractionMaxTokens: 2400,
               extractionPrompt: "prompt",
               sectionConfigs: [
                 {
