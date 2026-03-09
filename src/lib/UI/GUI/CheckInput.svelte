@@ -11,6 +11,7 @@
         className?: string;
         grayText?: boolean;
         bare?: boolean;
+        disabled?: boolean;
         children?: import('svelte').Snippet;
     }
 
@@ -24,6 +25,7 @@
         className = "",
         grayText = false,
         bare = false,
+        disabled = false,
         children
     }: Props = $props();
 
@@ -42,6 +44,7 @@
         class="ds-ui-check-native" 
         type="checkbox" 
         bind:checked={check}
+        {disabled}
         onchange={() => {
             onChange(!!check)
         }}

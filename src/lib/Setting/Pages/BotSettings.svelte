@@ -27,6 +27,7 @@
     import { allBasicParameterItems } from "src/ts/setting/botSettingsParamsData";
     import SeparateParametersSection from "./SeparateParametersSection.svelte";
     import SettingsSubTabs from "src/lib/Setting/SettingsSubTabs.svelte";
+    import EvolutionDefaultsSettings from "./EvolutionDefaultsSettings.svelte";
     
 const tokens = $state({
         mainPrompt: 0,
@@ -602,6 +603,7 @@ const tokens = $state({
     {:else if submenu === 2}
         <PromptSettings mode='inline' />
     {/if}
+    <EvolutionDefaultsSettings />
     </div>
 {/if}
 

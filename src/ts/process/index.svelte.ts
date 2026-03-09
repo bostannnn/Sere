@@ -22,6 +22,10 @@ import { getInlayAsset } from "./files/inlays";
 import { getGenerationModelString } from "./models/modelString";
 import { saveServerDatabase } from "../storage/serverDb";
 import { fetchServerStateSnapshot } from "../storage/serverStateClient";
+import {
+    getEffectiveCharacterEvolutionSettings,
+    renderCharacterEvolutionStateForPrompt,
+} from "../characterEvolution";
 import { resolveServerAuthToken } from "../storage/serverAuth";
 import { runInlayScreen } from "./inlayScreen";
 import { addRerolls } from "./prereroll";
@@ -456,6 +460,7 @@ export async function sendChat(chatProcessIndex = -1,arg:{
         'lorebook':([] as OpenAIChat[]),
         'rulebookRag':([] as OpenAIChat[]),
         'gameState':([] as OpenAIChat[]),
+        'characterState':([] as OpenAIChat[]),
         'globalNote':([] as OpenAIChat[]),
         'authorNote':([] as OpenAIChat[]),
         'lastChat':([] as OpenAIChat[]),
@@ -635,6 +640,21 @@ export async function sendChat(chatProcessIndex = -1,arg:{
         unformated.personaPrompt.push({
             role: 'system',
             content: risuChatParser(getPersonaPrompt(), {chara: currentChar})
+        })
+    }
+
+    const evolutionSettings = getEffectiveCharacterEvolutionSettings(DBState.db, currentChar)
+    const characterStatePrompt = evolutionSettings.enabled
+        ? renderCharacterEvolutionStateForPrompt(
+            evolutionSettings.currentState,
+            evolutionSettings.sectionConfigs,
+            evolutionSettings.privacy
+        )
+        : ''
+    if(characterStatePrompt){
+        unformated.characterState.push({
+            role: 'system',
+            content: characterStatePrompt,
         })
     }
     
@@ -860,6 +880,16 @@ export async function sendChat(chatProcessIndex = -1,arg:{
                 }
                 case 'memory':{
                     supaMemoryCardUsed = true
+                    break
+                }
+                case 'characterState':{
+                    const pmt = safeStructuredClone(unformated.characterState)
+                    if(card.innerFormat && pmt.length > 0){
+                        for(let i=0;i<pmt.length;i++){
+                            pmt[i].content = risuChatParser(positionParser(card.innerFormat, card.type), {chara: currentChar}).replace('{{slot}}', pmt[i].content)
+                        }
+                    }
+                    await tokenizeChatArray(pmt)
                     break
                 }
                 case 'cache':{
@@ -1616,6 +1646,19 @@ export async function sendChat(chatProcessIndex = -1,arg:{
 
                     for(const item of pmt){
                         addPromptBlock('Memory', item.role, item.content)
+                    }
+                    pushPrompts(pmt)
+                    break
+                }
+                case 'characterState':{
+                    const pmt = safeStructuredClone(unformated.characterState)
+                    if(card.innerFormat && pmt.length > 0){
+                        for(let i=0;i<pmt.length;i++){
+                            pmt[i].content = risuChatParser(card.innerFormat, {chara: currentChar}).replace('{{slot}}', pmt[i].content)
+                        }
+                    }
+                    for(const item of pmt){
+                        addPromptBlock('Character State', item.role, item.content)
                     }
                     pushPrompts(pmt)
                     break

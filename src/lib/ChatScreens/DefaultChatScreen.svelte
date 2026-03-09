@@ -2,7 +2,7 @@
      
 
     import Suggestion from './Suggestion.svelte';
-    import { CameraIcon, DatabaseIcon, DicesIcon, GlobeIcon, ImagePlusIcon, LanguagesIcon, Laugh, MenuIcon, MicOffIcon, PackageIcon, RefreshCcwIcon, ReplyIcon, Send, StepForwardIcon, XIcon, ArrowDown } from "@lucide/svelte";
+    import { CameraIcon, DatabaseIcon, DicesIcon, GlobeIcon, ImagePlusIcon, LanguagesIcon, Laugh, MenuIcon, MicOffIcon, PackageIcon, RefreshCcwIcon, ReplyIcon, Send, StepForwardIcon, XIcon, ArrowDown, GitBranch } from "@lucide/svelte";
     import { selectedCharID, createSimpleCharacter, ScrollToMessageStore, comfyProgressStore } from "../../ts/stores.svelte";
     import { tick } from 'svelte';
     import Chat from "./Chat.svelte";
@@ -34,6 +34,19 @@
     import Button from '../UI/GUI/Button.svelte';
     import GameStateHud from '../SideBars/GameStateHUD.svelte';
     import { runComfyTemplateById } from 'src/ts/integrations/comfy/execute';
+    import ProposalPanel from '../Evolution/ProposalPanel.svelte';
+    import {
+        createCharacterEvolutionProposal,
+        createNewChatAfterEvolution,
+        getCharacterEvolutionErrorMessage,
+        rejectCharacterEvolutionProposal,
+        acceptCharacterEvolutionProposal,
+        getPendingCharacterEvolutionProposal,
+    } from 'src/ts/evolution';
+    import {
+        ensureCharacterEvolution,
+        getEffectiveCharacterEvolutionSettings,
+    } from 'src/ts/characterEvolution';
     const defaultChatScreenLog = (..._args: unknown[]) => {};
     
     interface Props {
@@ -56,6 +69,9 @@
     let showNewMessageButton = $state(false)
     let chatsInstance: unknown = $state()
     let isScrollingToMessage = $state(false)
+    let showEvolutionProposal = $state(false)
+    let evolutionBusy = $state(false)
+    let evolutionProposalDraft = $state(null)
     let {
         onOpenModuleList = () => {},
         onOpenChatList = () => {},
@@ -71,6 +87,21 @@
     const comfyMenuTemplates = $derived.by(() => {
         const templates = DBState.db.comfyCommander?.templates ?? []
         return templates.filter((template) => template.showInChatMenu)
+    })
+    const currentEvolutionSettings = $derived.by(() => {
+        const character = currentCharacter
+        if (!character || character.type === 'group') {
+            return null
+        }
+        return getEffectiveCharacterEvolutionSettings(DBState.db, character)
+    })
+
+    $effect(() => {
+        const character = currentCharacter
+        if (!character || character.type === 'group') {
+            return
+        }
+        ensureCharacterEvolution(character)
     })
 
     function extractHttpStatusFromError(error: unknown): number | null {
@@ -200,6 +231,78 @@
     async function sendContinue(){
         return sendMain(true)
     }
+
+    async function runEvolutionHandoff() {
+        if (!currentCharacter || currentCharacter.type === 'group') {
+            return
+        }
+        const activeChat = currentCharacter.chats?.[currentCharacter.chatPage]
+        if (!currentCharacter.chaId || !activeChat?.id) {
+            alertError("Cannot start evolution handoff without a saved character and chat.")
+            return
+        }
+        evolutionBusy = true
+        try {
+            const payload = await createCharacterEvolutionProposal(currentCharacter.chaId, activeChat.id)
+            const proposal = payload.proposal as typeof currentCharacter.characterEvolution.pendingProposal
+            currentCharacter.characterEvolution.pendingProposal = proposal
+            evolutionProposalDraft = JSON.parse(JSON.stringify(proposal?.proposedState ?? {}))
+            showEvolutionProposal = true
+            alertNormal("Evolution proposal is ready for review.")
+        } catch (error) {
+            alertError(getCharacterEvolutionErrorMessage(error))
+        } finally {
+            evolutionBusy = false
+        }
+    }
+
+    async function rejectEvolutionProposal() {
+        if (!currentCharacter || currentCharacter.type === 'group' || !currentCharacter.chaId) {
+            return
+        }
+        evolutionBusy = true
+        try {
+            await rejectCharacterEvolutionProposal(currentCharacter.chaId)
+            currentCharacter.characterEvolution.pendingProposal = null
+            evolutionProposalDraft = null
+            showEvolutionProposal = false
+            alertNormal("Evolution proposal rejected.")
+        } catch (error) {
+            alertError(getCharacterEvolutionErrorMessage(error))
+        } finally {
+            evolutionBusy = false
+        }
+    }
+
+    async function acceptEvolutionProposal(createNextChat = false) {
+        if (!currentCharacter || currentCharacter.type === 'group' || !currentCharacter.chaId || !evolutionProposalDraft) {
+            return
+        }
+        evolutionBusy = true
+        try {
+            const payload = await acceptCharacterEvolutionProposal(currentCharacter.chaId, evolutionProposalDraft)
+            currentCharacter.characterEvolution.currentState = payload.state as typeof currentCharacter.characterEvolution.currentState
+            currentCharacter.characterEvolution.currentStateVersion = Number(payload.version) || currentCharacter.characterEvolution.currentStateVersion
+            currentCharacter.characterEvolution.pendingProposal = null
+            evolutionProposalDraft = null
+            showEvolutionProposal = false
+            if (createNextChat) {
+                await createNewChatAfterEvolution($selectedCharID)
+            }
+            alertNormal(createNextChat ? "Evolution accepted and a new chat was created." : "Evolution accepted.")
+        } catch (error) {
+            alertError(getCharacterEvolutionErrorMessage(error))
+        } finally {
+            evolutionBusy = false
+        }
+    }
+
+    $effect(() => {
+        const pending = getPendingCharacterEvolutionProposal(currentCharacter)
+        if (pending && !evolutionProposalDraft) {
+            evolutionProposalDraft = JSON.parse(JSON.stringify(pending.proposedState))
+        }
+    })
 
     function shouldSendOnEnter(e: KeyboardEvent){
         if(e.key.toLocaleLowerCase() !== "enter" || e.isComposing){
@@ -1071,6 +1174,18 @@
                     <button
                         type="button"
                         class="ds-chat-side-menu-item ds-ui-menu-item"
+                        title="Character evolution handoff"
+                        aria-label="Character evolution handoff"
+                        onclick={runEvolutionHandoff}
+                        disabled={evolutionBusy || currentCharacter?.type === 'group'}
+                    >
+                        <GitBranch />
+                        <span class="ds-chat-side-menu-label">Handoff</span>
+                    </button>
+
+                    <button
+                        type="button"
+                        class="ds-chat-side-menu-item ds-ui-menu-item"
                         title={language.postFile}
                         aria-label={language.postFile}
                         onclick={async () => {
@@ -1137,6 +1252,34 @@
 
             {/if}
             </div>
+
+            {#if currentEvolutionSettings?.pendingProposal || showEvolutionProposal}
+                <div class="ds-settings-section">
+                    <div class="ds-settings-card ds-settings-card-stack-start">
+                        <div class="ds-settings-inline-actions action-rail">
+                            <Button styled="outlined" onclick={() => { showEvolutionProposal = !showEvolutionProposal }}>
+                                {showEvolutionProposal ? "Hide Evolution Review" : "Review Evolution Proposal"}
+                            </Button>
+                            {#if !showEvolutionProposal}
+                                <span class="ds-settings-label-muted-sm">A pending proposal is ready.</span>
+                            {/if}
+                        </div>
+                    </div>
+                    {#if showEvolutionProposal && currentEvolutionSettings?.pendingProposal}
+                        <ProposalPanel
+                            proposal={currentEvolutionSettings.pendingProposal}
+                            currentState={currentEvolutionSettings.currentState}
+                            sectionConfigs={currentEvolutionSettings.sectionConfigs}
+                            privacy={currentEvolutionSettings.privacy}
+                            bind:bindState={evolutionProposalDraft}
+                            onAccept={() => acceptEvolutionProposal(false)}
+                            onAcceptAndCreate={() => acceptEvolutionProposal(true)}
+                            onReject={rejectEvolutionProposal}
+                            loading={evolutionBusy}
+                        />
+                    {/if}
+                </div>
+            {/if}
 
             <div class="ds-chat-composer-shell"
                 class:ds-chat-composer-shell-fixed={DBState.db.fixedChatTextarea}

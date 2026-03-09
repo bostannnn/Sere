@@ -102,6 +102,9 @@
                 if (promptItem.type === 'gameState'){
                     return "Game State"
                 }
+                if (promptItem.type === 'characterState'){
+                    return "Character State"
+                }
                 if (promptItem.type === 'memory'){
                     return language.formating.memory
                 }
@@ -256,6 +259,7 @@
             <OptionInput value="lorebook">{language.formating.lorebook}</OptionInput>
             <OptionInput value="rulebookRag">Rulebook RAG</OptionInput>
             <OptionInput value="gameState">Game State</OptionInput>
+            <OptionInput value="characterState">Character State</OptionInput>
             <OptionInput value="memory">{language.formating.memory}</OptionInput>
             <OptionInput value="postEverything">{language.formating.postEverything}</OptionInput>
             <OptionInput value="chatML">chatML</OptionInput>
@@ -296,6 +300,10 @@
                 <OptionInput value="bot">{language.character}</OptionInput>
                 <OptionInput value="system">{language.systemPrompt}</OptionInput>
             </SelectInput>
+        {/if}
+        {#if promptItem.type === 'characterState'}
+            <span>{language.format}</span>
+            <TextAreaInput highlight bind:value={promptItem.innerFormat} placeholder={"Wrap current character evolution state with {{slot}} if needed."} />
         {/if}
         {#if promptItem.type === 'chat'}
             {#if promptItem.rangeStart !== -1000}

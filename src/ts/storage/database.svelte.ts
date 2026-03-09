@@ -13,6 +13,10 @@ import { createHypaV3Preset } from '../process/memory/hypav3'
 import { defaultHotkeys } from '../defaulthotkeys';
 import { DBState, selectedCharID } from '../stores.svelte';
 import { DEFAULT_EMOTION_PROMPT } from '../process/emotion/defaultPrompt';
+import {
+    ensureCharacterEvolution,
+    ensureDatabaseEvolutionDefaults,
+} from '../characterEvolution';
 import type {
     Chat,
     Database,
@@ -88,7 +92,9 @@ export function setDatabase(data:Database){
     if(checkNullish(data.characters)){
         data.characters = []
     }
+    ensureDatabaseEvolutionDefaults(data)
     for (const char of data.characters) {
+        ensureCharacterEvolution(char)
         if (!Array.isArray(char?.chats)) {
             continue
         }

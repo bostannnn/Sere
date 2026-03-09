@@ -155,6 +155,7 @@ function createServerLlmBootstrap(arg = {}) {
         buildHypaSummarizationPromptMessages,
         normalizeHypaV3DataForEdit,
         persistChatDataToRaw,
+        executeInternalLLMTextCompletion,
         executeHypaSummaryFromMessages,
         appendMemoryTraceAudit,
         buildGenerateExecutionPayload,

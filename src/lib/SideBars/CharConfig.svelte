@@ -6,7 +6,7 @@
     import { tick, untrack } from 'svelte';
     import { SvelteMap } from "svelte/reactivity";
     import { CharConfigSubMenu, MobileGUI, selectedCharID } from "../../ts/stores.svelte";
-    import { PlusIcon, SmileIcon, TrashIcon, UserIcon, ActivityIcon, BookIcon, BookOpenCheckIcon, User, Braces, Volume2Icon, DownloadIcon, HardDriveUploadIcon, Share2Icon, ImageIcon, ImageOffIcon, ArrowUp, ArrowDown } from '@lucide/svelte'
+    import { PlusIcon, SmileIcon, TrashIcon, UserIcon, ActivityIcon, BookIcon, BookOpenCheckIcon, User, Braces, Volume2Icon, DownloadIcon, HardDriveUploadIcon, Share2Icon, ImageIcon, ImageOffIcon, ArrowUp, ArrowDown, GitBranch } from '@lucide/svelte'
     import Check from "../UI/GUI/CheckInput.svelte";
     import { addCharEmotion, addingEmotion, getCharImage, rmCharEmotion, selectCharImg, makeGroupImage, removeChar, changeCharImage } from "../../ts/characters";
     import LoreBook from "./LoreBook/LoreBookSetting.svelte";
@@ -36,6 +36,7 @@
     import Toggles from "./Toggles.svelte";
     import GameStateEditor from "./GameStateEditor.svelte";
     import { DatabaseIcon } from "@lucide/svelte";
+    import EvolutionSettings from "./Evolution/EvolutionSettings.svelte";
     const charConfigLog = (..._args: unknown[]) => {};
 
     type CharacterEditorState = character & {
@@ -116,8 +117,8 @@
     let viewSubMenu = $state(0)
     const emos: [string, string][] = $derived(DBState.db.characters[$selectedCharID]!.emotionImages)
     const iconButtonSize = window.innerWidth > 360 ? 24 as const : 20 as const
-    type CharConfigTabId = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8
-    const charConfigTabsForCharacter: CharConfigTabId[] = [0, 1, 3, 8, 5, 4, 2, 7, 6]
+    type CharConfigTabId = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9
+    const charConfigTabsForCharacter: CharConfigTabId[] = [0, 1, 3, 8, 9, 5, 4, 2, 7, 6]
     const charConfigTabsForGroup: CharConfigTabId[] = [0, 1, 3, 2, 7]
     const charConfigTabLabels: Record<CharConfigTabId, string> = {
         0: "Basics",
@@ -128,7 +129,8 @@
         4: "Scripts",
         5: "Voice",
         6: "Share",
-        7: "GameState"
+        7: "GameState",
+        9: "Evolution"
     }
 
     const getVisibleCharConfigTabs = (): CharConfigTabId[] => {
@@ -662,7 +664,7 @@
         if(!selected){
             return
         }
-        if(selected.type === 'group' && ($CharConfigSubMenu === 4 || $CharConfigSubMenu === 5 || $CharConfigSubMenu === 6 || $CharConfigSubMenu === 8)){
+        if(selected.type === 'group' && ($CharConfigSubMenu === 4 || $CharConfigSubMenu === 5 || $CharConfigSubMenu === 6 || $CharConfigSubMenu === 8 || $CharConfigSubMenu === 9)){
             $CharConfigSubMenu = 0
         }
 
@@ -809,6 +811,22 @@
                 onkeydown={(event) => handleCharConfigTabKeydown(event, 8)}
             >
                 <BookOpenCheckIcon size={iconButtonSize} />
+            </button>
+            <button
+                type="button"
+                class="char-config-tab seg-tab"
+                class:active={$CharConfigSubMenu === 9}
+                id="char-config-tab-9"
+                data-testid="char-config-subtab-9"
+                role="tab"
+                aria-label={charConfigTabLabels[9]}
+                aria-selected={$CharConfigSubMenu === 9}
+                aria-controls="char-config-panel-9"
+                tabindex={$CharConfigSubMenu === 9 ? 0 : -1}
+                onclick={() => selectCharConfigSubMenuAndFocus(9)}
+                onkeydown={(event) => handleCharConfigTabKeydown(event, 9)}
+            >
+                <GitBranch size={iconButtonSize} />
             </button>
             <button
                 type="button"
@@ -1870,6 +1888,12 @@
             <h2 class="char-config-title">Game State</h2>
         {/if}
         <GameStateEditor />
+    </div>
+{/if}
+
+{#if $CharConfigSubMenu === 9}
+    <div class="char-config-section" role="tabpanel" id="char-config-panel-9" aria-labelledby="char-config-tab-9" tabindex="0">
+        <EvolutionSettings />
     </div>
 {/if}
 

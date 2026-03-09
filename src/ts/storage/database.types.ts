@@ -25,6 +25,7 @@ export interface DynamicOutput {
 
 export interface Database{
     characters: (character|groupChat)[],
+    characterEvolutionDefaults?: CharacterEvolutionDefaults
     apiType: string
     openAIKey: string
     proxyKey:string
@@ -491,6 +492,128 @@ export interface HypaV3PromptOverride {
     reSummarizationPrompt?: string
 }
 
+export type CharacterEvolutionConfidence = 'suspected' | 'likely' | 'confirmed'
+export type CharacterEvolutionStatus = 'active' | 'archived' | 'corrected'
+export type CharacterEvolutionSectionKind = 'list' | 'string' | 'object'
+export type CharacterEvolutionSectionKey =
+    | 'relationship'
+    | 'activeThreads'
+    | 'runningJokes'
+    | 'characterLikes'
+    | 'characterDislikes'
+    | 'characterHabits'
+    | 'characterBoundariesPreferences'
+    | 'userFacts'
+    | 'userRead'
+    | 'userLikes'
+    | 'userDislikes'
+    | 'lastChatEnded'
+    | 'keyMoments'
+    | 'characterIntimatePreferences'
+    | 'userIntimatePreferences'
+
+export interface CharacterEvolutionItem {
+    value: string
+    confidence?: CharacterEvolutionConfidence
+    note?: string
+    status?: CharacterEvolutionStatus
+    sourceChatId?: string
+    updatedAt?: number
+}
+
+export interface CharacterEvolutionRelationshipState {
+    trustLevel: string
+    dynamic: string
+}
+
+export interface CharacterEvolutionLastChatEndedState {
+    state: string
+    residue: string
+}
+
+export interface CharacterEvolutionState {
+    relationship: CharacterEvolutionRelationshipState
+    activeThreads: string[]
+    runningJokes: string[]
+    characterLikes: CharacterEvolutionItem[]
+    characterDislikes: CharacterEvolutionItem[]
+    characterHabits: CharacterEvolutionItem[]
+    characterBoundariesPreferences: CharacterEvolutionItem[]
+    userFacts: CharacterEvolutionItem[]
+    userRead: string[]
+    userLikes: CharacterEvolutionItem[]
+    userDislikes: CharacterEvolutionItem[]
+    lastChatEnded: CharacterEvolutionLastChatEndedState
+    keyMoments: string[]
+    characterIntimatePreferences: CharacterEvolutionItem[]
+    userIntimatePreferences: CharacterEvolutionItem[]
+}
+
+export interface CharacterEvolutionSectionConfig {
+    key: CharacterEvolutionSectionKey
+    label: string
+    enabled: boolean
+    includeInPrompt: boolean
+    instruction: string
+    kind: CharacterEvolutionSectionKind
+    sensitive?: boolean
+}
+
+export interface CharacterEvolutionPrivacySettings {
+    allowCharacterIntimatePreferences: boolean
+    allowUserIntimatePreferences: boolean
+}
+
+export interface CharacterEvolutionChange {
+    sectionKey: CharacterEvolutionSectionKey
+    summary: string
+    evidence: string[]
+}
+
+export interface CharacterEvolutionVersionMeta {
+    version: number
+    chatId: string | null
+    acceptedAt: number
+}
+
+export interface CharacterEvolutionPendingProposal {
+    proposalId: string
+    sourceChatId: string
+    proposedState: CharacterEvolutionState
+    changes: CharacterEvolutionChange[]
+    createdAt: number
+}
+
+export interface CharacterEvolutionVersionFile {
+    version: number
+    chatId: string | null
+    acceptedAt: number
+    state: CharacterEvolutionState
+}
+
+export interface CharacterEvolutionSettings {
+    enabled: boolean
+    useGlobalDefaults: boolean
+    extractionProvider: string
+    extractionModel: string
+    extractionPrompt: string
+    sectionConfigs: CharacterEvolutionSectionConfig[]
+    privacy: CharacterEvolutionPrivacySettings
+    currentStateVersion: number
+    currentState: CharacterEvolutionState
+    pendingProposal?: CharacterEvolutionPendingProposal | null
+    lastProcessedChatId?: string | null
+    stateVersions: CharacterEvolutionVersionMeta[]
+}
+
+export interface CharacterEvolutionDefaults {
+    extractionProvider: string
+    extractionModel: string
+    extractionPrompt: string
+    sectionConfigs: CharacterEvolutionSectionConfig[]
+    privacy: CharacterEvolutionPrivacySettings
+}
+
 export interface character{
     type?:"character"
     name:string
@@ -631,6 +754,7 @@ export interface character{
     hypaV3PromptOverride?: HypaV3PromptOverride
     modules?:string[]
     gameState?: Record<string, any>
+    characterEvolution?: CharacterEvolutionSettings
 }
 
 
@@ -720,6 +844,7 @@ export interface groupChat{
     hypaV3PromptOverride?: HypaV3PromptOverride
     modules?:string[]
     gameState?: Record<string, any>
+    characterEvolution?: CharacterEvolutionSettings
 }
 
 export interface botPreset{

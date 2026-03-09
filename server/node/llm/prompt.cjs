@@ -10,6 +10,10 @@ const {
 } = require('./scripts.cjs');
 const { buildServerLorebookMessages } = require('./lorebook.cjs');
 const { extractTextFromMessageContent, estimateMessagesTokens } = require('./tokenizer.cjs');
+const {
+    getEffectiveCharacterEvolutionSettings,
+    renderCharacterEvolutionStateForPrompt,
+} = require('./character_evolution.cjs');
 
 const TRACE_AUDIT_MAX_MESSAGE_COUNT = 64;
 const TRACE_AUDIT_MAX_CONTENT_CHARS = 1200;
@@ -165,6 +169,7 @@ function getTemplateCardFallbackTitle(cardType, cardType2 = '') {
     if (cardType === 'memory') return 'HypaMemory';
     if (cardType === 'rulebookRag') return 'Rulebook RAG';
     if (cardType === 'gameState') return 'Game State';
+    if (cardType === 'characterState') return 'Character State';
     return 'Prompt Block';
 }
 
@@ -292,6 +297,14 @@ async function buildMessagesFromPromptTemplate(character, chat, settings, arg = 
     const personaPrompt = toStringOrEmpty(settings?.personaPrompt);
     const authorNote = resolveServerAuthorNote(chat, settings);
     const lorebook = buildServerLorebookMessages(character, chat, chats);
+    const evolutionSettings = getEffectiveCharacterEvolutionSettings(settings, character);
+    const characterState = evolutionSettings.enabled
+        ? renderCharacterEvolutionStateForPrompt(
+            evolutionSettings.currentState,
+            evolutionSettings.sectionConfigs,
+            evolutionSettings.privacy
+        )
+        : '';
     const memoryBuilder = typeof arg.buildServerMemoryMessages === 'function'
         ? arg.buildServerMemoryMessages
         : async () => [];
@@ -307,6 +320,7 @@ async function buildMessagesFromPromptTemplate(character, chat, settings, arg = 
         personaPrompt: personaPrompt ? [{ role: 'system', content: personaPrompt }] : [],
         lorebook,
         memory,
+        characterState: characterState ? [{ role: 'system', content: characterState }] : [],
         postEverything: [],
         authorNote: authorNote ? [{ role: 'system', content: authorNote }] : [],
     };
@@ -427,6 +441,28 @@ async function buildMessagesFromPromptTemplate(character, chat, settings, arg = 
                         source: 'template',
                         skipped: true,
                         reason: 'no_memory_data',
+                    });
+                    break;
+                }
+                for (const item of source) {
+                    if (!item || typeof item !== 'object') continue;
+                    const rendered = renderTemplateSlot(card.innerFormat, toStringOrEmpty(item.content), character, settings);
+                    const parsed = parsePromptAsMessages(rendered, character, settings, normalizeTemplateRole(item.role));
+                    pushPromptMessagesWithTitle(messages, promptBlocks, parsed, blockTitle, 'template');
+                }
+                break;
+            }
+            case 'characterState': {
+                const source = unformatted.characterState.length > 0
+                    ? unformatted.characterState
+                    : [];
+                if (source.length === 0) {
+                    promptBlocks.push({
+                        role: 'system',
+                        title: blockTitle,
+                        source: 'template',
+                        skipped: true,
+                        reason: 'no_character_evolution_state',
                     });
                     break;
                 }

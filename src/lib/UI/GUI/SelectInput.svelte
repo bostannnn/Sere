@@ -4,6 +4,7 @@
         value: string | number;
         className?: string;
         size?: 'sm'|'md'|'lg'|'xl';
+        disabled?: boolean;
         children?: import('svelte').Snippet;
         onchange?: (event: Event & {
             currentTarget: EventTarget & HTMLSelectElement;
@@ -14,6 +15,7 @@
         value = $bindable(),
         className = "",
         size = 'md',
+        disabled = false,
         children,
         onchange
     }: Props = $props();
@@ -28,6 +30,7 @@
 <select
     class={`ds-ui-input control-field ds-ui-select ${sizeClassMap[size]} ds-ui-input-with-padding${className ? ` ${className}` : ""}`}
     bind:value
+    {disabled}
     onchange={onchange}
 >
     {@render children?.()}

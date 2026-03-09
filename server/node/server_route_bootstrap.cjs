@@ -13,6 +13,7 @@ function registerServerRoutes(arg = {}) {
         registerStateRoutes,
         registerSyncRoutes,
         registerRagRoutes,
+        registerEvolutionRoutes,
     } = arg;
 
     registerSystemRoutes({
@@ -172,6 +173,30 @@ function registerServerRoutes(arg = {}) {
         requireSafeSegment: arg.requireSafeSegment,
         updateRulebookMetadata: arg.updateRulebookMetadata,
     });
+
+    if (typeof registerEvolutionRoutes === 'function') {
+        registerEvolutionRoutes({
+            app: arg.app,
+            fs: arg.fs,
+            dataDirs: arg.dataDirs,
+            existsSync: arg.existsSync,
+            LLMHttpError: arg.LLMHttpError,
+            isSafePathSegment: arg.isSafePathSegment,
+            requirePasswordAuth: arg.requirePasswordAuth,
+            safeResolve: arg.safeResolve,
+            getReqIdFromResponse: arg.getReqIdFromResponse,
+            toStringOrEmpty: arg.toStringOrEmpty,
+            sendJson: arg.sendJson,
+            toLLMErrorResponse: arg.toLLMErrorResponse,
+            logLLMExecutionStart: arg.logLLMExecutionStart,
+            logLLMExecutionEnd: arg.logLLMExecutionEnd,
+            appendLLMAudit: arg.appendLLMAudit,
+            buildExecutionAuditRequest: arg.buildExecutionAuditRequest,
+            executeInternalLLMTextCompletion: arg.executeInternalLLMTextCompletion,
+            applyStateCommands: arg.applyStateCommands,
+            readStateLastEventId: arg.readStateLastEventId,
+        });
+    }
 }
 
 module.exports = {

@@ -46,6 +46,7 @@
             {autocomplete}
             {placeholder}
             id={id}
+            {disabled}
             bind:value={value}
             oninput={(e) => {
                 if(optimaizedInput){
@@ -78,15 +79,23 @@
     <div
         class="ds-textarea-input-layer ds-textarea-input-layer-highlight"
         contenteditable="true"
+        aria-disabled={disabled}
         bind:textContent={value}
         onkeydown={(e) => {
+            if(disabled){
+                e.preventDefault()
+                return
+            }
             handleKeyDown(e)
             onValueChange(value ?? '')
             onInput()
         }}
         role="textbox"
-        tabindex="0"
+        tabindex={disabled ? -1 : 0}
         oninput={() => {
+            if(disabled){
+                return
+            }
             onValueChange(value ?? '')
             autoComplete()
         }}
@@ -129,6 +138,7 @@
         optimaizedInput?: boolean;
         highlight?: boolean;
         onchange?: () => void;
+        disabled?: boolean;
     }
 
     let {
@@ -146,7 +156,8 @@
         className = '',
         optimaizedInput = true,
         highlight = false,
-        onchange = () => {}
+        onchange = () => {},
+        disabled = false
     }: Props = $props();
     let selectingAutoComplete = $state(0)
     // TODO: Review if highlight prop can change dynamically - if so, this needs to be reactive

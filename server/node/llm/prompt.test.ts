@@ -47,4 +47,63 @@ describe("server prompt template slots", () => {
       slot: "gameState",
     });
   });
+
+  it("renders characterState blocks from current evolution state when enabled", async () => {
+    const assembled = await buildMessagesFromPromptTemplate(
+      {
+        name: "Chronicle Bot",
+        characterEvolution: {
+          enabled: true,
+          useGlobalDefaults: false,
+          currentState: {
+            relationship: {
+              trustLevel: "high",
+              dynamic: "warm and teasing",
+            },
+          },
+          sectionConfigs: [
+            {
+              key: "relationship",
+              label: "Relationship",
+              enabled: true,
+              includeInPrompt: true,
+              instruction: "Track relationship",
+              kind: "object",
+              sensitive: false,
+            },
+          ],
+          privacy: {
+            allowCharacterIntimatePreferences: false,
+            allowUserIntimatePreferences: false,
+          },
+        },
+      },
+      {
+        message: [{ role: "user", data: "hello" }],
+      },
+      {
+        characterEvolutionDefaults: {
+          extractionProvider: "openrouter",
+          extractionModel: "model",
+          extractionPrompt: "prompt",
+          sectionConfigs: [],
+          privacy: {
+            allowCharacterIntimatePreferences: false,
+            allowUserIntimatePreferences: false,
+          },
+        },
+        promptTemplate: [
+          { type: "plain", type2: "main", role: "system", text: "Main prompt." },
+          { type: "characterState", innerFormat: "{{slot}}" },
+          { type: "chat", rangeStart: 0, rangeEnd: "end" },
+        ],
+      },
+      {
+        userMessage: "hello",
+      },
+    );
+
+    expect(assembled?.messages?.some((entry: Record<string, unknown>) => String(entry.content || "").includes("Trust level: high"))).toBe(true);
+    expect(assembled?.promptBlocks?.some((entry: Record<string, unknown>) => entry.title === "Character State")).toBe(true);
+  });
 });

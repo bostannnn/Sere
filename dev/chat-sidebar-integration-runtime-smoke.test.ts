@@ -254,6 +254,9 @@ vi.mock(import("src/lib/SideBars/Toggles.svelte"), async () => ({
 vi.mock(import("src/lib/SideBars/GameStateEditor.svelte"), async () => ({
   default: (await import("./test-stubs/SimplePanelStub.svelte")).default,
 }));
+vi.mock(import("src/lib/SideBars/Evolution/EvolutionSettings.svelte"), async () => ({
+  default: (await import("./test-stubs/SimplePanelStub.svelte")).default,
+}));
 vi.mock(import("src/lib/Others/HypaV3Modal.svelte"), async () => ({
   default: (await import("./test-stubs/SimplePanelStub.svelte")).default,
 }));
@@ -495,6 +498,7 @@ describe("chat sidebar integration runtime smoke", () => {
       "char-config-tab-1",
       "char-config-tab-3",
       "char-config-tab-8",
+      "char-config-tab-9",
       "char-config-tab-5",
       "char-config-tab-4",
       "char-config-tab-2",
@@ -575,6 +579,7 @@ describe("chat sidebar integration runtime smoke", () => {
       "char-config-tab-1",
       "char-config-tab-3",
       "char-config-tab-8",
+      "char-config-tab-9",
       "char-config-tab-5",
       "char-config-tab-4",
       "char-config-tab-2",
