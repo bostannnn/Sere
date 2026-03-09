@@ -5,6 +5,10 @@ const mocks = vi.hoisted(() => ({
   sendChat: vi.fn(async () => {}),
 }));
 
+const platformState = vi.hoisted(() => ({
+  isMobile: false,
+}));
+
 vi.mock(import("src/lang"), () => ({
   language: {
     newMessage: "New message",
@@ -189,9 +193,16 @@ vi.mock(import("src/ts/sync/multiuser"), async () => {
   };
 });
 
-vi.mock(import("src/ts/platform"), () => ({
-  isNodeServer: false,
-}));
+vi.mock(import("src/ts/platform"), async () => {
+  const actual = await vi.importActual<typeof import("src/ts/platform")>("src/ts/platform");
+  return {
+    ...actual,
+    get isMobile() {
+      return platformState.isMobile;
+    },
+    isNodeServer: false,
+  };
+});
 
 vi.mock(import("src/ts/storage/serverDb"), () => ({
   saveServerDatabase: async () => {},
@@ -243,6 +254,7 @@ async function flushUi() {
 describe("default chat screen runtime smoke", () => {
   beforeEach(() => {
     mocks.sendChat.mockClear();
+    platformState.isMobile = false;
     selectedCharID.set(0);
     DBState.db.fixedChatTextarea = false;
     DBState.db.newMessageButtonStyle = "floating-circle";
@@ -413,5 +425,73 @@ describe("default chat screen runtime smoke", () => {
     await flushUi();
     expect(document.querySelector(".ds-chat-side-menu")).toBeNull();
     expect(menuButton?.getAttribute("aria-expanded")).toBe("false");
+  });
+
+  it("keeps Enter as button-only send on mobile", async () => {
+    platformState.isMobile = true;
+    DBState.db.sendWithEnter = true;
+
+    const target = document.createElement("div");
+    document.body.appendChild(target);
+    app = mount(DefaultChatScreen, { target });
+    await flushUi();
+
+    const composerInput = document.querySelector(
+      ".ds-chat-composer-input.control-field",
+    ) as HTMLTextAreaElement | null;
+    const translateInput = document.querySelector(
+      ".ds-chat-translate-input.control-field",
+    ) as HTMLTextAreaElement | null;
+    const sendButton = document.querySelector(
+      '.ds-chat-composer-action.icon-btn.icon-btn--sm[aria-label="Send message"]',
+    ) as HTMLButtonElement | null;
+
+    expect(composerInput).not.toBeNull();
+    expect(translateInput).not.toBeNull();
+    expect(sendButton).not.toBeNull();
+    expect(composerInput?.getAttribute("enterkeyhint")).toBe("enter");
+    expect(translateInput?.getAttribute("enterkeyhint")).toBe("enter");
+
+    composerInput!.value = "mobile composer";
+    composerInput!.dispatchEvent(new Event("input", { bubbles: true }));
+    composerInput!.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    await flushUi();
+    expect(mocks.sendChat).toHaveBeenCalledTimes(0);
+
+    translateInput!.value = "mobile translate";
+    translateInput!.dispatchEvent(new Event("input", { bubbles: true }));
+    translateInput!.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    await flushUi();
+    expect(mocks.sendChat).toHaveBeenCalledTimes(0);
+
+    sendButton!.click();
+    await flushUi();
+    expect(mocks.sendChat).toHaveBeenCalledTimes(1);
+  });
+
+  it("uses Shift+Enter to send on desktop when sendWithEnter is disabled", async () => {
+    DBState.db.sendWithEnter = false;
+
+    const target = document.createElement("div");
+    document.body.appendChild(target);
+    app = mount(DefaultChatScreen, { target });
+    await flushUi();
+
+    const composerInput = document.querySelector(
+      ".ds-chat-composer-input.control-field",
+    ) as HTMLTextAreaElement | null;
+
+    expect(composerInput).not.toBeNull();
+    expect(composerInput?.getAttribute("enterkeyhint")).toBe("enter");
+
+    composerInput!.value = "desktop composer";
+    composerInput!.dispatchEvent(new Event("input", { bubbles: true }));
+    composerInput!.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    await flushUi();
+    expect(mocks.sendChat).toHaveBeenCalledTimes(0);
+
+    composerInput!.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", shiftKey: true, bubbles: true }));
+    await flushUi();
+    expect(mocks.sendChat).toHaveBeenCalledTimes(1);
   });
 });

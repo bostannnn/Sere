@@ -805,7 +805,7 @@ export const languageEnglish = {
     globalLoreBook: "Global Lorebook",
     globalRegexScript: "Global Regex",
     accessibility: "Accessibility",
-    sendWithEnter: "Send with Enter Key",
+    sendWithEnter: "Send with Enter Key (desktop)",
     fixedChatTextarea: "Fixed at the bottom of the chat window(When unchecked, Shift + Enter changes to send a message.)",
     clickToEdit: "Click Text to Edit",
     setNodePassword: "Set your password to security",

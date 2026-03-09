@@ -286,6 +286,7 @@ vi.mock(import("src/ts/sync/multiuser"), async () => {
 });
 
 vi.mock(import("src/ts/platform"), () => ({
+  isMobile: false,
   isNodeServer: false,
 }));
 

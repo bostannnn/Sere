@@ -27,7 +27,7 @@
     import { processMultiCommand } from 'src/ts/process/command';
     import { postChatFile } from 'src/ts/process/files/multisend';
     import { getInlayAsset } from 'src/ts/process/files/inlays';
-    import { isNodeServer } from "src/ts/platform";
+    import { isMobile, isNodeServer } from "src/ts/platform";
     import { saveServerDatabase } from "src/ts/storage/serverDb";
     import { resolveServerAuthToken } from "src/ts/storage/serverAuth";
     import Chats from './Chats.svelte';
@@ -199,6 +199,31 @@
     }
     async function sendContinue(){
         return sendMain(true)
+    }
+
+    function shouldSendOnEnter(e: KeyboardEvent){
+        if(e.key.toLocaleLowerCase() !== "enter" || e.isComposing){
+            return false
+        }
+        if(isMobile){
+            return false
+        }
+        if(DBState.db.sendWithEnter){
+            return !e.shiftKey
+        }
+        return e.shiftKey
+    }
+
+    function handleComposerKeydown(e: KeyboardEvent){
+        if(shouldSendOnEnter(e)){
+            void send()
+            e.preventDefault()
+            return
+        }
+        if(e.key.toLocaleLowerCase() === "m" && e.ctrlKey){
+            reroll()
+            e.preventDefault()
+        }
     }
 
     async function sendMain(continueResponse:boolean) {
@@ -756,18 +781,8 @@
                     <textarea id = 'messageInputTranslate' class="ds-chat-translate-input control-field"
                               bind:value={messageInputTranslate}
                               bind:this={inputTranslateEle}
-                              onkeydown={(e) => {
-                            if(e.key.toLocaleLowerCase() === "enter" && (!e.shiftKey)){
-                                if(DBState.db.sendWithEnter){
-                                    send()
-                                    e.preventDefault()
-                                }
-                            }
-                            if(e.key.toLocaleLowerCase() === "m" && (e.ctrlKey)){
-                                reroll()
-                                e.preventDefault()
-                            }
-                        }}
+                              enterkeyhint={isMobile || !DBState.db.sendWithEnter ? "enter" : "send"}
+                              onkeydown={handleComposerKeydown}
                               oninput={()=>{updateInputSizeAll();updateInputTransateMessage(true)}}
                               placeholder={language.enterMessageForTranslateToEnglish}
                               style:height={inputTranslateHeight}
@@ -1133,21 +1148,8 @@
                 <textarea class="ds-chat-composer-input control-field"
                           bind:value={messageInput}
                           bind:this={inputEle}
-                          onkeydown={(e) => {
-                        if(e.key.toLocaleLowerCase() === "enter" && !e.isComposing){
-                            if(DBState.db.sendWithEnter && (!e.shiftKey)){
-                                send()
-                                e.preventDefault()
-                            }else if(!DBState.db.sendWithEnter && e.shiftKey){
-                                send()
-                                e.preventDefault()
-                            }
-                        }
-                        if(e.key.toLocaleLowerCase() === "m" && (e.ctrlKey)){
-                            reroll()
-                            e.preventDefault()
-                        }
-                    }}
+                          enterkeyhint={isMobile || !DBState.db.sendWithEnter ? "enter" : "send"}
+                          onkeydown={handleComposerKeydown}
                           onpaste={(e) => {
                         const items = e.clipboardData?.items
                         if(!items){
