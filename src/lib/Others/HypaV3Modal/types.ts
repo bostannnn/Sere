@@ -39,6 +39,16 @@ export interface BulkResummaryState {
     mergedChatMemos: string[];
 }
 
+export interface ManualState {
+    start: string;
+    end: string;
+    processing: boolean;
+    feedbackMessage: string;
+    feedbackTone: "error" | "success" | null;
+}
+
+export type MemoryWorkspaceTab = "summary" | "settings" | "log";
+
 // Category Management Types
 export interface Category {
     id: string;

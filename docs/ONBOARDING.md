@@ -83,6 +83,8 @@ The Node.js server owns all LLM execution, prompt assembly, RAG, and memory. The
 
 `AlertComp` is now a thin modal router in [`src/lib/Others/AlertComp.svelte`](/Users/andrewbostan/Documents/RisuAII/src/lib/Others/AlertComp.svelte). Its alert-mode implementations live under [`src/lib/Others/AlertComp/`](/Users/andrewbostan/Documents/RisuAII/src/lib/Others/AlertComp) as focused subcomponents and helpers.
 
+`HypaV3Modal.svelte` is now a thin shell around [`src/lib/Others/HypaV3Modal/useHypaV3Modal.svelte.ts`](/Users/andrewbostan/Documents/RisuAII/src/lib/Others/HypaV3Modal/useHypaV3Modal.svelte.ts) and focused helper modules in [`src/lib/Others/HypaV3Modal/`](/Users/andrewbostan/Documents/RisuAII/src/lib/Others/HypaV3Modal). Keep new memory-modal behavior in those split files so staged changes continue to satisfy the 500 LOC gate.
+
 ---
 
 ## 3. The Client/Server Gate
@@ -147,8 +149,13 @@ pnpm run check:server:contracts
 # LOC audit check (warns when tracked files exceed 500 lines)
 pnpm run check:loc
 
-# LOC ratchet check (fails on new oversized files or growth above 500 lines)
+# LOC limit check (fails if any staged file still exceeds 500 lines)
 pnpm run check:loc:staged
+
+# Hypa modal focused runtime smokes
+pnpm exec vitest run dev/hypa-modal-embedded-manual-runtime-smoke.test.ts
+pnpm exec vitest run dev/hypa-modal-log-scope-runtime-smoke.test.ts
+pnpm exec vitest run dev/hypa-modal-summary-toggle-runtime-smoke.test.ts
 
 # Server unit tests — no server needed, run before every commit that touches server/node/llm/
 node scripts/test-memory-unit.cjs
@@ -170,7 +177,7 @@ Memory sidebar note: in embedded right-sidebar Memory mode, manual HypaV3 summar
 
 ### Git Hook Setup (one-time per clone)
 
-Enable repository-managed hooks so the blocking LOC ratchet runs on every commit:
+Enable repository-managed hooks so the blocking LOC limit runs on every commit:
 
 ```bash
 git config core.hooksPath .githooks

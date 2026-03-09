@@ -14,14 +14,22 @@ pnpm check                     # TypeScript / Svelte type check
 pnpm run check:strict          # Strict type migration check (tracked debt)
 pnpm test                      # Vitest unit test suite
 pnpm run check:loc             # Full-repo audit: warns about tracked files above 500 LOC
-pnpm run check:loc:staged      # Blocking ratchet: fails on new oversized files or growth above 500 LOC
+pnpm run check:loc:staged      # Blocking limit: any staged file still above 500 LOC must be split/refactored
 pnpm run check:server          # Server static contract checks
 pnpm run check:server:contracts  # Server runtime contract checks
 ```
 
 Both must pass. No exceptions. See `CONVENTIONS.md` section VI for merge requirements.
 
-To run the blocking LOC ratchet automatically on each commit, set hooks once per clone:
+When a change touches `src/lib/Others/HypaV3Modal.svelte` or helpers under `src/lib/Others/HypaV3Modal/`, also run:
+
+```bash
+pnpm exec vitest run dev/hypa-modal-embedded-manual-runtime-smoke.test.ts
+pnpm exec vitest run dev/hypa-modal-log-scope-runtime-smoke.test.ts
+pnpm exec vitest run dev/hypa-modal-summary-toggle-runtime-smoke.test.ts
+```
+
+To run the blocking LOC limit automatically on each commit, set hooks once per clone:
 
 ```bash
 git config core.hooksPath .githooks
