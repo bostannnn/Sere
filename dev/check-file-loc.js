@@ -206,35 +206,19 @@ for (const relPath of candidates) {
   };
   const previousLines = getPreviousLineCount(relPath, stagedEntry.oldPath);
   const isNewFile = stagedEntry.status === "A" || stagedEntry.status === "C" || previousLines === null;
-  const crossedLimit = previousLines !== null && previousLines <= maxLines && lines > maxLines;
-  const grewWhileOversized = previousLines !== null && previousLines > maxLines && lines > previousLines;
 
-  if (isNewFile && lines > maxLines) {
+  if (lines > maxLines) {
+    const reason = isNewFile
+      ? `new file exceeds ${maxLines} LOC`
+      : previousLines !== null && previousLines > maxLines
+        ? `modified file still exceeds ${maxLines} LOC and must be split/refactored`
+        : `crossed from ${previousLines} to ${lines} LOC`;
+
     violations.push({
       relPath,
       lines,
       previousLines,
-      reason: `new file exceeds ${maxLines} LOC`,
-    });
-    continue;
-  }
-
-  if (crossedLimit) {
-    violations.push({
-      relPath,
-      lines,
-      previousLines,
-      reason: `crossed from ${previousLines} to ${lines} LOC`,
-    });
-    continue;
-  }
-
-  if (grewWhileOversized) {
-    violations.push({
-      relPath,
-      lines,
-      previousLines,
-      reason: `grew from ${previousLines} to ${lines} LOC while already over ${maxLines}`,
+      reason,
     });
   }
 }
@@ -242,7 +226,7 @@ for (const relPath of candidates) {
 if (violations.length === 0) {
   if (stagedOnly) {
     console.log(
-      `[loc-check] OK: no staged files created or grew past the ${maxLines} LOC ratchet.`
+      `[loc-check] OK: no staged files remain above the ${maxLines} LOC limit.`
     );
   } else {
     console.log(`[loc-check] OK: no tracked files exceed ${maxLines} LOC.`);
@@ -267,7 +251,7 @@ if (!stagedOnly) {
 }
 
 console.warn(
-  `[loc-check] RATCHET violation: ${violations.length} staged file(s) created or grew beyond ${maxLines} LOC:`
+  `[loc-check] LIMIT violation: ${violations.length} staged file(s) still exceed ${maxLines} LOC:`
 );
 for (const item of violations) {
   if (item.previousLines === null) {
