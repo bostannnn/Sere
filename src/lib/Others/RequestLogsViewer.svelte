@@ -763,13 +763,29 @@
     }
 
     .request-log-status-success {
-        background: color-mix(in srgb, var(--alert-info-success) 35%, var(--ds-surface-2) 65%);
-        border-color: color-mix(in srgb, var(--alert-info-success) 48%, var(--ds-border-subtle) 52%);
+        background: color-mix(
+            in srgb,
+            var(--alert-info-success, var(--risu-theme-success-500)) 35%,
+            var(--ds-surface-2) 65%
+        );
+        border-color: color-mix(
+            in srgb,
+            var(--alert-info-success, var(--risu-theme-success-500)) 48%,
+            var(--ds-border-subtle) 52%
+        );
     }
 
     .request-log-status-error {
-        background: color-mix(in srgb, var(--alert-info-danger) 40%, var(--ds-surface-2) 60%);
-        border-color: color-mix(in srgb, var(--alert-info-danger) 58%, var(--ds-border-subtle) 42%);
+        background: color-mix(
+            in srgb,
+            var(--alert-info-danger, var(--ds-text-danger, var(--risu-theme-danger-500))) 40%,
+            var(--ds-surface-2) 60%
+        );
+        border-color: color-mix(
+            in srgb,
+            var(--alert-info-danger, var(--ds-text-danger, var(--risu-theme-danger-500))) 58%,
+            var(--ds-border-subtle) 42%
+        );
     }
 
     .request-log-copy-btn.icon-btn.icon-btn--sm {
@@ -786,7 +802,7 @@
     }
 
     .request-log-copy-btn-copied {
-        color: var(--alert-info-success);
+        color: var(--alert-info-success, var(--risu-theme-success-500));
     }
 
     .alert-requestlog-overlay {

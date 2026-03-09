@@ -81,6 +81,8 @@ The Node.js server owns all LLM execution, prompt assembly, RAG, and memory. The
 ├── plan.md                     # Current priorities and task tracking
 ```
 
+`AlertComp` is now a thin modal router in [`src/lib/Others/AlertComp.svelte`](/Users/andrewbostan/Documents/RisuAII/src/lib/Others/AlertComp.svelte). Its alert-mode implementations live under [`src/lib/Others/AlertComp/`](/Users/andrewbostan/Documents/RisuAII/src/lib/Others/AlertComp) as focused subcomponents and helpers.
+
 ---
 
 ## 3. The Client/Server Gate
