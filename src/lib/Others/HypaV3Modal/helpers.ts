@@ -11,7 +11,7 @@ export interface ManualSummarizeTarget {
   chatId: string;
 }
 
-interface HypaModalChatLike extends Record<string, unknown> {
+interface HypaModalChatLike {
   id?: string;
   hypaV3Data?: SerializableHypaV3Data & { lastManualDebug?: SummarizeDebugLog };
   hypaV2Data?: {
@@ -19,7 +19,7 @@ interface HypaModalChatLike extends Record<string, unknown> {
   } | null;
 }
 
-interface HypaModalCharacterLike extends Record<string, unknown> {
+interface HypaModalCharacterLike {
   chaId?: string;
   chats?: HypaModalChatLike[];
 }
