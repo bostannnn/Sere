@@ -469,6 +469,48 @@ describe("default chat screen runtime smoke", () => {
     expect(mocks.sendChat).toHaveBeenCalledTimes(1);
   });
 
+  it("keeps Enter as button-only send on mobile even when sendWithEnter is disabled", async () => {
+    platformState.isMobile = true;
+    DBState.db.sendWithEnter = false;
+
+    const target = document.createElement("div");
+    document.body.appendChild(target);
+    app = mount(DefaultChatScreen, { target });
+    await flushUi();
+
+    const composerInput = document.querySelector(
+      ".ds-chat-composer-input.control-field",
+    ) as HTMLTextAreaElement | null;
+    const translateInput = document.querySelector(
+      ".ds-chat-translate-input.control-field",
+    ) as HTMLTextAreaElement | null;
+    const sendButton = document.querySelector(
+      '.ds-chat-composer-action.icon-btn.icon-btn--sm[aria-label="Send message"]',
+    ) as HTMLButtonElement | null;
+
+    expect(composerInput).not.toBeNull();
+    expect(translateInput).not.toBeNull();
+    expect(sendButton).not.toBeNull();
+    expect(composerInput?.getAttribute("enterkeyhint")).toBe("enter");
+    expect(translateInput?.getAttribute("enterkeyhint")).toBe("enter");
+
+    composerInput!.value = "mobile composer disabled";
+    composerInput!.dispatchEvent(new Event("input", { bubbles: true }));
+    composerInput!.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    await flushUi();
+    expect(mocks.sendChat).toHaveBeenCalledTimes(0);
+
+    translateInput!.value = "mobile translate disabled";
+    translateInput!.dispatchEvent(new Event("input", { bubbles: true }));
+    translateInput!.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", shiftKey: true, bubbles: true }));
+    await flushUi();
+    expect(mocks.sendChat).toHaveBeenCalledTimes(0);
+
+    sendButton!.click();
+    await flushUi();
+    expect(mocks.sendChat).toHaveBeenCalledTimes(1);
+  });
+
   it("uses Shift+Enter to send on desktop when sendWithEnter is disabled", async () => {
     DBState.db.sendWithEnter = false;
 
@@ -493,5 +535,31 @@ describe("default chat screen runtime smoke", () => {
     composerInput!.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", shiftKey: true, bubbles: true }));
     await flushUi();
     expect(mocks.sendChat).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not send from translate input on desktop when sendWithEnter is disabled", async () => {
+    DBState.db.sendWithEnter = false;
+
+    const target = document.createElement("div");
+    document.body.appendChild(target);
+    app = mount(DefaultChatScreen, { target });
+    await flushUi();
+
+    const translateInput = document.querySelector(
+      ".ds-chat-translate-input.control-field",
+    ) as HTMLTextAreaElement | null;
+
+    expect(translateInput).not.toBeNull();
+    expect(translateInput?.getAttribute("enterkeyhint")).toBe("enter");
+
+    translateInput!.value = "desktop translate";
+    translateInput!.dispatchEvent(new Event("input", { bubbles: true }));
+    translateInput!.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    await flushUi();
+    expect(mocks.sendChat).toHaveBeenCalledTimes(0);
+
+    translateInput!.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", shiftKey: true, bubbles: true }));
+    await flushUi();
+    expect(mocks.sendChat).toHaveBeenCalledTimes(0);
   });
 });

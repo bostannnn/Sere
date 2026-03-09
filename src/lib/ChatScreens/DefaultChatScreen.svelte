@@ -214,8 +214,18 @@
         return e.shiftKey
     }
 
-    function handleComposerKeydown(e: KeyboardEvent){
-        if(shouldSendOnEnter(e)){
+    function shouldSendTranslateOnEnter(e: KeyboardEvent){
+        if(e.key.toLocaleLowerCase() !== "enter" || e.isComposing){
+            return false
+        }
+        if(isMobile){
+            return false
+        }
+        return DBState.db.sendWithEnter && !e.shiftKey
+    }
+
+    function handleComposerKeydown(e: KeyboardEvent, canSend:(event: KeyboardEvent) => boolean = shouldSendOnEnter){
+        if(canSend(e)){
             void send()
             e.preventDefault()
             return
@@ -782,7 +792,7 @@
                               bind:value={messageInputTranslate}
                               bind:this={inputTranslateEle}
                               enterkeyhint={isMobile || !DBState.db.sendWithEnter ? "enter" : "send"}
-                              onkeydown={handleComposerKeydown}
+                              onkeydown={(e) => handleComposerKeydown(e, shouldSendTranslateOnEnter)}
                               oninput={()=>{updateInputSizeAll();updateInputTransateMessage(true)}}
                               placeholder={language.enterMessageForTranslateToEnglish}
                               style:height={inputTranslateHeight}
