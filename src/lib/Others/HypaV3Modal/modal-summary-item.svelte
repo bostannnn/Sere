@@ -351,7 +351,7 @@
     <textarea
       class="hypa-summary-textarea hypa-summary-textarea-focus control-field"
       bind:this={summaryItemState.originalRef}
-      bind:value={summary.text}
+      bind:value={() => summary.text, (value) => summary.text = value}
       onfocus={() => {
         if (searchState && !searchState.isNavigating) {
           searchState.requestedSearchFromIndex = summaryIndex;

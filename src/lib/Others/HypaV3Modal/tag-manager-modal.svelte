@@ -110,6 +110,10 @@
       handleAddTagEnter();
     }
   }
+
+  function updateEditingTag(event: Event) {
+    tagManagerState.editingTag = (event.currentTarget as HTMLInputElement).value;
+  }
 </script>
 
 <!-- Tag Manager Modal -->
@@ -135,8 +139,9 @@
             type="text"
             class="ds-hypa-tag-input control-field"
             placeholder={language.hypaV3Modal.newTagName}
-            bind:value={tagManagerState.editingTag}
+            value={tagManagerState.editingTag}
             onkeydown={handleAddTagKeydown}
+            oninput={updateEditingTag}
           />
           <button
             class="ds-hypa-tag-add-btn"
@@ -156,8 +161,9 @@
                 <input
                   type="text"
                   class="ds-hypa-tag-edit-input control-field"
-                  bind:value={tagManagerState.editingTag}
+                  value={tagManagerState.editingTag}
                   onkeydown={handleEditTagKeydown}
+                  oninput={updateEditingTag}
                 />
                 <button
                   class="ds-hypa-tag-icon-btn ds-hypa-tag-icon-btn-save icon-btn icon-btn--sm"

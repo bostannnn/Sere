@@ -88,6 +88,14 @@
     categoryManagerState.editingCategory = null;
   }
 
+  function updateEditingCategoryName(event: Event) {
+    if (!categoryManagerState.editingCategory) return;
+    categoryManagerState.editingCategory = {
+      ...categoryManagerState.editingCategory,
+      name: (event.currentTarget as HTMLInputElement).value,
+    };
+  }
+
   function addCategory(name: string) {
     const id = createCategoryId();
     const currentCategories = hypaV3Data.categories || [];
@@ -186,8 +194,9 @@
               <input
                 type="text"
                 class="hypa-category-edit-input control-field"
-                bind:value={categoryManagerState.editingCategory.name}
+                value={categoryManagerState.editingCategory.name}
                 placeholder={language.hypaV3Modal.categoryName}
+                oninput={updateEditingCategoryName}
               />
               <button
                 class="hypa-category-icon-btn hypa-category-icon-btn-accent icon-btn icon-btn--sm"
