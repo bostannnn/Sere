@@ -1,3 +1,5 @@
+const { applyPromptVars } = require('./scripts.cjs');
+
 const DEFAULT_EXTRACTION_PROMPT = [
     'You update a character evolution state after a completed roleplay chat.',
     '',
@@ -81,16 +83,6 @@ function clone(value, fallback = null) {
 
 function toString(value) {
     return typeof value === 'string' ? value.trim() : '';
-}
-
-function renderEvolutionPromptVars(text, character, settings) {
-    const source = typeof text === 'string' ? text : '';
-    if (!source) return '';
-    const charName = toString(character?.name) || 'Character';
-    const userName = toString(settings?.username) || 'User';
-    return source
-        .replace(/\{\{\s*char\s*\}\}/gi, charName)
-        .replace(/\{\{\s*user\s*\}\}/gi, userName);
 }
 
 function createDefaultCharacterEvolutionState() {
@@ -434,7 +426,7 @@ function buildCharacterEvolutionPromptMessages(arg = {}) {
             `  label: ${section.label}`,
             `  kind: ${section.kind}`,
             `  includeInPrompt: ${section.includeInPrompt ? 'true' : 'false'}`,
-            `  instruction: ${renderEvolutionPromptVars(section.instruction, character, settings)}`,
+            `  instruction: ${applyPromptVars(section.instruction, character, settings)}`,
         ].join('\n'))
         .join('\n');
 
@@ -449,7 +441,7 @@ function buildCharacterEvolutionPromptMessages(arg = {}) {
     ].join('\n');
 
     const prompt = [
-        renderEvolutionPromptVars(evolution.extractionPrompt, character, settings),
+        applyPromptVars(evolution.extractionPrompt, character, settings),
         '',
         'Enabled sections:',
         sections || '[none]',

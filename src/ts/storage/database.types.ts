@@ -29,16 +29,12 @@ export interface Database{
     apiType: string
     openAIKey: string
     proxyKey:string
-    mainPrompt: string
-    jailbreak: string
-    globalNote:string
     temperature: number
     askRemoval:boolean
     maxContext: number
     maxResponse: number
     frequencyPenalty: number
     PresensePenalty: number
-    formatingOrder: FormatingOrderItem[]
     aiModel: string
     loreBookDepth: number
     loreBookToken: number,
@@ -52,8 +48,6 @@ export interface Database{
     username: string
     userIcon: string
     userNote: string
-    additionalPrompt: string
-    descriptionPrefix: string
     forceReplaceUrl: string
     language: string
     translator: string
@@ -74,7 +68,6 @@ export interface Database{
     botPresets:botPreset[]
     botPresetsId:number
     ttsAutoSpeech?:boolean
-    promptPreprocess:boolean
     bias: [string, number][]
     swipe:boolean
     instantRemove:boolean
@@ -157,7 +150,7 @@ export interface Database{
     NAIsettings:NAISettings
     colorScheme:ColorScheme
     colorSchemeName:string
-    promptTemplate?:PromptItem[]
+    promptTemplate:PromptItem[]
     hypaModel:HypaModel
     saveTime?:number
     mancerHeader:string
@@ -853,15 +846,11 @@ export interface botPreset{
     name?:string
     apiType?: string
     openAIKey?: string
-    mainPrompt: string
-    jailbreak: string
-    globalNote:string
     temperature: number
     maxContext: number
     maxResponse: number
     frequencyPenalty: number
     PresensePenalty: number
-    formatingOrder: FormatingOrderItem[]
     aiModel?: string
     subModel?:string
     removedModelMigrationNotice?: string[]
@@ -869,7 +858,6 @@ export interface botPreset{
     textgenWebUIBlockingURL?:string
     forceReplaceUrl?:string
     forceReplaceUrl2?:string
-    promptPreprocess: boolean,
     bias: [string, number][]
     proxyRequestModel?:string
     openrouterRequestModel?:string
@@ -1004,8 +992,6 @@ export interface ComfyCommanderState {
     workflows: ComfyCommanderWorkflow[]
     templates: ComfyCommanderTemplate[]
 }
-
-export type FormatingOrderItem = 'main'|'jailbreak'|'chats'|'lorebook'|'globalNote'|'authorNote'|'lastChat'|'description'|'postEverything'|'personaPrompt'|'rulebookRag'
 
 export interface Chat{
     message: Message[]

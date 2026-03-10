@@ -64,27 +64,6 @@ function extractLatestUserMessage(rawBody) {
     return '';
 }
 
-function resolveServerMainPrompt(character, settings) {
-    const baseMainPrompt = toStringOrEmpty(settings?.mainPrompt);
-    const override = toStringOrEmpty(character?.systemPrompt);
-    let mainPrompt = override ? override.replaceAll('{{original}}', baseMainPrompt) : baseMainPrompt;
-
-    const additionalPrompt = toStringOrEmpty(settings?.additionalPrompt);
-    if (additionalPrompt && settings?.promptPreprocess === true) {
-        mainPrompt = mainPrompt ? `${mainPrompt}\n${additionalPrompt}` : additionalPrompt;
-    }
-    return mainPrompt;
-}
-
-function resolveServerGlobalNote(character, settings) {
-    const baseGlobalNote = toStringOrEmpty(settings?.globalNote);
-    const override = toStringOrEmpty(character?.replaceGlobalNote);
-    if (override) {
-        return override.replaceAll('{{original}}', baseGlobalNote);
-    }
-    return baseGlobalNote;
-}
-
 function getDefaultAuthorNoteText(settings) {
     const template = Array.isArray(settings?.promptTemplate) ? settings.promptTemplate : [];
     for (const card of template) {
@@ -116,16 +95,11 @@ function applyGlobalNoteOverride(baseGlobalNote, character) {
     return override.replaceAll('{{original}}', original);
 }
 
-function buildServerDescriptionPrompt(character, settings) {
+function buildServerDescriptionPrompt(character) {
     const chunks = [];
     const desc = toStringOrEmpty(character?.desc);
     if (desc) {
-        if (settings?.promptPreprocess === true) {
-            const prefix = toStringOrEmpty(settings?.descriptionPrefix);
-            chunks.push(`${prefix}${desc}`);
-        } else {
-            chunks.push(desc);
-        }
+        chunks.push(desc);
     }
 
     const additionalText = toStringOrEmpty(character?.additionalText);
@@ -539,94 +513,8 @@ async function buildGeneratePromptMessages(arg = {}) {
         userMessage: arg.userMessage,
         buildServerMemoryMessages: arg.buildServerMemoryMessages,
     });
-    let messages = Array.isArray(assembledFromTemplate?.messages) ? assembledFromTemplate.messages : null;
+    const messages = Array.isArray(assembledFromTemplate?.messages) ? assembledFromTemplate.messages : [];
     const promptBlocks = Array.isArray(assembledFromTemplate?.promptBlocks) ? assembledFromTemplate.promptBlocks : [];
-
-    if (!Array.isArray(messages) || messages.length === 0) {
-        messages = [];
-        const mainPrompt = resolveServerMainPrompt(character, settings);
-        const description = buildServerDescriptionPrompt(character, settings);
-        const evolutionSettings = getEffectiveCharacterEvolutionSettings(settings, character);
-        const characterState = evolutionSettings.enabled
-            ? renderCharacterEvolutionStateForPrompt(
-                evolutionSettings.currentState,
-                evolutionSettings.sectionConfigs,
-                evolutionSettings.privacy
-            )
-            : '';
-        pushPromptMessagesWithTitle(
-            messages,
-            promptBlocks,
-            parsePromptAsMessages(mainPrompt, character, settings, 'system'),
-            'Main Prompt',
-            'legacy'
-        );
-
-        pushPromptMessagesWithTitle(
-            messages,
-            promptBlocks,
-            parsePromptAsMessages(description, character, settings, 'system'),
-            'Description',
-            'legacy'
-        );
-
-        pushPromptMessagesWithTitle(
-            messages,
-            promptBlocks,
-            parsePromptAsMessages(characterState, character, settings, 'system'),
-            'Character State',
-            'legacy'
-        );
-
-        pushPromptMessagesWithTitle(
-            messages,
-            promptBlocks,
-            convertStoredChatToOpenAIMessages(chat.message, {
-                limit: arg.historyLimit,
-                stripThoughts: true,
-            }),
-            'Chat History',
-            'legacy'
-        );
-
-        const globalNote = resolveServerGlobalNote(character, settings);
-        pushPromptMessagesWithTitle(
-            messages,
-            promptBlocks,
-            parsePromptAsMessages(globalNote, character, settings, 'system'),
-            'Global Note',
-            'legacy'
-        );
-
-        const authorNote = resolveServerAuthorNote(chat, settings);
-        pushPromptMessagesWithTitle(
-            messages,
-            promptBlocks,
-            parsePromptAsMessages(authorNote, character, settings, 'system'),
-            'Author Note',
-            'legacy'
-        );
-
-        const userMessage = toStringOrEmpty(arg.userMessage);
-        if (userMessage) {
-            const normalizedUserMessage = userMessage.trim();
-            const tail = messages[messages.length - 1];
-            const isDuplicateTail =
-                tail &&
-                tail.role === 'user' &&
-                typeof tail.content === 'string' &&
-                tail.content.trim() === normalizedUserMessage;
-            if (!isDuplicateTail) {
-                pushPromptMessagesWithTitle(
-                    messages,
-                    promptBlocks,
-                    [{ role: 'user', content: normalizedUserMessage }],
-                    'User Message',
-                    'legacy'
-                );
-            }
-        }
-    }
 
     injectDepthPrompt(messages, promptBlocks, character, settings);
 
@@ -925,8 +813,6 @@ function estimatePromptTokens(messages) {
 
 module.exports = {
     extractLatestUserMessage,
-    resolveServerMainPrompt,
-    resolveServerGlobalNote,
     resolveServerAuthorNote,
     convertStoredChatToOpenAIMessages,
     buildMessagesFromPromptTemplate,

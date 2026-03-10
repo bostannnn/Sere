@@ -5,9 +5,8 @@
     import Help from "src/lib/Others/Help.svelte";
     
     import { BotSettingsSubMenuIndex, DBState } from 'src/ts/stores.svelte';
-    import { tokenizeAccurate, tokenizerList } from "src/ts/tokenizer";
+    import { tokenizerList } from "src/ts/tokenizer";
     import ModelList from "src/lib/UI/ModelList.svelte";
-    import DropList from "src/lib/SideBars/DropList.svelte";
     import { PlusIcon, TrashIcon } from "@lucide/svelte";
     import TextInput from "src/lib/UI/GUI/TextInput.svelte";
     import NumberInput from "src/lib/UI/GUI/NumberInput.svelte";
@@ -28,31 +27,12 @@
     import SeparateParametersSection from "./SeparateParametersSection.svelte";
     import SettingsSubTabs from "src/lib/Setting/SettingsSubTabs.svelte";
     
-const tokens = $state({
-        mainPrompt: 0,
-        jailbreak: 0,
-        globalNote: 0,
-    })
-
     interface Props {
         goPromptTemplate?: () => void;
     }
 
     const { goPromptTemplate = () => {} }: Props = $props();
     const modelStartsWith = (value: unknown, prefix: string) => typeof value === "string" && value.startsWith(prefix)
-
-    async function loadTokenize(){
-        tokens.mainPrompt = await tokenizeAccurate(DBState.db.mainPrompt, true)
-        tokens.jailbreak = await tokenizeAccurate(DBState.db.jailbreak, true)
-        tokens.globalNote = await tokenizeAccurate(DBState.db.globalNote, true)
-    }
-
-    $effect(() => {
-        void DBState.db.mainPrompt
-        void DBState.db.jailbreak
-        void DBState.db.globalNote
-        void loadTokenize()
-    })
 
     $effect.pre(() => {
         if(DBState.db.aiModel === 'textgen_webui' || DBState.db.subModel === 'mancer'){
@@ -450,28 +430,7 @@ const tokens = $state({
 
 {#if submenu === 2 || submenu === -1}
     <div class="ds-settings-section">
-    {#if !DBState.db.promptTemplate}
-        <div class="ds-settings-section">
-            <span class="ds-settings-label">{language.mainPrompt} <Help key="mainprompt"/></span>
-            <TextAreaInput fullwidth autocomplete="off" height="32" bind:value={DBState.db.mainPrompt}></TextAreaInput>
-            <span class="ds-settings-label-muted-sm">{tokens.mainPrompt} {language.tokens}</span>
-        </div>
-        <div class="ds-settings-section">
-            <span class="ds-settings-label">{language.jailbreakPrompt} <Help key="jailbreak"/></span>
-            <TextAreaInput fullwidth autocomplete="off" height="32" bind:value={DBState.db.jailbreak}></TextAreaInput>
-            <span class="ds-settings-label-muted-sm">{tokens.jailbreak} {language.tokens}</span>
-        </div>
-        <div class="ds-settings-section">
-            <span class="ds-settings-label">{language.globalNote} <Help key="globalNote"/></span>
-            <TextAreaInput fullwidth autocomplete="off" height="32" bind:value={DBState.db.globalNote}></TextAreaInput>
-            <span class="ds-settings-label-muted-sm">{tokens.globalNote} {language.tokens}</span>
-        </div>
-        <div class="ds-settings-section">
-            <span class="ds-settings-label">{language.formatingOrder} <Help key="formatOrder"/></span>
-            <DropList bind:list={DBState.db.formatingOrder} />
-            <Check bind:check={DBState.db.promptPreprocess} name={language.promptPreprocess}/>
-        </div>
-    {:else if submenu === 2}
+    {#if submenu === 2}
         <PromptSettings mode='inline' />
     {/if}
     </div>

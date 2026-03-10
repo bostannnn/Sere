@@ -482,7 +482,7 @@ export class RisuSaveDecoder {
         }
         //to fix botpreset bugs
         if(!Array.isArray(db.botPresets) || db.botPresets.length === 0){
-            db.botPresets = [presetTemplate]
+            db.botPresets = [structuredClone(presetTemplate)]
             db.botPresetsId = 0
         }
         risuSaveLog('Decoded RisuSave data', db);

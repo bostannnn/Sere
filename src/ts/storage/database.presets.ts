@@ -4,7 +4,7 @@ import { LLMFormat } from '../model/modellist';
 import { decodeRPack, encodeRPack } from '../rpack/rpack_js';
 import { encode as encodeMsgpack, decode as decodeMsgpack } from 'msgpackr/index-no-eval';
 import * as fflate from 'fflate';
-import { defaultJailbreak, defaultMainPrompt } from './defaultPrompts';
+import { cloneDefaultPromptTemplate, normalizePromptTemplate } from './defaultPrompts';
 import { migrateRemovedProviderSelections } from './database.normalizers';
 import type { PromptItem, PromptItemPlain } from '../process/prompt';
 import type { AINsettings, Database, botPreset, OobaSettings } from './database.types';
@@ -61,22 +61,17 @@ export const presetTemplate:botPreset = {
   name: 'New Preset',
   apiType: 'gemini-3-flash-preview',
   openAIKey: '',
-  mainPrompt: defaultMainPrompt,
-  jailbreak: defaultJailbreak,
-  globalNote: '',
   temperature: 80,
   maxContext: 4000,
   maxResponse: 300,
   frequencyPenalty: 70,
   PresensePenalty: 70,
-  formatingOrder: ['main', 'description', 'personaPrompt', 'chats', 'lastChat', 'jailbreak', 'lorebook', 'globalNote', 'authorNote'],
   aiModel: 'gemini-3-flash-preview',
   subModel: 'gemini-3-flash-preview',
   textgenWebUIStreamURL: '',
   textgenWebUIBlockingURL: '',
   forceReplaceUrl: '',
   forceReplaceUrl2: '',
-  promptPreprocess: false,
   proxyKey: '',
   bias: [],
   ooba: safeStructuredClone(defaultOoba),
@@ -84,6 +79,7 @@ export const presetTemplate:botPreset = {
   reverseProxyOobaArgs: {
     mode: 'instruct',
   },
+  promptTemplate: cloneDefaultPromptTemplate(),
   top_p: 1,
   useInstructPrompt: false,
   verbosity: 1,
@@ -161,21 +157,16 @@ function buildSavedPreset(db: Database): botPreset {
     name: presets[db.botPresetsId]?.name ?? 'Preset',
     apiType: db.apiType,
     openAIKey: db.openAIKey,
-    mainPrompt: db.mainPrompt,
-    jailbreak: db.jailbreak,
-    globalNote: db.globalNote,
     temperature: db.temperature,
     maxContext: db.maxContext,
     maxResponse: db.maxResponse,
     frequencyPenalty: db.frequencyPenalty,
     PresensePenalty: db.PresensePenalty,
-    formatingOrder: db.formatingOrder,
     aiModel: db.aiModel,
     subModel: db.subModel,
     textgenWebUIStreamURL: db.textgenWebUIStreamURL,
     textgenWebUIBlockingURL: db.textgenWebUIBlockingURL,
     forceReplaceUrl: db.forceReplaceUrl,
-    promptPreprocess: db.promptPreprocess,
     bias: db.bias,
     koboldURL: db.koboldURL,
     proxyKey: db.proxyKey,
@@ -185,7 +176,7 @@ function buildSavedPreset(db: Database): botPreset {
     openrouterRequestModel: db.openrouterRequestModel,
     openrouterSubRequestModel: db.openrouterSubRequestModel,
     NAISettings: safeStructuredClone(db.NAIsettings),
-    promptTemplate: db.promptTemplate ?? null,
+    promptTemplate: safeStructuredClone(db.promptTemplate),
     NAIadventure: db.NAIadventure ?? false,
     NAIappendName: db.NAIappendName ?? false,
     localStopStrings: db.localStopStrings,
@@ -346,21 +337,16 @@ export function copyPresetInDatabase(db: Database, id: number) {
 
 export function setPresetOnDatabase(db: Database, newPres: botPreset) {
   db.apiType = newPres.apiType ?? db.apiType;
-  db.mainPrompt = newPres.mainPrompt ?? db.mainPrompt;
-  db.jailbreak = newPres.jailbreak ?? db.jailbreak;
-  db.globalNote = newPres.globalNote ?? db.globalNote;
   db.temperature = newPres.temperature ?? db.temperature;
   db.maxContext = newPres.maxContext ?? db.maxContext;
   db.maxResponse = newPres.maxResponse ?? db.maxResponse;
   db.frequencyPenalty = newPres.frequencyPenalty ?? db.frequencyPenalty;
   db.PresensePenalty = newPres.PresensePenalty ?? db.PresensePenalty;
-  db.formatingOrder = newPres.formatingOrder ?? db.formatingOrder;
   db.aiModel = newPres.aiModel ?? db.aiModel;
   db.subModel = newPres.subModel ?? db.subModel;
   db.textgenWebUIStreamURL = newPres.textgenWebUIStreamURL ?? db.textgenWebUIStreamURL;
   db.textgenWebUIBlockingURL = newPres.textgenWebUIBlockingURL ?? db.textgenWebUIBlockingURL;
   db.forceReplaceUrl = newPres.forceReplaceUrl ?? db.forceReplaceUrl;
-  db.promptPreprocess = newPres.promptPreprocess ?? db.promptPreprocess;
   db.bias = newPres.bias ?? db.bias;
   db.koboldURL = newPres.koboldURL ?? db.koboldURL;
   db.proxyKey = newPres.proxyKey ?? db.proxyKey;
@@ -373,7 +359,7 @@ export function setPresetOnDatabase(db: Database, newPres: botPreset) {
   db.autoSuggestPrompt = newPres.autoSuggestPrompt ?? db.autoSuggestPrompt;
   db.autoSuggestPrefix = newPres.autoSuggestPrefix ?? db.autoSuggestPrefix;
   db.autoSuggestClean = newPres.autoSuggestClean ?? db.autoSuggestClean;
-  db.promptTemplate = newPres.promptTemplate;
+  db.promptTemplate = normalizePromptTemplate(newPres.promptTemplate);
   db.NAIadventure = newPres.NAIadventure;
   db.NAIappendName = newPres.NAIappendName;
   db.NAIsettings.cfg_scale ??= 1;
@@ -424,10 +410,14 @@ export function setPresetOnDatabase(db: Database, newPres: botPreset) {
   db.outputImageModal = newPres.outputImageModal ?? false;
   if (!db.doNotChangeSeperateModels) {
     db.seperateModelsForAxModels = newPres.seperateModelsForAxModels ?? false;
-    db.seperateModels = safeStructuredClone(newPres.seperateModels) ?? { memory: '', emotion: '', translate: '', otherAx: '' };
+    db.seperateModels = newPres.seperateModels
+      ? safeStructuredClone(newPres.seperateModels)
+      : { memory: '', emotion: '', translate: '', otherAx: '' };
   }
   if (!db.doNotChangeFallbackModels) {
-    db.fallbackModels = safeStructuredClone(newPres.fallbackModels) ?? { memory: [], emotion: [], translate: [], otherAx: [], model: [] };
+    db.fallbackModels = newPres.fallbackModels
+      ? safeStructuredClone(newPres.fallbackModels)
+      : { memory: [], emotion: [], translate: [], otherAx: [], model: [] };
     db.fallbackWhenBlankResponse = newPres.fallbackWhenBlankResponse ?? false;
   }
   db.modelTools = safeStructuredClone(newPres.modelTools ?? []);

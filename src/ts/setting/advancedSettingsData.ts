@@ -21,14 +21,6 @@ export const advancedSettingsItems: SettingItem[] = [
         options: { min: 0 }
     },
 
-    // Prompts
-    {
-        id: 'adv.addPrompt', type: 'text', labelKey: 'additionalPrompt', bindKey: 'additionalPrompt',
-        helpKey: 'additionalPrompt'
-    },
-    {
-        id: 'adv.descPrefix', type: 'text', labelKey: 'descriptionPrefix', bindKey: 'descriptionPrefix'
-    },
     {
         id: 'adv.keiUrl', type: 'text', fallbackLabel: 'Kei Server URL', bindKey: 'keiServerURL',
         options: { placeholder: 'Leave it blank to use default' }

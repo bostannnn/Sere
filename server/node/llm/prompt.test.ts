@@ -109,7 +109,7 @@ describe("server prompt template slots", () => {
     expect(assembled?.promptBlocks?.some((entry: Record<string, unknown>) => entry.title === "Character State")).toBe(true);
   });
 
-  it("keeps description and characterState in the legacy fallback path", async () => {
+  it("renders description and characterState through the template-only path", async () => {
     const assembled = await buildGeneratePromptMessages({
       character: {
         name: "Chronicle Bot",
@@ -146,8 +146,6 @@ describe("server prompt template slots", () => {
         message: [{ role: "user", data: "hello" }],
       },
       settings: {
-        mainPrompt: "Main prompt.",
-        globalNote: "Global note.",
         characterEvolutionDefaults: {
           extractionProvider: "openrouter",
           extractionModel: "model",
@@ -159,6 +157,13 @@ describe("server prompt template slots", () => {
             allowUserIntimatePreferences: false,
           },
         },
+        promptTemplate: [
+          { type: "plain", type2: "main", role: "system", text: "Main prompt." },
+          { type: "description" },
+          { type: "characterState", innerFormat: "{{slot}}" },
+          { type: "chat", rangeStart: 0, rangeEnd: "end" },
+          { type: "plain", type2: "globalNote", role: "system", text: "Global note." },
+        ],
       },
       userMessage: "hello",
     });

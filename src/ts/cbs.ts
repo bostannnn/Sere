@@ -302,16 +302,6 @@ export function registerCBS(arg:CBSRegisterArg) {
     });
 
     registerFunction({
-        name: 'mainprompt',
-        callback: (str, matcherArg, _args, _vars) => {
-            const db = getDatabase()
-            return risuChatParser(db.mainPrompt, matcherArg)
-        },
-        alias: ['systemprompt', 'main_prompt'],
-        description: 'Returns the main system prompt that provides instructions to the AI model. The text is processed through the chat parser for variable substitution.\n\nUsage:: {{mainprompt}}',
-    });
-
-    registerFunction({
         name: 'lorebook',
         callback: (str, matcherArg, _args, _vars) => {
             const db = getDatabase()
@@ -364,26 +354,6 @@ export function registerCBS(arg:CBSRegisterArg) {
         },
         alias: ['charmessages', 'char_history'],
         description: 'Returns all character messages in the current chat as a JSON array. Each message object contains role, data, and other metadata. Data is processed through chat parser.\n\nUsage:: {{charhistory}}',
-    });
-
-    registerFunction({
-        name: 'jb',
-        callback: (str, matcherArg, _args, _vars) => {
-            const db = getDatabase()
-            return risuChatParser(db.jailbreak, matcherArg)
-        },
-        alias: ['jailbreak'],
-        description: 'Returns the jailbreak prompt text used to modify AI behavior. The text is processed through the chat parser for variable substitution.\n\nUsage:: {{jb}}',
-    });
-
-    registerFunction({
-        name: 'globalnote',
-        callback: (str, matcherArg, _args, _vars) => {
-            const db = getDatabase()
-            return risuChatParser(db.globalNote, matcherArg)
-        },
-        alias: ['globalnote', 'systemnote', 'ujb'],
-        description: 'Returns the global note (also called system note) that is appended to prompts. The text is processed through the chat parser for variable substitution.\n\nUsage:: {{globalnote}}',
     });
 
     registerFunction({

@@ -3,7 +3,6 @@ import { get } from "svelte/store";
 import { setDatabase, getDatabase } from "./storage/database.svelte";
 import { MobileGUI, selectedCharID, loadedStore, DBState, LoadingStatusState } from "./stores.svelte";
 import { alertError, alertMd, alertTOS, waitAlert } from "./alert";
-import { defaultJailbreak, defaultMainPrompt, oldJailbreak, oldMainPrompt } from "./storage/defaultPrompts";
 import { updateAnimationSpeed } from "./gui/animation";
 import { updateColorScheme, updateTextThemeAndCSS } from "./gui/colorscheme";
 import { language } from "src/lang";
@@ -317,12 +316,6 @@ async function checkNewFormat(): Promise<void> {
     }
     if (!db.characterOrder) {
         db.characterOrder = [];
-    }
-    if (db.mainPrompt === oldMainPrompt) {
-        db.mainPrompt = defaultMainPrompt;
-    }
-    if (db.jailbreak === oldJailbreak) {
-        db.jailbreak = defaultJailbreak;
     }
     for (let i = 0; i < db.characters.length; i++) {
         const trashTime = db.characters[i].trashTime;

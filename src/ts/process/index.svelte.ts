@@ -469,24 +469,22 @@ export async function sendChat(chatProcessIndex = -1,arg:{
         'personaPrompt':([] as OpenAIChat[])
     }
 
-    let promptTemplate = safeStructuredClone(DBState.db.promptTemplate)
-    const usingPromptTemplate = !!promptTemplate
-    if(promptTemplate){
-        let hasPostEverything = false
-        for(const card of promptTemplate){
-            if(card.type === 'postEverything'){
-                hasPostEverything = true
-                break
-            }
-        }
-
-        if(!hasPostEverything){
-            promptTemplate.push({
-                type: 'postEverything'
-            })
+    let promptTemplate = safeStructuredClone(DBState.db.promptTemplate ?? [])
+    const usingPromptTemplate = true
+    let hasPostEverything = false
+    for(const card of promptTemplate){
+        if(card.type === 'postEverything'){
+            hasPostEverything = true
+            break
         }
     }
-    if(currentChar.utilityBot && (!(usingPromptTemplate && DBState.db.promptSettings.utilOverride))){
+
+    if(!hasPostEverything){
+        promptTemplate.push({
+            type: 'postEverything'
+        })
+    }
+    if(currentChar.utilityBot && (!DBState.db.promptSettings.utilOverride)){
         promptTemplate = [
             {
               "type": "plain",
@@ -525,36 +523,6 @@ export async function sendChat(chatProcessIndex = -1,arg:{
         return override.replaceAll('{{original}}', mainPrompt)
     }
 
-    if((!currentChar.utilityBot) && (!promptTemplate)){
-        const mainp = applySystemPromptOverride(DBState.db.mainPrompt)
-
-
-        function formatPrompt(data:string){
-            if(!data.startsWith('@@')){
-                data = "@@system\n" + data
-            }
-            const parts = data.split(/@@@?(user|assistant|system)\n/);
-  
-            // Initialize empty array for the chat objects
-            const chatObjects: OpenAIChat[] = [];
-            
-            // Loop through the parts array two elements at a time
-            for (let i = 1; i < parts.length; i += 2) {
-              const role = parts[i] as 'user' | 'assistant' | 'system';
-              const content = parts[i + 1]?.trim() || '';
-              chatObjects.push({ role, content });
-            }
-
-            return chatObjects;
-        }
-
-        unformated.main.push(...formatPrompt(risuChatParser(mainp + ((DBState.db.additionalPrompt === '' || (!DBState.db.promptPreprocess)) ? '' : `\n${DBState.db.additionalPrompt}`), {chara: currentChar})))
-    
-        unformated.jailbreak.push(...formatPrompt(risuChatParser(DBState.db.jailbreak, {chara: currentChar})))
-    
-        unformated.globalNote.push(...formatPrompt(risuChatParser(currentChar.replaceGlobalNote?.replaceAll('{{original}}', DBState.db.globalNote) || DBState.db.globalNote, {chara:currentChar})))
-    }
-
     if(currentChat.note){
         unformated.authorNote.push({
             role: 'system',
@@ -568,7 +536,7 @@ export async function sendChat(chatProcessIndex = -1,arg:{
         })
     }
 
-    if(DBState.db.chainOfThought && (!(usingPromptTemplate && DBState.db.promptSettings.customChainOfThought))){
+    if(DBState.db.chainOfThought && (!DBState.db.promptSettings.customChainOfThought)){
         unformated.postEverything.push({
             role: 'system',
             content: `<instruction> - before respond everything, Think step by step as a ai assistant how would you respond inside <Thoughts> xml tag. this must be less than 5 paragraphs.</instruction>`
@@ -576,7 +544,7 @@ export async function sendChat(chatProcessIndex = -1,arg:{
     }
 
     {
-        let description = risuChatParser((DBState.db.promptPreprocess ? DBState.db.descriptionPrefix: '') + currentChar.desc, {chara: currentChar})
+        let description = risuChatParser(currentChar.desc, {chara: currentChar})
 
         const additionalInfo = await additionalInformations(currentChar, currentChat)
 
@@ -741,18 +709,17 @@ export async function sendChat(chatProcessIndex = -1,arg:{
     }
 
     let hasCachePoint = false
-    if(promptTemplate){
-        const template = promptTemplate
+    const template = promptTemplate
 
-        async function tokenizeChatArray(chats:OpenAIChat[]){
-            for(const chat of chats){
-                const tokens = await tokenizer.tokenizeChat(chat)
-                currentTokens += tokens
-            }
+    async function tokenizeChatArray(chats:OpenAIChat[]){
+        for(const chat of chats){
+            const tokens = await tokenizer.tokenizeChat(chat)
+            currentTokens += tokens
         }
+    }
 
-        for(const card of template){
-            switch(card.type){
+    for(const card of template){
+        switch(card.type){
                 case 'persona':{
                     const pmt = safeStructuredClone(unformated.personaPrompt)
                     if(card.innerFormat && pmt.length > 0){
@@ -897,15 +864,6 @@ export async function sendChat(chatProcessIndex = -1,arg:{
                     break
                 }
             }
-        }
-    }
-    else{
-        for(const key in unformated){
-            const chats = unformated[key] as OpenAIChat[]
-            for(const chat of chats){
-                currentTokens += await tokenizer.tokenizeChat(chat)
-            }
-        }
     }
     
     const examples = exampleMessage(currentChar, getUserName())
@@ -1206,11 +1164,6 @@ export async function sendChat(chatProcessIndex = -1,arg:{
 
 
 
-    if(!promptTemplate){
-        unformated.lastChat.push(chats[chats.length - 1])
-        chats.splice(chats.length - 1, 1)
-    }
-
     unformated.chats = chats.map((v) => {
         if(v.memo !== 'supaMemory' && v.memo !== 'hypaMemory'){
             v.removable = true
@@ -1264,10 +1217,6 @@ export async function sendChat(chatProcessIndex = -1,arg:{
     //make into one
 
     let formated:OpenAIChat[] = []
-    const formatOrder = safeStructuredClone(DBState.db.formatingOrder)
-    if(formatOrder){
-        formatOrder.push('postEverything')
-    }
 
     //continue chat model
     if(arg.continue && (DBState.db.aiModel.startsWith('claude') || DBState.db.aiModel.startsWith('gpt') || DBState.db.aiModel.startsWith('openrouter'))){
@@ -1434,11 +1383,8 @@ export async function sendChat(chatProcessIndex = -1,arg:{
         });
     }
 
-    if(promptTemplate){
-        const template = promptTemplate
-
-        for(const card of template){
-            switch(card.type){
+    for(const card of template){
+        switch(card.type){
                 case 'persona':{
                     const pmt = safeStructuredClone(unformated.personaPrompt)
                     if(card.innerFormat && pmt.length > 0){
@@ -1689,16 +1635,6 @@ export async function sendChat(chatProcessIndex = -1,arg:{
                     break
                 }
             }
-        }
-    }
-    else{
-        for(let i=0;i<formatOrder.length;i++){
-            const cha = unformated[formatOrder[i]]
-            if (formatOrder[i] === 'rulebookRag' && cha.length > 0) {
-                // RAG is already in unformated.rulebookRag and pushed to promptBlocks
-            }
-            pushPrompts(cha)
-        }
     }
 
 

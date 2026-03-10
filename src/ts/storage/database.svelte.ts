@@ -3,7 +3,7 @@ import { get } from 'svelte/store';
 import { checkNullish, selectSingleFile } from '../util';
 import { changeLanguage, language } from '../../lang';
 import { downloadFile, saveAsset as saveImageGlobal } from '../globalApi.svelte';
-import { defaultAutoSuggestPrompt, defaultJailbreak, defaultMainPrompt } from './defaultPrompts';
+import { defaultAutoSuggestPrompt, normalizePromptTemplate } from './defaultPrompts';
 import { alertNormal } from '../alert';
 import { prebuiltNAIpresets } from '../process/templates/templates';
 import { defaultColorScheme } from '../gui/colorscheme';
@@ -108,15 +108,7 @@ export function setDatabase(data:Database){
     if(checkNullish(data.openAIKey)){
         data.openAIKey = ''
     }
-    if(checkNullish(data.mainPrompt)){
-        data.mainPrompt = defaultMainPrompt
-    }
-    if(checkNullish(data.jailbreak)){
-        data.jailbreak = defaultJailbreak
-    }
-    if(checkNullish(data.globalNote)){
-        data.globalNote = ``
-    }
+    data.promptTemplate = normalizePromptTemplate(data.promptTemplate)
     if(checkNullish(data.temperature)){
         data.temperature = 80
     }
@@ -135,9 +127,6 @@ export function setDatabase(data:Database){
     if(checkNullish(data.aiModel)){
         data.aiModel = 'gemini-3-flash-preview'
     }
-    if(checkNullish(data.formatingOrder)){
-        data.formatingOrder = ['main','description', 'personaPrompt','chats','lastChat','jailbreak','lorebook', 'rulebookRag', 'globalNote', 'authorNote']
-    }
     if(checkNullish(data.loreBookDepth)){
         data.loreBookDepth = 5
     }
@@ -152,12 +141,6 @@ export function setDatabase(data:Database){
     }
     if (checkNullish(data.userNote)){
         data.userNote = ''
-    }
-    if(checkNullish(data.additionalPrompt)){
-        data.additionalPrompt = 'The assistant must act as {{char}}. user is {{user}}.'
-    }
-    if(checkNullish(data.descriptionPrefix)){
-        data.descriptionPrefix = 'description of {{char}}: '
     }
     if(checkNullish(data.forceReplaceUrl)){
         data.forceReplaceUrl = ''
@@ -227,7 +210,7 @@ export function setDatabase(data:Database){
         data.proxyKey = ""
     }
     if(checkNullish(data.botPresets)){
-        const defaultPreset = presetTemplate
+        const defaultPreset = structuredClone(presetTemplate)
         defaultPreset.name = "Default"
         data.botPresets = [defaultPreset]
     }
@@ -319,12 +302,6 @@ export function setDatabase(data:Database){
     data.OAIPrediction ??= ''
     data.autoSuggestClean ??= true
     data.imageCompression ??= true
-    if(!data.formatingOrder.includes('personaPrompt')){
-        data.formatingOrder.splice(data.formatingOrder.indexOf('main'),0,'personaPrompt')
-    }
-    if(!data.formatingOrder.includes('rulebookRag')){
-        data.formatingOrder.splice(data.formatingOrder.indexOf('lorebook') + 1, 0, 'rulebookRag')
-    }
     data.selectedPersona ??= 0
     data.personaPrompt ??= ''
     data.personas ??= [{
@@ -443,6 +420,7 @@ export function setDatabase(data:Database){
     }
     if (data.botPresets) {
         for (const preset of data.botPresets) {
+            preset.promptTemplate = normalizePromptTemplate(preset.promptTemplate)
             if (typeof preset.openrouterProvider === 'string') {
                 const oldProvider = preset.openrouterProvider as unknown as string;
                 preset.openrouterProvider = {

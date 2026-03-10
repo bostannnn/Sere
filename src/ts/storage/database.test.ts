@@ -77,6 +77,47 @@ describe("database chatReadingMode normalization", () => {
     const db = applySetDatabase({ characters: [], chatReadingMode: "unknown" });
     expect(db.chatReadingMode).toBe("normal");
   });
+
+  it("normalizes missing prompt templates into the default template", () => {
+    const db = applySetDatabase({ characters: [], formatversion: 5, promptTemplate: null });
+
+    expect(Array.isArray(db.promptTemplate)).toBe(true);
+    expect((db.promptTemplate as Array<{ type?: string }>).some((item) => item.type === "characterState")).toBe(true);
+  });
+
+  it("normalizes empty prompt templates into the default template", () => {
+    const db = applySetDatabase({ characters: [], formatversion: 5, promptTemplate: [] });
+
+    expect(Array.isArray(db.promptTemplate)).toBe(true);
+    expect((db.promptTemplate as Array<{ type?: string }>).length).toBeGreaterThan(0);
+    expect((db.promptTemplate as Array<{ type?: string }>).some((item) => item.type === "characterState")).toBe(true);
+  });
+
+  it("clones the default preset when seeding missing bot presets", () => {
+    const db = applySetDatabase({ characters: [], botPresets: null });
+    const seededPreset = (db.botPresets as Array<{ promptTemplate?: Array<{ type?: string }> }>)[0];
+
+    expect(seededPreset).toBeTruthy();
+    expect(seededPreset).not.toBe(presetTemplateFromDatabase);
+    expect(seededPreset.promptTemplate).not.toBe(presetTemplateFromDatabase.promptTemplate);
+  });
+
+  it("normalizes stored preset prompt templates when loading an existing database", () => {
+    const db = applySetDatabase({
+      characters: [],
+      botPresets: [
+        {
+          ...presetTemplate,
+          promptTemplate: [],
+        },
+      ],
+    });
+
+    const storedPreset = (db.botPresets as Array<{ promptTemplate?: Array<{ type?: string }> }>)[0];
+    expect(Array.isArray(storedPreset.promptTemplate)).toBe(true);
+    expect(storedPreset.promptTemplate?.length).toBeGreaterThan(0);
+    expect(storedPreset.promptTemplate?.some((item) => item.type === "characterState")).toBe(true);
+  });
 });
 
 describe("legacy provider migration", () => {
@@ -344,6 +385,29 @@ describe("preset helper unit coverage", () => {
     expect((db.botPresets as unknown[]).length).toBe(beforeCount);
     expect(db.botPresetsId).toBe(1);
     expect(db.temperature).toBe(77);
+  });
+
+  it("repairs empty preset prompt templates back to the default template", () => {
+    const db = applySetDatabase({ characters: [] });
+    const presetBase = {
+      reverseProxyOobaArgs: structuredClone(db.reverseProxyOobaArgs),
+      promptSettings: structuredClone(db.promptSettings),
+      customAPIFormat: structuredClone(db.customAPIFormat),
+      customFlags: [],
+    };
+
+    setPresetOnDatabase(
+      db as unknown as Parameters<typeof setPresetOnDatabase>[0],
+      {
+        ...presetTemplate,
+        ...presetBase,
+        promptTemplate: [],
+      } as unknown as Parameters<typeof setPresetOnDatabase>[1],
+    );
+
+    expect(Array.isArray(db.promptTemplate)).toBe(true);
+    expect((db.promptTemplate as Array<{ type?: string }>).length).toBeGreaterThan(0);
+    expect((db.promptTemplate as Array<{ type?: string }>).some((item) => item.type === "characterState")).toBe(true);
   });
 
   it("converts ST-style imports into internal prompt template preset", () => {

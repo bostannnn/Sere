@@ -36,11 +36,7 @@ export const languageEnglish = {
         model: "Model option is a main model used in chat.",
         submodel: "Auxiliary Model is a model that used in analizing emotion images and auto suggestions and etc. gpt3.5 is recommended.",
         oaiapikey: "Api key for OpenAI. you can get it in https://platform.openai.com/account/api-keys",
-        mainprompt: "The main prompt option sets the default model behavior.",
-        jailbreak: "The jailbreak prompt option activates when jailbreak toggle is on in character.",
-        globalNote: "a note that strongly effects model behavior, also known as UJB. works in all characters.",
         autoSuggest: "Prompts used to generate options when automatically suggesting user responses.",
-        formatOrder: "formating order of prompt. lower blocks does more effect to the model.",
         forceUrl: "if it is not blank, the request will go to the url that you had inputed.",
         tempature:
             "lower values make character follow prompts closely, but it will more likely to response like a machine.\nHigher values will result in creative behavior, but the character's response can break down more easily.",
@@ -89,7 +85,7 @@ export const languageEnglish = {
             "\n\n```<START>``` Marks the beginning of a new conversation.",
         creatorQuotes: "Note that appearances on top of first message. Used to inform users about this character. It doesn't go into prompt.",
         systemPrompt: "A prompt that replaces main prompt in settings if its not blank.",
-        chatNote: "a note that strongly effects model behavior. embbedded to current chat. also known as memory or ujb.",
+        chatNote: "A note that strongly affects model behavior and is embedded into the current chat as prompt context.",
         personality: "A brief description about character's personality. \n\n**It is not recommended to use this option. Describe it in character description instead.**",
         scenario: "A brief description about character's scenario. \n\n**It is not recommended to use this option. Describe it in character description instead.**",
         utilityBot: "When activated, it ignores main prompt, jailbreak and other prompts. used for bot made for utility, not for roleplay.",
@@ -231,8 +227,6 @@ export const languageEnglish = {
             "Only use the providers in this list, if all the provider is not available, the request will failed. See detail on https://openrouter.ai/docs/guides/routing/provider-selection#allowing-only-specific-providers",
         openrouterProviderIgnore:
             "Ignore the providers in this list, if all the provider is ingored, the request will failed. See detail on https://openrouter.ai/docs/guides/routing/provider-selection#ignoring-providers",
-        additionalPrompt:
-            "Text that gets appended to the Main Prompt when Prompt Preprocess is enabled. Default is 'The assistant must act as {{char}}. user is {{user}}.' This helps set up basic roleplay context.",
         hideAllImagesDesc: "Hides bot icons, bot image assets, and RisuRealm cover images.",
         embedding:
             "Embedding model is used for similarity search across multiple features:\n\n" +
@@ -635,7 +629,6 @@ export const languageEnglish = {
     comfyCommander: "Comfy Commander",
     logs: "Logs",
     advancedSettingsWarn: "Warn: If you don't know what the option does, don't change it!",
-    formatingOrder: "Formating Order",
     authorNote: "Author's Note",
     firstMessage: "First Message",
     description: "Description",
@@ -682,8 +675,6 @@ export const languageEnglish = {
     successImport: "Successfuly imported",
     importedCharacter: "Imported Character",
     alwaysActive: "Always Active",
-    additionalPrompt: "Additional Prompt",
-    descriptionPrefix: "Description Prefix",
     forceReplaceUrl: "Reverse Proxy",
     emotionWarn: "Auxiliary model is used.",
     language: "Language",
@@ -739,7 +730,6 @@ export const languageEnglish = {
     key: "key",
     noData: "No Data",
     currentImageGeneration: "Current Image Generation Data",
-    promptPreprocess: "Use Prompt Preprocess",
     SwipeRegenerate: "Use Swipe for Regeneration",
     instantRemove: "Remove subsequent when message remove",
     instantRemoveConfirm: "Do you want to remove just one message? If you select No, then the message after it will also be remove.",

@@ -161,7 +161,7 @@ const specialCBS = [
 ]
 
 const deprecatedCBS = [
-    'personality', 'scenario', 'main_prompt', 'system_prompt', 'ujb', 'global_note', 'system_note',
+    'personality', 'scenario',
 ]
 
 const deprecatedCBSwithParams = [
