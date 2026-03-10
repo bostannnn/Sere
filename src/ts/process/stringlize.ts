@@ -1,5 +1,4 @@
 import type { OpenAIChat } from "./index.svelte";
-import { getDatabase } from "../storage/database.svelte";
 import { getUserName } from "../util";
 const stringlizeLog = (..._args: unknown[]) => {};
 
@@ -29,110 +28,6 @@ export function stringlizeChat(formated:OpenAIChat[], char:string, continued:boo
         res += `\n\n${char}:`
     }
     return res
-}
-
-function appendWhitespace(prefix:string, seperator:string=" ") {
-    if(!prefix){
-        return ""
-    }
-    if(prefix && !"> \n".includes(prefix[prefix.length-1])){
-        prefix += seperator.includes("\n\n") ? "\n" : " "
-    }
-    return prefix
-}
-export function stringlizeChatOba(formated:OpenAIChat[], characterName:string, suggesting:boolean, continued:boolean){
-    const db = getDatabase()
-    const resultString:string[] = []
-    let { systemPrefix, userPrefix, assistantPrefix, seperator } = db.ooba.formating;
-    systemPrefix = systemPrefix ?? ""
-    userPrefix = userPrefix ?? ""
-    assistantPrefix = assistantPrefix ?? ""
-    seperator = seperator ?? "\n"
-
-    for(const form of formated){
-        if(form.content === "[Start a new chat]"){
-            resultString.push("<START>")
-            continue
-        }
-        let prefix = ""
-        let name = form.name
-        if(form.role === 'user'){
-            prefix = appendWhitespace(suggesting ? assistantPrefix : userPrefix, seperator)
-            name ??= `${getUserName()}`
-            name += ': '
-        }
-        else if(form.role === 'assistant'){
-            prefix = appendWhitespace(suggesting ? userPrefix : assistantPrefix, seperator)
-            name ??= `${characterName}`
-            name += ': '
-        }
-        else if(form.role === 'system'){
-            prefix = appendWhitespace(systemPrefix, seperator)
-            name = ""
-        }
-        if(db.ooba.formating.useName){
-            stringlizeLog(name)
-            resultString.push(prefix + name + form.content)
-        }
-        else{
-            resultString.push(prefix + form.content)
-        }
-    }
-    if(!continued){
-        if(db.ooba.formating.useName){
-            if (suggesting){
-                resultString.push(appendWhitespace(assistantPrefix, seperator) + `${getUserName()}:\n` + db.autoSuggestPrefix)
-            } else {
-                resultString.push(assistantPrefix + `${characterName}:`)
-            }
-        }
-        else{
-            if (suggesting){
-                resultString.push(appendWhitespace(assistantPrefix, seperator) + `\n` + db.autoSuggestPrefix)
-            } else {
-                resultString.push(assistantPrefix)
-            }
-        }
-    }
-    stringlizeLog(resultString)
-    return resultString.join(seperator).trim()
-}
-
-const userStrings = ["user", "human", "input", "inst", "instruction"]
-function toTitleCase(s:string){
-    return s[0].toUpperCase() + s.slice(1).toLowerCase()
-}
-export function getStopStrings(suggesting:boolean=false){
-    const db = getDatabase()
-    const { userPrefix } = db.ooba.formating;
-    let { seperator } = db.ooba.formating;
-    if(!seperator){
-        seperator = "\n"
-    }
-    const { username } = db
-    const stopStrings = [
-        "GPT4 User",
-        "</s>",
-        "<|end",
-        "<|im_end",
-        userPrefix,
-        `${username}:`,
-    ]
-    if(suggesting){
-        stopStrings.push("\n\n")
-    }
-    for (const user of userStrings){
-        for (const u of [
-            user.toLowerCase(),
-            user.toUpperCase(),
-            user.replace(/\w\S*/g, toTitleCase),
-        ]){
-            stopStrings.push(`${u}:`)
-            stopStrings.push(`<<${u}>>`)
-            stopStrings.push(`### ${u}`)
-        }
-    }
-    return [...new Set(stopStrings)]
 }
 
 export function unstringlizeChat(text:string, formated:OpenAIChat[], char:string = ''){

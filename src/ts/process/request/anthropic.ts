@@ -1,8 +1,4 @@
-import { Sha256 } from "@aws-crypto/sha256-js"
-import { HttpRequest } from "@smithy/protocol-http"
-import { SignatureV4 } from "@smithy/signature-v4"
 import { addFetchLog, fetchNative, globalFetch, textifyReadableStream } from "src/ts/globalApi.svelte"
-import { LLMFormat } from "src/ts/model/modellist"
 import { registerClaudeObserver } from "src/ts/observer.svelte"
 import { isNodeServer } from "src/ts/platform"
 import { getDatabase } from "src/ts/storage/database.svelte"
@@ -579,145 +575,6 @@ export async function requestClaude(arg:RequestDataArgumentExtended):Promise<req
         delete body.system
     }
 
-    const bedrock = arg.modelInfo.format === LLMFormat.AWSBedrockClaude
-
-    if(bedrock){
-        function getCredentialParts(key:string) {
-            const [accessKeyId, secretAccessKey, region] = key.split(":");
-          
-            if (!accessKeyId || !secretAccessKey || !region) {
-              throw new Error("The key assigned to this request is invalid.");
-            }
-          
-            return { accessKeyId, secretAccessKey, region };
-        }
-        const { accessKeyId, secretAccessKey, region } = getCredentialParts(apiKey);
-
-        const AMZ_HOST = "bedrock-runtime.%REGION%.amazonaws.com";
-        const host = AMZ_HOST.replace("%REGION%", region);
-        const stream = false;   // todo?
-
-        // https://docs.claude.com/en/api/claude-on-amazon-bedrock#global-vs-regional-endpoints
-        const datePart = Number(arg.modelInfo.internalID.match(/(\d{8})/)?.[0]);
-        const awsModel = datePart && datePart >= 20250929 ? "global." + arg.modelInfo.internalID : "us." + arg.modelInfo.internalID;
-        const url = `https://${host}/model/${awsModel}/invoke${stream ? "-with-response-stream" : ""}`
-
-        const params: AnthropicRequestBody & {
-            anthropic_version?: string
-            temperature?: number
-            top_k?: number
-            top_p?: number
-        } = {...body}
-        params.anthropic_version = "bedrock-2023-05-31"
-        delete params.model
-        delete params.stream
-        if (params.thinking?.type === "enabled"){
-            params.temperature = 1.0
-            delete params.top_k
-            delete params.top_p
-        }
-
-        const rq = new HttpRequest({
-            method: "POST",
-            protocol: "https:",
-            hostname: host,
-            path: `/model/${awsModel}/invoke${stream ? "-with-response-stream" : ""}`,
-            headers: {
-              ["Host"]: host,
-              ["Content-Type"]: "application/json",
-              ["accept"]: "application/json",
-            },
-            body: JSON.stringify(params),
-        });
-        
-        const signer = new SignatureV4({
-            sha256: Sha256,
-            credentials: { accessKeyId, secretAccessKey },
-            region,
-            service: "bedrock",
-        });
-        
-        const signed = await signer.sign(rq);
-
-        if(arg.previewBody){
-            return {
-                type: 'success',
-                result: JSON.stringify({
-                    url: url,
-                    body: params,
-                    headers: signed.headers
-                })
-            }
-
-        }
-
-        const res = await globalFetch(url, {
-            method: "POST",
-            body: params,
-            headers: signed.headers,
-            plainFetchForce: true,
-            chatId: arg.chatId
-        })
-
-        if(!res.ok){
-            return {
-                type: 'fail',
-                result: JSON.stringify(res.data)
-            }
-        }
-        if(res.data.error){
-            return {
-                type: 'fail',
-                result: JSON.stringify(res.data.error)
-            }
-        }
-        const contents = res?.data?.content
-        if(!contents || contents.length === 0){
-            return {
-                type: 'fail',
-                result: JSON.stringify(res.data)
-            }
-        }
-        let resText = ''
-        let thinking = false
-        for(const content of contents){
-            if(content.type === 'text'){
-                if(thinking){
-                    resText += "</Thoughts>\n\n"
-                    thinking = false
-                }
-                resText += content.text
-            }
-            if(content.type === 'thinking'){
-                if(!thinking){
-                    resText += "<Thoughts>\n"
-                    thinking = true
-                }
-                resText += content.thinking ?? ''
-            }
-            if(content.type === 'redacted_thinking'){
-                if(!thinking){
-                    resText += "<Thoughts>\n"
-                    thinking = true
-                }
-                resText += '\n{{redacted_thinking}}\n'
-            }
-        }
-    
-    
-        if(arg.extractJson && db.jsonSchemaEnabled){
-            return {
-                type: 'success',
-                result: extractJSON(resText, db.jsonSchema)
-            }
-        }
-        return {
-            type: 'success',
-            result: resText
-        }
-    }
-
-
     const headers:{
         [key:string]:string
     } = {
@@ -755,7 +612,6 @@ export async function requestClaude(arg:RequestDataArgumentExtended):Promise<req
 
     const useServerAnthropic =
         isNodeServer &&
-        !bedrock &&
         !(arg.tools && arg.tools.length > 0);
 
     if (useServerAnthropic) {

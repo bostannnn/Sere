@@ -74,6 +74,7 @@
     let evolutionBusy = $state(false)
     let evolutionAction: 'handoff' | 'accept' | 'reject' | null = $state(null)
     let evolutionProposalDraft = $state(null)
+    let evolutionProposalDraftKey = $state<string | null>(null)
     let {
         onOpenModuleList = () => {},
         onOpenChatList = () => {},
@@ -253,6 +254,7 @@
             const proposal = payload.proposal as typeof currentCharacter.characterEvolution.pendingProposal
             currentCharacter.characterEvolution.pendingProposal = proposal
             evolutionProposalDraft = JSON.parse(JSON.stringify(proposal?.proposedState ?? {}))
+            evolutionProposalDraftKey = getEvolutionProposalIdentity(currentCharacter.chaId, proposal)
             showEvolutionProposal = true
             alertNormal("Evolution proposal is ready for review.")
         } catch (error) {
@@ -273,6 +275,7 @@
             await rejectCharacterEvolutionProposal(currentCharacter.chaId)
             currentCharacter.characterEvolution.pendingProposal = null
             evolutionProposalDraft = null
+            evolutionProposalDraftKey = null
             showEvolutionProposal = false
             alertNormal("Evolution proposal rejected.")
         } catch (error) {
@@ -295,6 +298,7 @@
             currentCharacter.characterEvolution.currentStateVersion = Number(payload.version) || currentCharacter.characterEvolution.currentStateVersion
             currentCharacter.characterEvolution.pendingProposal = null
             evolutionProposalDraft = null
+            evolutionProposalDraftKey = null
             showEvolutionProposal = false
             if (createNextChat) {
                 await createNewChatAfterEvolution($selectedCharID)
@@ -308,10 +312,24 @@
         }
     }
 
+    function getEvolutionProposalIdentity(characterId: string | undefined, proposal: { proposalId?: string; sourceChatId?: string; createdAt?: number } | null | undefined) {
+        if (!characterId || !proposal) {
+            return null
+        }
+        return `${characterId}:${proposal.proposalId ?? proposal.sourceChatId ?? "pending"}:${proposal.createdAt ?? 0}`
+    }
+
     $effect(() => {
-        const pending = getPendingCharacterEvolutionProposal(currentCharacter)
-        if (pending && !evolutionProposalDraft) {
-            evolutionProposalDraft = JSON.parse(JSON.stringify(pending.proposedState))
+        const proposal = getPendingCharacterEvolutionProposal(currentCharacter)
+        const proposalIdentity = getEvolutionProposalIdentity(currentCharacter?.chaId, proposal)
+        if (!proposalIdentity) {
+            evolutionProposalDraft = null
+            evolutionProposalDraftKey = null
+            return
+        }
+        if (!evolutionProposalDraft || evolutionProposalDraftKey !== proposalIdentity) {
+            evolutionProposalDraft = JSON.parse(JSON.stringify(proposal?.proposedState ?? {}))
+            evolutionProposalDraftKey = proposalIdentity
         }
     })
 

@@ -17,138 +17,9 @@ import { GoogleModels } from './providers/google'
 export { LLMFlags, LLMProvider, LLMFormat, LLMTokenizer, ProviderNames, OpenAIParameters, ClaudeParameters }
 export type { LLMModel }
 
-function makeDeepInfraModels(id:string[]):LLMModel[]{
-    return id.map((id) => {
-        return {
-            id: 'deepinfra_' + id,
-            name: id,
-            internalID: id,
-            provider: LLMProvider.DeepInfra,
-            format: LLMFormat.OpenAICompatible,
-            parameters: ['frequency_penalty', 'presence_penalty','temperature', 'top_p'],
-            flags: [LLMFlags.hasFirstSystemPrompt, LLMFlags.requiresAlternateRole, LLMFlags.mustStartWithUserInput, LLMFlags.hasPrefill, LLMFlags.deepSeekThinkingOutput, LLMFlags.hasStreaming],
-            tokenizer: LLMTokenizer.DeepSeek,
-            endpoint: 'https://api.deepinfra.com/v1/openai/chat/completions',
-            keyIdentifier: 'deepinfra',
-            recommended: true
-        } as LLMModel
-    })
-}
-
 export const LLMModels: LLMModel[] = [
     ...OpenAIModels,
     ...AnthropicModels,
-    // AWS Bedrock Claude models
-    {
-        name: 'Claude 4.5 Sonnet (20250929) v1',
-        id: 'anthropic.claude-sonnet-4-5-20250929-v1:0',
-        provider: LLMProvider.AWS,
-        format: LLMFormat.AWSBedrockClaude,
-        flags: [
-            LLMFlags.hasPrefill,
-            LLMFlags.hasImageInput,
-            LLMFlags.hasFirstSystemPrompt,
-            LLMFlags.claudeThinking
-        ],
-        parameters: [...ClaudeParameters, 'thinking_tokens'],
-        tokenizer: LLMTokenizer.Claude
-    },
-    {
-        name: 'Claude 4.1 Opus (20250805) v1',
-        id: 'anthropic.claude-opus-4-1-20250805-v1:0',
-        provider: LLMProvider.AWS,
-        format: LLMFormat.AWSBedrockClaude,
-        flags: [
-            LLMFlags.hasPrefill,
-            LLMFlags.hasImageInput,
-            LLMFlags.hasFirstSystemPrompt,
-            LLMFlags.claudeThinking
-        ],
-        parameters: [...ClaudeParameters, 'thinking_tokens'],
-        tokenizer: LLMTokenizer.Claude
-    },
-    {
-        name: 'Claude 4 Opus (20250514) v1',
-        id: 'anthropic.claude-opus-4-20250514-v1:0',
-        provider: LLMProvider.AWS,
-        format: LLMFormat.AWSBedrockClaude,
-        flags: [
-            LLMFlags.hasPrefill,
-            LLMFlags.hasImageInput,
-            LLMFlags.hasFirstSystemPrompt,
-            LLMFlags.claudeThinking
-        ],
-        parameters: [...ClaudeParameters, 'thinking_tokens'],
-        tokenizer: LLMTokenizer.Claude
-    },
-    {
-        name: 'Claude 4 Sonnet (20250514) v1',
-        id: 'anthropic.claude-sonnet-4-20250514-v1:0',
-        provider: LLMProvider.AWS,
-        format: LLMFormat.AWSBedrockClaude,
-        flags: [
-            LLMFlags.hasPrefill,
-            LLMFlags.hasImageInput,
-            LLMFlags.hasFirstSystemPrompt,
-            LLMFlags.claudeThinking
-        ],
-        parameters: [...ClaudeParameters, 'thinking_tokens'],
-        tokenizer: LLMTokenizer.Claude
-    },
-    {
-        name: 'Claude 3.7 Sonnet (20250219) v1',
-        id: 'anthropic.claude-3-7-sonnet-20250219-v1:0',
-        provider: LLMProvider.AWS,
-        format: LLMFormat.AWSBedrockClaude,
-        flags: [
-            LLMFlags.hasPrefill,
-            LLMFlags.hasImageInput,
-            LLMFlags.hasFirstSystemPrompt,
-            LLMFlags.claudeThinking
-        ],
-        parameters: [...ClaudeParameters, 'thinking_tokens'],
-        tokenizer: LLMTokenizer.Claude
-    },
-    {
-        name: 'Claude 3.5 Sonnet (20241022) v2',
-        id: 'anthropic.claude-3-5-sonnet-20241022-v2:0',
-        provider: LLMProvider.AWS,
-        format: LLMFormat.AWSBedrockClaude,
-        flags: [LLMFlags.hasPrefill, LLMFlags.hasImageInput, LLMFlags.hasFirstSystemPrompt],
-        parameters: ClaudeParameters,
-        tokenizer: LLMTokenizer.Claude
-    },
-    {
-        name: 'Claude 3.5 Sonnet (20240620) v1',
-        id: 'anthropic.claude-3-5-sonnet-20240620-v1:0',
-        provider: LLMProvider.AWS,
-        format: LLMFormat.AWSBedrockClaude,
-        flags: [LLMFlags.hasPrefill, LLMFlags.hasImageInput, LLMFlags.hasFirstSystemPrompt],
-        parameters: ClaudeParameters,
-        tokenizer: LLMTokenizer.Claude
-    },
-    {
-        name: 'Claude 3 Opus (20240229) v1',
-        id: 'anthropic.claude-3-opus-20240229-v1:0',
-        provider: LLMProvider.AWS,
-        format: LLMFormat.AWSBedrockClaude,
-        flags: [LLMFlags.hasPrefill, LLMFlags.hasImageInput, LLMFlags.hasFirstSystemPrompt],
-        parameters: ClaudeParameters,
-        tokenizer: LLMTokenizer.Claude
-    },
-    {
-        name: 'Claude 3 Sonnet (20240229) v1',
-        id: 'anthropic.claude-3-sonnet-20240229-v1:0',
-        provider: LLMProvider.AWS,
-        format: LLMFormat.AWSBedrockClaude,
-        flags: [
-            LLMFlags.hasPrefill,
-            LLMFlags.hasImageInput,
-            LLMFlags.hasFirstSystemPrompt
-        ],
-        parameters: ClaudeParameters,
-        tokenizer: LLMTokenizer.Claude
-    },
     // Other providers
     {
         name: 'OpenRouter',
@@ -178,25 +49,6 @@ export const LLMModels: LLMModel[] = [
             'top_a'
         ],
         tokenizer: LLMTokenizer.Unknown
-    },
-    // NovelList
-    {
-        name: "SuperTrin",
-        id: 'novellist',
-        provider: LLMProvider.NovelList,
-        format: LLMFormat.NovelList,
-        flags: [],
-        parameters: [],
-        tokenizer: LLMTokenizer.NovelList
-    },
-    {
-        name: "Damsel",
-        id: 'novellist_damsel',
-        provider: LLMProvider.NovelList,
-        format: LLMFormat.NovelList,
-        flags: [],
-        parameters: [],
-        tokenizer: LLMTokenizer.NovelList
     },
     // NovelAI
     {
@@ -233,34 +85,6 @@ export const LLMModels: LLMModel[] = [
         parameters: OpenAIParameters,
         tokenizer: LLMTokenizer.Unknown
     },
-    // WebLLM
-    {
-        id: 'hf:::Xenova/opt-350m',
-        name: 'opt-350m',
-        provider: LLMProvider.WebLLM,
-        format: LLMFormat.WebLLM,
-        flags: [LLMFlags.hasFullSystemPrompt],
-        parameters: OpenAIParameters,
-        tokenizer: LLMTokenizer.Local
-    },
-    {
-        id: 'hf:::Xenova/tiny-random-mistral',
-        name: 'tiny-random-mistral',
-        provider: LLMProvider.WebLLM,
-        format: LLMFormat.WebLLM,
-        flags: [LLMFlags.hasFullSystemPrompt],
-        parameters: OpenAIParameters,
-        tokenizer: LLMTokenizer.Local
-    },
-    {
-        id: 'hf:::Xenova/gpt2-large-conversational',
-        name: 'gpt2-large-conversational',
-        provider: LLMProvider.WebLLM,
-        format: LLMFormat.WebLLM,
-        flags: [LLMFlags.hasFullSystemPrompt],
-        parameters: OpenAIParameters,
-        tokenizer: LLMTokenizer.Local
-    },
     // DeepSeek
     {
         id: 'deepseek-chat',
@@ -286,46 +110,6 @@ export const LLMModels: LLMModel[] = [
         keyIdentifier: 'deepseek',
         recommended: true
     },
-    // DeepInfra
-    ...makeDeepInfraModels([
-        'deepseek-ai/DeepSeek-R1',
-        'deepseek-ai/DeepSeek-R1-Distill-Llama-70B',
-        'deepseek-ai/DeepSeek-V3',
-        'meta-llama/Llama-3.3-70B-Instruct-Turbo',
-        'meta-llama/Llama-3.3-70B-Instruct',
-        'microsoft/phi-4',
-        'meta-llama/Meta-Llama-3.1-70B-Instruct',
-        'meta-llama/Meta-Llama-3.1-8B-Instruct',
-        'meta-llama/Meta-Llama-3.1-405B-Instruct',
-        'Qwen/QwQ-32B-Preview',
-        'meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo',
-        'meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo',
-        'Qwen/Qwen2.5-Coder-32B-Instruct',
-        'nvidia/Llama-3.1-Nemotron-70B-Instruct',
-        'Qwen/Qwen2.5-72B-Instruct',
-        'meta-llama/Llama-3.2-90B-Vision-Instruct',
-        'meta-llama/Llama-3.2-11B-Vision-Instruct',
-        'microsoft/WizardLM-2-8x22B',
-        '01-ai/Yi-34B-Chat',
-        'Austism/chronos-hermes-13b-v2',
-        'Gryphe/MythoMax-L2-13b',
-        'Gryphe/MythoMax-L2-13b-turbo',
-        'Sao10K/L3.3-70B-Euryale-v2.3',
-        'Sao10K/L3.1-70B-Euryale-v2.2',
-        'Sao10K/L3-70B-Euryale-v2.1',
-        'google/gemma-2-27b-it',
-        'google/gemma-2-9b-it'
-    ]),
-    {
-        id: 'echo_model',
-        name: "Echo",
-        provider: LLMProvider.Echo,
-        format: LLMFormat.Echo,
-        flags: [LLMFlags.hasFullSystemPrompt],
-        recommended: false,
-        parameters: [],
-        tokenizer: LLMTokenizer.Unknown
-    },
 ]
 
 for(const model of LLMModels){
@@ -345,18 +129,6 @@ for(let i=0; i<LLMModels.length; i++){
             fullName: `${LLMModels[i].fullName ?? LLMModels[i].name} (Response API)`,
             recommended: false
 
-        })
-    }
-    if(LLMModels[i].provider === LLMProvider.GoogleCloud){
-        LLMModels.push({
-            ...LLMModels[i],
-            id: `${LLMModels[i].id}-vertex`,
-            name: `${LLMModels[i].name} Vertex`,
-            fullName: `${LLMModels[i].fullName ?? LLMModels[i].name} Vertex`,
-            flags: [...LLMModels[i].flags],
-            recommended: false,
-            provider: LLMProvider.VertexAI,
-            format: LLMFormat.VertexAIGemini
         })
     }
 }
@@ -388,21 +160,6 @@ export function getModelInfo(id?: string | null): LLMModel{
         return found
     }
 
-    if(id.startsWith('hf:::')){
-        const withoutPrefix = id.replace('hf:::', '')
-        return {
-            id,
-            name: withoutPrefix,
-            shortName: withoutPrefix,
-            fullName: withoutPrefix,
-            internalID: withoutPrefix,
-            provider: LLMProvider.WebLLM,
-            format: LLMFormat.WebLLM,
-            flags: [],
-            parameters: OpenAIParameters,
-            tokenizer: LLMTokenizer.Local
-        }
-    }
     return {
         id,
         name: id,

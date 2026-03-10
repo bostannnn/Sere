@@ -26,8 +26,6 @@ vi.mock("../globalApi.svelte", () => ({
 
 import {
   DEFAULT_GLOBAL_RAG_SETTINGS,
-  defaultAIN as defaultAINFromDatabase,
-  defaultOoba as defaultOobaFromDatabase,
   presetTemplate as presetTemplateFromDatabase,
   resolveChatBackgroundMode as resolveChatBackgroundModeFromDatabase,
   resolveGlobalRagSettings as resolveGlobalRagSettingsFromDatabase,
@@ -40,14 +38,13 @@ import {
   normalizeChatBackground,
   resolveChatBackgroundMode,
   resolveGlobalRagSettings,
+  stripLegacyProviderFields,
 } from "./database.normalizers";
 import {
   REMOVED_PROVIDER_MIGRATION_NOTICE,
   applyImportedPresetToDatabase,
   buildDownloadPresetForExport,
   changeToPresetInDatabase,
-  defaultAIN,
-  defaultOoba,
   presetTemplate,
   setPresetOnDatabase,
 } from "./database.presets";
@@ -216,8 +213,6 @@ describe("chat background normalization", () => {
 
 describe("database module re-export contract", () => {
   it("re-exports split helper values and functions", () => {
-    expect(defaultAINFromDatabase).toBe(defaultAIN);
-    expect(defaultOobaFromDatabase).toBe(defaultOoba);
     expect(presetTemplateFromDatabase).toBe(presetTemplate);
     expect(resolveGlobalRagSettingsFromDatabase).toBe(resolveGlobalRagSettings);
     expect(resolveChatBackgroundModeFromDatabase).toBe(resolveChatBackgroundMode);
@@ -257,6 +252,22 @@ describe("normalizer unit coverage", () => {
     resolved.enabledRulebooks.push("ruleset-a");
 
     expect(DEFAULT_GLOBAL_RAG_SETTINGS.enabledRulebooks).toEqual([]);
+  });
+
+  it("strips dead legacy provider fields from persisted payloads", () => {
+    const payload = {
+      ooba: { top_p: 0.9 },
+      ainconfig: { top_p: 0.7 },
+      textgenWebUIBlockingURL: "https://legacy.example",
+      vertexRegion: "global",
+      cohereAPIKey: "secret",
+      keep: "value",
+    };
+
+    const changed = stripLegacyProviderFields(payload);
+
+    expect(changed).toBe(true);
+    expect(payload).toEqual({ keep: "value" });
   });
 
   it("sanitizes invalid comfy commander state shape", () => {
@@ -347,8 +358,6 @@ describe("preset helper unit coverage", () => {
           proxyKey: "secret-proxy",
           forceReplaceUrl: "https://proxy.example",
           forceReplaceUrl2: "https://proxy2.example",
-          textgenWebUIStreamURL: "wss://stream.example",
-          textgenWebUIBlockingURL: "https://block.example",
         },
       ],
     });
@@ -359,8 +368,6 @@ describe("preset helper unit coverage", () => {
     expect(exported.proxyKey).toBe("");
     expect(exported.forceReplaceUrl).toBe("");
     expect(exported.forceReplaceUrl2).toBe("");
-    expect(exported.textgenWebUIStreamURL).toBe("");
-    expect(exported.textgenWebUIBlockingURL).toBe("");
   });
 
   it("changes preset without implicitly appending current preset when saveCurrent is false", () => {

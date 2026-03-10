@@ -71,6 +71,137 @@ vi.mock(import("uuid"), () => ({
 
 vi.mock(import("src/ts/stores.svelte"), async () => {
   const { writable } = await import("svelte/store");
+  const makeCharacter = (arg: {
+    chaId: string;
+    name: string;
+    chatId: string;
+    proposalId?: string | null;
+    trustLevel?: string;
+  }) => ({
+    chaId: arg.chaId,
+    type: "character",
+    name: arg.name,
+    image: "",
+    firstMessage: "Hello",
+    alternateGreetings: [],
+    creatorNotes: [],
+    removedQuotes: false,
+    largePortrait: false,
+    chatPage: 0,
+    chats: [
+      {
+        id: arg.chatId,
+        name: `${arg.name} Chat`,
+        fmIndex: -1,
+        message: [],
+        localLore: [],
+        modules: [],
+        note: "",
+        bindedPersona: "",
+      },
+    ],
+    characterEvolution: {
+      enabled: true,
+      useGlobalDefaults: false,
+      extractionProvider: "openrouter",
+      extractionModel: "anthropic/claude-3.5-haiku",
+      extractionMaxTokens: 2400,
+      extractionPrompt: "prompt",
+      sectionConfigs: [
+        {
+          key: "relationship",
+          label: "Relationship",
+          enabled: true,
+          includeInPrompt: true,
+          instruction: "Track trust shifts.",
+          kind: "object",
+          sensitive: false,
+        },
+        {
+          key: "activeThreads",
+          label: "Active Threads",
+          enabled: true,
+          includeInPrompt: true,
+          instruction: "Track open threads.",
+          kind: "list",
+          sensitive: false,
+        },
+        {
+          key: "lastChatEnded",
+          label: "Last Chat Ended",
+          enabled: true,
+          includeInPrompt: true,
+          instruction: "Track ending residue.",
+          kind: "object",
+          sensitive: false,
+        },
+        {
+          key: "keyMoments",
+          label: "Key Moments",
+          enabled: true,
+          includeInPrompt: true,
+          instruction: "Track key moments.",
+          kind: "list",
+          sensitive: false,
+        },
+      ],
+      privacy: {
+        allowCharacterIntimatePreferences: false,
+        allowUserIntimatePreferences: false,
+      },
+      currentStateVersion: 0,
+      currentState: {
+        relationship: { trustLevel: "", dynamic: "" },
+        activeThreads: [],
+        runningJokes: [],
+        characterLikes: [],
+        characterDislikes: [],
+        characterHabits: [],
+        characterBoundariesPreferences: [],
+        userFacts: [],
+        userRead: [],
+        userLikes: [],
+        userDislikes: [],
+        lastChatEnded: { state: "", residue: "" },
+        keyMoments: [],
+        characterIntimatePreferences: [],
+        userIntimatePreferences: [],
+      },
+      pendingProposal: arg.proposalId
+        ? {
+            proposalId: arg.proposalId,
+            sourceChatId: arg.chatId,
+            proposedState: {
+              relationship: { trustLevel: arg.trustLevel ?? "", dynamic: `${arg.name} dynamic` },
+              activeThreads: [`${arg.name} thread`],
+              runningJokes: [],
+              characterLikes: [],
+              characterDislikes: [],
+              characterHabits: [],
+              characterBoundariesPreferences: [],
+              userFacts: [],
+              userRead: [],
+              userLikes: [],
+              userDislikes: [],
+              lastChatEnded: { state: `${arg.name} close`, residue: `${arg.name} residue` },
+              keyMoments: [`${arg.name} moment`],
+              characterIntimatePreferences: [],
+              userIntimatePreferences: [],
+            },
+            changes: [
+              {
+                sectionKey: "relationship",
+                summary: `${arg.name} relationship changed.`,
+                evidence: [`${arg.name} evidence`],
+              },
+            ],
+            createdAt: 1,
+          }
+        : null,
+      lastProcessedChatId: null,
+      stateVersions: [],
+    },
+  });
   return {
     selectedCharID: writable(0),
     createSimpleCharacter: (character: unknown) => character,
@@ -117,101 +248,8 @@ vi.mock(import("src/ts/stores.svelte"), async () => {
           },
         ],
         characters: [
-          {
-            chaId: "char-1",
-            type: "character",
-            name: "Character One",
-            image: "",
-            firstMessage: "Hello",
-            alternateGreetings: [],
-            creatorNotes: [],
-            removedQuotes: false,
-            largePortrait: false,
-            chatPage: 0,
-            chats: [
-              {
-                id: "chat-1",
-                name: "Chat One",
-                fmIndex: -1,
-                message: [],
-                localLore: [],
-                modules: [],
-                note: "",
-                bindedPersona: "",
-              },
-            ],
-            characterEvolution: {
-              enabled: true,
-              useGlobalDefaults: false,
-              extractionProvider: "openrouter",
-              extractionModel: "anthropic/claude-3.5-haiku",
-              extractionMaxTokens: 2400,
-              extractionPrompt: "prompt",
-              sectionConfigs: [
-                {
-                  key: "relationship",
-                  label: "Relationship",
-                  enabled: true,
-                  includeInPrompt: true,
-                  instruction: "Track trust shifts.",
-                  kind: "object",
-                  sensitive: false,
-                },
-                {
-                  key: "activeThreads",
-                  label: "Active Threads",
-                  enabled: true,
-                  includeInPrompt: true,
-                  instruction: "Track open threads.",
-                  kind: "list",
-                  sensitive: false,
-                },
-                {
-                  key: "lastChatEnded",
-                  label: "Last Chat Ended",
-                  enabled: true,
-                  includeInPrompt: true,
-                  instruction: "Track ending residue.",
-                  kind: "object",
-                  sensitive: false,
-                },
-                {
-                  key: "keyMoments",
-                  label: "Key Moments",
-                  enabled: true,
-                  includeInPrompt: true,
-                  instruction: "Track key moments.",
-                  kind: "list",
-                  sensitive: false,
-                },
-              ],
-              privacy: {
-                allowCharacterIntimatePreferences: false,
-                allowUserIntimatePreferences: false,
-              },
-              currentStateVersion: 0,
-              currentState: {
-                relationship: { trustLevel: "", dynamic: "" },
-                activeThreads: [],
-                runningJokes: [],
-                characterLikes: [],
-                characterDislikes: [],
-                characterHabits: [],
-                characterBoundariesPreferences: [],
-                userFacts: [],
-                userRead: [],
-                userLikes: [],
-                userDislikes: [],
-                lastChatEnded: { state: "", residue: "" },
-                keyMoments: [],
-                characterIntimatePreferences: [],
-                userIntimatePreferences: [],
-              },
-              pendingProposal: null,
-              lastProcessedChatId: null,
-              stateVersions: [],
-            },
-          },
+          makeCharacter({ chaId: "char-1", name: "Character One", chatId: "chat-1" }),
+          makeCharacter({ chaId: "char-2", name: "Character Two", chatId: "chat-2" }),
         ],
       },
     },
@@ -408,6 +446,88 @@ describe("default chat screen runtime smoke", () => {
     DBState.db.newMessageButtonStyle = "floating-circle";
     DBState.db.useAutoTranslateInput = true;
     DBState.db.sendWithEnter = true;
+    DBState.db.characters[0] = {
+      ...DBState.db.characters[0],
+      name: "Character One",
+      chaId: "char-1",
+      chatPage: 0,
+      chats: [
+        {
+          id: "chat-1",
+          name: "Character One Chat",
+          fmIndex: -1,
+          message: [],
+          localLore: [],
+          modules: [],
+          note: "",
+          bindedPersona: "",
+        },
+      ],
+      characterEvolution: {
+        ...DBState.db.characters[0].characterEvolution,
+        currentStateVersion: 0,
+        currentState: {
+          relationship: { trustLevel: "", dynamic: "" },
+          activeThreads: [],
+          runningJokes: [],
+          characterLikes: [],
+          characterDislikes: [],
+          characterHabits: [],
+          characterBoundariesPreferences: [],
+          userFacts: [],
+          userRead: [],
+          userLikes: [],
+          userDislikes: [],
+          lastChatEnded: { state: "", residue: "" },
+          keyMoments: [],
+          characterIntimatePreferences: [],
+          userIntimatePreferences: [],
+        },
+        pendingProposal: null,
+        stateVersions: [],
+      },
+    };
+    DBState.db.characters[1] = {
+      ...DBState.db.characters[1],
+      name: "Character Two",
+      chaId: "char-2",
+      chatPage: 0,
+      chats: [
+        {
+          id: "chat-2",
+          name: "Character Two Chat",
+          fmIndex: -1,
+          message: [],
+          localLore: [],
+          modules: [],
+          note: "",
+          bindedPersona: "",
+        },
+      ],
+      characterEvolution: {
+        ...DBState.db.characters[1].characterEvolution,
+        currentStateVersion: 0,
+        currentState: {
+          relationship: { trustLevel: "", dynamic: "" },
+          activeThreads: [],
+          runningJokes: [],
+          characterLikes: [],
+          characterDislikes: [],
+          characterHabits: [],
+          characterBoundariesPreferences: [],
+          userFacts: [],
+          userRead: [],
+          userLikes: [],
+          userDislikes: [],
+          lastChatEnded: { state: "", residue: "" },
+          keyMoments: [],
+          characterIntimatePreferences: [],
+          userIntimatePreferences: [],
+        },
+        pendingProposal: null,
+        stateVersions: [],
+      },
+    };
     document.body.innerHTML = "";
   });
 
@@ -732,5 +852,85 @@ describe("default chat screen runtime smoke", () => {
     expect(DBState.db.characters[0].chats[0]?.name).toBe("New Chat 1");
     expect(DBState.db.characters[0].chatPage).toBe(0);
     expect(mocks.changeChatTo).toHaveBeenCalledWith(0);
+  });
+
+  it("re-seeds the review draft when switching to a different character proposal", async () => {
+    DBState.db.characters[0].characterEvolution.pendingProposal = {
+      proposalId: "proposal-char-1",
+      sourceChatId: "chat-1",
+      proposedState: {
+        relationship: { trustLevel: "char-1", dynamic: "Character One dynamic" },
+        activeThreads: ["Character One thread"],
+        runningJokes: [],
+        characterLikes: [],
+        characterDislikes: [],
+        characterHabits: [],
+        characterBoundariesPreferences: [],
+        userFacts: [],
+        userRead: [],
+        userLikes: [],
+        userDislikes: [],
+        lastChatEnded: { state: "Character One close", residue: "Character One residue" },
+        keyMoments: ["Character One moment"],
+        characterIntimatePreferences: [],
+        userIntimatePreferences: [],
+      },
+      changes: [],
+      createdAt: 1,
+    };
+
+    const target = document.createElement("div");
+    document.body.appendChild(target);
+    app = mount(DefaultChatScreen, { target });
+    await flushUi();
+
+    DBState.db.characters[1].characterEvolution.pendingProposal = {
+      proposalId: "proposal-char-2",
+      sourceChatId: "chat-2",
+      proposedState: {
+        relationship: { trustLevel: "char-2", dynamic: "Character Two dynamic" },
+        activeThreads: ["Character Two thread"],
+        runningJokes: [],
+        characterLikes: [],
+        characterDislikes: [],
+        characterHabits: [],
+        characterBoundariesPreferences: [],
+        userFacts: [],
+        userRead: [],
+        userLikes: [],
+        userDislikes: [],
+        lastChatEnded: { state: "Character Two close", residue: "Character Two residue" },
+        keyMoments: ["Character Two moment"],
+        characterIntimatePreferences: [],
+        userIntimatePreferences: [],
+      },
+      changes: [],
+      createdAt: 1,
+    };
+    selectedCharID.set(1);
+    await flushUi();
+
+    const reviewPrompt = Array.from(document.querySelectorAll("button")).find(
+      (element) => (element as HTMLButtonElement).textContent?.includes("Pending evolution proposal"),
+    ) as HTMLButtonElement | undefined;
+    expect(reviewPrompt).toBeDefined();
+    reviewPrompt?.click();
+    await flushUi();
+
+    const acceptButton = Array.from(document.querySelectorAll("button")).find(
+      (element) => (element as HTMLButtonElement).textContent?.trim() === "Accept",
+    ) as HTMLButtonElement | undefined;
+    expect(acceptButton).toBeDefined();
+    acceptButton?.click();
+    await flushUi();
+
+    expect(mocks.acceptEvolutionProposal).toHaveBeenCalledTimes(1);
+    expect(mocks.acceptEvolutionProposal.mock.calls[0]?.[0]).toBe("char-2");
+    expect(mocks.acceptEvolutionProposal.mock.calls[0]?.[1]).toMatchObject({
+      relationship: {
+        trustLevel: "char-2",
+        dynamic: "Character Two dynamic",
+      },
+    });
   });
 });

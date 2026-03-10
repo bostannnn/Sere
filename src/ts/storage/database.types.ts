@@ -53,8 +53,6 @@ export interface Database{
     translator: string
     zoomsize:number
     customBackground:string
-    textgenWebUIStreamURL:string
-    textgenWebUIBlockingURL:string
     autoTranslate: boolean
     fullScreen:boolean
     playMessage:boolean
@@ -99,7 +97,6 @@ export interface Database{
     textScreenRounded?:boolean
     textScreenBorder?:string
     characterOrder:(string|folder)[]
-    hordeConfig:hordeConfig,
     novelai:{
         token:string,
         model:string
@@ -116,7 +113,6 @@ export interface Database{
     autoSuggestClean:boolean
     claudeAPIKey:string,
     useChatCopy:boolean,
-    novellistAPI:string,
     useAutoTranslateInput:boolean
     imageCompression:boolean
     classicMaxWidth: boolean,
@@ -127,8 +123,6 @@ export interface Database{
     hypav2:boolean
     memoryAlgorithmType:string // To enable new memory module/algorithms 
     proxyRequestModel:string
-    ooba:OobaSettings
-    ainconfig: AINsettings
     personaPrompt:string
     openrouterRequestModel:string
     openrouterSubRequestModel:string
@@ -153,7 +147,6 @@ export interface Database{
     promptTemplate:PromptItem[]
     hypaModel:HypaModel
     saveTime?:number
-    mancerHeader:string
     emotionProcesser:'submodel'|HypaModel,
     showMenuChatList?:boolean,
     translatorType:'google'|'deepl'|'none'|'llm'|'deeplX'|'bergamot',
@@ -187,7 +180,6 @@ export interface Database{
         accessToken: string
         projectId: string
     }
-    mistralKey?:string
     chainOfThought?:boolean
     genTime:number
     promptSettings: PromptSettings
@@ -196,7 +188,6 @@ export interface Database{
     repetition_penalty:number
     min_p:number
     top_a:number
-    claudeAws:boolean
     lastPatchNoteCheckVersion?:string,
     removePunctuationHypa?:boolean
     memoryLimitThickness?:number
@@ -237,7 +228,6 @@ export interface Database{
     templateDefaultVariables:string
     hypaAllocatedTokens:number
     hypaChunkSize:number
-    cohereAPIKey:string
     dallEQuality:string
     font: string
     customFont: string
@@ -278,11 +268,6 @@ export interface Database{
     customAPIFormat:LLMFormat
     systemContentReplacement:string
     systemRoleReplacement:'user'|'assistant'
-    vertexPrivateKey: string
-    vertexClientEmail: string
-    vertexAccessToken: string
-    vertexAccessTokenExpires: number
-    vertexRegion: string
     seperateParametersEnabled:boolean
     seperateParameters:{
         memory: SeparateParameters,
@@ -401,8 +386,6 @@ export interface Database{
     autoScrollToNewMessage?: boolean
     alwaysScrollToNewMessage?: boolean
     newMessageButtonStyle?: string
-    echoMessage?:string
-    echoDelay?:number
     createFolderOnBranch?:boolean
     hypaV3Debug?:{
         timestamp:number
@@ -854,8 +837,6 @@ export interface botPreset{
     aiModel?: string
     subModel?:string
     removedModelMigrationNotice?: string[]
-    textgenWebUIStreamURL?:string
-    textgenWebUIBlockingURL?:string
     forceReplaceUrl?:string
     forceReplaceUrl2?:string
     bias: [string, number][]
@@ -863,8 +844,6 @@ export interface botPreset{
     openrouterRequestModel?:string
     openrouterSubRequestModel?:string
     proxyKey?:string
-    ooba: OobaSettings
-    ainconfig: AINsettings
     koboldURL?: string
     NAISettings?: NAISettings
     autoSuggestPrompt?: string
@@ -937,12 +916,6 @@ export interface botPreset{
     dynamicOutput?:DynamicOutput
 }
 
-
-interface hordeConfig{
-    apiKey:string
-    model:string
-    softPrompt:string
-}
 
 export interface folder{
     name:string
@@ -1077,50 +1050,4 @@ export interface PromptDiffPrefs {
     isGrouped: boolean
     showOnlyChanges: boolean
     contextRadius: number
-}
-
-export interface AINsettings{
-    top_p: number,
-    rep_pen: number,
-    top_a: number,
-    rep_pen_slope:number,
-    rep_pen_range: number,
-    typical_p:number
-    badwords:string
-    stoptokens:string
-    top_k:number
-}
-
-export interface OobaSettings{
-    max_new_tokens: number,
-    do_sample: boolean,
-    temperature: number,
-    top_p: number,
-    typical_p: number,
-    repetition_penalty: number,
-    encoder_repetition_penalty: number,
-    top_k: number,
-    min_length: number,
-    no_repeat_ngram_size: number,
-    num_beams: number,
-    penalty_alpha: number,
-    length_penalty: number,
-    early_stopping: boolean,
-    seed: number,
-    add_bos_token: boolean,
-    truncation_length: number,
-    ban_eos_token: boolean,
-    skip_special_tokens: boolean,
-    top_a: number,
-    tfs: number,
-    epsilon_cutoff: number,
-    eta_cutoff: number,
-    formating:{
-        header:string,
-        systemPrefix:string,
-        userPrefix:string,
-        assistantPrefix:string
-        seperator:string
-        useName:boolean
-    }
 }

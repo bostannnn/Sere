@@ -7,16 +7,12 @@
     import { BotSettingsSubMenuIndex, DBState } from 'src/ts/stores.svelte';
     import { tokenizerList } from "src/ts/tokenizer";
     import ModelList from "src/lib/UI/ModelList.svelte";
-    import { PlusIcon, TrashIcon } from "@lucide/svelte";
     import TextInput from "src/lib/UI/GUI/TextInput.svelte";
-    import NumberInput from "src/lib/UI/GUI/NumberInput.svelte";
     import SliderInput from "src/lib/UI/GUI/SliderInput.svelte";
-    import TextAreaInput from "src/lib/UI/GUI/TextAreaInput.svelte";
     import Button from "src/lib/UI/GUI/Button.svelte";
     import SelectInput from "src/lib/UI/GUI/SelectInput.svelte";
     import OptionInput from "src/lib/UI/GUI/OptionInput.svelte";
     import OpenRouterModelSelect from "src/lib/UI/GUI/OpenRouterModelSelect.svelte";
-    import OobaSettings from "./OobaSettings.svelte";
     import OpenrouterSettings from "./OpenrouterSettings.svelte";
     import ChatFormatSettings from "./ChatFormatSettings.svelte";
     import PromptSettings from "./PromptSettings.svelte";
@@ -32,19 +28,6 @@
     }
 
     const { goPromptTemplate = () => {} }: Props = $props();
-    const modelStartsWith = (value: unknown, prefix: string) => typeof value === "string" && value.startsWith(prefix)
-
-    $effect.pre(() => {
-        if(DBState.db.aiModel === 'textgen_webui' || DBState.db.subModel === 'mancer'){
-            DBState.db.useStreaming = DBState.db.textgenWebUIStreamURL.startsWith("wss://")
-        }
-    });
-
-    function clearVertexToken() {
-        DBState.db.vertexAccessToken = '';
-        DBState.db.vertexAccessTokenExpires = 0;
-    }
-
     const allowedSubmenus = new Set([0, 1, 2, -1]);
     let submenu = $state(0)
     const modelInfo = $derived(getModelInfo(DBState.db.aiModel))
@@ -128,55 +111,13 @@
         <span class="ds-settings-label">GoogleAI API Key</span>
         <TextInput size="sm" placeholder="..." hideText={DBState.db.hideApiKey} bind:value={DBState.db.google.accessToken}/>
     {/if}
-    {#if modelInfo.provider === LLMProvider.VertexAI || subModelInfo.provider === LLMProvider.VertexAI}
-        <span class="ds-settings-label">Project ID</span>
-        <TextInput size="sm" placeholder="..." bind:value={DBState.db.google.projectId} oninput={clearVertexToken}/>
-        <span class="ds-settings-label">Vertex Client Email</span>
-        <TextInput size="sm" placeholder="..." bind:value={DBState.db.vertexClientEmail} oninput={clearVertexToken}/>
-        <span class="ds-settings-label">Vertex Private Key</span>
-        <TextInput size="sm" placeholder="..." hideText={DBState.db.hideApiKey} bind:value={DBState.db.vertexPrivateKey} oninput={clearVertexToken}/>
-        <span class="ds-settings-label">Region</span>
-        <SelectInput value={DBState.db.vertexRegion} onchange={(e) => {
-            DBState.db.vertexRegion = e.currentTarget.value
-            clearVertexToken()
-        }}>
-            <OptionInput value="global">
-                global
-            </OptionInput>
-            <OptionInput value="us-central1">
-                us-central1
-            </OptionInput>
-            <OptionInput value="us-west1">
-                us-west1
-            </OptionInput>
-        </SelectInput>    
-    {/if}
-    {#if modelInfo.provider === LLMProvider.NovelList || subModelInfo.provider === LLMProvider.NovelList}
-        <span class="ds-settings-label">NovelList {language.apiKey}</span>
-        <TextInput hideText={DBState.db.hideApiKey} size="sm" placeholder="..." bind:value={DBState.db.novellistAPI}/>
-    {/if}
-    {#if modelStartsWith(DBState.db.aiModel, 'mancer') || modelStartsWith(DBState.db.subModel, 'mancer')}
-        <span class="ds-settings-label">Mancer {language.apiKey}</span>
-        <TextInput hideText={DBState.db.hideApiKey} size="sm" placeholder="..." bind:value={DBState.db.mancerHeader}/>
-    {/if}
-    {#if modelInfo.provider === LLMProvider.Anthropic || subModelInfo.provider === LLMProvider.Anthropic
-            || modelInfo.provider === LLMProvider.AWS || subModelInfo.provider === LLMProvider.AWS }
+    {#if modelInfo.provider === LLMProvider.Anthropic || subModelInfo.provider === LLMProvider.Anthropic}
         <span class="ds-settings-label">Claude {language.apiKey}</span>
         <TextInput hideText={DBState.db.hideApiKey} size="sm" placeholder="..." bind:value={DBState.db.claudeAPIKey}/>
-    {/if}
-    {#if modelInfo.provider === LLMProvider.Mistral || subModelInfo.provider === LLMProvider.Mistral}
-        <span class="ds-settings-label">Mistral {language.apiKey}</span>
-        <TextInput hideText={DBState.db.hideApiKey} size="sm" placeholder="..." bind:value={DBState.db.mistralKey!}/>
     {/if}
     {#if modelInfo.provider === LLMProvider.NovelAI || subModelInfo.provider === LLMProvider.NovelAI}
         <span class="ds-settings-label">NovelAI Bearer Token</span>
         <TextInput hideText={DBState.db.hideApiKey} bind:value={DBState.db.novelai.token}/>
-    {/if}
-    {#if modelInfo.provider === LLMProvider.Cohere || subModelInfo.provider === LLMProvider.Cohere}
-        <div class="ds-settings-section">
-            <span class="ds-settings-label">Cohere {language.apiKey}</span>
-            <TextInput hideText={DBState.db.hideApiKey} size="sm" bind:value={DBState.db.cohereAPIKey} />
-        </div>
     {/if}
     {#if DBState.db.aiModel === 'ollama-hosted'}
         <div class="ds-settings-section">
@@ -260,40 +201,7 @@
         <TextInput bind:value={DBState.db.koboldURL} />
 
     {/if}
-
-    {#if DBState.db.aiModel === 'echo_model' || DBState.db.subModel === 'echo_model'}
-        <div class="ds-settings-section">
-            <span class="ds-settings-label">Echo Message</span>
-            <TextAreaInput bind:value={DBState.db.echoMessage!} placeholder="The message you want to receive as the bot's response\n(e.g., Lumi tilts her head, her white hair sliding down as her pretty green and aqua eyes sparkle…)"/>
-            <span class="ds-settings-label">Echo Delay (Seconds)</span>
-            <NumberInput bind:value={DBState.db.echoDelay!} min={0}/>
-        </div>
-    {/if}
-
-
-    {#if modelStartsWith(DBState.db.aiModel, "horde") || modelStartsWith(DBState.db.subModel, "horde") }
-        <span class="ds-settings-label">Horde {language.apiKey}</span>
-        <TextInput hideText={DBState.db.hideApiKey} bind:value={DBState.db.hordeConfig.apiKey} />
-    {/if}
-    {#if DBState.db.aiModel === 'textgen_webui' || DBState.db.subModel === 'textgen_webui'
-        || DBState.db.aiModel === 'mancer' || DBState.db.subModel === 'mancer'}
-        <div class="ds-settings-section">
-            <span class="ds-settings-label">Blocking {language.providerURL}</span>
-            <TextInput bind:value={DBState.db.textgenWebUIBlockingURL} placeholder="https://..."/>
-            <span class="ds-settings-note-danger">You must use textgen webui with --public-api</span>
-            <span class="ds-settings-label">Stream {language.providerURL}</span>
-            <TextInput bind:value={DBState.db.textgenWebUIStreamURL} placeholder="wss://..."/>
-            <span class="ds-settings-note-danger">You are using web version. you must use ngrok or other tunnels to use your local webui.</span>
-            <span class="ds-settings-note-danger">Warning: For Ooba version over 1.7, use "Ooba" as model, and use url like http://127.0.0.1:5000/v1/chat/completions</span>
-        </div>
-    {/if}
-    {#if DBState.db.aiModel === 'ooba' || DBState.db.subModel === 'ooba'}
-        <div class="ds-settings-section">
-            <span class="ds-settings-label">Ooba {language.providerURL}</span>
-            <TextInput bind:value={DBState.db.textgenWebUIBlockingURL} placeholder="https://..."/>
-        </div>
-    {/if}
-    {#if modelStartsWith(DBState.db.aiModel, "horde") || DBState.db.aiModel === 'kobold' }
+    {#if DBState.db.aiModel === 'kobold'}
         <ChatFormatSettings />
     {/if}
     </div>
@@ -303,64 +211,7 @@
     <div class="ds-settings-section">
     <!-- Data-driven basic parameters -->
     <SettingRenderer items={allBasicParameterItems} {modelInfo} {subModelInfo} />
-    {#if DBState.db.aiModel === 'textgen_webui' || DBState.db.aiModel === 'mancer' || modelStartsWith(DBState.db.aiModel, 'local_') || modelStartsWith(DBState.db.aiModel, 'hf:::')}
-        <span class="ds-settings-label">Repetition Penalty</span>
-        <SliderInput min={1} max={1.5} step={0.01} fixed={2} bind:value={DBState.db.ooba.repetition_penalty}/>
-        <span class="ds-settings-label">Length Penalty</span>
-        <SliderInput min={-5} max={5} step={0.05} fixed={2} bind:value={DBState.db.ooba.length_penalty}/>
-        <span class="ds-settings-label">Top K</span>
-        <SliderInput min={0} max={100} step={1} bind:value={DBState.db.ooba.top_k} />
-        <span class="ds-settings-label">Top P</span>
-        <SliderInput min={0} max={1} step={0.01} fixed={2} bind:value={DBState.db.ooba.top_p}/>
-        <span class="ds-settings-label">Typical P</span>
-        <SliderInput min={0} max={1} step={0.01} fixed={2} bind:value={DBState.db.ooba.typical_p}/>
-        <span class="ds-settings-label">Top A</span>
-        <SliderInput min={0} max={1} step={0.01} fixed={2} bind:value={DBState.db.ooba.top_a}/>
-        <span class="ds-settings-label">No Repeat n-gram Size</span>
-        <SliderInput min={0} max={20} step={1} bind:value={DBState.db.ooba.no_repeat_ngram_size}/>
-        <Check bind:check={DBState.db.ooba.do_sample} name="Do Sample"/>
-        <Check bind:check={DBState.db.ooba.add_bos_token} name="Add BOS Token"/>
-        <Check bind:check={DBState.db.ooba.ban_eos_token} name="Ban EOS Token"/>
-        <Check bind:check={DBState.db.ooba.skip_special_tokens} name="Skip Special Tokens"/>
-        <Check check={!!DBState.db.localStopStrings} name={language.customStopWords} onChange={() => {
-            if(!DBState.db.localStopStrings){
-                DBState.db.localStopStrings = []
-            }
-            else{
-                DBState.db.localStopStrings = undefined
-            }
-        }} />
-        {#if DBState.db.localStopStrings}
-            <div class="ds-settings-section ds-settings-card">
-                <div class="ds-settings-inline-actions action-rail">
-                    <Button size="sm" className="ds-settings-icon-action ds-settings-icon-action-compact icon-btn icon-btn--sm" onclick={() => {
-                        const localStopStrings = DBState.db.localStopStrings ?? []
-                        localStopStrings.push('')
-                        DBState.db.localStopStrings = localStopStrings
-                    }}><PlusIcon /></Button>
-                </div>
-                {#each DBState.db.localStopStrings as _stopString, i (i)}
-                    <div class="ds-settings-inline-actions ds-settings-inline-actions-fluid action-rail">
-                        <div class="ds-settings-grow-min">
-                            <TextInput bind:value={DBState.db.localStopStrings[i]} fullwidth fullh/>
-                        </div>
-                        <div>
-                            <Button styled="danger" size="sm" className="ds-settings-icon-action ds-settings-icon-action-compact icon-btn icon-btn--sm" onclick={() => {
-                                const localStopStrings = DBState.db.localStopStrings ?? []
-                                localStopStrings.splice(i, 1)
-                                DBState.db.localStopStrings = localStopStrings
-                            }}><TrashIcon /></Button>
-                        </div>
-                    </div>
-                {/each}
-            </div>
-        {/if}
-        <div class="ds-settings-card ds-settings-card-stack">
-            <ChatFormatSettings />
-        </div>
-        <Check bind:check={DBState.db.ooba.formating.useName} name={language.useNamePrefix}/>
-    
-    {:else if modelInfo.format === LLMFormat.NovelAI}
+    {#if modelInfo.format === LLMFormat.NovelAI}
         <div class="ds-settings-card ds-settings-card-stack">
             <span class="ds-settings-label">Starter</span>
             <TextInput bind:value={DBState.db.NAIsettings.starter} placeholder="⁂" />
@@ -394,30 +245,11 @@
         <span class="ds-settings-label">Cfg Scale</span>
         <SliderInput min={1} max={3} step={0.01} fixed={2} bind:value={DBState.db.NAIsettings.cfg_scale!}/>
 
-    {:else if modelInfo.format === LLMFormat.NovelList}
-        <span class="ds-settings-label">Top P</span>
-        <SliderInput min={0} max={2} step={0.01} fixed={2} bind:value={DBState.db.ainconfig.top_p}/>
-        <span class="ds-settings-label">Reputation Penalty</span>
-        <SliderInput min={0} max={2} step={0.01} fixed={2} bind:value={DBState.db.ainconfig.rep_pen}/>
-        <span class="ds-settings-label">Reputation Penalty Range</span>
-        <SliderInput min={0} max={2048} step={1} fixed={2} bind:value={DBState.db.ainconfig.rep_pen_range}/>
-        <span class="ds-settings-label">Reputation Penalty Slope</span>
-        <SliderInput min={0} max={10} step={0.1} fixed={2} bind:value={DBState.db.ainconfig.rep_pen_slope}/>
-        <span class="ds-settings-label">Top K</span>
-        <SliderInput min={1} max={500} step={1} fixed={2} bind:value={DBState.db.ainconfig.top_k}/>
-        <span class="ds-settings-label">Top A</span>
-        <SliderInput min={0} max={1} step={0.01} fixed={2} bind:value={DBState.db.ainconfig.top_a}/>
-        <span class="ds-settings-label">Typical P</span>
-        <SliderInput min={0} max={1} step={0.01} fixed={2} bind:value={DBState.db.ainconfig.typical_p}/>
     {:else}
         <!-- Standard parameters now handled by SettingRenderer above -->
     {/if}
 
-    {#if DBState.db.aiModel === 'ooba'}
-        <OobaSettings instructionMode={DBState.db.aiModel === 'ooba'} />
-    {/if}
-
-    {#if modelStartsWith(DBState.db.aiModel, 'openrouter')}
+    {#if DBState.db.aiModel === 'openrouter'}
         <OpenrouterSettings />
     {/if}
 

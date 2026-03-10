@@ -14,6 +14,11 @@
         showMeta?: boolean;
     }
 
+    interface ModelOption {
+        id: string;
+        name: string;
+    }
+
     let {
         value = $bindable(""),
         label = "OpenRouter Model",
@@ -24,7 +29,7 @@
 
     let searchQuery = $state("");
     let loading = $state(false);
-    let state = $state<OpenRouterModelsState>({
+    let modelState: OpenRouterModelsState = $state({
         models: [],
         status: 0,
         source: "server",
@@ -45,8 +50,13 @@
         ["anthropic/claude-v1-100k", "Claude v1 100k"],
         ["anthropic/claude-1.2", "Claude v1.2"],
     ] as const;
+    const autoOptions = [
+        { id: "risu/free", name: "Free Auto" },
+        { id: "openrouter/auto", name: "Openrouter Auto" },
+    ] as const;
 
-    const models = $derived(state.models ?? []);
+    const models = $derived(modelState.models ?? []);
+    const fallbackOptions = $derived(fallbackModels.map(([id, name]) => ({ id, name } satisfies ModelOption)));
     const filteredModels = $derived.by(() => {
         if (searchQuery === "") {
             return models;
@@ -56,6 +66,46 @@
             const modelText = `${model.name} ${model.id}`.toLowerCase();
             return searchTerms.every((term) => modelText.includes(term));
         });
+    });
+    const displayedOptions = $derived.by(() => {
+        const next: ModelOption[] = [];
+        const seen = new Set<string>();
+
+        const pushOption = (option: ModelOption | null | undefined) => {
+            if (!option || !option.id || seen.has(option.id)) {
+                return;
+            }
+            seen.add(option.id);
+            next.push(option);
+        };
+
+        if (includeAutoOptions) {
+            for (const option of autoOptions) {
+                pushOption(option);
+            }
+        }
+
+        const baseOptions = models.length === 0
+            ? fallbackOptions
+            : filteredModels.map((model) => ({
+                id: model.id,
+                name: model.name,
+            }));
+        for (const option of baseOptions) {
+            pushOption(option);
+        }
+
+        if (value && !seen.has(value)) {
+            const knownModel = models.find((model) => model.id === value);
+            const fallbackOption = fallbackOptions.find((option) => option.id === value);
+            const autoOption = autoOptions.find((option) => option.id === value);
+            pushOption({
+                id: value,
+                name: knownModel?.name ?? fallbackOption?.name ?? autoOption?.name ?? value,
+            });
+        }
+
+        return next;
     });
 
     function formatUpdatedAt(value: string | null): string {
@@ -72,7 +122,7 @@
     async function refreshModels(forceRefresh = false) {
         loading = true;
         try {
-            state = await openRouterModelsWithState({ forceRefresh });
+            modelState = await openRouterModelsWithState({ forceRefresh });
         } finally {
             loading = false;
         }
@@ -89,16 +139,16 @@
         <div class="ds-settings-openrouter-status-row">
             {#if loading}
                 <span class="ds-settings-label-muted-sm">Loading OpenRouter model list...</span>
-            {:else if state.stale}
+            {:else if modelState.stale}
                 <span class="ds-settings-label-muted-sm">
-                    Using cached model list{state.updatedAt ? ` (updated ${formatUpdatedAt(state.updatedAt)})` : ""}.
-                    {state.error ? ` Last refresh failed: ${state.error}` : ""}
+                    Using cached model list{modelState.updatedAt ? ` (updated ${formatUpdatedAt(modelState.updatedAt)})` : ""}.
+                    {modelState.error ? ` Last refresh failed: ${modelState.error}` : ""}
                 </span>
-            {:else if state.error}
-                <span class="ds-settings-note-danger">{state.error}</span>
-            {:else if state.updatedAt}
+            {:else if modelState.error}
+                <span class="ds-settings-note-danger">{modelState.error}</span>
+            {:else if modelState.updatedAt}
                 <span class="ds-settings-label-muted-sm">
-                    Model list updated {formatUpdatedAt(state.updatedAt)} ({state.source}).
+                    Model list updated {formatUpdatedAt(modelState.updatedAt)} ({modelState.source}).
                 </span>
             {/if}
             <Button
@@ -122,18 +172,8 @@
         />
     {/if}
     <SelectInput bind:value {disabled}>
-        {#if models.length === 0}
-            {#each fallbackModels as [modelId, modelName] (modelId)}
-                <OptionInput value={modelId}>{modelName}</OptionInput>
-            {/each}
-        {:else}
-            {#if includeAutoOptions}
-                <OptionInput value="risu/free">Free Auto</OptionInput>
-                <OptionInput value="openrouter/auto">Openrouter Auto</OptionInput>
-            {/if}
-            {#each filteredModels as model (model.id)}
-                <OptionInput value={model.id}>{model.name}</OptionInput>
-            {/each}
-        {/if}
+        {#each displayedOptions as option (option.id)}
+            <OptionInput value={option.id}>{option.name}</OptionInput>
+        {/each}
     </SelectInput>
 </div>

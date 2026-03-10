@@ -32,6 +32,7 @@ import {
     normalizeChatBackground,
     resolveChatBackgroundMode,
     resolveGlobalRagSettings,
+    stripLegacyProviderFields,
     type ChatBackgroundMode,
 } from './database.normalizers';
 import {
@@ -40,8 +41,6 @@ import {
     changeToPresetInDatabase,
     copyPresetInDatabase,
     decodeImportedPresetFile,
-    defaultAIN,
-    defaultOoba,
     encodeDownloadPresetBuffer,
     presetTemplate,
     REMOVED_PROVIDER_MIGRATION_NOTICE,
@@ -53,8 +52,6 @@ import { isNodeServer } from "src/ts/platform"
 const dbStorageLog = (..._args: unknown[]) => {};
 
 export {
-    defaultAIN,
-    defaultOoba,
     presetTemplate,
     DEFAULT_GLOBAL_RAG_SETTINGS,
     resolveChatBackgroundMode,
@@ -89,6 +86,7 @@ const emotionEmbeddingModels: Set<HypaModel> = new Set([
 ])
 
 export function setDatabase(data:Database){
+    stripLegacyProviderFields(data as unknown as Record<string, unknown>)
     if(checkNullish(data.characters)){
         data.characters = []
     }
@@ -165,12 +163,6 @@ export function setDatabase(data:Database){
     }
     if(checkNullish(data.customBackground)){
         data.customBackground = ''
-    }
-    if(checkNullish(data.textgenWebUIStreamURL)){
-        data.textgenWebUIStreamURL = 'wss://localhost/api/'
-    }
-    if(checkNullish(data.textgenWebUIBlockingURL)){
-        data.textgenWebUIBlockingURL = 'https://localhost/api/'
     }
     if(checkNullish(data.autoTranslate)){
         data.autoTranslate = false
@@ -272,13 +264,6 @@ export function setDatabase(data:Database){
             FontColorQuote2: '#FFB86C'
         }
     }
-    if(checkNullish(data.hordeConfig)){
-        data.hordeConfig = {
-            apiKey: "",
-            model: "",
-            softPrompt: ""
-        }
-    }
     if(checkNullish(data.novelai)){
         data.novelai = {
             token: "",
@@ -312,8 +297,6 @@ export function setDatabase(data:Database){
         largePortrait: false
     }]
     data.classicMaxWidth ??= false
-    data.ooba ??= safeStructuredClone(defaultOoba)
-    data.ainconfig ??= safeStructuredClone(defaultAIN)
     data.openrouterKey ??= ''
     data.openrouterRequestModel ??= DEFAULT_OPENROUTER_REQUEST_MODEL
     data.openrouterSubRequestModel ??= data.openrouterRequestModel
@@ -324,7 +307,6 @@ export function setDatabase(data:Database){
     data.colorSchemeName ??= 'default'
     data.NAIsettings.starter ??= ""
     data.hypaModel ??= 'MiniLM'
-    data.mancerHeader ??= ''
     const rawEmotionProcesser = data.emotionProcesser as string | undefined
     if(checkNullish(rawEmotionProcesser)){
         data.emotionProcesser = 'submodel'
@@ -420,6 +402,7 @@ export function setDatabase(data:Database){
     }
     if (data.botPresets) {
         for (const preset of data.botPresets) {
+            stripLegacyProviderFields(preset as unknown as Record<string, unknown>)
             preset.promptTemplate = normalizePromptTemplate(preset.promptTemplate)
             if (typeof preset.openrouterProvider === 'string') {
                 const oldProvider = preset.openrouterProvider as unknown as string;
@@ -500,11 +483,6 @@ export function setDatabase(data:Database){
     data.customAPIFormat ??= LLMFormat.OpenAICompatible
     data.systemContentReplacement ??= `system: {{slot}}`
     data.systemRoleReplacement ??= 'user'
-    data.vertexAccessToken ??= ''
-    data.vertexAccessTokenExpires ??= 0
-    data.vertexClientEmail ??= ''
-    data.vertexPrivateKey ??= ''
-    data.vertexRegion ??= 'global'
     data.seperateParametersEnabled ??= false
     data.seperateParameters ??= {
         memory: {},
@@ -624,8 +602,6 @@ export function setDatabase(data:Database){
     data.autoScrollToNewMessage ??= true
     data.alwaysScrollToNewMessage ??= false
     data.newMessageButtonStyle ??= 'bottom-center'
-    data.echoMessage ??= "Echo Message"
-    data.echoDelay ??= 0
     if(!isNodeServer){
         //this is intended to forcely reduce the size of the database in web
         data.promptInfoInsideChat = false

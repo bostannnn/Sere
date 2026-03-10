@@ -270,7 +270,9 @@
                     handleRightPanelTabKeydown(event, "evolution")
                 }}
             >
-                <EvolutionSettings />
+                {#key selectedCharacter?.chaId ?? "no-character"}
+                    <EvolutionSettings />
+                {/key}
             </div>
             {/if}
         {/if}

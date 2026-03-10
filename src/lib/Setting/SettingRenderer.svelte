@@ -56,7 +56,7 @@
     }
 
     /**
-     * Get value from nested path (e.g., 'ooba.top_p')
+     * Get value from nested path (e.g., 'google.accessToken')
      */
     function _getBindValue(item: SettingItem): unknown {
         if (item.bindPath) {
@@ -71,7 +71,7 @@
     }
 
     /**
-     * Set value to nested path (e.g., 'ooba.top_p')
+     * Set value to nested path (e.g., 'google.accessToken')
      */
     function _setBindValue(item: SettingItem, newValue: unknown): void {
         if (item.bindPath) {

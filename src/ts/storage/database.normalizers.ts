@@ -38,6 +38,26 @@ type LegacyProviderTarget = {
   openrouterSubRequestModel?: string;
 };
 
+const LEGACY_PROVIDER_FIELD_KEYS = [
+  'textgenWebUIStreamURL',
+  'textgenWebUIBlockingURL',
+  'hordeConfig',
+  'novellistAPI',
+  'ooba',
+  'ainconfig',
+  'mancerHeader',
+  'mistralKey',
+  'claudeAws',
+  'cohereAPIKey',
+  'vertexPrivateKey',
+  'vertexClientEmail',
+  'vertexAccessToken',
+  'vertexAccessTokenExpires',
+  'vertexRegion',
+  'echoMessage',
+  'echoDelay',
+] as const;
+
 function cloneDefaultGlobalRagSettings() {
   return {
     ...DEFAULT_GLOBAL_RAG_SETTINGS,
@@ -45,8 +65,46 @@ function cloneDefaultGlobalRagSettings() {
   };
 }
 
+export function stripLegacyProviderFields(target: Record<string, unknown> | null | undefined): boolean {
+  if (!target) {
+    return false;
+  }
+
+  let changed = false;
+  for (const key of LEGACY_PROVIDER_FIELD_KEYS) {
+    if (key in target) {
+      delete target[key];
+      changed = true;
+    }
+  }
+
+  return changed;
+}
+
 function isRemovedLegacyModelId(value: unknown): value is string {
-  return typeof value === 'string' && (value === 'reverse_proxy' || value.startsWith('xcustom:::'));
+  if (typeof value !== 'string') {
+    return false;
+  }
+
+  const normalized = value.trim().toLowerCase();
+  return (
+    normalized === 'reverse_proxy' ||
+    normalized.startsWith('xcustom:::') ||
+    normalized === 'ooba' ||
+    normalized === 'textgen_webui' ||
+    normalized === 'mancer' ||
+    normalized.startsWith('cohere-') ||
+    normalized === 'horde' ||
+    normalized.startsWith('horde:::') ||
+    normalized.startsWith('mistral-') ||
+    normalized === 'open-mistral-nemo' ||
+    normalized === 'novellist' ||
+    normalized === 'novellist_damsel' ||
+    normalized === 'echo_model' ||
+    normalized.startsWith('hf:::') ||
+    normalized.startsWith('deepinfra_') ||
+    normalized.startsWith('anthropic.claude-')
+  );
 }
 
 function ensureOpenRouterRequestModel(value: unknown) {
@@ -60,12 +118,37 @@ function ensureOpenRouterRequestModel(value: unknown) {
   return trimmed;
 }
 
+function normalizeSupportedModelSelection(value: unknown): string | null {
+  if (typeof value !== 'string') {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  const normalized = trimmed.toLowerCase();
+  if (!normalized) {
+    return null;
+  }
+
+  if (normalized.endsWith('-vertex')) {
+    return trimmed.slice(0, -7);
+  }
+
+  if (isRemovedLegacyModelId(trimmed)) {
+    return 'openrouter';
+  }
+
+  return null;
+}
+
 export function migrateRemovedProviderSelections(target: LegacyProviderTarget): boolean {
   let changed = false;
 
-  if (isRemovedLegacyModelId(target.aiModel)) {
-    target.aiModel = 'openrouter';
-    target.openrouterRequestModel = ensureOpenRouterRequestModel(target.openrouterRequestModel);
+  const nextAiModel = normalizeSupportedModelSelection(target.aiModel);
+  if (nextAiModel) {
+    target.aiModel = nextAiModel;
+    if (nextAiModel === 'openrouter') {
+      target.openrouterRequestModel = ensureOpenRouterRequestModel(target.openrouterRequestModel);
+    }
     changed = true;
   } else if (target.aiModel === 'openrouter') {
     const nextRequestModel = ensureOpenRouterRequestModel(target.openrouterRequestModel);
@@ -75,9 +158,12 @@ export function migrateRemovedProviderSelections(target: LegacyProviderTarget): 
     }
   }
 
-  if (isRemovedLegacyModelId(target.subModel)) {
-    target.subModel = 'openrouter';
-    target.openrouterSubRequestModel = ensureOpenRouterRequestModel(target.openrouterSubRequestModel);
+  const nextSubModel = normalizeSupportedModelSelection(target.subModel);
+  if (nextSubModel) {
+    target.subModel = nextSubModel;
+    if (nextSubModel === 'openrouter') {
+      target.openrouterSubRequestModel = ensureOpenRouterRequestModel(target.openrouterSubRequestModel);
+    }
     changed = true;
   } else if (target.subModel === 'openrouter') {
     const nextSubRequestModel = ensureOpenRouterRequestModel(target.openrouterSubRequestModel);

@@ -5,57 +5,11 @@ import { decodeRPack, encodeRPack } from '../rpack/rpack_js';
 import { encode as encodeMsgpack, decode as decodeMsgpack } from 'msgpackr/index-no-eval';
 import * as fflate from 'fflate';
 import { cloneDefaultPromptTemplate, normalizePromptTemplate } from './defaultPrompts';
-import { migrateRemovedProviderSelections } from './database.normalizers';
+import { migrateRemovedProviderSelections, stripLegacyProviderFields } from './database.normalizers';
 import type { PromptItem, PromptItemPlain } from '../process/prompt';
-import type { AINsettings, Database, botPreset, OobaSettings } from './database.types';
+import type { Database, botPreset } from './database.types';
 
 export const REMOVED_PROVIDER_MIGRATION_NOTICE = 'Legacy removed providers were migrated to OpenRouter. Review Bot Settings and re-save any affected presets.';
-
-export const defaultAIN:AINsettings = {
-  top_p: 0.7,
-  rep_pen: 1.0625,
-  top_a: 0.08,
-  rep_pen_slope: 1.7,
-  rep_pen_range: 1024,
-  typical_p: 1.0,
-  badwords: '',
-  stoptokens: '',
-  top_k: 140,
-};
-
-export const defaultOoba:OobaSettings = {
-  max_new_tokens: 180,
-  do_sample: true,
-  temperature: 0.7,
-  top_p: 0.9,
-  typical_p: 1,
-  repetition_penalty: 1.15,
-  encoder_repetition_penalty: 1,
-  top_k: 20,
-  min_length: 0,
-  no_repeat_ngram_size: 0,
-  num_beams: 1,
-  penalty_alpha: 0,
-  length_penalty: 1,
-  early_stopping: false,
-  seed: -1,
-  add_bos_token: true,
-  truncation_length: 4096,
-  ban_eos_token: false,
-  skip_special_tokens: true,
-  top_a: 0,
-  tfs: 1,
-  epsilon_cutoff: 0,
-  eta_cutoff: 0,
-  formating: {
-    header: 'Below is an instruction that describes a task. Write a response that appropriately completes the request.',
-    systemPrefix: '### Instruction:',
-    userPrefix: '### Input:',
-    assistantPrefix: '### Response:',
-    seperator: '',
-    useName: false,
-  },
-};
 
 export const presetTemplate:botPreset = {
   name: 'New Preset',
@@ -68,14 +22,10 @@ export const presetTemplate:botPreset = {
   PresensePenalty: 70,
   aiModel: 'gemini-3-flash-preview',
   subModel: 'gemini-3-flash-preview',
-  textgenWebUIStreamURL: '',
-  textgenWebUIBlockingURL: '',
   forceReplaceUrl: '',
   forceReplaceUrl2: '',
   proxyKey: '',
   bias: [],
-  ooba: safeStructuredClone(defaultOoba),
-  ainconfig: safeStructuredClone(defaultAIN),
   reverseProxyOobaArgs: {
     mode: 'instruct',
   },
@@ -164,14 +114,10 @@ function buildSavedPreset(db: Database): botPreset {
     PresensePenalty: db.PresensePenalty,
     aiModel: db.aiModel,
     subModel: db.subModel,
-    textgenWebUIStreamURL: db.textgenWebUIStreamURL,
-    textgenWebUIBlockingURL: db.textgenWebUIBlockingURL,
     forceReplaceUrl: db.forceReplaceUrl,
     bias: db.bias,
     koboldURL: db.koboldURL,
     proxyKey: db.proxyKey,
-    ooba: safeStructuredClone(db.ooba),
-    ainconfig: safeStructuredClone(db.ainconfig),
     proxyRequestModel: db.proxyRequestModel,
     openrouterRequestModel: db.openrouterRequestModel,
     openrouterSubRequestModel: db.openrouterSubRequestModel,
@@ -240,12 +186,11 @@ function appendPreset(db: Database, preset: botPreset) {
 
 function sanitizePresetForExport(preset: botPreset): botPreset {
   const sanitized = safeStructuredClone(preset);
+  stripLegacyProviderFields(sanitized as unknown as Record<string, unknown>);
   sanitized.openAIKey = '';
   sanitized.forceReplaceUrl = '';
   sanitized.forceReplaceUrl2 = '';
   sanitized.proxyKey = '';
-  sanitized.textgenWebUIStreamURL = '';
-  sanitized.textgenWebUIBlockingURL = '';
   return sanitized;
 }
 
@@ -336,6 +281,7 @@ export function copyPresetInDatabase(db: Database, id: number) {
 }
 
 export function setPresetOnDatabase(db: Database, newPres: botPreset) {
+  stripLegacyProviderFields(newPres as unknown as Record<string, unknown>);
   db.apiType = newPres.apiType ?? db.apiType;
   db.temperature = newPres.temperature ?? db.temperature;
   db.maxContext = newPres.maxContext ?? db.maxContext;
@@ -344,14 +290,10 @@ export function setPresetOnDatabase(db: Database, newPres: botPreset) {
   db.PresensePenalty = newPres.PresensePenalty ?? db.PresensePenalty;
   db.aiModel = newPres.aiModel ?? db.aiModel;
   db.subModel = newPres.subModel ?? db.subModel;
-  db.textgenWebUIStreamURL = newPres.textgenWebUIStreamURL ?? db.textgenWebUIStreamURL;
-  db.textgenWebUIBlockingURL = newPres.textgenWebUIBlockingURL ?? db.textgenWebUIBlockingURL;
   db.forceReplaceUrl = newPres.forceReplaceUrl ?? db.forceReplaceUrl;
   db.bias = newPres.bias ?? db.bias;
   db.koboldURL = newPres.koboldURL ?? db.koboldURL;
   db.proxyKey = newPres.proxyKey ?? db.proxyKey;
-  db.ooba = safeStructuredClone(newPres.ooba ?? db.ooba);
-  db.ainconfig = safeStructuredClone(newPres.ainconfig ?? db.ainconfig);
   db.openrouterRequestModel = newPres.openrouterRequestModel ?? db.openrouterRequestModel;
   db.openrouterSubRequestModel = newPres.openrouterSubRequestModel ?? db.openrouterSubRequestModel;
   db.proxyRequestModel = newPres.proxyRequestModel ?? db.proxyRequestModel;

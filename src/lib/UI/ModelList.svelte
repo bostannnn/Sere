@@ -67,7 +67,9 @@
     const providerOptions = $derived.by(() => {
         const next: ProviderOption[] = []
         const seen = new Set<string>()
-        const flatModels = getModelList()
+        const flatModels = getModelList({
+            groupedByProvider: false
+        })
         for (const model of flatModels) {
             const providerId = getProviderId(model.id)
             if (!providerId || seen.has(providerId)) continue

@@ -86,7 +86,7 @@
                 const keyToRemove = [
                     "characters", "loreBook", "personas", "username", "userIcon", "userNote",
                     "modules", "enabledModules", "botPresets", "characterOrder", "webUiUrl", "characterOrder",
-                    "hordeConfig", "novelai", "koboldURL", "ooba", "ainconfig", "personaPrompt", "promptTemplate",
+                    "novelai", "koboldURL", "personaPrompt", "promptTemplate",
                     "deeplOptions", "google", "customPromptTemplateToggle", "globalChatVariables", "comfyConfig",
                     "comfyUiUrl", "translatorPrompt", "customModels", "mcpURLs", "authRefreshes",
                 ];
