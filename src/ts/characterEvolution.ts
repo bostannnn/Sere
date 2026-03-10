@@ -89,6 +89,39 @@ export const CHARACTER_EVOLUTION_MODEL_SUGGESTIONS = [
     "deepseek/deepseek-chat",
 ] as const;
 
+const CHARACTER_EVOLUTION_NATIVE_MODEL_SUGGESTIONS = {
+    openrouter: CHARACTER_EVOLUTION_MODEL_SUGGESTIONS,
+    openai: [
+        "gpt-4.1-mini",
+        "gpt-4.1",
+    ],
+    anthropic: [
+        "claude-3-5-haiku-latest",
+        "claude-3-5-sonnet-latest",
+    ],
+    google: [
+        "gemini-2.0-flash-001",
+        "gemini-2.0-flash",
+    ],
+    deepseek: [
+        "deepseek-chat",
+    ],
+    ollama: [] as const,
+    kobold: [] as const,
+    novelai: [] as const,
+} as const;
+
+const CHARACTER_EVOLUTION_MODEL_PREFIX_BY_PROVIDER = {
+    openai: "openai/",
+    anthropic: "anthropic/",
+    google: "google/",
+    deepseek: "deepseek/",
+} as const;
+
+const CHARACTER_EVOLUTION_MODEL_PREFIXES = Object.values(
+    CHARACTER_EVOLUTION_MODEL_PREFIX_BY_PROVIDER,
+);
+
 const BUILTIN_SECTION_DEFS: Array<{
     key: CharacterEvolutionSectionKey,
     label: string,
@@ -210,6 +243,34 @@ export function createDefaultCharacterEvolutionDefaults(): CharacterEvolutionDef
     };
 }
 
+export function normalizeCharacterEvolutionExtractionModel(providerRaw: unknown, modelRaw: unknown): string {
+    const provider = typeof providerRaw === "string" ? providerRaw.trim().toLowerCase() : "";
+    const model = typeof modelRaw === "string" ? modelRaw.trim() : "";
+    if (!model || provider === "openrouter") {
+        return model;
+    }
+
+    const normalizedModel = model.toLowerCase();
+    const matchedPrefix = CHARACTER_EVOLUTION_MODEL_PREFIXES.find((prefix) => normalizedModel.startsWith(prefix));
+    const prefix = CHARACTER_EVOLUTION_MODEL_PREFIX_BY_PROVIDER[
+        provider as keyof typeof CHARACTER_EVOLUTION_MODEL_PREFIX_BY_PROVIDER
+    ];
+    if (prefix && matchedPrefix === prefix) {
+        return model.slice(prefix.length);
+    }
+    if (matchedPrefix) {
+        return "";
+    }
+    return model;
+}
+
+export function getCharacterEvolutionModelSuggestions(providerRaw: string): readonly string[] {
+    const provider = providerRaw.trim().toLowerCase();
+    return CHARACTER_EVOLUTION_NATIVE_MODEL_SUGGESTIONS[
+        provider as keyof typeof CHARACTER_EVOLUTION_NATIVE_MODEL_SUGGESTIONS
+    ] ?? CHARACTER_EVOLUTION_MODEL_SUGGESTIONS;
+}
+
 export function normalizeCharacterEvolutionPrivacy(raw: unknown): CharacterEvolutionPrivacySettings {
     const value = (raw && typeof raw === "object") ? raw as Record<string, unknown> : {};
     return {
@@ -283,13 +344,12 @@ export function normalizeCharacterEvolutionDefaults(raw: unknown): CharacterEvol
     const defaults = createDefaultCharacterEvolutionDefaults();
     const value = (raw && typeof raw === "object") ? raw as Record<string, unknown> : {};
     const extractionMaxTokens = Number(value.extractionMaxTokens);
+    const extractionProvider = typeof value.extractionProvider === "string" && value.extractionProvider.trim()
+        ? value.extractionProvider.trim()
+        : defaults.extractionProvider;
     return {
-        extractionProvider: typeof value.extractionProvider === "string" && value.extractionProvider.trim()
-            ? value.extractionProvider.trim()
-            : defaults.extractionProvider,
-        extractionModel: typeof value.extractionModel === "string"
-            ? value.extractionModel.trim()
-            : defaults.extractionModel,
+        extractionProvider,
+        extractionModel: normalizeCharacterEvolutionExtractionModel(extractionProvider, value.extractionModel),
         extractionMaxTokens: Number.isFinite(extractionMaxTokens) && extractionMaxTokens > 0
             ? Math.max(64, Math.floor(extractionMaxTokens))
             : defaults.extractionMaxTokens,
@@ -305,15 +365,14 @@ export function normalizeCharacterEvolutionSettings(raw: unknown): CharacterEvol
     const defaults = createDefaultCharacterEvolutionDefaults();
     const value = (raw && typeof raw === "object") ? raw as Record<string, unknown> : {};
     const extractionMaxTokens = Number(value.extractionMaxTokens);
+    const extractionProvider = typeof value.extractionProvider === "string" && value.extractionProvider.trim()
+        ? value.extractionProvider.trim()
+        : defaults.extractionProvider;
     return {
         enabled: value.enabled === true,
         useGlobalDefaults: value.useGlobalDefaults !== false,
-        extractionProvider: typeof value.extractionProvider === "string" && value.extractionProvider.trim()
-            ? value.extractionProvider.trim()
-            : defaults.extractionProvider,
-        extractionModel: typeof value.extractionModel === "string"
-            ? value.extractionModel.trim()
-            : defaults.extractionModel,
+        extractionProvider,
+        extractionModel: normalizeCharacterEvolutionExtractionModel(extractionProvider, value.extractionModel),
         extractionMaxTokens: Number.isFinite(extractionMaxTokens) && extractionMaxTokens > 0
             ? Math.max(64, Math.floor(extractionMaxTokens))
             : defaults.extractionMaxTokens,

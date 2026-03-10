@@ -174,4 +174,29 @@ describe("server prompt template slots", () => {
     expect(assembled?.messages?.some((entry: Record<string, unknown>) => String(entry.content || "").includes("A careful archivist."))).toBe(true);
     expect(assembled?.messages?.some((entry: Record<string, unknown>) => String(entry.content || "").includes("Trust level: high"))).toBe(true);
   });
+  it("keeps slot-only templates message-free", async () => {
+    const assembled = await buildGeneratePromptMessages({
+      character: {
+        name: "Chronicle Bot",
+      },
+      chat: {
+        message: [{ role: "user", data: "hello" }],
+      },
+      settings: {
+        promptTemplate: [
+          { type: "rulebookRag", innerFormat: "{{slot}}" },
+        ],
+      },
+      userMessage: "hello",
+    });
+
+    expect(assembled?.messages).toEqual([]);
+    expect(assembled?.promptBlocks).toEqual([
+      expect.objectContaining({
+        title: "Rulebook RAG",
+        source: "template-slot",
+        slot: "rulebookRag",
+      }),
+    ]);
+  });
 });

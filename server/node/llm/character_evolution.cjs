@@ -85,6 +85,33 @@ function toString(value) {
     return typeof value === 'string' ? value.trim() : '';
 }
 
+const MODEL_PREFIX_BY_PROVIDER = {
+    openai: 'openai/',
+    anthropic: 'anthropic/',
+    google: 'google/',
+    deepseek: 'deepseek/',
+};
+
+const MODEL_PREFIXES = Object.values(MODEL_PREFIX_BY_PROVIDER);
+
+function normalizeCharacterEvolutionExtractionModel(providerRaw, modelRaw) {
+    const provider = toString(providerRaw).toLowerCase();
+    const model = toString(modelRaw);
+    if (!model || provider === 'openrouter') {
+        return model;
+    }
+    const normalizedModel = model.toLowerCase();
+    const matchedPrefix = MODEL_PREFIXES.find((prefix) => normalizedModel.startsWith(prefix));
+    const prefix = MODEL_PREFIX_BY_PROVIDER[provider];
+    if (prefix && matchedPrefix === prefix) {
+        return model.slice(prefix.length);
+    }
+    if (matchedPrefix) {
+        return '';
+    }
+    return model;
+}
+
 function createDefaultCharacterEvolutionState() {
     return {
         relationship: {
@@ -232,9 +259,10 @@ function normalizeCharacterEvolutionDefaults(raw) {
     const defaults = createDefaultCharacterEvolutionDefaults();
     const value = (raw && typeof raw === 'object') ? raw : {};
     const extractionMaxTokens = Number(value.extractionMaxTokens);
+    const extractionProvider = toString(value.extractionProvider) || defaults.extractionProvider;
     return {
-        extractionProvider: toString(value.extractionProvider) || defaults.extractionProvider,
-        extractionModel: toString(value.extractionModel),
+        extractionProvider,
+        extractionModel: normalizeCharacterEvolutionExtractionModel(extractionProvider, value.extractionModel),
         extractionMaxTokens: Number.isFinite(extractionMaxTokens) && extractionMaxTokens > 0
             ? Math.max(64, Math.floor(extractionMaxTokens))
             : defaults.extractionMaxTokens,
@@ -248,11 +276,12 @@ function normalizeCharacterEvolutionSettings(raw) {
     const defaults = createDefaultCharacterEvolutionDefaults();
     const value = (raw && typeof raw === 'object') ? raw : {};
     const extractionMaxTokens = Number(value.extractionMaxTokens);
+    const extractionProvider = toString(value.extractionProvider) || defaults.extractionProvider;
     return {
         enabled: value.enabled === true,
         useGlobalDefaults: value.useGlobalDefaults !== false,
-        extractionProvider: toString(value.extractionProvider) || defaults.extractionProvider,
-        extractionModel: toString(value.extractionModel),
+        extractionProvider,
+        extractionModel: normalizeCharacterEvolutionExtractionModel(extractionProvider, value.extractionModel),
         extractionMaxTokens: Number.isFinite(extractionMaxTokens) && extractionMaxTokens > 0
             ? Math.max(64, Math.floor(extractionMaxTokens))
             : defaults.extractionMaxTokens,
@@ -381,9 +410,10 @@ function isEvolutionSectionAllowed(section, privacy) {
     return true;
 }
 
-function sanitizeStateForEvolution(stateRaw, evolutionSettings) {
+function sanitizeStateForEvolution(stateRaw, evolutionSettings, baseStateRaw = null) {
     const state = normalizeCharacterEvolutionState(stateRaw);
     const defaults = createDefaultCharacterEvolutionState();
+    const baseState = normalizeCharacterEvolutionState(baseStateRaw);
     const privacy = normalizeCharacterEvolutionPrivacy(evolutionSettings?.privacy);
     const allowedKeys = new Set(
         normalizeCharacterEvolutionSectionConfigs(evolutionSettings?.sectionConfigs)
@@ -393,7 +423,7 @@ function sanitizeStateForEvolution(stateRaw, evolutionSettings) {
 
     for (const key of Object.keys(defaults)) {
         if (allowedKeys.has(key)) continue;
-        state[key] = clone(defaults[key], defaults[key]);
+        state[key] = clone(baseState[key], defaults[key]);
     }
     return state;
 }
@@ -493,7 +523,11 @@ function normalizeCharacterEvolutionProposal(raw, evolutionSettings) {
             .map((section) => section.key)
     );
     return {
-        proposedState: sanitizeStateForEvolution(payload.proposedState || evolutionSettings.currentState, evolutionSettings),
+        proposedState: sanitizeStateForEvolution(
+            payload.proposedState || evolutionSettings.currentState,
+            evolutionSettings,
+            evolutionSettings.currentState
+        ),
         changes: Array.isArray(payload.changes)
             ? payload.changes
                 .map((change) => {

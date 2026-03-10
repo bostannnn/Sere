@@ -354,7 +354,10 @@
             item.type === 'description' ||
             item.type === 'lorebook' ||
             item.type === 'postEverything' ||
-            item.type === 'memory'
+            item.type === 'memory' ||
+            item.type === 'rulebookRag' ||
+            item.type === 'gameState' ||
+            item.type === 'characterState'
         
         const isPromptItemAuthorNote = (item: PromptItem): item is PromptItemAuthorNote =>
             item.type === 'authornote'

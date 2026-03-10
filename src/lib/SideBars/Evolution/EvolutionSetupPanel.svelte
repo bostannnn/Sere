@@ -6,7 +6,10 @@
     import TextAreaInput from "src/lib/UI/GUI/TextAreaInput.svelte"
     import TextInput from "src/lib/UI/GUI/TextInput.svelte"
     import ModelList from "src/lib/UI/ModelList.svelte"
-    import { CHARACTER_EVOLUTION_MODEL_SUGGESTIONS } from "src/ts/characterEvolution"
+    import {
+        getCharacterEvolutionModelSuggestions,
+        normalizeCharacterEvolutionExtractionModel,
+    } from "src/ts/characterEvolution"
     import type { CharacterEvolutionSettings, character as CharacterEntry } from "src/ts/storage/database.types"
 
     interface Props {
@@ -22,6 +25,9 @@
         onOpenGlobalDefaults: () => void
         onPersistCharacter: () => void | Promise<void>
         onRefreshVersions: () => void | Promise<void>
+        replayCurrentChatAvailable?: boolean
+        replayCurrentChatBusy?: boolean
+        onReplayCurrentChat?: () => void | Promise<void>
     }
 
     let {
@@ -37,17 +43,69 @@
         onOpenGlobalDefaults,
         onPersistCharacter,
         onRefreshVersions,
+        replayCurrentChatAvailable = false,
+        replayCurrentChatBusy = false,
+        onReplayCurrentChat = () => {},
     }: Props = $props()
 
     function usesOpenRouterModelSelector(provider: string) {
         return provider.trim().toLowerCase() === "openrouter"
     }
+
+    function setEvolutionFlag(
+        key: "enabled" | "useGlobalDefaults",
+        value: boolean,
+    ) {
+        characterEntry.characterEvolution = {
+            ...characterEntry.characterEvolution,
+            [key]: value,
+        }
+    }
+
+    function setPrivacyFlag(
+        key: "allowCharacterIntimatePreferences" | "allowUserIntimatePreferences",
+        value: boolean,
+    ) {
+        characterEntry.characterEvolution = {
+            ...characterEntry.characterEvolution,
+            privacy: {
+                ...characterEntry.characterEvolution.privacy,
+                [key]: value,
+            },
+        }
+    }
+
+    const modelSuggestions = $derived(
+        getCharacterEvolutionModelSuggestions(characterEntry.characterEvolution.extractionProvider)
+    )
+
+    $effect(() => {
+        const normalizedModel = normalizeCharacterEvolutionExtractionModel(
+            characterEntry.characterEvolution.extractionProvider,
+            characterEntry.characterEvolution.extractionModel,
+        )
+        if (characterEntry.characterEvolution.extractionModel !== normalizedModel) {
+            characterEntry.characterEvolution.extractionModel = normalizedModel
+        }
+    })
 </script>
 
 <div class="ds-settings-card evolution-setup-panel">
     <div class="ds-settings-section evolution-toggle-list">
-        <CheckInput bare={true} className="evolution-toggle-row" bind:check={characterEntry.characterEvolution.enabled} name="Enable Character Evolution" />
-        <CheckInput bare={true} className="evolution-toggle-row" bind:check={characterEntry.characterEvolution.useGlobalDefaults} name="Use Global Defaults" />
+        <CheckInput
+            bare={true}
+            className="evolution-toggle-row"
+            check={characterEntry.characterEvolution.enabled}
+            onChange={(value) => setEvolutionFlag("enabled", value)}
+            name="Enable Character Evolution"
+        />
+        <CheckInput
+            bare={true}
+            className="evolution-toggle-row"
+            check={characterEntry.characterEvolution.useGlobalDefaults}
+            onChange={(value) => setEvolutionFlag("useGlobalDefaults", value)}
+            name="Use Global Defaults"
+        />
     </div>
 
     <div class="ds-settings-section evolution-runtime-summary">
@@ -96,7 +154,7 @@
                 <span class="ds-settings-label">{usingGlobalDefaults ? "Character Override Model" : "Extraction Model"}</span>
                 <TextInput
                     bind:value={characterEntry.characterEvolution.extractionModel}
-                    placeholder="anthropic/claude-3.5-haiku"
+                    placeholder={modelSuggestions[0] ?? "Model id"}
                     disabled={usingGlobalDefaults}
                     list="character-evolution-model-options"
                 />
@@ -117,8 +175,18 @@
             </span>
 
             <div class="ds-settings-grid-two">
-                <CheckInput bind:check={characterEntry.characterEvolution.privacy.allowCharacterIntimatePreferences} name="Allow Character Intimate Preferences" disabled={usingGlobalDefaults} />
-                <CheckInput bind:check={characterEntry.characterEvolution.privacy.allowUserIntimatePreferences} name="Allow User Intimate Preferences" disabled={usingGlobalDefaults} />
+                <CheckInput
+                    check={characterEntry.characterEvolution.privacy.allowCharacterIntimatePreferences}
+                    onChange={(value) => setPrivacyFlag("allowCharacterIntimatePreferences", value)}
+                    name="Allow Character Intimate Preferences"
+                    disabled={usingGlobalDefaults}
+                />
+                <CheckInput
+                    check={characterEntry.characterEvolution.privacy.allowUserIntimatePreferences}
+                    onChange={(value) => setPrivacyFlag("allowUserIntimatePreferences", value)}
+                    name="Allow User Intimate Preferences"
+                    disabled={usingGlobalDefaults}
+                />
             </div>
 
             {#if usingGlobalDefaults}
@@ -139,12 +207,22 @@
         <div class="ds-settings-inline-actions action-rail evolution-setup-actions">
             <Button styled="outlined" onclick={onPersistCharacter}>Save Evolution Settings</Button>
             <Button styled="outlined" onclick={onRefreshVersions} disabled={loadingVersions}>Refresh Versions</Button>
+            {#if replayCurrentChatAvailable}
+                <Button styled="outlined" onclick={onReplayCurrentChat} disabled={replayCurrentChatBusy}>
+                    {replayCurrentChatBusy ? "Replaying Accepted Chat" : "Replay Accepted Chat"}
+                </Button>
+            {/if}
         </div>
+        {#if replayCurrentChatAvailable}
+            <span class="ds-settings-label-muted-sm">
+                Recovery action. Re-runs handoff for the current accepted chat and creates a new proposal without changing the accepted version yet.
+            </span>
+        {/if}
     </div>
 </div>
 
 <datalist id="character-evolution-model-options">
-    {#each CHARACTER_EVOLUTION_MODEL_SUGGESTIONS as model (model)}
+    {#each modelSuggestions as model (model)}
         <option value={model}></option>
     {/each}
 </datalist>

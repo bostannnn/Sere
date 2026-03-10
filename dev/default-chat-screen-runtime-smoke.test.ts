@@ -36,6 +36,7 @@ const mocks = vi.hoisted(() => ({
   })),
   acceptEvolutionProposal: vi.fn(async (_characterId: string, proposedState: unknown) => ({
     version: 1,
+    acceptedAt: 1234,
     state: proposedState,
   })),
   rejectEvolutionProposal: vi.fn(async () => ({ ok: true })),
@@ -422,6 +423,10 @@ vi.mock(import("src/lib/SideBars/GameStateHUD.svelte"), async () => ({
   default: (await import("./test-stubs/SimplePanelStub.svelte")).default,
 }));
 
+vi.mock(import("src/lib/Evolution/ReviewWorkspace.svelte"), async () => ({
+  default: (await import("./test-stubs/DefaultChatScreenReviewWorkspaceStub.svelte")).default,
+}));
+
 import DefaultChatScreen from "src/lib/ChatScreens/DefaultChatScreen.svelte";
 import { DBState, selectedCharID } from "src/ts/stores.svelte";
 
@@ -484,6 +489,7 @@ describe("default chat screen runtime smoke", () => {
           userIntimatePreferences: [],
         },
         pendingProposal: null,
+        lastProcessedChatId: null,
         stateVersions: [],
       },
     };
@@ -525,9 +531,19 @@ describe("default chat screen runtime smoke", () => {
           userIntimatePreferences: [],
         },
         pendingProposal: null,
+        lastProcessedChatId: null,
         stateVersions: [],
       },
     };
+    const confirmMock = vi.fn(() => true);
+    vi.stubGlobal("confirm", confirmMock);
+    window.confirm = confirmMock;
+    vi.stubGlobal(
+      "safeStructuredClone",
+      <T>(value: T) => (typeof structuredClone === "function"
+        ? structuredClone(value)
+        : JSON.parse(JSON.stringify(value)) as T),
+    );
     document.body.innerHTML = "";
   });
 
@@ -536,6 +552,7 @@ describe("default chat screen runtime smoke", () => {
       await unmount(app);
       app = undefined;
     }
+    vi.unstubAllGlobals();
   });
 
   it("keeps composer controls on primitive classes", async () => {
@@ -669,7 +686,11 @@ describe("default chat screen runtime smoke", () => {
     ) as HTMLButtonElement | null;
     expect(menuButton).not.toBeNull();
     expect(menuButton?.getAttribute("aria-expanded")).toBe("false");
-    menuButton!.click();
+    const reopenMenuButton = document.querySelector(
+      ".ds-chat-composer-action.ds-chat-composer-action-end.icon-btn.icon-btn--sm",
+    ) as HTMLButtonElement | null;
+    expect(reopenMenuButton).not.toBeNull();
+    reopenMenuButton!.click();
     await flushUi();
     expect(menuButton?.getAttribute("aria-expanded")).toBe("true");
     expect(document.querySelector(".ds-chat-side-menu")).not.toBeNull();
@@ -837,10 +858,10 @@ describe("default chat screen runtime smoke", () => {
     handoffButton!.click();
     await flushUi();
 
-    const acceptAndCreateButton = Array.from(document.querySelectorAll("button")).find(
-      (element) => (element as HTMLButtonElement).textContent?.includes("Accept And Create New Chat"),
-    ) as HTMLButtonElement | undefined;
-    expect(acceptAndCreateButton).toBeDefined();
+    const acceptAndCreateButton = document.querySelector(
+      '[data-testid="review-accept-create"]',
+    ) as HTMLButtonElement | null;
+    expect(acceptAndCreateButton).not.toBeNull();
     acceptAndCreateButton!.click();
     await flushUi();
 
@@ -848,10 +869,75 @@ describe("default chat screen runtime smoke", () => {
     expect(mocks.acceptEvolutionProposal).toHaveBeenCalledTimes(1);
     expect(DBState.db.characters[0].characterEvolution.currentStateVersion).toBe(1);
     expect(DBState.db.characters[0].characterEvolution.pendingProposal).toBeNull();
+    expect(DBState.db.characters[0].characterEvolution.lastProcessedChatId).toBe("chat-1");
+    expect(DBState.db.characters[0].characterEvolution.stateVersions).toEqual([
+      {
+        version: 1,
+        chatId: "chat-1",
+        acceptedAt: 1234,
+      },
+    ]);
     expect(DBState.db.characters[0].chats).toHaveLength(2);
     expect(DBState.db.characters[0].chats[0]?.name).toBe("New Chat 1");
     expect(DBState.db.characters[0].chatPage).toBe(0);
     expect(mocks.changeChatTo).toHaveBeenCalledWith(0);
+  });
+
+  it("records the accepted chat locally after accepting without creating a new one", async () => {
+    const target = document.createElement("div");
+    document.body.appendChild(target);
+    app = mount(DefaultChatScreen, { target });
+    await flushUi();
+
+    const menuButton = document.querySelector(
+      ".ds-chat-composer-action.ds-chat-composer-action-end.icon-btn.icon-btn--sm",
+    ) as HTMLButtonElement | null;
+    expect(menuButton).not.toBeNull();
+    menuButton!.click();
+    await flushUi();
+
+    let handoffButton = Array.from(document.querySelectorAll(".ds-chat-side-menu-item")).find(
+      (element) => (element as HTMLButtonElement).getAttribute("aria-label") === "Character evolution handoff",
+    ) as HTMLButtonElement | undefined;
+    expect(handoffButton).toBeDefined();
+    handoffButton!.click();
+    await flushUi();
+
+    const acceptButton = Array.from(document.querySelectorAll("button")).find(
+      (element) => (element as HTMLButtonElement).textContent?.trim() === "Accept",
+    ) as HTMLButtonElement | undefined;
+    expect(acceptButton).toBeDefined();
+    acceptButton!.click();
+    await flushUi();
+
+    expect(DBState.db.characters[0].characterEvolution.lastProcessedChatId).toBe("chat-1");
+  });
+
+  it("replays handoff for an already accepted chat when confirmed", async () => {
+    DBState.db.characters[0].characterEvolution.lastProcessedChatId = "chat-1";
+
+    const target = document.createElement("div");
+    document.body.appendChild(target);
+    app = mount(DefaultChatScreen, { target });
+    await flushUi();
+
+    const menuButton = document.querySelector(
+      ".ds-chat-composer-action.ds-chat-composer-action-end.icon-btn.icon-btn--sm",
+    ) as HTMLButtonElement | null;
+    expect(menuButton).not.toBeNull();
+    menuButton!.click();
+    await flushUi();
+
+    const handoffButton = Array.from(document.querySelectorAll(".ds-chat-side-menu-item")).find(
+      (element) => (element as HTMLButtonElement).getAttribute("aria-label") === "Character evolution handoff",
+    ) as HTMLButtonElement | undefined;
+    expect(handoffButton).toBeDefined();
+    expect(handoffButton?.textContent).toContain("Replay Accepted Chat");
+    handoffButton!.click();
+    await flushUi();
+
+    expect(mocks.createEvolutionProposal).toHaveBeenCalledTimes(1);
+    expect(mocks.createEvolutionProposal).toHaveBeenCalledWith("char-1", "chat-1", { forceReplay: true });
   });
 
   it("re-seeds the review draft when switching to a different character proposal", async () => {
@@ -932,5 +1018,108 @@ describe("default chat screen runtime smoke", () => {
         dynamic: "Character Two dynamic",
       },
     });
+  });
+
+  it("keeps async accept-and-create work pinned to the original character", async () => {
+    let resolveAccept: ((value: {
+      version: number;
+      acceptedAt: number;
+      state: {
+        relationship: { trustLevel: string; dynamic: string };
+        activeThreads: string[];
+        runningJokes: string[];
+        characterLikes: never[];
+        characterDislikes: never[];
+        characterHabits: never[];
+        characterBoundariesPreferences: never[];
+        userFacts: never[];
+        userRead: string[];
+        userLikes: never[];
+        userDislikes: never[];
+        lastChatEnded: { state: string; residue: string };
+        keyMoments: string[];
+        characterIntimatePreferences: never[];
+        userIntimatePreferences: never[];
+      };
+    }) => void) | null = null;
+
+    mocks.acceptEvolutionProposal.mockImplementationOnce(async () => {
+      return await new Promise((resolve) => {
+        resolveAccept = resolve;
+      });
+    });
+
+    DBState.db.characters[0].characterEvolution.pendingProposal = {
+      proposalId: "proposal-char-1",
+      sourceChatId: "chat-1",
+      proposedState: {
+        relationship: { trustLevel: "char-1", dynamic: "Character One dynamic" },
+        activeThreads: ["Character One thread"],
+        runningJokes: [],
+        characterLikes: [],
+        characterDislikes: [],
+        characterHabits: [],
+        characterBoundariesPreferences: [],
+        userFacts: [],
+        userRead: [],
+        userLikes: [],
+        userDislikes: [],
+        lastChatEnded: { state: "Character One close", residue: "Character One residue" },
+        keyMoments: ["Character One moment"],
+        characterIntimatePreferences: [],
+        userIntimatePreferences: [],
+      },
+      changes: [],
+      createdAt: 1,
+    };
+
+    const target = document.createElement("div");
+    document.body.appendChild(target);
+    app = mount(DefaultChatScreen, { target });
+    await flushUi();
+
+    const reviewPrompt = target.querySelector(".ds-chat-evolution-review-prompt") as HTMLButtonElement | null;
+    expect(reviewPrompt).not.toBeNull();
+    reviewPrompt!.click();
+    await flushUi();
+
+    const acceptCreateButton = target.querySelector('[data-testid="review-accept-create"]') as HTMLButtonElement | null;
+    expect(acceptCreateButton).not.toBeNull();
+    acceptCreateButton!.click();
+    await flushUi();
+
+    selectedCharID.set(1);
+    await flushUi();
+
+    resolveAccept?.({
+      version: 2,
+      acceptedAt: 999,
+      state: {
+        relationship: { trustLevel: "char-1", dynamic: "Character One dynamic" },
+        activeThreads: ["Character One thread"],
+        runningJokes: [],
+        characterLikes: [],
+        characterDislikes: [],
+        characterHabits: [],
+        characterBoundariesPreferences: [],
+        userFacts: [],
+        userRead: [],
+        userLikes: [],
+        userDislikes: [],
+        lastChatEnded: { state: "Character One close", residue: "Character One residue" },
+        keyMoments: ["Character One moment"],
+        characterIntimatePreferences: [],
+        userIntimatePreferences: [],
+      },
+    });
+    await flushUi();
+    await flushUi();
+
+    expect(DBState.db.characters[0].characterEvolution.currentStateVersion).toBe(2);
+    expect(DBState.db.characters[0].characterEvolution.lastProcessedChatId).toBe("chat-1");
+    expect(DBState.db.characters[0].chats).toHaveLength(2);
+    expect(DBState.db.characters[0].chats[0]?.id).toBe("chat-2");
+    expect(DBState.db.characters[1].characterEvolution.currentStateVersion).toBe(0);
+    expect(DBState.db.characters[1].chats).toHaveLength(1);
   });
 });

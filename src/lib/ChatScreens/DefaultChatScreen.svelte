@@ -99,6 +99,27 @@
         }
         return getEffectiveCharacterEvolutionSettings(DBState.db, character)
     })
+    function findCharacterIndexById(characterId: string): number {
+        return DBState.db.characters.findIndex((entry) => entry?.type !== 'group' && entry?.chaId === characterId)
+    }
+
+    function findCharacterById(characterId: string) {
+        const characterIndex = findCharacterIndexById(characterId)
+        if (characterIndex < 0) {
+            return null
+        }
+        const entry = DBState.db.characters[characterIndex]
+        return entry && entry.type !== 'group' ? entry : null
+    }
+
+    const evolutionHandoffBlockedForCurrentChat = $derived.by(() => {
+        const character = currentCharacter
+        if (!character || character.type === 'group') {
+            return false
+        }
+        const activeChat = character.chats?.[character.chatPage]
+        return !!activeChat?.id && character.characterEvolution.lastProcessedChatId === activeChat.id
+    })
     const isEvolutionReviewVisible = $derived(Boolean(showEvolutionProposal && currentEvolutionSettings?.pendingProposal))
 
     $effect(() => {
@@ -237,12 +258,25 @@
         return sendMain(true)
     }
 
-    async function runEvolutionHandoff() {
+    async function runEvolutionHandoff(forceReplay = false) {
         if (!currentCharacter || currentCharacter.type === 'group') {
             return
         }
+        const characterId = currentCharacter.chaId
         const activeChat = currentCharacter.chats?.[currentCharacter.chatPage]
-        if (!currentCharacter.chaId || !activeChat?.id) {
+        const alreadyAccepted = currentCharacter.characterEvolution.lastProcessedChatId
+            && currentCharacter.characterEvolution.lastProcessedChatId === activeChat?.id
+        if (currentCharacter.characterEvolution.pendingProposal) {
+            alertError("Resolve the current evolution proposal before running another handoff.")
+            return
+        }
+        if (alreadyAccepted && !forceReplay) {
+            if (typeof window !== 'undefined' && !window.confirm("This chat was already accepted for evolution. Replay handoff for recovery?")) {
+                return
+            }
+            forceReplay = true
+        }
+        if (!characterId || !activeChat?.id) {
             alertError("Cannot start evolution handoff without a saved character and chat.")
             return
         }
@@ -250,13 +284,23 @@
         evolutionAction = 'handoff'
         openMenu = false
         try {
-            const payload = await createCharacterEvolutionProposal(currentCharacter.chaId, activeChat.id)
-            const proposal = payload.proposal as typeof currentCharacter.characterEvolution.pendingProposal
-            currentCharacter.characterEvolution.pendingProposal = proposal
-            evolutionProposalDraft = JSON.parse(JSON.stringify(proposal?.proposedState ?? {}))
-            evolutionProposalDraftKey = getEvolutionProposalIdentity(currentCharacter.chaId, proposal)
-            showEvolutionProposal = true
-            alertNormal("Evolution proposal is ready for review.")
+            const payload = await createCharacterEvolutionProposal(
+                characterId,
+                activeChat.id,
+                forceReplay ? { forceReplay: true } : {},
+            )
+            const characterEntry = findCharacterById(characterId)
+            if (!characterEntry) {
+                return
+            }
+            const proposal = payload.proposal as typeof characterEntry.characterEvolution.pendingProposal
+            characterEntry.characterEvolution.pendingProposal = proposal
+            if (currentCharacter?.chaId === characterId) {
+                evolutionProposalDraft = JSON.parse(JSON.stringify(proposal?.proposedState ?? {}))
+                evolutionProposalDraftKey = getEvolutionProposalIdentity(characterId, proposal)
+                showEvolutionProposal = true
+            }
+            alertNormal(forceReplay ? "Evolution proposal was regenerated for the accepted chat." : "Evolution proposal is ready for review.")
         } catch (error) {
             alertError(getCharacterEvolutionErrorMessage(error))
         } finally {
@@ -269,14 +313,21 @@
         if (!currentCharacter || currentCharacter.type === 'group' || !currentCharacter.chaId) {
             return
         }
+        const characterId = currentCharacter.chaId
         evolutionBusy = true
         evolutionAction = 'reject'
         try {
-            await rejectCharacterEvolutionProposal(currentCharacter.chaId)
-            currentCharacter.characterEvolution.pendingProposal = null
-            evolutionProposalDraft = null
-            evolutionProposalDraftKey = null
-            showEvolutionProposal = false
+            await rejectCharacterEvolutionProposal(characterId)
+            const characterEntry = findCharacterById(characterId)
+            if (!characterEntry) {
+                return
+            }
+            characterEntry.characterEvolution.pendingProposal = null
+            if (currentCharacter?.chaId === characterId) {
+                evolutionProposalDraft = null
+                evolutionProposalDraftKey = null
+                showEvolutionProposal = false
+            }
             alertNormal("Evolution proposal rejected.")
         } catch (error) {
             alertError(getCharacterEvolutionErrorMessage(error))
@@ -290,20 +341,62 @@
         if (!currentCharacter || currentCharacter.type === 'group' || !currentCharacter.chaId || !evolutionProposalDraft) {
             return
         }
+        const characterId = currentCharacter.chaId
+        const proposedState = JSON.parse(JSON.stringify(evolutionProposalDraft))
         evolutionBusy = true
         evolutionAction = 'accept'
         try {
-            const payload = await acceptCharacterEvolutionProposal(currentCharacter.chaId, evolutionProposalDraft)
-            currentCharacter.characterEvolution.currentState = payload.state as typeof currentCharacter.characterEvolution.currentState
-            currentCharacter.characterEvolution.currentStateVersion = Number(payload.version) || currentCharacter.characterEvolution.currentStateVersion
-            currentCharacter.characterEvolution.pendingProposal = null
-            evolutionProposalDraft = null
-            evolutionProposalDraftKey = null
-            showEvolutionProposal = false
-            if (createNextChat) {
-                await createNewChatAfterEvolution($selectedCharID)
+            const acceptedSourceChatId = currentCharacter.characterEvolution.pendingProposal?.sourceChatId
+                ?? currentCharacter.chats?.[currentCharacter.chatPage]?.id
+                ?? null
+            const payload = await acceptCharacterEvolutionProposal(characterId, proposedState)
+            const characterEntry = findCharacterById(characterId)
+            if (!characterEntry) {
+                return
             }
-            alertNormal(createNextChat ? "Evolution accepted and a new chat was created." : "Evolution accepted.")
+            characterEntry.characterEvolution.currentState = payload.state as typeof characterEntry.characterEvolution.currentState
+            const acceptedVersion = Number(payload.version) || characterEntry.characterEvolution.currentStateVersion
+            const acceptedAt = Number((payload as { acceptedAt?: number | string }).acceptedAt) || 0
+            characterEntry.characterEvolution.currentStateVersion = acceptedVersion
+            characterEntry.characterEvolution.pendingProposal = null
+            characterEntry.characterEvolution.lastProcessedChatId = acceptedSourceChatId
+            characterEntry.characterEvolution.stateVersions = [
+                {
+                    version: acceptedVersion,
+                    chatId: acceptedSourceChatId,
+                    acceptedAt,
+                },
+                ...(Array.isArray(characterEntry.characterEvolution.stateVersions)
+                    ? characterEntry.characterEvolution.stateVersions.filter((entry) => Number(entry?.version) !== acceptedVersion)
+                    : []),
+            ]
+            if (currentCharacter?.chaId === characterId) {
+                evolutionProposalDraft = null
+                evolutionProposalDraftKey = null
+                showEvolutionProposal = false
+            }
+            let chatCreationError = ''
+            if (createNextChat) {
+                try {
+                    const characterIndex = findCharacterIndexById(characterId)
+                    if (characterIndex < 0) {
+                        throw new Error("Character is no longer available for new chat creation.")
+                    }
+                    await createNewChatAfterEvolution(characterIndex)
+                } catch (error) {
+                    chatCreationError = getCharacterEvolutionErrorMessage(error)
+                }
+            }
+            alertNormal(
+                createNextChat
+                    ? (chatCreationError
+                        ? "Evolution accepted, but the new chat could not be created."
+                        : "Evolution accepted and a new chat was created.")
+                    : "Evolution accepted."
+            )
+            if (chatCreationError) {
+                alertError(chatCreationError)
+            }
         } catch (error) {
             alertError(getCharacterEvolutionErrorMessage(error))
         } finally {
@@ -1382,10 +1475,24 @@
                                 title="Character evolution handoff"
                                 aria-label="Character evolution handoff"
                                 onclick={runEvolutionHandoff}
-                                disabled={evolutionBusy || currentCharacter?.type === 'group'}
+                                disabled={evolutionBusy || currentCharacter?.type === 'group' || !!currentEvolutionSettings?.pendingProposal}
                             >
                                 <GitBranch />
-                                <span class="ds-chat-side-menu-label">{evolutionAction === 'handoff' ? 'Running Handoff' : 'Handoff'}</span>
+                                <span class="ds-chat-side-menu-label">
+                                    {#if evolutionAction === 'handoff'}
+                                        {#if evolutionHandoffBlockedForCurrentChat}
+                                            Replaying Accepted Chat
+                                        {:else}
+                                            Running Handoff
+                                        {/if}
+                                    {:else if currentEvolutionSettings?.pendingProposal}
+                                        Review Pending Proposal
+                                    {:else if evolutionHandoffBlockedForCurrentChat}
+                                        Replay Accepted Chat
+                                    {:else}
+                                        Handoff
+                                    {/if}
+                                </span>
                             </button>
 
                             <button

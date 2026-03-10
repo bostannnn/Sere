@@ -3,15 +3,30 @@
     import SectionConfigEditor from "src/lib/Evolution/SectionConfigEditor.svelte"
     import StateEditor from "src/lib/Evolution/StateEditor.svelte"
     import Button from "src/lib/UI/GUI/Button.svelte"
+    import CheckInput from "src/lib/UI/GUI/CheckInput.svelte"
     import { alertError, alertNormal } from "src/ts/alert"
     import {
+        createDefaultCharacterEvolutionSectionConfigs,
         ensureCharacterEvolution,
         getEffectiveCharacterEvolutionSettings,
         hasCharacterStateTemplateBlock,
+        normalizeCharacterEvolutionPrivacy,
+        normalizeCharacterEvolutionSectionConfigs,
+        normalizeCharacterEvolutionState,
     } from "src/ts/characterEvolution"
-    import { getCharacterEvolutionErrorMessage } from "src/ts/evolution"
+    import {
+        createCharacterEvolutionProposal,
+        getCharacterEvolutionErrorMessage,
+    } from "src/ts/evolution"
     import { DBState, selectedCharID } from "src/ts/stores.svelte"
-    import type { CharacterEvolutionState, character, groupChat } from "src/ts/storage/database.types"
+    import type {
+        CharacterEvolutionSectionConfig,
+        CharacterEvolutionPrivacySettings,
+        CharacterEvolutionState,
+        CharacterEvolutionVersionFile,
+        character,
+        groupChat,
+    } from "src/ts/storage/database.types"
     import EvolutionSetupPanel from "./EvolutionSetupPanel.svelte"
     import EvolutionWorkspaceTabs from "./EvolutionWorkspaceTabs.svelte"
     import {
@@ -37,15 +52,40 @@
         return !!value && value.type !== "group"
     }
 
+    function cloneState(value: CharacterEvolutionState | null | undefined): CharacterEvolutionState | null {
+        return value ? structuredClone(value) : null
+    }
+
+    function cloneSections(value: CharacterEvolutionSectionConfig[] | null | undefined): CharacterEvolutionSectionConfig[] {
+        return structuredClone(value ?? [])
+    }
+
+    function clonePrivacy(value: CharacterEvolutionPrivacySettings | null | undefined): CharacterEvolutionPrivacySettings {
+        return structuredClone(normalizeCharacterEvolutionPrivacy(value))
+    }
+
+    function jsonEqual(a: unknown, b: unknown): boolean {
+        return JSON.stringify(a) === JSON.stringify(b)
+    }
+
     let loadingVersions = $state(false)
     let accepting = $state(false)
     let selectedVersion = $state<number | null>(null)
-    let selectedVersionState = $state<CharacterEvolutionState | null>(null)
+    let selectedVersionFile = $state<CharacterEvolutionVersionFile | null>(null)
     let proposalDraft = $state<CharacterEvolutionState | null>(null)
     let proposalDraftKey = $state<string | null>(null)
     let versionCharacterId = $state<string | null>(null)
     let revealCharacterOverrides = $state(false)
     let selectedWorkspaceTab = $state<EvolutionWorkspaceTabId>(EVOLUTION_SETUP_TAB)
+    let sectionConfigDraft = $state<CharacterEvolutionSectionConfig[]>([])
+    let privacyDraft = $state<CharacterEvolutionPrivacySettings>({
+        allowCharacterIntimatePreferences: false,
+        allowUserIntimatePreferences: false,
+    })
+    let sectionDraftKey = $state<string | null>(null)
+    let currentStateDraft = $state<CharacterEvolutionState | null>(null)
+    let currentStateDraftKey = $state<string | null>(null)
+    let replayingAcceptedChat = $state(false)
 
     const selectedEntry = $derived.by(() => {
         const selectedIndex = Number($selectedCharID)
@@ -73,10 +113,84 @@
     })
 
     const hasTemplateSlot = $derived(hasCharacterStateTemplateBlock(DBState.db))
-    const usingGlobalDefaults = $derived(evolutionSettings?.useGlobalDefaults ?? true)
+    const usingGlobalDefaults = $derived(currentCharacter?.characterEvolution.useGlobalDefaults ?? true)
     const effectiveProvider = $derived(evolutionSettings?.extractionProvider ?? "")
     const effectiveModel = $derived(evolutionSettings?.extractionModel ?? "")
     const selectedWorkspaceTitle = $derived(EVOLUTION_TAB_LABELS[selectedWorkspaceTab])
+    const currentPendingProposal = $derived(currentCharacter?.characterEvolution.pendingProposal ?? null)
+    const activeChatId = $derived(currentCharacter?.chats?.[currentCharacter.chatPage]?.id ?? null)
+    const replayCurrentChatAvailable = $derived(
+        Boolean(
+            currentCharacter?.chaId
+            && activeChatId
+            && !currentPendingProposal
+            && currentCharacter.characterEvolution.lastProcessedChatId === activeChatId
+        )
+    )
+
+    function findCharacterById(characterId: string) {
+        const characters = Array.isArray(DBState.db.characters) ? DBState.db.characters : []
+        const entry = characters.find((candidate) => candidate?.type !== "group" && candidate?.chaId === characterId)
+        return isSingleCharacter(entry) ? entry : null
+    }
+
+    function commitCharacter(characterEntry: character) {
+        const characters = Array.isArray(DBState.db.characters) ? DBState.db.characters : []
+        const characterIndex = characters.findIndex(
+            (candidate) => candidate?.type !== "group" && candidate?.chaId === characterEntry.chaId,
+        )
+        if (characterIndex >= 0) {
+            DBState.db.characters[characterIndex] = {
+                ...characterEntry,
+            }
+        }
+    }
+
+    function syncCharacterDrafts(characterEntry: character) {
+        let changed = false
+        const nextEvolution = {
+            ...characterEntry.characterEvolution,
+        }
+
+        if (currentStateDraft) {
+            const normalizedState = normalizeCharacterEvolutionState(currentStateDraft)
+            if (!jsonEqual(characterEntry.characterEvolution.currentState, normalizedState)) {
+                nextEvolution.currentState = structuredClone(normalizedState)
+                changed = true
+            }
+        }
+
+        if (!characterEntry.characterEvolution.useGlobalDefaults) {
+            const normalizedSections = normalizeCharacterEvolutionSectionConfigs(sectionConfigDraft)
+            const normalizedPrivacy = normalizeCharacterEvolutionPrivacy(privacyDraft)
+            if (!jsonEqual(characterEntry.characterEvolution.sectionConfigs, normalizedSections)) {
+                nextEvolution.sectionConfigs = structuredClone(normalizedSections)
+                changed = true
+            }
+            if (!jsonEqual(characterEntry.characterEvolution.privacy, normalizedPrivacy)) {
+                nextEvolution.privacy = structuredClone(normalizedPrivacy)
+                changed = true
+            }
+        }
+
+        if (changed) {
+            characterEntry.characterEvolution = nextEvolution
+            commitCharacter(characterEntry)
+        }
+    }
+
+    function setUseGlobalDefaults(nextValue: boolean) {
+        const characterEntry = currentCharacter
+        if (!characterEntry) {
+            return
+        }
+
+        characterEntry.characterEvolution = {
+            ...characterEntry.characterEvolution,
+            useGlobalDefaults: nextValue,
+        }
+        commitCharacter(characterEntry)
+    }
 
     $effect(() => {
         const characterEntry = currentCharacter
@@ -87,30 +201,99 @@
         ensureCharacterEvolution(characterEntry)
     })
 
+    $effect(() => {
+        const characterEntry = currentCharacter
+        const nextKey = characterEntry?.chaId
+            ? `${characterEntry.chaId}:${characterEntry.characterEvolution.useGlobalDefaults ? `global:${JSON.stringify(evolutionSettings?.sectionConfigs ?? [])}:${JSON.stringify(evolutionSettings?.privacy ?? {})}` : "local"}`
+            : null
+        if (sectionDraftKey === nextKey) {
+            return
+        }
+
+        sectionDraftKey = nextKey
+        if (!characterEntry) {
+            sectionConfigDraft = []
+            privacyDraft = clonePrivacy(null)
+            return
+        }
+
+        if (characterEntry.characterEvolution.useGlobalDefaults) {
+            sectionConfigDraft = cloneSections(evolutionSettings?.sectionConfigs ?? createDefaultCharacterEvolutionSectionConfigs())
+            privacyDraft = clonePrivacy(evolutionSettings?.privacy)
+            return
+        }
+
+        sectionConfigDraft = cloneSections(characterEntry.characterEvolution.sectionConfigs)
+        privacyDraft = clonePrivacy(characterEntry.characterEvolution.privacy)
+    })
+
+    $effect(() => {
+        const characterEntry = currentCharacter
+        if (!characterEntry || characterEntry.characterEvolution.useGlobalDefaults) {
+            return
+        }
+
+        syncCharacterDrafts(characterEntry)
+    })
+
+    $effect(() => {
+        const characterEntry = currentCharacter
+        const nextKey = characterEntry?.chaId
+            ? `${characterEntry.chaId}:${characterEntry.characterEvolution.currentStateVersion}`
+            : null
+        if (currentStateDraftKey === nextKey) {
+            return
+        }
+
+        currentStateDraftKey = nextKey
+        currentStateDraft = cloneState(characterEntry?.characterEvolution.currentState)
+    })
+
+    $effect(() => {
+        const characterEntry = currentCharacter
+        if (!characterEntry || !currentStateDraft || evolutionSettings?.pendingProposal) {
+            return
+        }
+
+        syncCharacterDrafts(characterEntry)
+    })
+
     async function persistCharacter() {
         const characterEntry = currentCharacter
         if (!characterEntry?.chaId) {
             return
         }
 
+        syncCharacterDrafts(characterEntry)
         await persistEvolutionCharacter(DBState.db, characterEntry.chaId)
     }
 
-    async function handleRefreshVersions() {
-        const characterEntry = currentCharacter
-        if (!characterEntry?.chaId) {
+    async function handleRefreshVersions(characterId = currentCharacter?.chaId ?? null) {
+        if (!characterId) {
             return
         }
 
         loadingVersions = true
+        if (currentCharacter?.chaId === characterId) {
+            selectedVersionFile = null
+        }
         try {
             const payload = await refreshEvolutionVersions(
-                characterEntry.chaId,
+                characterId,
                 selectedVersion,
             )
-            characterEntry.characterEvolution.stateVersions = payload.versions
-            selectedVersionState = payload.selectedVersionState
+            const characterEntry = findCharacterById(characterId)
+            if (characterEntry) {
+                characterEntry.characterEvolution.stateVersions = payload.versions
+                commitCharacter(characterEntry)
+            }
+            if (currentCharacter?.chaId === characterId) {
+                selectedVersionFile = payload.selectedVersionFile
+            }
         } catch (error) {
+            if (currentCharacter?.chaId === characterId) {
+                selectedVersionFile = null
+            }
             alertError(getCharacterEvolutionErrorMessage(error))
         } finally {
             loadingVersions = false
@@ -122,14 +305,21 @@
         if (!characterEntry?.chaId) {
             return
         }
+        const characterId = characterEntry.chaId
 
         loadingVersions = true
+        selectedVersionFile = null
         try {
             selectedWorkspaceTab = EVOLUTION_HISTORY_TAB
             selectedVersion = version
-            const payload = await loadEvolutionVersionState(characterEntry.chaId, version)
-            selectedVersionState = payload?.state ?? null
+            const payload = await loadEvolutionVersionState(characterId, version)
+            if (currentCharacter?.chaId === characterId) {
+                selectedVersionFile = payload
+            }
         } catch (error) {
+            if (currentCharacter?.chaId === characterId) {
+                selectedVersionFile = null
+            }
             alertError(getCharacterEvolutionErrorMessage(error))
         } finally {
             loadingVersions = false
@@ -145,9 +335,15 @@
         accepting = true
         try {
             await rejectEvolutionProposalAction(characterEntry.chaId)
-            characterEntry.characterEvolution.pendingProposal = null
-            proposalDraft = null
-            proposalDraftKey = null
+            characterEntry.characterEvolution = {
+                ...characterEntry.characterEvolution,
+                pendingProposal: null,
+            }
+            commitCharacter(characterEntry)
+            if (currentCharacter?.chaId === characterEntry.chaId) {
+                proposalDraft = null
+                proposalDraftKey = null
+            }
             alertNormal("Evolution proposal rejected.")
         } catch (error) {
             alertError(getCharacterEvolutionErrorMessage(error))
@@ -164,29 +360,63 @@
 
         accepting = true
         try {
+            const acceptedSourceChatId = characterEntry.characterEvolution.pendingProposal?.sourceChatId ?? null
             const payload = await acceptEvolutionProposalAction({
                 characterId: characterEntry.chaId,
                 proposedState: proposalDraft,
                 createNextChat,
-                selectedCharIndex: Number($selectedCharID),
             })
 
             characterEntry.characterEvolution.currentState =
                 payload.state as typeof characterEntry.characterEvolution.currentState
-            characterEntry.characterEvolution.currentStateVersion =
+            const acceptedVersion =
                 Number(payload.version) || characterEntry.characterEvolution.currentStateVersion
-            characterEntry.characterEvolution.pendingProposal = null
-            proposalDraft = null
-            proposalDraftKey = null
+            const acceptedAt =
+                Number((payload as { acceptedAt?: number | string }).acceptedAt) || 0
+            const nextStateVersions = [
+                {
+                    version: acceptedVersion,
+                    chatId: acceptedSourceChatId,
+                    acceptedAt,
+                },
+                ...(Array.isArray(characterEntry.characterEvolution.stateVersions)
+                    ? characterEntry.characterEvolution.stateVersions.filter((entry) => Number(entry?.version) !== acceptedVersion)
+                    : []),
+            ]
+            characterEntry.characterEvolution = {
+                ...characterEntry.characterEvolution,
+                currentState: payload.state as typeof characterEntry.characterEvolution.currentState,
+                currentStateVersion: acceptedVersion,
+                pendingProposal: null,
+                lastProcessedChatId: acceptedSourceChatId,
+                stateVersions: nextStateVersions,
+            }
+            commitCharacter(characterEntry)
+            currentStateDraft = cloneState(characterEntry.characterEvolution.currentState)
+            currentStateDraftKey = `${characterEntry.chaId}:${acceptedVersion}`
+            if (currentCharacter?.chaId === characterEntry.chaId) {
+                proposalDraft = null
+                proposalDraftKey = null
+            }
             selectedWorkspaceTab = EVOLUTION_STATE_TAB
 
-            await handleRefreshVersions()
+            await handleRefreshVersions(characterEntry.chaId)
+
+            const chatCreationError =
+                typeof payload.chatCreationError === "string" && payload.chatCreationError.trim()
+                    ? payload.chatCreationError.trim()
+                    : ""
 
             alertNormal(
                 createNextChat
-                    ? "Evolution state accepted and a new chat was created."
+                    ? (chatCreationError
+                        ? "Evolution state accepted, but the new chat could not be created."
+                        : "Evolution state accepted and a new chat was created.")
                     : "Evolution state accepted.",
             )
+            if (chatCreationError) {
+                alertError(chatCreationError)
+            }
         } catch (error) {
             alertError(getCharacterEvolutionErrorMessage(error))
         } finally {
@@ -194,8 +424,42 @@
         }
     }
 
+    async function replayAcceptedChat() {
+        const characterEntry = currentCharacter
+        const chatId = characterEntry?.chats?.[characterEntry.chatPage]?.id ?? null
+        if (!characterEntry?.chaId || !chatId || !replayCurrentChatAvailable) {
+            return
+        }
+        if (typeof window !== "undefined" && !window.confirm("This chat was already accepted for evolution. Replay handoff for recovery?")) {
+            return
+        }
+
+        replayingAcceptedChat = true
+        try {
+            const payload = await createCharacterEvolutionProposal(
+                characterEntry.chaId,
+                chatId,
+                { forceReplay: true },
+            )
+            const freshCharacterEntry = findCharacterById(characterEntry.chaId)
+            if (!freshCharacterEntry) {
+                return
+            }
+            freshCharacterEntry.characterEvolution = {
+                ...freshCharacterEntry.characterEvolution,
+                pendingProposal: payload.proposal as typeof freshCharacterEntry.characterEvolution.pendingProposal,
+            }
+            commitCharacter(freshCharacterEntry)
+            alertNormal("Evolution proposal was regenerated for the accepted chat.")
+        } catch (error) {
+            alertError(getCharacterEvolutionErrorMessage(error))
+        } finally {
+            replayingAcceptedChat = false
+        }
+    }
+
     $effect(() => {
-        const pendingProposal = evolutionSettings?.pendingProposal ?? null
+        const pendingProposal = currentPendingProposal
         const proposalIdentity = getEvolutionProposalIdentity(
             currentCharacter?.chaId,
             pendingProposal,
@@ -224,14 +488,70 @@
 
         if (!characterId) {
             selectedVersion = null
-            selectedVersionState = null
+            selectedVersionFile = null
             return
         }
 
         selectedVersion = null
-        selectedVersionState = null
+        selectedVersionFile = null
         void handleRefreshVersions()
     })
+
+    const selectedVersionState = $derived(selectedVersionFile?.state ?? null)
+    function versionSectionHasData(state: CharacterEvolutionState | null, key: string): boolean {
+        if (!state) {
+            return false
+        }
+        if (key === "relationship") {
+            return Boolean(state.relationship.trustLevel || state.relationship.dynamic)
+        }
+        if (key === "lastChatEnded") {
+            return Boolean(state.lastChatEnded.state || state.lastChatEnded.residue)
+        }
+        const value = state[key as keyof CharacterEvolutionState]
+        return Array.isArray(value) ? value.length > 0 : false
+    }
+    const selectedVersionSectionConfigs = $derived(
+        (() => {
+            if (selectedVersionFile?.sectionConfigs) {
+                return selectedVersionFile.sectionConfigs as CharacterEvolutionSectionConfig[]
+            }
+
+            const defaults = createDefaultCharacterEvolutionSectionConfigs()
+            const currentMap = new Map(
+                (evolutionSettings?.sectionConfigs ?? []).map((section) => [section.key, section] as const)
+            )
+
+            return defaults.map((section) => {
+                const current = currentMap.get(section.key)
+                const shouldShowFromSnapshot = versionSectionHasData(selectedVersionState, section.key)
+                return {
+                    ...section,
+                    enabled: Boolean(current?.enabled || shouldShowFromSnapshot),
+                    includeInPrompt: current?.includeInPrompt ?? section.includeInPrompt,
+                    label: current?.label ?? section.label,
+                    instruction: current?.instruction ?? section.instruction,
+                    kind: current?.kind ?? section.kind,
+                    sensitive: current?.sensitive ?? section.sensitive,
+                }
+            })
+        })()
+    )
+    const selectedVersionPrivacy = $derived(
+        (() => {
+            if (selectedVersionFile?.privacy) {
+                return selectedVersionFile.privacy as CharacterEvolutionPrivacySettings
+            }
+            return {
+                allowCharacterIntimatePreferences:
+                    (selectedVersionState?.characterIntimatePreferences?.length ?? 0) > 0
+                    || (evolutionSettings?.privacy.allowCharacterIntimatePreferences ?? false),
+                allowUserIntimatePreferences:
+                    (selectedVersionState?.userIntimatePreferences?.length ?? 0) > 0
+                    || (evolutionSettings?.privacy.allowUserIntimatePreferences ?? false),
+            }
+        })()
+    )
 </script>
 
 {#if hasGroupSelection}
@@ -279,6 +599,9 @@
                 onOpenGlobalDefaults={openEvolutionGlobalDefaults}
                 onPersistCharacter={persistCharacter}
                 onRefreshVersions={handleRefreshVersions}
+                {replayCurrentChatAvailable}
+                replayCurrentChatBusy={replayingAcceptedChat}
+                onReplayCurrentChat={replayAcceptedChat}
             />
         </div>
     {:else if selectedWorkspaceTab === EVOLUTION_SECTIONS_TAB}
@@ -288,10 +611,51 @@
             aria-labelledby="evolution-subtab-1"
             tabindex="0"
         >
+            <div class="ds-settings-section">
+                <div class="ds-settings-card ds-settings-card-stack-start">
+                    <CheckInput
+                        bare={true}
+                        className="evolution-sections-toggle"
+                        check={usingGlobalDefaults}
+                        onChange={setUseGlobalDefaults}
+                        name="Use Global Defaults For Sections And Privacy"
+                    />
+                    <span class="ds-settings-label-muted-sm">
+                        {usingGlobalDefaults
+                            ? "Sections and privacy are inherited from global evolution defaults."
+                            : "These section and privacy settings are specific to this character."}
+                    </span>
+                    <div class="ds-settings-inline-actions action-rail">
+                        <Button styled="outlined" size="sm" onclick={openEvolutionGlobalDefaults}>
+                            Open Global Defaults
+                        </Button>
+                    </div>
+                </div>
+            </div>
+
+            {#if !usingGlobalDefaults}
+                <div class="ds-settings-section">
+                    <div class="ds-settings-card ds-settings-card-stack-start">
+                        <span class="ds-settings-label">Privacy</span>
+                        <div class="ds-settings-grid-two">
+                            <CheckInput
+                                bind:check={privacyDraft.allowCharacterIntimatePreferences}
+                                name="Allow Character Intimate Preferences"
+                            />
+                            <CheckInput
+                                bind:check={privacyDraft.allowUserIntimatePreferences}
+                                name="Allow User Intimate Preferences"
+                            />
+                        </div>
+                    </div>
+                </div>
+            {/if}
+
             <SectionConfigEditor
-                bind:value={currentCharacter.characterEvolution.sectionConfigs}
-                privacy={currentCharacter.characterEvolution.privacy}
+                bind:value={sectionConfigDraft}
+                privacy={privacyDraft}
                 readonly={usingGlobalDefaults}
+                title={usingGlobalDefaults ? "Global Sections" : "Character Section Overrides"}
             />
         </div>
     {:else if selectedWorkspaceTab === EVOLUTION_REVIEW_TAB}
@@ -301,9 +665,9 @@
             aria-labelledby="evolution-subtab-2"
             tabindex="0"
         >
-            {#if evolutionSettings.pendingProposal}
+            {#if currentPendingProposal}
                 <ProposalPanel
-                    proposal={evolutionSettings.pendingProposal}
+                    proposal={currentPendingProposal}
                     currentState={evolutionSettings.currentState}
                     sectionConfigs={evolutionSettings.sectionConfigs}
                     privacy={evolutionSettings.privacy}
@@ -332,7 +696,7 @@
             aria-labelledby="evolution-subtab-3"
             tabindex="0"
         >
-            {#if evolutionSettings.pendingProposal}
+            {#if currentPendingProposal}
                 <div class="ds-settings-section">
                     <div class="ds-settings-card ds-settings-card-stack-start">
                         <span class="ds-settings-label">Current State</span>
@@ -342,19 +706,21 @@
                     </div>
                 </div>
             {:else}
-                <StateEditor
-                    bind:value={currentCharacter.characterEvolution.currentState}
-                    sectionConfigs={evolutionSettings.sectionConfigs}
-                    privacy={evolutionSettings.privacy}
-                    title="Current State"
-                />
-                <div class="ds-settings-section">
-                    <div class="ds-settings-inline-actions action-rail">
-                        <Button styled="outlined" onclick={persistCharacter}>
-                            Save Current State
-                        </Button>
+                {#if currentStateDraft}
+                    <StateEditor
+                        bind:value={currentStateDraft}
+                        sectionConfigs={evolutionSettings.sectionConfigs}
+                        privacy={evolutionSettings.privacy}
+                        title="Current State"
+                    />
+                    <div class="ds-settings-section">
+                        <div class="ds-settings-inline-actions action-rail">
+                            <Button styled="outlined" onclick={persistCharacter}>
+                                Save Current State
+                            </Button>
+                        </div>
                     </div>
-                </div>
+                {/if}
             {/if}
         </div>
     {:else}
@@ -392,8 +758,8 @@
         {#if selectedVersion !== null && selectedVersionState}
             <StateEditor
                 value={selectedVersionState}
-                sectionConfigs={evolutionSettings.sectionConfigs}
-                privacy={evolutionSettings.privacy}
+                sectionConfigs={selectedVersionSectionConfigs}
+                privacy={selectedVersionPrivacy}
                 readonly={true}
                 title={`Version v${selectedVersion}`}
             />

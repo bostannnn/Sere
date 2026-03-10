@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
@@ -96,6 +96,8 @@ function buildHandlers(overrides: {
   appendLLMAudit?: (payload: unknown) => Promise<void>;
   executeInternalLLMTextCompletion?: () => Promise<string>;
   logLLMExecutionEnd?: (payload: unknown) => void;
+  applyStateCommands?: (commands: Array<Record<string, unknown>>) => Promise<unknown>;
+  fsOverride?: Partial<typeof fs>;
 } = {}) {
   const postHandlers = new Map<string, RegisteredHandler>();
   const getHandlers = new Map<string, RegisteredHandler>();
@@ -110,7 +112,10 @@ function buildHandlers(overrides: {
 
   registerEvolutionRoutes({
     app,
-    fs,
+    fs: {
+      ...fs,
+      ...overrides.fsOverride,
+    },
     dataDirs,
     existsSync,
     LLMHttpError: MockLLMHttpError,
@@ -157,7 +162,7 @@ function buildHandlers(overrides: {
         },
       ],
     })),
-    applyStateCommands: async (commands: Array<Record<string, unknown>>) => {
+    applyStateCommands: overrides.applyStateCommands ?? (async (commands: Array<Record<string, unknown>>) => {
       const command = commands[0];
       if (command?.type === "character.replace") {
         writeJson(path.join(dataDirs.characters, characterId, "character.json"), {
@@ -165,7 +170,7 @@ function buildHandlers(overrides: {
         });
       }
       return { ok: true, lastEventId: 1, applied: [], conflicts: [] };
-    },
+    }),
     readStateLastEventId: async () => 1,
   });
 
@@ -252,11 +257,90 @@ describe("registerEvolutionRoutes", () => {
       metadata: {
         model: "anthropic/claude-3.5-haiku",
         maxTokens: 2400,
+        replayed: false,
       },
     }));
 
     const characterFile = JSON.parse(readFileSync(path.join(dataDirs.characters, characterId, "character.json"), "utf-8"));
     expect(characterFile.character.characterEvolution.pendingProposal.sourceChatId).toBe(chatId);
+  });
+
+  it("normalizes provider-prefixed extraction models before execution for non-openrouter providers", async () => {
+    writeJson(path.join(dataDirs.root, "settings.json"), {
+      data: {
+        username: "User",
+        characterEvolutionDefaults: {
+          extractionProvider: "openai",
+          extractionModel: "openai/gpt-4.1-mini",
+          extractionMaxTokens: 2400,
+          extractionPrompt: "default prompt",
+          sectionConfigs: [],
+          privacy: {
+            allowCharacterIntimatePreferences: false,
+            allowUserIntimatePreferences: false,
+          },
+        },
+      },
+    });
+    const executeInternalLLMTextCompletion = vi.fn(async () => JSON.stringify({
+      proposedState: {},
+      changes: [],
+    }));
+    const { postHandlers } = buildHandlers({ executeInternalLLMTextCompletion });
+    const handler = postHandlers.get("/data/character-evolution/handoff");
+    expect(handler).toBeTruthy();
+
+    const res = createRes();
+    await handler!(createReq({ characterId, chatId }), res);
+
+    expect(res.statusCode).toBe(200);
+    expect(executeInternalLLMTextCompletion).toHaveBeenCalledWith(expect.objectContaining({
+      provider: "openai",
+      model: "gpt-4.1-mini",
+    }));
+  });
+
+  it("rejects a second handoff while a proposal is already pending", async () => {
+    const { postHandlers } = buildHandlers();
+    const handler = postHandlers.get("/data/character-evolution/handoff");
+    expect(handler).toBeTruthy();
+
+    await handler!(createReq({ characterId, chatId }), createRes());
+
+    const secondRes = createRes();
+    await handler!(createReq({ characterId, chatId }), secondRes);
+
+    expect(secondRes.statusCode).toBe(409);
+    expect(secondRes.payload).toEqual(expect.objectContaining({
+      error: "PENDING_PROPOSAL_EXISTS",
+    }));
+  });
+
+  it("returns a conflict instead of retrying a stale handoff write", async () => {
+    const { postHandlers } = buildHandlers({
+      applyStateCommands: async () => {
+        throw {
+          result: {
+            conflicts: [
+              { code: "STALE_BASE_EVENT" },
+            ],
+          },
+        };
+      },
+    });
+    const handler = postHandlers.get("/data/character-evolution/handoff");
+    expect(handler).toBeTruthy();
+
+    const res = createRes();
+    await handler!(createReq({ characterId, chatId }), res);
+
+    expect(res.statusCode).toBe(409);
+    expect(res.payload).toEqual(expect.objectContaining({
+      error: "EVOLUTION_STATE_CONFLICT",
+    }));
+
+    const characterFile = JSON.parse(readFileSync(path.join(dataDirs.characters, characterId, "character.json"), "utf-8"));
+    expect(characterFile.character.characterEvolution.pendingProposal ?? null).toBeNull();
   });
 
   it("accepts a pending proposal and writes a version file", async () => {
@@ -289,7 +373,406 @@ describe("registerEvolutionRoutes", () => {
         params: { charId: characterId, version: "1" },
       }, getRes);
       expect(getRes.statusCode).toBe(200);
+      expect(getRes.payload).toEqual(expect.objectContaining({
+        version: expect.objectContaining({
+          version: 1,
+          sectionConfigs: expect.any(Array),
+          privacy: {
+            allowCharacterIntimatePreferences: false,
+            allowUserIntimatePreferences: false,
+          },
+        }),
+      }));
     }
+  });
+
+  it("allows an explicit replay handoff for an already accepted chat", async () => {
+    writeJson(path.join(dataDirs.characters, characterId, "character.json"), {
+      character: {
+        chaId: characterId,
+        type: "character",
+        name: "Eva",
+        desc: "desc",
+        personality: "personality",
+        characterEvolution: {
+          enabled: true,
+          useGlobalDefaults: true,
+          currentStateVersion: 3,
+          currentState: {},
+          stateVersions: [],
+          lastProcessedChatId: chatId,
+        },
+      },
+    });
+
+    const appendLLMAudit = vi.fn(async () => {});
+    const { postHandlers } = buildHandlers({ appendLLMAudit });
+    const handler = postHandlers.get("/data/character-evolution/handoff");
+    expect(handler).toBeTruthy();
+
+    const res = createRes();
+    await handler!(createReq({ characterId, chatId, forceReplay: true }, {}), res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.payload).toEqual(expect.objectContaining({
+      ok: true,
+      replayed: true,
+      proposal: expect.objectContaining({
+        sourceChatId: chatId,
+      }),
+    }));
+    expect(appendLLMAudit).toHaveBeenCalledWith(expect.objectContaining({
+      endpoint: "character_evolution_handoff",
+      status: 200,
+      metadata: expect.objectContaining({
+        replayed: true,
+      }),
+      response: expect.objectContaining({
+        replayed: true,
+      }),
+    }));
+  });
+
+  it("keeps an accepted version readable when snapshot finalization falls back to the staged file", async () => {
+    const { postHandlers, getHandlers } = buildHandlers({
+      fsOverride: {
+        rename: async () => {
+          throw new Error("rename failed");
+        },
+        copyFile: async () => {
+          throw new Error("copy failed");
+        },
+      },
+    });
+    const handoff = postHandlers.get("/data/character-evolution/handoff");
+    const accept = postHandlers.get("/data/character-evolution/:charId/proposal/accept");
+    const getVersion = getHandlers.get("/data/character-evolution/:charId/versions/:version");
+    expect(handoff).toBeTruthy();
+    expect(accept).toBeTruthy();
+    expect(getVersion).toBeTruthy();
+
+    await handoff!(createReq({ characterId, chatId }), createRes());
+
+    const acceptRes = createRes();
+    await accept!(createReq({}, { charId: characterId }), acceptRes);
+
+    expect(acceptRes.statusCode).toBe(200);
+    expect(existsSync(path.join(dataDirs.characters, characterId, "states", "v1.json"))).toBe(false);
+    expect(
+      readdirSync(path.join(dataDirs.characters, characterId, "states")).some(
+        (entry) => entry.startsWith(".v1.") && entry.endsWith(".pending.json"),
+      ),
+    ).toBe(true);
+
+    const getRes = createRes();
+    await getVersion!({
+      method: "GET",
+      originalUrl: "/data/character-evolution/test",
+      body: {},
+      params: { charId: characterId, version: "1" },
+    }, getRes);
+
+    expect(getRes.statusCode).toBe(200);
+    expect(getRes.payload).toEqual(expect.objectContaining({
+      version: expect.objectContaining({
+        version: 1,
+      }),
+    }));
+  });
+
+  it("preserves disabled-section state when accepting a proposal", async () => {
+    writeJson(path.join(dataDirs.characters, characterId, "character.json"), {
+      character: {
+        chaId: characterId,
+        type: "character",
+        name: "Eva",
+        desc: "desc",
+        personality: "personality",
+        characterEvolution: {
+          enabled: true,
+          useGlobalDefaults: false,
+          extractionProvider: "openrouter",
+          extractionModel: "anthropic/claude-3.5-haiku",
+          extractionMaxTokens: 2400,
+          extractionPrompt: "prompt",
+          sectionConfigs: [
+            {
+              key: "relationship",
+              label: "Relationship",
+              enabled: true,
+              includeInPrompt: true,
+              instruction: "Track relationship",
+              kind: "object",
+              sensitive: false,
+            },
+            {
+              key: "userFacts",
+              label: "User Facts",
+              enabled: false,
+              includeInPrompt: false,
+              instruction: "Track facts",
+              kind: "list",
+              sensitive: false,
+            },
+          ],
+          privacy: {
+            allowCharacterIntimatePreferences: false,
+            allowUserIntimatePreferences: false,
+          },
+          currentStateVersion: 0,
+          currentState: {
+            relationship: {
+              trustLevel: "steady",
+              dynamic: "old dynamic",
+            },
+            userFacts: [
+              {
+                value: "User works nights",
+                confidence: "confirmed",
+                note: "from an earlier accepted chat",
+                status: "active",
+              },
+            ],
+          },
+          pendingProposal: {
+            proposalId: "proposal-1",
+            sourceChatId: chatId,
+            proposedState: {
+              relationship: {
+                trustLevel: "higher",
+                dynamic: "warmer after the last exchange",
+              },
+              userFacts: [],
+            },
+            changes: [
+              {
+                sectionKey: "relationship",
+                summary: "Relationship became warmer.",
+                evidence: ["Character said they feel closer now."],
+              },
+            ],
+            createdAt: 1,
+          },
+          stateVersions: [],
+          lastProcessedChatId: null,
+        },
+      },
+    });
+
+    const { postHandlers } = buildHandlers();
+    const accept = postHandlers.get("/data/character-evolution/:charId/proposal/accept");
+    expect(accept).toBeTruthy();
+
+    const acceptRes = createRes();
+    await accept!(createReq({}, { charId: characterId }), acceptRes);
+
+    expect(acceptRes.statusCode).toBe(200);
+    expect(acceptRes.payload).toEqual(expect.objectContaining({
+      state: expect.objectContaining({
+        relationship: {
+          trustLevel: "higher",
+          dynamic: "warmer after the last exchange",
+        },
+        userFacts: [
+          {
+            value: "User works nights",
+            confidence: "confirmed",
+            note: "from an earlier accepted chat",
+            status: "active",
+          },
+        ],
+      }),
+    }));
+  });
+
+  it("preserves intimate preferences on accept when global defaults allow them", async () => {
+    writeJson(path.join(dataDirs.root, "settings.json"), {
+      data: {
+        username: "User",
+        characterEvolutionDefaults: {
+          extractionProvider: "openrouter",
+          extractionModel: "anthropic/claude-3.5-haiku",
+          extractionMaxTokens: 2400,
+          extractionPrompt: "prompt",
+          sectionConfigs: [
+            {
+              key: "relationship",
+              label: "Relationship",
+              enabled: true,
+              includeInPrompt: true,
+              instruction: "Track relationship",
+              kind: "object",
+              sensitive: false,
+            },
+            {
+              key: "characterIntimatePreferences",
+              label: "Character Intimate Preferences",
+              enabled: true,
+              includeInPrompt: true,
+              instruction: "Track character intimacy",
+              kind: "list",
+              sensitive: true,
+            },
+            {
+              key: "userIntimatePreferences",
+              label: "User Intimate Preferences",
+              enabled: true,
+              includeInPrompt: true,
+              instruction: "Track user intimacy",
+              kind: "list",
+              sensitive: true,
+            },
+          ],
+          privacy: {
+            allowCharacterIntimatePreferences: true,
+            allowUserIntimatePreferences: true,
+          },
+        },
+      },
+    });
+    writeJson(path.join(dataDirs.characters, characterId, "character.json"), {
+      character: {
+        chaId: characterId,
+        type: "character",
+        name: "Eva",
+        desc: "desc",
+        personality: "personality",
+        characterEvolution: {
+          enabled: true,
+          useGlobalDefaults: true,
+          extractionProvider: "openrouter",
+          extractionModel: "anthropic/claude-3.5-haiku",
+          extractionMaxTokens: 2400,
+          extractionPrompt: "prompt",
+          sectionConfigs: [],
+          privacy: {
+            allowCharacterIntimatePreferences: false,
+            allowUserIntimatePreferences: false,
+          },
+          currentStateVersion: 0,
+          currentState: {
+            relationship: {
+              trustLevel: "steady",
+              dynamic: "old dynamic",
+            },
+            characterIntimatePreferences: [],
+            userIntimatePreferences: [],
+          },
+          pendingProposal: {
+            proposalId: "proposal-1",
+            sourceChatId: chatId,
+            proposedState: {
+              relationship: {
+                trustLevel: "higher",
+                dynamic: "warmer after the last exchange",
+              },
+              characterIntimatePreferences: [
+                {
+                  value: "Being in control during intimacy",
+                  confidence: "confirmed",
+                  note: "stated directly",
+                  status: "active",
+                },
+              ],
+              userIntimatePreferences: [
+                {
+                  value: "Face-sitting",
+                  confidence: "confirmed",
+                  note: "stated directly",
+                  status: "active",
+                },
+              ],
+            },
+            changes: [
+              {
+                sectionKey: "characterIntimatePreferences",
+                summary: "Character intimate preferences were updated.",
+                evidence: ["Character explicitly described what they wanted."],
+              },
+              {
+                sectionKey: "userIntimatePreferences",
+                summary: "User intimate preferences were updated.",
+                evidence: ["User explicitly described what they wanted."],
+              },
+            ],
+            createdAt: 1,
+          },
+          stateVersions: [],
+          lastProcessedChatId: null,
+        },
+      },
+    });
+
+    const { postHandlers } = buildHandlers();
+    const accept = postHandlers.get("/data/character-evolution/:charId/proposal/accept");
+    expect(accept).toBeTruthy();
+
+    const acceptRes = createRes();
+    await accept!(createReq({}, { charId: characterId }), acceptRes);
+
+    expect(acceptRes.statusCode).toBe(200);
+    expect(acceptRes.payload).toEqual(expect.objectContaining({
+      state: expect.objectContaining({
+        characterIntimatePreferences: [
+          expect.objectContaining({
+            value: "Being in control during intimacy",
+          }),
+        ],
+        userIntimatePreferences: [
+          expect.objectContaining({
+            value: "Face-sitting",
+          }),
+        ],
+      }),
+    }));
+
+    const versionFile = JSON.parse(
+      readFileSync(path.join(dataDirs.characters, characterId, "states", "v1.json"), "utf-8"),
+    );
+    expect(versionFile).toEqual(expect.objectContaining({
+      state: expect.objectContaining({
+        characterIntimatePreferences: [
+          expect.objectContaining({
+            value: "Being in control during intimacy",
+          }),
+        ],
+        userIntimatePreferences: [
+          expect.objectContaining({
+            value: "Face-sitting",
+          }),
+        ],
+      }),
+      privacy: {
+        allowCharacterIntimatePreferences: true,
+        allowUserIntimatePreferences: true,
+      },
+    }));
+  });
+
+  it("does not leave a visible version file behind when accept fails", async () => {
+    const { postHandlers: handoffHandlers } = buildHandlers();
+    const handoff = handoffHandlers.get("/data/character-evolution/handoff");
+    expect(handoff).toBeTruthy();
+
+    await handoff!(createReq({ characterId, chatId }), createRes());
+
+    const { postHandlers } = buildHandlers({
+      applyStateCommands: async () => {
+        throw new Error("simulated replace failure");
+      },
+    });
+    const accept = postHandlers.get("/data/character-evolution/:charId/proposal/accept");
+    expect(accept).toBeTruthy();
+
+    const acceptRes = createRes();
+    await accept!(createReq({}, { charId: characterId }), acceptRes);
+
+    expect(acceptRes.statusCode).toBe(500);
+
+    const statesDir = path.join(dataDirs.characters, characterId, "states");
+    expect(existsSync(path.join(statesDir, "v1.json"))).toBe(false);
+    expect(existsSync(statesDir)).toBe(true);
+    expect(readdirSync(statesDir)).toEqual([]);
   });
 
   it("rebuilds version history from disk when stored stateVersions metadata is empty", async () => {
@@ -351,6 +834,67 @@ describe("registerEvolutionRoutes", () => {
     expect(listRes.payload).toEqual(expect.objectContaining({
       ok: true,
       currentStateVersion: 2,
+      versions: [
+        { version: 2, chatId: "chat-b", acceptedAt: 1002 },
+        { version: 1, chatId: "chat-a", acceptedAt: 1001 },
+      ],
+    }));
+  });
+
+  it("rebuilds version history from staged files when finalized snapshots are unavailable", async () => {
+    writeJson(path.join(dataDirs.characters, characterId, "states", ".v1.pending-a.pending.json"), {
+      version: 1,
+      chatId: "chat-a",
+      acceptedAt: 1001,
+      state: {
+        relationship: {
+          trustLevel: "high",
+          dynamic: "first",
+        },
+      },
+    });
+    writeJson(path.join(dataDirs.characters, characterId, "states", ".v2.pending-b.pending.json"), {
+      version: 2,
+      chatId: "chat-b",
+      acceptedAt: 1002,
+      state: {
+        relationship: {
+          trustLevel: "higher",
+          dynamic: "second",
+        },
+      },
+    });
+    writeJson(path.join(dataDirs.characters, characterId, "character.json"), {
+      character: {
+        chaId: characterId,
+        type: "character",
+        name: "Eva",
+        desc: "desc",
+        personality: "personality",
+        characterEvolution: {
+          enabled: true,
+          useGlobalDefaults: true,
+          currentStateVersion: 2,
+          currentState: {},
+          stateVersions: [],
+        },
+      },
+    });
+
+    const { getHandlers } = buildHandlers();
+    const listVersions = getHandlers.get("/data/character-evolution/:charId/versions");
+    expect(listVersions).toBeTruthy();
+
+    const listRes = createRes();
+    await listVersions!({
+      method: "GET",
+      originalUrl: "/data/character-evolution/test",
+      body: {},
+      params: { charId: characterId },
+    }, listRes);
+
+    expect(listRes.statusCode).toBe(200);
+    expect(listRes.payload).toEqual(expect.objectContaining({
       versions: [
         { version: 2, chatId: "chat-b", acceptedAt: 1002 },
         { version: 1, chatId: "chat-a", acceptedAt: 1001 },

@@ -115,6 +115,7 @@ describe("database chatReadingMode normalization", () => {
     expect(storedPreset.promptTemplate?.length).toBeGreaterThan(0);
     expect(storedPreset.promptTemplate?.some((item) => item.type === "characterState")).toBe(true);
   });
+
 });
 
 describe("legacy provider migration", () => {
@@ -134,6 +135,37 @@ describe("legacy provider migration", () => {
     expect(db.removedModelMigrationNotice).toEqual([
       "Legacy removed providers were migrated to OpenRouter. Review Bot Settings and re-save any affected presets.",
     ]);
+  });
+
+  it("normalizes provider-prefixed character evolution models for non-openrouter runtimes", () => {
+    const db = applySetDatabase({
+      characters: [
+        {
+          characterEvolution: {
+            enabled: true,
+            useGlobalDefaults: false,
+            extractionProvider: "anthropic",
+            extractionModel: "anthropic/claude-3-5-haiku-latest",
+            extractionMaxTokens: 1200,
+            extractionPrompt: "prompt",
+            currentStateVersion: 0,
+            currentState: {},
+            stateVersions: [],
+          },
+        },
+      ],
+      characterEvolutionDefaults: {
+        extractionProvider: "openai",
+        extractionModel: "openai/gpt-4.1-mini",
+        extractionMaxTokens: 1200,
+        extractionPrompt: "prompt",
+        sectionConfigs: [],
+        privacy: {},
+      },
+    });
+
+    expect((db.characterEvolutionDefaults as { extractionModel?: string }).extractionModel).toBe("gpt-4.1-mini");
+    expect(((db.characters[0] as { characterEvolution?: { extractionModel?: string } }).characterEvolution?.extractionModel)).toBe("claude-3-5-haiku-latest");
   });
 });
 

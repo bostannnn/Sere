@@ -43,10 +43,17 @@ async function getJson(path: string) {
     return (response.data ?? {}) as Record<string, unknown>;
 }
 
-export async function createCharacterEvolutionProposal(characterId: string, chatId: string) {
+export async function createCharacterEvolutionProposal(
+    characterId: string,
+    chatId: string,
+    options: {
+        forceReplay?: boolean
+    } = {},
+) {
     return await postJson("/data/character-evolution/handoff", {
         characterId,
         chatId,
+        ...(options.forceReplay ? { forceReplay: true } : {}),
     });
 }
 
@@ -78,6 +85,8 @@ export async function createNewChatAfterEvolution(charIndex: number): Promise<vo
     const db = getDatabase();
     const current = db.characters[charIndex];
     if (!current) return;
+    const previousDb = structuredClone(db);
+    const previousChatPage = typeof current.chatPage === "number" ? current.chatPage : 0;
     const nextChat: Chat = {
         message: [],
         note: "",
@@ -103,10 +112,16 @@ export async function createNewChatAfterEvolution(charIndex: number): Promise<vo
     setDatabase(db);
     changeChatTo(0);
     if (typeof current.chaId === "string" && current.chaId && typeof nextChat.id === "string" && nextChat.id) {
-        await saveServerDatabase(db, {
-            character: [current.chaId],
-            chat: [[current.chaId, nextChat.id]],
-        });
+        try {
+            await saveServerDatabase(db, {
+                character: [current.chaId],
+                chat: [[current.chaId, nextChat.id]],
+            });
+        } catch (error) {
+            setDatabase(previousDb);
+            changeChatTo(previousChatPage);
+            throw error;
+        }
     }
 }
 

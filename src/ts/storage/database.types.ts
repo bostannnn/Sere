@@ -565,6 +565,8 @@ export interface CharacterEvolutionVersionFile {
     chatId: string | null
     acceptedAt: number
     state: CharacterEvolutionState
+    sectionConfigs?: CharacterEvolutionSectionConfig[]
+    privacy?: CharacterEvolutionPrivacySettings
 }
 
 export interface CharacterEvolutionSettings {

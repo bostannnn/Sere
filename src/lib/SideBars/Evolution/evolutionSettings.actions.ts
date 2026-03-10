@@ -6,7 +6,7 @@ import {
     rejectCharacterEvolutionProposal,
 } from "src/ts/evolution"
 import { saveServerDatabase } from "src/ts/storage/serverDb"
-import { OtherBotSettingsSubMenuIndex, SettingsMenuIndex, settingsOpen } from "src/ts/stores.svelte"
+import { DBState, OtherBotSettingsSubMenuIndex, SettingsMenuIndex, settingsOpen } from "src/ts/stores.svelte"
 import type {
     CharacterEvolutionPendingProposal,
     CharacterEvolutionState,
@@ -18,6 +18,20 @@ import type {
 export interface AcceptedEvolutionProposalPayload extends Record<string, unknown> {
     state?: CharacterEvolutionState
     version?: number | string
+    chatCreationError?: string
+}
+
+function toErrorMessage(error: unknown): string {
+    if (error instanceof Error && error.message) {
+        return error.message
+    }
+    return String(error ?? "Unknown error")
+}
+
+function findCharacterIndexById(characterId: string): number {
+    return Array.isArray(DBState.db.characters)
+        ? DBState.db.characters.findIndex((entry) => entry?.type !== "group" && entry?.chaId === characterId)
+        : -1
 }
 
 export function getEvolutionProposalIdentity(
@@ -46,14 +60,14 @@ export async function refreshEvolutionVersions(
     selectedVersion: number | null,
 ): Promise<{
     versions: CharacterEvolutionVersionMeta[]
-    selectedVersionState: CharacterEvolutionState | null
+    selectedVersionFile: CharacterEvolutionVersionFile | null
 }> {
     const versions = await listCharacterEvolutionVersions(characterId)
 
     if (selectedVersion === null) {
         return {
             versions,
-            selectedVersionState: null,
+            selectedVersionFile: null,
         }
     }
 
@@ -61,7 +75,7 @@ export async function refreshEvolutionVersions(
 
     return {
         versions,
-        selectedVersionState: version?.state ?? null,
+        selectedVersionFile: version,
     }
 }
 
@@ -82,7 +96,6 @@ export async function acceptEvolutionProposalAction(args: {
     characterId: string
     proposedState: CharacterEvolutionState
     createNextChat?: boolean
-    selectedCharIndex: number
 }): Promise<AcceptedEvolutionProposalPayload> {
     const payload = await acceptCharacterEvolutionProposal(
         args.characterId,
@@ -90,7 +103,18 @@ export async function acceptEvolutionProposalAction(args: {
     )
 
     if (args.createNextChat) {
-        await createNewChatAfterEvolution(args.selectedCharIndex)
+        try {
+            const selectedCharIndex = findCharacterIndexById(args.characterId)
+            if (selectedCharIndex < 0) {
+                throw new Error("Character is no longer available for new chat creation.")
+            }
+            await createNewChatAfterEvolution(selectedCharIndex)
+        } catch (error) {
+            return {
+                ...(payload as AcceptedEvolutionProposalPayload),
+                chatCreationError: toErrorMessage(error),
+            }
+        }
     }
 
     return payload as AcceptedEvolutionProposalPayload

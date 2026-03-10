@@ -5,6 +5,8 @@ const {
     getEffectiveCharacterEvolutionSettings,
     normalizeCharacterEvolutionDefaults,
     normalizeCharacterEvolutionProposal,
+    normalizeCharacterEvolutionPrivacy,
+    normalizeCharacterEvolutionSectionConfigs,
     normalizeCharacterEvolutionSettings,
     normalizeCharacterEvolutionState,
     sanitizeStateForEvolution,
@@ -91,35 +93,69 @@ function registerEvolutionRoutes(arg = {}) {
         if (typeof applyStateCommands !== 'function') {
             throw new LLMHttpError(500, 'STATE_COMMANDS_UNAVAILABLE', 'Internal state command service is unavailable.');
         }
-        for (let attempt = 0; attempt < 2; attempt += 1) {
-            const baseEventId = await readStateLastEventId();
-            try {
-                await applyStateCommands([
-                    {
-                        type: 'character.replace',
-                        charId: characterId,
-                        character: nextCharacter,
-                    },
-                ], source, { baseEventId });
-                return;
-            } catch (error) {
-                const conflicts = Array.isArray(error?.result?.conflicts) ? error.result.conflicts : [];
-                const isStale = conflicts.some((entry) => entry?.code === 'STALE_BASE_EVENT');
-                if (!isStale || attempt >= 1) {
-                    throw error;
-                }
+        const baseEventId = await readStateLastEventId();
+        try {
+            await applyStateCommands([
+                {
+                    type: 'character.replace',
+                    charId: characterId,
+                    character: nextCharacter,
+                },
+            ], source, { baseEventId });
+            return;
+        } catch (error) {
+            const conflicts = Array.isArray(error?.result?.conflicts) ? error.result.conflicts : [];
+            const isStale = conflicts.some((entry) => entry?.code === 'STALE_BASE_EVENT');
+            if (isStale) {
+                throw new LLMHttpError(409, 'EVOLUTION_STATE_CONFLICT', 'Character evolution changed while processing. Refresh and retry.');
             }
+            throw error;
         }
     }
 
-    async function writeVersionFile(characterDir, version, payload) {
+    async function stageVersionFile(characterDir, version, payload) {
         const statesDir = path.join(characterDir, 'states');
         await fs.mkdir(statesDir, { recursive: true });
+        const stagedPath = path.join(
+            statesDir,
+            `.v${version}.${Date.now()}.${Math.random().toString(36).slice(2, 10)}.pending.json`
+        );
         await fs.writeFile(
-            path.join(statesDir, `v${version}.json`),
+            stagedPath,
             JSON.stringify(payload, null, 2),
             'utf-8'
         );
+        return {
+            stagedPath,
+            finalPath: path.join(statesDir, `v${version}.json`),
+        };
+    }
+
+    async function cleanupStagedVersionFile(stagedPath) {
+        if (!stagedPath) {
+            return;
+        }
+        try {
+            await fs.unlink(stagedPath);
+        } catch {}
+    }
+
+    async function finalizeVersionFile(versionFile) {
+        if (!versionFile?.stagedPath || !versionFile?.finalPath) {
+            return null;
+        }
+        try {
+            await fs.rename(versionFile.stagedPath, versionFile.finalPath);
+            return versionFile.finalPath;
+        } catch {
+            try {
+                await fs.copyFile(versionFile.stagedPath, versionFile.finalPath);
+                await cleanupStagedVersionFile(versionFile.stagedPath);
+                return versionFile.finalPath;
+            } catch {
+                return versionFile.stagedPath;
+            }
+        }
     }
 
     async function readVersionMetasFromDisk(characterDir) {
@@ -128,22 +164,64 @@ function registerEvolutionRoutes(arg = {}) {
             return [];
         }
         const files = await fs.readdir(statesDir);
-        const versions = [];
+        const versionFiles = new Map();
         for (const fileName of files) {
-            const match = /^v(\d+)\.json$/.exec(fileName);
+            const finalMatch = /^v(\d+)\.json$/.exec(fileName);
+            const stagedMatch = /^\.v(\d+)\..+\.pending\.json$/.exec(fileName);
+            const match = finalMatch || stagedMatch;
             if (!match) continue;
             const version = Number(match[1]);
             if (!Number.isFinite(version)) continue;
+            const current = versionFiles.get(version);
+            if (finalMatch) {
+                versionFiles.set(version, {
+                    fileName,
+                    version,
+                    priority: 2,
+                });
+                continue;
+            }
+            if (!current || current.priority < 2) {
+                if (!current || fileName > current.fileName) {
+                    versionFiles.set(version, {
+                        fileName,
+                        version,
+                        priority: 1,
+                    });
+                }
+            }
+        }
+
+        const versions = [];
+        for (const entry of versionFiles.values()) {
             try {
-                const payload = JSON.parse(await fs.readFile(path.join(statesDir, fileName), 'utf-8'));
+                const payload = JSON.parse(await fs.readFile(path.join(statesDir, entry.fileName), 'utf-8'));
                 versions.push({
-                    version: Math.max(0, Math.floor(version)),
+                    version: Math.max(0, Math.floor(entry.version)),
                     chatId: typeof payload?.chatId === 'string' ? payload.chatId : null,
                     acceptedAt: Number.isFinite(Number(payload?.acceptedAt)) ? Number(payload.acceptedAt) : 0,
                 });
             } catch {}
         }
         return versions.sort((left, right) => left.version - right.version);
+    }
+
+    async function resolveVersionFilePath(characterDir, version) {
+        const statesDir = path.join(characterDir, 'states');
+        const finalPath = path.join(statesDir, `v${version}.json`);
+        if (existsSync(finalPath)) {
+            return finalPath;
+        }
+        if (!existsSync(statesDir)) {
+            return null;
+        }
+        const stagedFiles = (await fs.readdir(statesDir))
+            .filter((entry) => entry.startsWith(`.v${version}.`) && entry.endsWith('.pending.json'))
+            .sort();
+        if (stagedFiles.length === 0) {
+            return null;
+        }
+        return path.join(statesDir, stagedFiles[stagedFiles.length - 1]);
     }
 
     function mergeVersionMetas(preferred, fallback) {
@@ -253,6 +331,7 @@ function registerEvolutionRoutes(arg = {}) {
         const body = (req.body && typeof req.body === 'object') ? req.body : {};
         const characterId = toStringOrEmpty(body.characterId);
         const chatId = toStringOrEmpty(body.chatId);
+        const forceReplay = body.forceReplay === true;
         ensureCharacterChatInput(characterId, chatId);
         req._characterEvolutionAudit = {
             mode: 'memory',
@@ -279,13 +358,18 @@ function registerEvolutionRoutes(arg = {}) {
             throw new LLMHttpError(400, 'GROUP_CHAT_UNSUPPORTED', 'Character evolution is only supported for single-character chats.');
         }
         const evolution = resolveEffectiveEvolutionSettings(settings, character);
+        const currentEvolution = normalizeCharacterEvolutionSettings(character.characterEvolution);
         req._characterEvolutionAudit.provider = evolution.extractionProvider;
         req._characterEvolutionAudit.model = evolution.extractionModel;
         req._characterEvolutionAudit.metadata = {
             model: evolution.extractionModel,
             maxTokens: evolution.extractionMaxTokens,
+            replayed: forceReplay,
         };
-        if (evolution.lastProcessedChatId && evolution.lastProcessedChatId === chatId) {
+        if (currentEvolution.pendingProposal) {
+            throw new LLMHttpError(409, 'PENDING_PROPOSAL_EXISTS', 'Resolve the current evolution proposal before running another handoff.');
+        }
+        if (!forceReplay && evolution.lastProcessedChatId && evolution.lastProcessedChatId === chatId) {
             throw new LLMHttpError(409, 'CHAT_ALREADY_PROCESSED', 'This chat has already been handed off and accepted.');
         }
         const { chat } = await loadChat(characterId, chatId);
@@ -339,6 +423,7 @@ function registerEvolutionRoutes(arg = {}) {
 
         const payload = {
             ok: true,
+            replayed: forceReplay,
             proposal: pendingProposal,
         };
         const durationMs = Date.now() - startedAt;
@@ -369,6 +454,7 @@ function registerEvolutionRoutes(arg = {}) {
             metadata: {
                 model: evolution.extractionModel,
                 maxTokens: evolution.extractionMaxTokens,
+                replayed: forceReplay,
             },
             request: buildExecutionAuditRequest('character_evolution_handoff', body),
             response: payload,
@@ -384,57 +470,66 @@ function registerEvolutionRoutes(arg = {}) {
         if (!characterId || !isSafePathSegment(characterId)) {
             throw new LLMHttpError(400, 'INVALID_CHARACTER_ID', 'charId is required and must be a safe id.');
         }
-        const { character, charDir } = await loadCharacterAndSettings(characterId);
+        const { settings, character, charDir } = await loadCharacterAndSettings(characterId);
         if (character.type === 'group') {
             throw new LLMHttpError(400, 'GROUP_CHAT_UNSUPPORTED', 'Character evolution is only supported for single-character chats.');
         }
-        const evolution = normalizeCharacterEvolutionSettings(character.characterEvolution);
-        const pendingProposal = evolution.pendingProposal;
+        const storedEvolution = normalizeCharacterEvolutionSettings(character.characterEvolution);
+        const effectiveEvolution = getEffectiveCharacterEvolutionSettings(settings, character);
+        const pendingProposal = storedEvolution.pendingProposal;
         if (!pendingProposal) {
             throw new LLMHttpError(404, 'PENDING_PROPOSAL_NOT_FOUND', 'No pending proposal exists for this character.');
         }
-        if (evolution.lastProcessedChatId && evolution.lastProcessedChatId === pendingProposal.sourceChatId) {
+        if (storedEvolution.lastProcessedChatId && storedEvolution.lastProcessedChatId === pendingProposal.sourceChatId) {
             throw new LLMHttpError(409, 'CHAT_ALREADY_PROCESSED', 'This chat has already been accepted.');
         }
 
         const body = (req.body && typeof req.body === 'object') ? req.body : {};
         const proposedState = sanitizeStateForEvolution(
             normalizeCharacterEvolutionState(body.proposedState || pendingProposal.proposedState),
-            evolution
+            effectiveEvolution,
+            storedEvolution.currentState
         );
         const recoveredVersions = mergeVersionMetas(
-            evolution.stateVersions,
+            storedEvolution.stateVersions,
             await readVersionMetasFromDisk(charDir),
         );
         const nextVersion = Math.max(
-            evolution.currentStateVersion || 0,
+            storedEvolution.currentStateVersion || 0,
             ...recoveredVersions.map((entry) => Number(entry.version) || 0),
         ) + 1;
         const acceptedAt = Date.now();
-        await writeVersionFile(charDir, nextVersion, {
+        const versionFile = await stageVersionFile(charDir, nextVersion, {
             version: nextVersion,
             chatId: pendingProposal.sourceChatId || null,
             acceptedAt,
             state: proposedState,
+            sectionConfigs: effectiveEvolution.sectionConfigs,
+            privacy: effectiveEvolution.privacy,
         });
-
-        const nextCharacter = clone(character, character);
-        nextCharacter.characterEvolution = {
-            ...evolution,
-            currentStateVersion: nextVersion,
-            currentState: proposedState,
-            pendingProposal: null,
-            lastProcessedChatId: pendingProposal.sourceChatId,
-            stateVersions: [
-                ...recoveredVersions,
-                {
-                    version: nextVersion,
-                    chatId: pendingProposal.sourceChatId || null,
-                    acceptedAt,
-                },
-            ],
-        };
-        await replaceCharacterWithRetry(characterId, nextCharacter, 'character-evolution.accept');
+        try {
+            const nextCharacter = clone(character, character);
+            nextCharacter.characterEvolution = {
+                ...storedEvolution,
+                currentStateVersion: nextVersion,
+                currentState: proposedState,
+                pendingProposal: null,
+                lastProcessedChatId: pendingProposal.sourceChatId,
+                stateVersions: [
+                    ...recoveredVersions,
+                    {
+                        version: nextVersion,
+                        chatId: pendingProposal.sourceChatId || null,
+                        acceptedAt,
+                    },
+                ],
+            };
+            await replaceCharacterWithRetry(characterId, nextCharacter, 'character-evolution.accept');
+        } catch (error) {
+            await cleanupStagedVersionFile(versionFile.stagedPath);
+            throw error;
+        }
+        await finalizeVersionFile(versionFile);
         sendJson(res, 200, {
             ok: true,
             version: nextVersion,
@@ -499,14 +594,26 @@ function registerEvolutionRoutes(arg = {}) {
         if (!Number.isFinite(version) || version < 0) {
             throw new LLMHttpError(400, 'INVALID_VERSION', 'version must be a positive number.');
         }
-        const versionPath = safeResolve(dataDirs.characters, `${characterId}/states/v${Math.floor(version)}.json`);
-        if (!existsSync(versionPath)) {
+        const versionPath = await resolveVersionFilePath(
+            safeResolve(dataDirs.characters, characterId),
+            Math.floor(version),
+        );
+        if (!versionPath) {
             throw new LLMHttpError(404, 'VERSION_NOT_FOUND', `Evolution version not found: ${version}`);
         }
         const payload = JSON.parse(await fs.readFile(versionPath, 'utf-8'));
         sendJson(res, 200, {
             ok: true,
-            version: payload,
+            version: {
+                ...payload,
+                state: normalizeCharacterEvolutionState(payload?.state),
+                ...(Array.isArray(payload?.sectionConfigs)
+                    ? { sectionConfigs: normalizeCharacterEvolutionSectionConfigs(payload.sectionConfigs) }
+                    : {}),
+                ...(payload?.privacy && typeof payload.privacy === 'object'
+                    ? { privacy: normalizeCharacterEvolutionPrivacy(payload.privacy) }
+                    : {}),
+            },
         });
     }));
 }

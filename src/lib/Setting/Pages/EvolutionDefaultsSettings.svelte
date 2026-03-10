@@ -1,8 +1,9 @@
 <script lang="ts">
     import { DBState } from "src/ts/stores.svelte";
     import {
-        CHARACTER_EVOLUTION_MODEL_SUGGESTIONS,
         ensureDatabaseEvolutionDefaults,
+        getCharacterEvolutionModelSuggestions,
+        normalizeCharacterEvolutionExtractionModel,
     } from "src/ts/characterEvolution";
     import CheckInput from "src/lib/UI/GUI/CheckInput.svelte";
     import ModelList from "src/lib/UI/ModelList.svelte";
@@ -16,9 +17,45 @@
         ensureDatabaseEvolutionDefaults(DBState.db)
     })
 
+    $effect(() => {
+        const defaults = DBState.db.characterEvolutionDefaults
+        if (!defaults) {
+            return
+        }
+
+        const normalizedModel = normalizeCharacterEvolutionExtractionModel(
+            defaults.extractionProvider,
+            defaults.extractionModel,
+        )
+        if (defaults.extractionModel !== normalizedModel) {
+            defaults.extractionModel = normalizedModel
+        }
+    })
+
     function usesOpenRouterModelSelector(provider: string) {
         return provider.trim().toLowerCase() === "openrouter";
     }
+
+    function setDefaultPrivacyFlag(
+        key: "allowCharacterIntimatePreferences" | "allowUserIntimatePreferences",
+        value: boolean,
+    ) {
+        if (!DBState.db.characterEvolutionDefaults) {
+            return
+        }
+
+        DBState.db.characterEvolutionDefaults = {
+            ...DBState.db.characterEvolutionDefaults,
+            privacy: {
+                ...DBState.db.characterEvolutionDefaults.privacy,
+                [key]: value,
+            },
+        }
+    }
+
+    const modelSuggestions = $derived(
+        getCharacterEvolutionModelSuggestions(DBState.db.characterEvolutionDefaults?.extractionProvider ?? "openrouter")
+    );
 </script>
 
 {#if DBState.db.characterEvolutionDefaults}
@@ -42,7 +79,11 @@
                     <OpenRouterModelSelect bind:value={DBState.db.characterEvolutionDefaults.extractionModel} label="Extraction Model" />
                 {:else}
                     <span class="ds-settings-label">Extraction Model</span>
-                    <TextInput bind:value={DBState.db.characterEvolutionDefaults.extractionModel} placeholder="anthropic/claude-3.5-haiku" list="character-evolution-default-model-options" />
+                    <TextInput
+                        bind:value={DBState.db.characterEvolutionDefaults.extractionModel}
+                        placeholder={modelSuggestions[0] ?? "Model id"}
+                        list="character-evolution-default-model-options"
+                    />
                 {/if}
 
                 <span class="ds-settings-label">Extraction Max Response Tokens</span>
@@ -60,8 +101,20 @@
             <div class="ds-settings-section">
                 <span class="ds-settings-label">Privacy</span>
                 <div class="evolution-defaults-toggle-list">
-                    <CheckInput bare={true} className="evolution-defaults-toggle-row" bind:check={DBState.db.characterEvolutionDefaults.privacy.allowCharacterIntimatePreferences} name="Allow Character Intimate Preferences" />
-                    <CheckInput bare={true} className="evolution-defaults-toggle-row" bind:check={DBState.db.characterEvolutionDefaults.privacy.allowUserIntimatePreferences} name="Allow User Intimate Preferences" />
+                    <CheckInput
+                        bare={true}
+                        className="evolution-defaults-toggle-row"
+                        check={DBState.db.characterEvolutionDefaults.privacy.allowCharacterIntimatePreferences}
+                        onChange={(value) => setDefaultPrivacyFlag("allowCharacterIntimatePreferences", value)}
+                        name="Allow Character Intimate Preferences"
+                    />
+                    <CheckInput
+                        bare={true}
+                        className="evolution-defaults-toggle-row"
+                        check={DBState.db.characterEvolutionDefaults.privacy.allowUserIntimatePreferences}
+                        onChange={(value) => setDefaultPrivacyFlag("allowUserIntimatePreferences", value)}
+                        name="Allow User Intimate Preferences"
+                    />
                 </div>
             </div>
         </div>
@@ -69,7 +122,7 @@
         <SectionConfigEditor bind:value={DBState.db.characterEvolutionDefaults.sectionConfigs} privacy={DBState.db.characterEvolutionDefaults.privacy} title="Default Sections" />
     </div>
     <datalist id="character-evolution-default-model-options">
-        {#each CHARACTER_EVOLUTION_MODEL_SUGGESTIONS as model (model)}
+        {#each modelSuggestions as model (model)}
             <option value={model}></option>
         {/each}
     </datalist>
