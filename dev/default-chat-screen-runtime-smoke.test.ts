@@ -34,12 +34,12 @@ const mocks = vi.hoisted(() => ({
       createdAt: 1,
     },
   })),
-  acceptEvolutionProposal: vi.fn(async (_characterId: string, proposedState: unknown) => ({
+  acceptEvolutionProposalAction: vi.fn(async (arg: { proposedState: unknown; createNextChat?: boolean }) => ({
     version: 1,
     acceptedAt: 1234,
-    state: proposedState,
+    state: arg.proposedState,
   })),
-  rejectEvolutionProposal: vi.fn(async () => ({ ok: true })),
+  rejectEvolutionProposalAction: vi.fn(async () => ({ ok: true })),
   changeChatTo: vi.fn(),
 }));
 
@@ -326,8 +326,6 @@ vi.mock(import("src/ts/evolution"), async () => {
 
   return {
     createCharacterEvolutionProposal: mocks.createEvolutionProposal,
-    acceptCharacterEvolutionProposal: mocks.acceptEvolutionProposal,
-    rejectCharacterEvolutionProposal: mocks.rejectEvolutionProposal,
     getCharacterEvolutionErrorMessage: (error: unknown) => String(error ?? "Unknown error"),
     getPendingCharacterEvolutionProposal: (character: Record<string, unknown> | null | undefined) => character?.characterEvolution?.pendingProposal ?? null,
     createNewChatAfterEvolution: async (charIndex: number) => {
@@ -347,6 +345,77 @@ vi.mock(import("src/ts/evolution"), async () => {
     },
   };
 });
+
+vi.mock(import("src/ts/character-evolution/actions"), async () => {
+  const { DBState } = await import("src/ts/stores.svelte");
+
+  return {
+    acceptEvolutionProposalAction: async (arg: {
+      characterId: string;
+      proposedState: unknown;
+      createNextChat?: boolean;
+    }) => {
+      const payload = await mocks.acceptEvolutionProposalAction(arg);
+      if (arg.createNextChat) {
+        const characterIndex = DBState.db.characters.findIndex((entry) => entry?.type !== "group" && entry?.chaId === arg.characterId);
+        if (characterIndex >= 0) {
+          const character = DBState.db.characters[characterIndex];
+          character.chats.unshift({
+            id: "chat-2",
+            name: "New Chat 1",
+            fmIndex: -1,
+            message: [],
+            localLore: [],
+            modules: [],
+            note: "",
+            bindedPersona: "",
+          });
+          character.chatPage = 0;
+          mocks.changeChatTo(0);
+        }
+      }
+      return payload;
+    },
+    rejectEvolutionProposalAction: mocks.rejectEvolutionProposalAction,
+  };
+});
+
+vi.mock(import("src/ts/character-evolution/workflow"), () => ({
+  getEvolutionProposalIdentity: (characterId: string | undefined, proposal: { proposalId?: string; sourceChatId?: string; createdAt?: number } | null | undefined) => {
+    if (!characterId || !proposal) {
+      return null;
+    }
+    return `${characterId}:${proposal.proposalId ?? proposal.sourceChatId ?? "pending"}:${proposal.createdAt ?? 0}`;
+  },
+  withPendingEvolutionProposal: (characterEntry: Record<string, unknown>, proposal: unknown) => {
+    (characterEntry.characterEvolution as Record<string, unknown>).pendingProposal = proposal as Record<string, unknown> | null;
+    return characterEntry;
+  },
+  withAcceptedEvolutionState: (args: {
+    characterEntry: Record<string, unknown>;
+    state: Record<string, unknown>;
+    version?: number | string;
+    acceptedAt?: number | string;
+    sourceChatId: string | null;
+  }) => {
+    const evolution = args.characterEntry.characterEvolution as Record<string, unknown>;
+    const acceptedVersion = Number(args.version) || Number(evolution.currentStateVersion) || 0;
+    const acceptedAt = Number(args.acceptedAt) || 0;
+    evolution.currentState = args.state;
+    evolution.currentStateVersion = acceptedVersion;
+    evolution.pendingProposal = null;
+    evolution.lastProcessedChatId = args.sourceChatId;
+    evolution.stateVersions = [
+      {
+        version: acceptedVersion,
+        chatId: args.sourceChatId,
+        acceptedAt,
+      },
+      ...(((evolution.stateVersions as Array<{ version?: number }> | undefined) ?? []).filter((entry) => Number(entry?.version) !== acceptedVersion)),
+    ];
+    return args.characterEntry;
+  },
+}));
 
 vi.mock(import("src/ts/process/triggers"), () => ({
   runTrigger: async () => null,
@@ -442,8 +511,8 @@ describe("default chat screen runtime smoke", () => {
   beforeEach(() => {
     mocks.sendChat.mockClear();
     mocks.createEvolutionProposal.mockClear();
-    mocks.acceptEvolutionProposal.mockClear();
-    mocks.rejectEvolutionProposal.mockClear();
+    mocks.acceptEvolutionProposalAction.mockClear();
+    mocks.rejectEvolutionProposalAction.mockClear();
     mocks.changeChatTo.mockClear();
     platformState.isMobile = false;
     selectedCharID.set(0);
@@ -866,7 +935,7 @@ describe("default chat screen runtime smoke", () => {
     await flushUi();
 
     expect(mocks.createEvolutionProposal).toHaveBeenCalledTimes(1);
-    expect(mocks.acceptEvolutionProposal).toHaveBeenCalledTimes(1);
+    expect(mocks.acceptEvolutionProposalAction).toHaveBeenCalledTimes(1);
     expect(DBState.db.characters[0].characterEvolution.currentStateVersion).toBe(1);
     expect(DBState.db.characters[0].characterEvolution.pendingProposal).toBeNull();
     expect(DBState.db.characters[0].characterEvolution.lastProcessedChatId).toBe("chat-1");
@@ -1010,12 +1079,14 @@ describe("default chat screen runtime smoke", () => {
     acceptButton?.click();
     await flushUi();
 
-    expect(mocks.acceptEvolutionProposal).toHaveBeenCalledTimes(1);
-    expect(mocks.acceptEvolutionProposal.mock.calls[0]?.[0]).toBe("char-2");
-    expect(mocks.acceptEvolutionProposal.mock.calls[0]?.[1]).toMatchObject({
-      relationship: {
-        trustLevel: "char-2",
-        dynamic: "Character Two dynamic",
+    expect(mocks.acceptEvolutionProposalAction).toHaveBeenCalledTimes(1);
+    expect(mocks.acceptEvolutionProposalAction.mock.calls[0]?.[0]).toMatchObject({
+      characterId: "char-2",
+      proposedState: {
+        relationship: {
+          trustLevel: "char-2",
+          dynamic: "Character Two dynamic",
+        },
       },
     });
   });
@@ -1043,7 +1114,7 @@ describe("default chat screen runtime smoke", () => {
       };
     }) => void) | null = null;
 
-    mocks.acceptEvolutionProposal.mockImplementationOnce(async () => {
+    mocks.acceptEvolutionProposalAction.mockImplementationOnce(async () => {
       return await new Promise((resolve) => {
         resolveAccept = resolve;
       });

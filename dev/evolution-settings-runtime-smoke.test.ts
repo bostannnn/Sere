@@ -436,6 +436,61 @@ describe("evolution settings runtime smoke", () => {
     expect(mocks.alertError).toHaveBeenCalledWith("save failed");
   });
 
+  it("preserves a new local chat created during accept-and-create", async () => {
+    mocks.acceptEvolutionProposalAction.mockImplementationOnce(async () => {
+      DBState.db.characters[0].chats.unshift({
+        id: "new-chat-1",
+        name: "New Chat 1",
+        message: [],
+        note: "",
+        localLore: [],
+        fmIndex: -1,
+      });
+      DBState.db.characters[0].chatPage = 0;
+
+      return {
+        version: 2,
+        acceptedAt: 5678,
+        state: {
+          relationship: { trustLevel: "warmer", dynamic: "accepted" },
+          activeThreads: [],
+          runningJokes: [],
+          characterLikes: [],
+          characterDislikes: [],
+          characterHabits: [],
+          characterBoundariesPreferences: [],
+          userFacts: [],
+          userRead: [],
+          userLikes: [],
+          userDislikes: [],
+          lastChatEnded: { state: "", residue: "" },
+          keyMoments: [],
+          characterIntimatePreferences: [],
+          userIntimatePreferences: [],
+        },
+      };
+    });
+
+    const target = document.createElement("div");
+    document.body.appendChild(target);
+
+    app = mount(EvolutionSettings, { target });
+    await flushUi();
+
+    const acceptAndCreateButton = target.querySelector('[data-testid="proposal-accept-create"]') as HTMLButtonElement | null;
+    expect(acceptAndCreateButton).not.toBeNull();
+    acceptAndCreateButton!.click();
+    await flushUi();
+    await flushUi();
+
+    expect(mocks.acceptEvolutionProposalAction).toHaveBeenCalledTimes(1);
+    expect(DBState.db.characters[0].characterEvolution.currentStateVersion).toBe(2);
+    expect(DBState.db.characters[0].characterEvolution.pendingProposal).toBeNull();
+    expect(DBState.db.characters[0].chats[0]?.id).toBe("new-chat-1");
+    expect(DBState.db.characters[0].chats[0]?.name).toBe("New Chat 1");
+    expect(DBState.db.characters[0].chatPage).toBe(0);
+  });
+
   it("keeps the accepted version in local history when version refresh fails", async () => {
     mocks.acceptEvolutionProposalAction.mockResolvedValueOnce({
       version: 3,

@@ -472,6 +472,102 @@ const PHASE4_UNCOVERED_MATRIX = [
       "class=\"title-shell panel-shell\"",
     ],
   },
+  {
+    file: "src/lib/Evolution/ProposalPanel.svelte",
+    classification: "migrate",
+    owner: "ui-shell-contract",
+    rationale: "Proposal review panel is a first-class interactive workspace surface and is tracked separately from the chat-shell host.",
+  },
+  {
+    file: "src/lib/Evolution/ProposalSectionCompare.svelte",
+    classification: "migrate",
+    owner: "ui-shell-contract",
+    rationale: "Section-by-section proposal diff rendering is an interactive review surface that needs explicit migration coverage.",
+  },
+  {
+    file: "src/lib/Evolution/ReviewWorkspace.svelte",
+    classification: "migrate",
+    owner: "ui-shell-contract",
+    rationale: "Evolution review workspace composes proposal, editing, and approval controls outside the original chat-sidebar contracts.",
+  },
+  {
+    file: "src/lib/Evolution/SectionConfigEditor.svelte",
+    classification: "migrate",
+    owner: "ui-shell-contract",
+    rationale: "Section configuration editing is a dedicated evolution settings surface and should be represented in the migration matrix.",
+  },
+  {
+    file: "src/lib/Evolution/StateEditor.svelte",
+    classification: "migrate",
+    owner: "ui-shell-contract",
+    rationale: "Evolution state editing is a standalone interactive surface and not covered by the top-level chat shell contracts.",
+  },
+  {
+    file: "src/lib/Others/AlertComp/AlertBaseModal.svelte",
+    classification: "migrate",
+    owner: "ui-shell-contract",
+    rationale: "Alert modal chrome is a reusable interactive shell surface that needs explicit phase-four coverage.",
+  },
+  {
+    file: "src/lib/Others/AlertComp/AlertBranchesOverlay.svelte",
+    classification: "migrate",
+    owner: "ui-shell-contract",
+    rationale: "Branches overlay is an interactive alert surface layered outside the main shell contracts and must be tracked directly.",
+  },
+  {
+    file: "src/lib/Others/AlertComp/AlertHypaV2Modal.svelte",
+    classification: "migrate",
+    owner: "ui-shell-contract",
+    rationale: "Legacy Hypa alert modal remains an interactive surface and needs an explicit migration matrix entry.",
+  },
+  {
+    file: "src/lib/Others/AlertComp/AlertRequestDataModal.svelte",
+    classification: "migrate",
+    owner: "ui-shell-contract",
+    rationale: "Request-data alert modal is a dedicated modal surface that is outside the current shell-specific contract files.",
+  },
+  {
+    file: "src/lib/Others/AlertComp/AlertSelectCharModal.svelte",
+    classification: "migrate",
+    owner: "ui-shell-contract",
+    rationale: "Character-selection alert modal is an interactive chooser surface and should be explicitly represented in phase-four coverage.",
+  },
+  {
+    file: "src/lib/Others/AlertComp/AlertToast.svelte",
+    classification: "migrate",
+    owner: "ui-shell-contract",
+    rationale: "Alert toast rendering is a distinct feedback surface with UI semantics outside the main shell contracts.",
+  },
+  {
+    file: "src/lib/Setting/Pages/EvolutionDefaultsSettings.svelte",
+    classification: "migrate",
+    owner: "settings-contract",
+    rationale: "Evolution defaults is a dedicated settings page and needs explicit coverage alongside the other settings surfaces.",
+  },
+  {
+    file: "src/lib/SideBars/Evolution/EvolutionSettings.svelte",
+    classification: "migrate",
+    owner: "chat-sidebar-contract",
+    rationale: "Evolution settings sidebar is a new right-panel workspace and must be tracked separately from the original three-tab sidebar contract.",
+  },
+  {
+    file: "src/lib/SideBars/Evolution/EvolutionSetupPanel.svelte",
+    classification: "migrate",
+    owner: "chat-sidebar-contract",
+    rationale: "Evolution setup panel is part of the new sidebar workspace and needs explicit migration coverage.",
+  },
+  {
+    file: "src/lib/SideBars/Evolution/EvolutionWorkspaceTabs.svelte",
+    classification: "migrate",
+    owner: "chat-sidebar-contract",
+    rationale: "Evolution workspace tabs extend the chat sidebar surface beyond the original contract and require direct matrix coverage.",
+  },
+  {
+    file: "src/lib/UI/GUI/OpenRouterModelSelect.svelte",
+    classification: "migrate",
+    owner: "ui-shell-contract",
+    rationale: "OpenRouter model selection is an interactive GUI control surface that should be represented in the phase-four matrix.",
+  },
 ];
 
 function readFile(file) {

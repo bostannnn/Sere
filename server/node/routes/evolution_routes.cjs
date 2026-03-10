@@ -111,7 +111,13 @@ function registerEvolutionRoutes(arg = {}) {
                     code: response.code,
                     durationMs,
                 });
-            } catch {}
+            } catch (logError) {
+                console.warn('[character-evolution] Failed to write execution end log.', {
+                    endpoint,
+                    requestId: reqId,
+                    error: logError instanceof Error ? logError.message : String(logError),
+                });
+            }
             try {
                 await appendLLMAudit({
                     requestId: reqId,
@@ -141,7 +147,13 @@ function registerEvolutionRoutes(arg = {}) {
                         : {}),
                     error: response.payload,
                 });
-            } catch {}
+            } catch (auditError) {
+                console.warn('[character-evolution] Failed to append audit log.', {
+                    endpoint,
+                    requestId: reqId,
+                    error: auditError instanceof Error ? auditError.message : String(auditError),
+                });
+            }
             sendJson(res, response.status, response.payload);
         }
     };
@@ -347,6 +359,11 @@ function registerEvolutionRoutes(arg = {}) {
             await replaceCharacterWithRetry(characterId, nextCharacter, 'character-evolution.accept');
         } catch (error) {
             await cleanupStagedVersionFile(versionFile.stagedPath);
+            console.warn('[character-evolution] Failed to persist accepted evolution state after staging version file.', {
+                characterId,
+                version: nextVersion,
+                error: error instanceof Error ? error.message : String(error),
+            });
             throw error;
         }
         await finalizeVersionFile(versionFile);

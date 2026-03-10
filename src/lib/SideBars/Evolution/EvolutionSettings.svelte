@@ -33,7 +33,6 @@
         cloneEvolutionSettingsSections,
         cloneEvolutionState,
         getEvolutionProposalIdentity,
-        withAcceptedEvolutionState,
         withPendingEvolutionProposal,
     } from "src/ts/character-evolution/workflow"
     import {
@@ -145,35 +144,38 @@
     }
 
     function syncCharacterDrafts(characterEntry: character) {
+        const baseCharacter = findCharacterById(characterEntry.chaId) ?? characterEntry
         let changed = false
         const nextEvolution = {
-            ...characterEntry.characterEvolution,
+            ...baseCharacter.characterEvolution,
         }
 
         if (currentStateDraft) {
             const normalizedState = normalizeCharacterEvolutionState(currentStateDraft)
-            if (!jsonEqual(characterEntry.characterEvolution.currentState, normalizedState)) {
+            if (!jsonEqual(baseCharacter.characterEvolution.currentState, normalizedState)) {
                 nextEvolution.currentState = structuredClone(normalizedState)
                 changed = true
             }
         }
 
-        if (!characterEntry.characterEvolution.useGlobalDefaults) {
+        if (!baseCharacter.characterEvolution.useGlobalDefaults) {
             const normalizedSections = normalizeCharacterEvolutionSectionConfigs(sectionConfigDraft)
             const normalizedPrivacy = normalizeCharacterEvolutionPrivacy(privacyDraft)
-            if (!jsonEqual(characterEntry.characterEvolution.sectionConfigs, normalizedSections)) {
+            if (!jsonEqual(baseCharacter.characterEvolution.sectionConfigs, normalizedSections)) {
                 nextEvolution.sectionConfigs = structuredClone(normalizedSections)
                 changed = true
             }
-            if (!jsonEqual(characterEntry.characterEvolution.privacy, normalizedPrivacy)) {
+            if (!jsonEqual(baseCharacter.characterEvolution.privacy, normalizedPrivacy)) {
                 nextEvolution.privacy = structuredClone(normalizedPrivacy)
                 changed = true
             }
         }
 
         if (changed) {
-            characterEntry.characterEvolution = nextEvolution
-            commitCharacter(characterEntry)
+            commitCharacter({
+                ...baseCharacter,
+                characterEvolution: nextEvolution,
+            })
         }
     }
 
@@ -361,13 +363,36 @@
                 createNextChat,
             })
 
-            const nextCharacter = withAcceptedEvolutionState({
-                characterEntry,
-                state: payload.state as CharacterEvolutionState,
-                version: payload.version,
-                acceptedAt: (payload as { acceptedAt?: number | string }).acceptedAt,
-                sourceChatId: acceptedSourceChatId,
-            })
+            const freshCharacterEntry = findCharacterById(characterEntry.chaId)
+            if (!freshCharacterEntry) {
+                return
+            }
+
+            const acceptedVersion =
+                Number(payload.version) || freshCharacterEntry.characterEvolution.currentStateVersion
+            const acceptedAt =
+                Number((payload as { acceptedAt?: number | string }).acceptedAt) || 0
+            const nextStateVersions = [
+                {
+                    version: acceptedVersion,
+                    chatId: acceptedSourceChatId,
+                    acceptedAt,
+                },
+                ...(Array.isArray(freshCharacterEntry.characterEvolution.stateVersions)
+                    ? freshCharacterEntry.characterEvolution.stateVersions.filter((entry) => Number(entry?.version) !== acceptedVersion)
+                    : []),
+            ]
+            const nextCharacter = {
+                ...freshCharacterEntry,
+                characterEvolution: {
+                    ...freshCharacterEntry.characterEvolution,
+                    currentState: payload.state as CharacterEvolutionState,
+                    currentStateVersion: acceptedVersion,
+                    pendingProposal: null,
+                    lastProcessedChatId: acceptedSourceChatId,
+                    stateVersions: nextStateVersions,
+                },
+            }
             commitCharacter(nextCharacter)
             currentStateDraft = cloneEvolutionState(nextCharacter.characterEvolution.currentState)
             currentStateDraftKey = `${nextCharacter.chaId}:${nextCharacter.characterEvolution.currentStateVersion}`
