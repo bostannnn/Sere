@@ -476,6 +476,8 @@ async function buildMessagesFromPromptTemplate(character, chat, settings, arg = 
             }
             case 'rulebookRag':
             case 'gameState': {
+                // Template slots are placeholders anchored to the next message index.
+                // A real block may later share this index after server-side context injection.
                 promptBlocks.push({
                     index: messages.length,
                     role: 'system',
@@ -762,6 +764,9 @@ function buildGenerateProviderRequest(provider, model, messages, maxTokens, stre
         requestBody.max_tokens = maxTokens || 1024;
     }
 
+    // Intentionally return both normalized fields and the raw provider request body.
+    // Execution adapters consume requestBody first, while audit/trace helpers rely on the
+    // provider-agnostic top-level fields for display and fallback extraction.
     return {
         model,
         messages,

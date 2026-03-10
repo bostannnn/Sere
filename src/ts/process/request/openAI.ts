@@ -172,6 +172,8 @@ async function requestServerExecution(
         && requestModelId === 'deepseek/deepseek-v3.2-speciale'
         && db.openrouterAllowReasoningOnlyForDeepSeekV32Speciale === true;
 
+    // Keep both the raw provider body and normalized top-level request metadata in logs/payloads.
+    // Downstream server routes and viewers read whichever shape is available.
     const payload = canUseRawGeneratePayload
         ? {
             mode: arg.mode ?? 'model',
