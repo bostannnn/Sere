@@ -187,7 +187,6 @@
             await rejectCharacterEvolutionProposal(character.chaId)
             character.characterEvolution.pendingProposal = null
             proposalDraft = null
-            await persistCharacter()
             alertNormal("Evolution proposal rejected.")
         } catch (error) {
             alertError(getCharacterEvolutionErrorMessage(error))
@@ -224,7 +223,6 @@
             proposalDraft = null
             selectedWorkspaceTab = EVOLUTION_STATE_TAB
             await refreshVersions()
-            await persistCharacter()
             if (createNextChat) {
                 await createNewChatAfterEvolution(Number($selectedCharID))
             }

@@ -122,6 +122,51 @@ function registerEvolutionRoutes(arg = {}) {
         );
     }
 
+    async function readVersionMetasFromDisk(characterDir) {
+        const statesDir = path.join(characterDir, 'states');
+        if (!existsSync(statesDir)) {
+            return [];
+        }
+        const files = await fs.readdir(statesDir);
+        const versions = [];
+        for (const fileName of files) {
+            const match = /^v(\d+)\.json$/.exec(fileName);
+            if (!match) continue;
+            const version = Number(match[1]);
+            if (!Number.isFinite(version)) continue;
+            try {
+                const payload = JSON.parse(await fs.readFile(path.join(statesDir, fileName), 'utf-8'));
+                versions.push({
+                    version: Math.max(0, Math.floor(version)),
+                    chatId: typeof payload?.chatId === 'string' ? payload.chatId : null,
+                    acceptedAt: Number.isFinite(Number(payload?.acceptedAt)) ? Number(payload.acceptedAt) : 0,
+                });
+            } catch {}
+        }
+        return versions.sort((left, right) => left.version - right.version);
+    }
+
+    function mergeVersionMetas(preferred, fallback) {
+        const merged = new Map();
+        for (const entry of Array.isArray(fallback) ? fallback : []) {
+            if (!entry || !Number.isFinite(Number(entry.version))) continue;
+            merged.set(Number(entry.version), {
+                version: Math.max(0, Math.floor(Number(entry.version))),
+                chatId: typeof entry.chatId === 'string' ? entry.chatId : null,
+                acceptedAt: Number.isFinite(Number(entry.acceptedAt)) ? Number(entry.acceptedAt) : 0,
+            });
+        }
+        for (const entry of Array.isArray(preferred) ? preferred : []) {
+            if (!entry || !Number.isFinite(Number(entry.version))) continue;
+            merged.set(Number(entry.version), {
+                version: Math.max(0, Math.floor(Number(entry.version))),
+                chatId: typeof entry.chatId === 'string' ? entry.chatId : null,
+                acceptedAt: Number.isFinite(Number(entry.acceptedAt)) ? Number(entry.acceptedAt) : 0,
+            });
+        }
+        return [...merged.values()].sort((left, right) => left.version - right.version);
+    }
+
     function resolveEffectiveEvolutionSettings(settings, character) {
         const evolution = getEffectiveCharacterEvolutionSettings(settings, character);
         if (!evolution.enabled) {
@@ -357,9 +402,13 @@ function registerEvolutionRoutes(arg = {}) {
             normalizeCharacterEvolutionState(body.proposedState || pendingProposal.proposedState),
             evolution
         );
+        const recoveredVersions = mergeVersionMetas(
+            evolution.stateVersions,
+            await readVersionMetasFromDisk(charDir),
+        );
         const nextVersion = Math.max(
             evolution.currentStateVersion || 0,
-            ...evolution.stateVersions.map((entry) => Number(entry.version) || 0),
+            ...recoveredVersions.map((entry) => Number(entry.version) || 0),
         ) + 1;
         const acceptedAt = Date.now();
         await writeVersionFile(charDir, nextVersion, {
@@ -377,7 +426,7 @@ function registerEvolutionRoutes(arg = {}) {
             pendingProposal: null,
             lastProcessedChatId: pendingProposal.sourceChatId,
             stateVersions: [
-                ...evolution.stateVersions,
+                ...recoveredVersions,
                 {
                     version: nextVersion,
                     chatId: pendingProposal.sourceChatId || null,
@@ -425,12 +474,16 @@ function registerEvolutionRoutes(arg = {}) {
         if (!characterId || !isSafePathSegment(characterId)) {
             throw new LLMHttpError(400, 'INVALID_CHARACTER_ID', 'charId is required and must be a safe id.');
         }
-        const { character } = await loadCharacterAndSettings(characterId);
+        const { character, charDir } = await loadCharacterAndSettings(characterId);
         const evolution = normalizeCharacterEvolutionSettings(character.characterEvolution);
+        const versions = mergeVersionMetas(
+            evolution.stateVersions,
+            await readVersionMetasFromDisk(charDir),
+        );
         sendJson(res, 200, {
             ok: true,
             currentStateVersion: evolution.currentStateVersion,
-            versions: [...evolution.stateVersions].sort((left, right) => right.version - left.version),
+            versions: [...versions].sort((left, right) => right.version - left.version),
         });
     }));
 

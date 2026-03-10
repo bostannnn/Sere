@@ -292,6 +292,72 @@ describe("registerEvolutionRoutes", () => {
     }
   });
 
+  it("rebuilds version history from disk when stored stateVersions metadata is empty", async () => {
+    const versionOne = {
+      version: 1,
+      chatId: "chat-a",
+      acceptedAt: 1001,
+      state: {
+        relationship: {
+          trustLevel: "high",
+          dynamic: "first",
+        },
+      },
+    };
+    const versionTwo = {
+      version: 2,
+      chatId: "chat-b",
+      acceptedAt: 1002,
+      state: {
+        relationship: {
+          trustLevel: "high",
+          dynamic: "second",
+        },
+      },
+    };
+
+    writeJson(path.join(dataDirs.characters, characterId, "states", "v1.json"), versionOne);
+    writeJson(path.join(dataDirs.characters, characterId, "states", "v2.json"), versionTwo);
+    writeJson(path.join(dataDirs.characters, characterId, "character.json"), {
+      character: {
+        chaId: characterId,
+        type: "character",
+        name: "Eva",
+        desc: "desc",
+        personality: "personality",
+        characterEvolution: {
+          enabled: true,
+          useGlobalDefaults: true,
+          currentStateVersion: 2,
+          currentState: versionTwo.state,
+          stateVersions: [],
+        },
+      },
+    });
+
+    const { getHandlers } = buildHandlers();
+    const listVersions = getHandlers.get("/data/character-evolution/:charId/versions");
+    expect(listVersions).toBeTruthy();
+
+    const listRes = createRes();
+    await listVersions!({
+      method: "GET",
+      originalUrl: "/data/character-evolution/test",
+      body: {},
+      params: { charId: characterId },
+    }, listRes);
+
+    expect(listRes.statusCode).toBe(200);
+    expect(listRes.payload).toEqual(expect.objectContaining({
+      ok: true,
+      currentStateVersion: 2,
+      versions: [
+        { version: 2, chatId: "chat-b", acceptedAt: 1002 },
+        { version: 1, chatId: "chat-a", acceptedAt: 1001 },
+      ],
+    }));
+  });
+
   it("audits raw model output when handoff parse fails", async () => {
     const appendLLMAudit = vi.fn(async () => {});
     const logLLMExecutionEnd = vi.fn();
