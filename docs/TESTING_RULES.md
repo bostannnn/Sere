@@ -4,6 +4,19 @@ Last updated: 2026-02-21
 
 ---
 
+## 0. Review Before Test Interpretation
+
+Read [`docs/CODE_REVIEW_PLAYBOOK.md`](/Users/andrewbostan/Documents/RisuAII/docs/CODE_REVIEW_PLAYBOOK.md) before using tests as evidence in a branch review.
+
+Tests and checks are review instruments, not proof that a change is correct. In review mode:
+
+- map the changed behaviors first
+- inspect adjacent helpers/callers, not only edited lines
+- use focused tests to confirm or sharpen risk
+- still report logic bugs when tests pass
+
+---
+
 ## 1. General App Tests
 
 Run from repo root before every commit:

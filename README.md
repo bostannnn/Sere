@@ -46,6 +46,7 @@ You can get detailed information on https://github.com/kwaroran/Risuai/wiki (Wor
 - `plan.md` — current priorities and task tracking
 - `docs/SERVER_ARCHITECTURE.md` — full server endpoint catalog and module descriptions
 - `docs/SERVER_RULES.md` — server-side coding rules and contracts
+- `docs/CODE_REVIEW_PLAYBOOK.md` — default branch review workflow, coverage rules, and stop criteria
 - `docs/SERVER_CODE_REVIEW.md` — current server audit and known issues
 - `docs/DESIGN_RULES.md` — UI shell design contracts (navigation, tokens, state)
 - `docs/MIGRATION_PLAN.md` — UI Shell V2 migration phases

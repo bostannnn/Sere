@@ -279,6 +279,7 @@ Covers the mandatory server-feature test requirement (Section 4 — unit tests +
 | `docs/ONBOARDING.md` | This file |
 | `docs/SERVER_ARCHITECTURE.md` | Full server endpoint catalog, module descriptions, request flows |
 | `docs/SERVER_RULES.md` | Server coding rules and contracts |
+| `docs/CODE_REVIEW_PLAYBOOK.md` | Default branch review workflow, required coverage categories, stop rule |
 | `docs/SERVER_CODE_REVIEW.md` | Current server audit (known issues, fix priorities) |
 | `docs/DESIGN_RULES.md` | UI design contracts (shell, navigation, tokens, state) |
 | `docs/TESTING_RULES.md` | Server-feature test mandate (unit + smoke required) and prototype smoke pass checklist |
