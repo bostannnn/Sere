@@ -69,13 +69,13 @@
     });
     const displayedOptions = $derived.by(() => {
         const next: ModelOption[] = [];
-        const seen = new Set<string>();
+        const seenIds: string[] = [];
 
         const pushOption = (option: ModelOption | null | undefined) => {
-            if (!option || !option.id || seen.has(option.id)) {
+            if (!option || !option.id || seenIds.includes(option.id)) {
                 return;
             }
-            seen.add(option.id);
+            seenIds.push(option.id);
             next.push(option);
         };
 
@@ -95,7 +95,7 @@
             pushOption(option);
         }
 
-        if (value && !seen.has(value)) {
+        if (value && !seenIds.includes(value)) {
             const knownModel = models.find((model) => model.id === value);
             const fallbackOption = fallbackOptions.find((option) => option.id === value);
             const autoOption = autoOptions.find((option) => option.id === value);

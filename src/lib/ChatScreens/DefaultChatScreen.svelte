@@ -37,12 +37,18 @@
     import ReviewWorkspace from '../Evolution/ReviewWorkspace.svelte';
     import {
         createCharacterEvolutionProposal,
-        createNewChatAfterEvolution,
         getCharacterEvolutionErrorMessage,
-        rejectCharacterEvolutionProposal,
-        acceptCharacterEvolutionProposal,
         getPendingCharacterEvolutionProposal,
     } from 'src/ts/evolution';
+    import {
+        acceptEvolutionProposalAction,
+        rejectEvolutionProposalAction,
+    } from 'src/ts/character-evolution/actions';
+    import {
+        getEvolutionProposalIdentity,
+        withAcceptedEvolutionState,
+        withPendingEvolutionProposal,
+    } from 'src/ts/character-evolution/workflow';
     import {
         ensureCharacterEvolution,
         getEffectiveCharacterEvolutionSettings,
@@ -110,6 +116,14 @@
         }
         const entry = DBState.db.characters[characterIndex]
         return entry && entry.type !== 'group' ? entry : null
+    }
+
+    function commitCharacter(characterId: string, nextCharacter: NonNullable<ReturnType<typeof findCharacterById>>) {
+        const characterIndex = findCharacterIndexById(characterId)
+        if (characterIndex < 0) {
+            return
+        }
+        DBState.db.characters[characterIndex] = nextCharacter
     }
 
     const evolutionHandoffBlockedForCurrentChat = $derived.by(() => {
@@ -294,7 +308,8 @@
                 return
             }
             const proposal = payload.proposal as typeof characterEntry.characterEvolution.pendingProposal
-            characterEntry.characterEvolution.pendingProposal = proposal
+            const nextCharacter = withPendingEvolutionProposal(characterEntry, proposal)
+            commitCharacter(characterId, nextCharacter)
             if (currentCharacter?.chaId === characterId) {
                 evolutionProposalDraft = JSON.parse(JSON.stringify(proposal?.proposedState ?? {}))
                 evolutionProposalDraftKey = getEvolutionProposalIdentity(characterId, proposal)
@@ -317,12 +332,13 @@
         evolutionBusy = true
         evolutionAction = 'reject'
         try {
-            await rejectCharacterEvolutionProposal(characterId)
+            await rejectEvolutionProposalAction(characterId)
             const characterEntry = findCharacterById(characterId)
             if (!characterEntry) {
                 return
             }
-            characterEntry.characterEvolution.pendingProposal = null
+            const nextCharacter = withPendingEvolutionProposal(characterEntry, null)
+            commitCharacter(characterId, nextCharacter)
             if (currentCharacter?.chaId === characterId) {
                 evolutionProposalDraft = null
                 evolutionProposalDraftKey = null
@@ -349,44 +365,31 @@
             const acceptedSourceChatId = currentCharacter.characterEvolution.pendingProposal?.sourceChatId
                 ?? currentCharacter.chats?.[currentCharacter.chatPage]?.id
                 ?? null
-            const payload = await acceptCharacterEvolutionProposal(characterId, proposedState)
+            const payload = await acceptEvolutionProposalAction({
+                characterId,
+                proposedState,
+                createNextChat,
+            })
             const characterEntry = findCharacterById(characterId)
             if (!characterEntry) {
                 return
             }
-            characterEntry.characterEvolution.currentState = payload.state as typeof characterEntry.characterEvolution.currentState
-            const acceptedVersion = Number(payload.version) || characterEntry.characterEvolution.currentStateVersion
-            const acceptedAt = Number((payload as { acceptedAt?: number | string }).acceptedAt) || 0
-            characterEntry.characterEvolution.currentStateVersion = acceptedVersion
-            characterEntry.characterEvolution.pendingProposal = null
-            characterEntry.characterEvolution.lastProcessedChatId = acceptedSourceChatId
-            characterEntry.characterEvolution.stateVersions = [
-                {
-                    version: acceptedVersion,
-                    chatId: acceptedSourceChatId,
-                    acceptedAt,
-                },
-                ...(Array.isArray(characterEntry.characterEvolution.stateVersions)
-                    ? characterEntry.characterEvolution.stateVersions.filter((entry) => Number(entry?.version) !== acceptedVersion)
-                    : []),
-            ]
+            const nextCharacter = withAcceptedEvolutionState({
+                characterEntry,
+                state: payload.state as typeof characterEntry.characterEvolution.currentState,
+                version: payload.version,
+                acceptedAt: (payload as { acceptedAt?: number | string }).acceptedAt,
+                sourceChatId: acceptedSourceChatId,
+            })
+            commitCharacter(characterId, nextCharacter)
             if (currentCharacter?.chaId === characterId) {
                 evolutionProposalDraft = null
                 evolutionProposalDraftKey = null
                 showEvolutionProposal = false
             }
-            let chatCreationError = ''
-            if (createNextChat) {
-                try {
-                    const characterIndex = findCharacterIndexById(characterId)
-                    if (characterIndex < 0) {
-                        throw new Error("Character is no longer available for new chat creation.")
-                    }
-                    await createNewChatAfterEvolution(characterIndex)
-                } catch (error) {
-                    chatCreationError = getCharacterEvolutionErrorMessage(error)
-                }
-            }
+            const chatCreationError = typeof payload.chatCreationError === 'string'
+                ? payload.chatCreationError
+                : ''
             alertNormal(
                 createNextChat
                     ? (chatCreationError
@@ -403,13 +406,6 @@
             evolutionBusy = false
             evolutionAction = null
         }
-    }
-
-    function getEvolutionProposalIdentity(characterId: string | undefined, proposal: { proposalId?: string; sourceChatId?: string; createdAt?: number } | null | undefined) {
-        if (!characterId || !proposal) {
-            return null
-        }
-        return `${characterId}:${proposal.proposalId ?? proposal.sourceChatId ?? "pending"}:${proposal.createdAt ?? 0}`
     }
 
     $effect(() => {
@@ -1330,7 +1326,10 @@
                         ></div>
                     </div>
                 {/if}
-                <div class="ds-chat-composer-menu-anchor">
+                <div
+                    class="ds-chat-floating-actions action-rail"
+                    class:ds-chat-composer-menu-anchor={true}
+                >
                     <button
                             type="button"
                             title="Open chat actions"
@@ -1342,7 +1341,9 @@
                             openMenu = !openMenu
                             e.stopPropagation()
                         }}
-                            class="ds-chat-composer-action ds-chat-composer-action-end icon-btn icon-btn--sm"
+                            class="ds-chat-floating-action-btn icon-btn icon-btn--sm"
+                            class:ds-chat-composer-action={true}
+                            class:ds-chat-composer-action-end={true}
                             class:is-active={openMenu}
                             style:height={inputHeight}
                     >
@@ -1351,7 +1352,8 @@
 
                     {#if !isEvolutionReviewVisible && openMenu}
                         <div
-                            class="ds-chat-side-menu ds-chat-side-menu-composer panel-shell ds-ui-menu"
+                            class="ds-chat-side-menu panel-shell ds-ui-menu"
+                            class:ds-chat-side-menu-composer={true}
                             id="ds-chat-side-menu"
                             role="menu"
                             aria-label="Chat actions"
@@ -1474,7 +1476,9 @@
                                 class="ds-chat-side-menu-item ds-ui-menu-item"
                                 title="Character evolution handoff"
                                 aria-label="Character evolution handoff"
-                                onclick={runEvolutionHandoff}
+                                onclick={() => {
+                                    void runEvolutionHandoff()
+                                }}
                                 disabled={evolutionBusy || currentCharacter?.type === 'group' || !!currentEvolutionSettings?.pendingProposal}
                             >
                                 <GitBranch />

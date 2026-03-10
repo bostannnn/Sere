@@ -1,123 +1,19 @@
 import {
-    acceptCharacterEvolutionProposal,
-    createNewChatAfterEvolution,
-    fetchCharacterEvolutionVersion,
-    listCharacterEvolutionVersions,
-    rejectCharacterEvolutionProposal,
-} from "src/ts/evolution"
-import { saveServerDatabase } from "src/ts/storage/serverDb"
-import { DBState, OtherBotSettingsSubMenuIndex, SettingsMenuIndex, settingsOpen } from "src/ts/stores.svelte"
-import type {
-    CharacterEvolutionPendingProposal,
-    CharacterEvolutionState,
-    CharacterEvolutionVersionFile,
-    CharacterEvolutionVersionMeta,
-    Database,
-} from "src/ts/storage/database.types"
-
-export interface AcceptedEvolutionProposalPayload extends Record<string, unknown> {
-    state?: CharacterEvolutionState
-    version?: number | string
-    chatCreationError?: string
-}
-
-function toErrorMessage(error: unknown): string {
-    if (error instanceof Error && error.message) {
-        return error.message
-    }
-    return String(error ?? "Unknown error")
-}
-
-function findCharacterIndexById(characterId: string): number {
-    return Array.isArray(DBState.db.characters)
-        ? DBState.db.characters.findIndex((entry) => entry?.type !== "group" && entry?.chaId === characterId)
-        : -1
-}
-
-export function getEvolutionProposalIdentity(
-    characterId: string | undefined,
-    proposal: CharacterEvolutionPendingProposal | null | undefined,
-): string | null {
-    if (!characterId || !proposal) {
-        return null
-    }
-
-    return `${characterId}:${proposal.proposalId ?? proposal.sourceChatId ?? "pending"}:${proposal.createdAt ?? 0}`
-}
-
-export async function persistEvolutionCharacter(
-    db: Database,
-    characterId: string,
-): Promise<void> {
-    await saveServerDatabase(db, {
-        character: [characterId],
-        chat: [],
-    })
-}
-
-export async function refreshEvolutionVersions(
-    characterId: string,
-    selectedVersion: number | null,
-): Promise<{
-    versions: CharacterEvolutionVersionMeta[]
-    selectedVersionFile: CharacterEvolutionVersionFile | null
-}> {
-    const versions = await listCharacterEvolutionVersions(characterId)
-
-    if (selectedVersion === null) {
-        return {
-            versions,
-            selectedVersionFile: null,
-        }
-    }
-
-    const version = await fetchCharacterEvolutionVersion(characterId, selectedVersion)
-
-    return {
-        versions,
-        selectedVersionFile: version,
-    }
-}
-
-export async function loadEvolutionVersionState(
-    characterId: string,
-    version: number,
-): Promise<CharacterEvolutionVersionFile | null> {
-    return await fetchCharacterEvolutionVersion(characterId, version)
-}
-
-export async function rejectEvolutionProposalAction(
-    characterId: string,
-): Promise<void> {
-    await rejectCharacterEvolutionProposal(characterId)
-}
-
-export async function acceptEvolutionProposalAction(args: {
-    characterId: string
-    proposedState: CharacterEvolutionState
-    createNextChat?: boolean
-}): Promise<AcceptedEvolutionProposalPayload> {
-    const payload = await acceptCharacterEvolutionProposal(
-        args.characterId,
-        args.proposedState,
-    )
-
-    if (args.createNextChat) {
-        try {
-            const selectedCharIndex = findCharacterIndexById(args.characterId)
-            if (selectedCharIndex < 0) {
-                throw new Error("Character is no longer available for new chat creation.")
-            }
-            await createNewChatAfterEvolution(selectedCharIndex)
-        } catch (error) {
-            return {
-                ...(payload as AcceptedEvolutionProposalPayload),
-                chatCreationError: toErrorMessage(error),
-            }
-        }
-    }
-
-    return payload as AcceptedEvolutionProposalPayload
+    acceptEvolutionProposalAction,
+    loadEvolutionVersionState,
+    persistEvolutionCharacter,
+    refreshEvolutionVersions,
+    rejectEvolutionProposalAction,
+} from "src/ts/character-evolution/actions"
+import { getEvolutionProposalIdentity } from "src/ts/character-evolution/workflow"
+import { OtherBotSettingsSubMenuIndex, SettingsMenuIndex, settingsOpen } from "src/ts/stores.svelte"
+export {
+    acceptEvolutionProposalAction,
+    getEvolutionProposalIdentity,
+    loadEvolutionVersionState,
+    persistEvolutionCharacter,
+    refreshEvolutionVersions,
+    rejectEvolutionProposalAction,
 }
 
 export function openEvolutionGlobalDefaults(): void {

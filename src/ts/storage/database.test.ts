@@ -32,16 +32,13 @@ import {
   setDatabase,
 } from "./database.svelte";
 import {
-  DEFAULT_OPENROUTER_REQUEST_MODEL,
   ensureComfyCommanderStateShape,
-  migrateRemovedProviderSelections,
   normalizeChatBackground,
   resolveChatBackgroundMode,
   resolveGlobalRagSettings,
-  stripLegacyProviderFields,
+  stripRemovedProviderFields,
 } from "./database.normalizers";
 import {
-  REMOVED_PROVIDER_MIGRATION_NOTICE,
   applyImportedPresetToDatabase,
   buildDownloadPresetForExport,
   changeToPresetInDatabase,
@@ -116,27 +113,29 @@ describe("database chatReadingMode normalization", () => {
     expect(storedPreset.promptTemplate?.some((item) => item.type === "characterState")).toBe(true);
   });
 
-});
-
-describe("legacy provider migration", () => {
-  it("migrates removed model providers to OpenRouter and records a notice", () => {
+  it("strips removed provider fields from loaded database and presets", () => {
     const db = applySetDatabase({
       characters: [],
-      aiModel: "reverse_proxy",
-      subModel: "xcustom:::legacy-model",
-      openrouterRequestModel: "",
-      openrouterSubRequestModel: "",
+      vertexRegion: "global",
+      cohereAPIKey: "secret",
+      botPresets: [
+        {
+          ...presetTemplate,
+          vertexClientEmail: "legacy@example.com",
+          ooba: { top_p: 0.9 },
+        },
+      ],
     });
 
-    expect(db.aiModel).toBe("openrouter");
-    expect(db.subModel).toBe("openrouter");
-    expect(db.openrouterRequestModel).toBe("openai/gpt-3.5-turbo");
-    expect(db.openrouterSubRequestModel).toBe("openai/gpt-3.5-turbo");
-    expect(db.removedModelMigrationNotice).toEqual([
-      "Legacy removed providers were migrated to OpenRouter. Review Bot Settings and re-save any affected presets.",
-    ]);
+    expect(db).not.toHaveProperty("vertexRegion");
+    expect(db).not.toHaveProperty("cohereAPIKey");
+    expect(db.botPresets[0]).not.toHaveProperty("vertexClientEmail");
+    expect(db.botPresets[0]).not.toHaveProperty("ooba");
   });
 
+});
+
+describe("character evolution model normalization", () => {
   it("normalizes provider-prefixed character evolution models for non-openrouter runtimes", () => {
     const db = applySetDatabase({
       characters: [
@@ -252,21 +251,6 @@ describe("database module re-export contract", () => {
 });
 
 describe("normalizer unit coverage", () => {
-  it("normalizes OpenRouter targets with missing request models", () => {
-    const target = {
-      aiModel: "openrouter",
-      subModel: "openrouter",
-      openrouterRequestModel: "   ",
-      openrouterSubRequestModel: "",
-    };
-
-    const changed = migrateRemovedProviderSelections(target);
-
-    expect(changed).toBe(true);
-    expect(target.openrouterRequestModel).toBe(DEFAULT_OPENROUTER_REQUEST_MODEL);
-    expect(target.openrouterSubRequestModel).toBe(DEFAULT_OPENROUTER_REQUEST_MODEL);
-  });
-
   it("trims chat background image and falls back to inherit", () => {
     const chat: Parameters<typeof normalizeChatBackground>[0] = {
       backgroundMode: "custom",
@@ -286,7 +270,7 @@ describe("normalizer unit coverage", () => {
     expect(DEFAULT_GLOBAL_RAG_SETTINGS.enabledRulebooks).toEqual([]);
   });
 
-  it("strips dead legacy provider fields from persisted payloads", () => {
+  it("strips removed provider fields from persisted payloads", () => {
     const payload = {
       ooba: { top_p: 0.9 },
       ainconfig: { top_p: 0.7 },
@@ -296,7 +280,7 @@ describe("normalizer unit coverage", () => {
       keep: "value",
     };
 
-    const changed = stripLegacyProviderFields(payload);
+    const changed = stripRemovedProviderFields(payload);
 
     expect(changed).toBe(true);
     expect(payload).toEqual({ keep: "value" });
@@ -339,7 +323,6 @@ describe("preset helper unit coverage", () => {
       seperateModels: { memory: "keep-m", emotion: "keep-e", translate: "keep-t", otherAx: "keep-o" },
       fallbackModels: { memory: ["m"], emotion: ["e"], translate: ["t"], otherAx: ["o"], model: ["all"] },
       fallbackWhenBlankResponse: true,
-      removedModelMigrationNotice: [REMOVED_PROVIDER_MIGRATION_NOTICE],
     });
 
     const beforeSeparateModels = structuredClone(
@@ -350,8 +333,8 @@ describe("preset helper unit coverage", () => {
     );
 
     const incomingPreset = {
-        aiModel: "reverse_proxy",
-        subModel: "xcustom:::legacy",
+        aiModel: "openrouter",
+        subModel: "openrouter",
         reverseProxyOobaArgs: { mode: "instruct" },
         promptSettings: {
           assistantPrefill: "",
@@ -375,7 +358,6 @@ describe("preset helper unit coverage", () => {
     expect(db.seperateModels).toEqual(beforeSeparateModels);
     expect(db.fallbackModels).toEqual(beforeFallbackModels);
     expect(db.fallbackWhenBlankResponse).toBe(true);
-    expect(db.removedModelMigrationNotice).toEqual([REMOVED_PROVIDER_MIGRATION_NOTICE]);
   });
 
   it("scrubs sensitive fields from downloadable preset export", () => {
@@ -390,6 +372,7 @@ describe("preset helper unit coverage", () => {
           proxyKey: "secret-proxy",
           forceReplaceUrl: "https://proxy.example",
           forceReplaceUrl2: "https://proxy2.example",
+          vertexAccessToken: "legacy-token",
         },
       ],
     });
@@ -400,6 +383,7 @@ describe("preset helper unit coverage", () => {
     expect(exported.proxyKey).toBe("");
     expect(exported.forceReplaceUrl).toBe("");
     expect(exported.forceReplaceUrl2).toBe("");
+    expect(exported).not.toHaveProperty("vertexAccessToken");
   });
 
   it("changes preset without implicitly appending current preset when saveCurrent is false", () => {
@@ -490,5 +474,27 @@ describe("preset helper unit coverage", () => {
     expect(imported.promptTemplate?.some((item) => item.type === "lorebook")).toBe(true);
     expect(imported.promptTemplate?.some((item) => item.type === "postEverything")).toBe(true);
     expect(log).not.toHaveBeenCalled();
+  });
+
+  it("scrubs removed provider fields from imported generic presets", () => {
+    const db = applySetDatabase({
+      characters: [],
+      botPresets: [],
+    });
+
+    applyImportedPresetToDatabase(
+      db as unknown as Parameters<typeof applyImportedPresetToDatabase>[0],
+      {
+        name: "Imported",
+        aiModel: "openrouter",
+        vertexPrivateKey: "secret",
+        hordeConfig: { apiKey: "legacy" },
+      },
+      () => {},
+    );
+
+    expect(db.botPresets).toHaveLength(1);
+    expect(db.botPresets[0]).not.toHaveProperty("vertexPrivateKey");
+    expect(db.botPresets[0]).not.toHaveProperty("hordeConfig");
   });
 });

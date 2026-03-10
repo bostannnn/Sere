@@ -1,6 +1,5 @@
 import { v4 as uuidv4 } from "uuid";
-import { globalFetch } from "./globalApi.svelte";
-import { changeChatTo } from "./globalApi.svelte";
+import { changeChatTo, globalFetch } from "./globalApi.svelte";
 import { getDatabase, setDatabase, type Chat, type character, type groupChat } from "./storage/database.svelte";
 import { saveServerDatabase } from "./storage/serverDb";
 import type {

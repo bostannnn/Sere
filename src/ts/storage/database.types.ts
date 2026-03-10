@@ -296,7 +296,6 @@ export interface Database{
     OaiCompAPIKeys: {[key:string]:string}
     inlayErrorResponse:boolean
     globalRagSettings: RagSettings
-    removedModelMigrationNotice: string[]
     reasoningEffort:number
     bulkEnabling:boolean
     showTranslationLoading: boolean
@@ -838,7 +837,6 @@ export interface botPreset{
     PresensePenalty: number
     aiModel?: string
     subModel?:string
-    removedModelMigrationNotice?: string[]
     forceReplaceUrl?:string
     forceReplaceUrl2?:string
     bias: [string, number][]

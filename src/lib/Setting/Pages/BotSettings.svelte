@@ -32,17 +32,12 @@
     let submenu = $state(0)
     const modelInfo = $derived(getModelInfo(DBState.db.aiModel))
     const subModelInfo = $derived(getModelInfo(DBState.db.subModel))
-    const removedModelMigrationNotice = $derived((DBState.db.removedModelMigrationNotice ?? []).join(" "))
     let showPresetModal = $state(false)
     const deepSeekV32SpecialeModelId = 'deepseek/deepseek-v3.2-speciale'
     const showDeepSeekV32SpecialeReasoningToggle = $derived(
         (DBState.db.aiModel === 'openrouter' && DBState.db.openrouterRequestModel === deepSeekV32SpecialeModelId) ||
         (DBState.db.subModel === 'openrouter' && DBState.db.openrouterSubRequestModel === deepSeekV32SpecialeModelId)
     )
-
-    function dismissRemovedModelMigrationNotice() {
-        DBState.db.removedModelMigrationNotice = []
-    }
 
     $effect(() => {
         if (!allowedSubmenus.has(submenu)) {
@@ -71,16 +66,6 @@
 </h2>
 
 <div class="ds-settings-page">
-{#if removedModelMigrationNotice}
-    <div class="ds-settings-section ds-settings-card">
-        <span class="ds-settings-note-danger">{removedModelMigrationNotice}</span>
-        <div class="ds-settings-inline-actions action-rail">
-            <Button size="sm" styled="outlined" onclick={dismissRemovedModelMigrationNotice}>
-                Dismiss
-            </Button>
-        </div>
-    </div>
-{/if}
 {#if submenu !== -1}
     <SettingsSubTabs
         items={[

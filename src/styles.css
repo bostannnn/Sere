@@ -2177,10 +2177,13 @@ body {
 }
 
 .ds-hypa-memory-tabs .ds-settings-tabs {
+  overflow: hidden;
+}
+
+.ds-hypa-memory-tabs .ds-settings-tabs {
   border: 1px solid var(--ds-border-subtle);
   border-radius: var(--ds-radius-md);
   background: transparent;
-  overflow: hidden;
   gap: 0;
 }
 

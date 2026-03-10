@@ -28,11 +28,10 @@ import {
     DEFAULT_GLOBAL_RAG_SETTINGS,
     DEFAULT_OPENROUTER_REQUEST_MODEL,
     ensureComfyCommanderStateShape,
-    migrateRemovedProviderSelections,
     normalizeChatBackground,
     resolveChatBackgroundMode,
     resolveGlobalRagSettings,
-    stripLegacyProviderFields,
+    stripRemovedProviderFields,
     type ChatBackgroundMode,
 } from './database.normalizers';
 import {
@@ -43,7 +42,6 @@ import {
     decodeImportedPresetFile,
     encodeDownloadPresetBuffer,
     presetTemplate,
-    REMOVED_PROVIDER_MIGRATION_NOTICE,
     saveCurrentPresetInDatabase,
     setPresetOnDatabase,
     type PresetDownloadType,
@@ -86,7 +84,7 @@ const emotionEmbeddingModels: Set<HypaModel> = new Set([
 ])
 
 export function setDatabase(data:Database){
-    stripLegacyProviderFields(data as unknown as Record<string, unknown>)
+    stripRemovedProviderFields(data as unknown as Record<string, unknown>)
     if(checkNullish(data.characters)){
         data.characters = []
     }
@@ -402,7 +400,7 @@ export function setDatabase(data:Database){
     }
     if (data.botPresets) {
         for (const preset of data.botPresets) {
-            stripLegacyProviderFields(preset as unknown as Record<string, unknown>)
+            stripRemovedProviderFields(preset as unknown as Record<string, unknown>)
             preset.promptTemplate = normalizePromptTemplate(preset.promptTemplate)
             if (typeof preset.openrouterProvider === 'string') {
                 const oldProvider = preset.openrouterProvider as unknown as string;
@@ -419,19 +417,6 @@ export function setDatabase(data:Database){
         only: [],
         ignore: []
     }
-    data.removedModelMigrationNotice ??= []
-    const removedModelMigrationNotices = new Set(data.removedModelMigrationNotice)
-    if (migrateRemovedProviderSelections(data)) {
-        removedModelMigrationNotices.add(REMOVED_PROVIDER_MIGRATION_NOTICE)
-    }
-    if (data.botPresets) {
-        for (const preset of data.botPresets) {
-            if (migrateRemovedProviderSelections(preset)) {
-                removedModelMigrationNotices.add(REMOVED_PROVIDER_MIGRATION_NOTICE)
-            }
-        }
-    }
-    data.removedModelMigrationNotice = [...removedModelMigrationNotices]
     data.useInstructPrompt ??= false
     data.hanuraiEnable ??= false
     data.hanuraiSplit ??= false

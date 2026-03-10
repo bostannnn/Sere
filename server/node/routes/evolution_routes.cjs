@@ -1,17 +1,3 @@
-const path = require('path');
-const {
-    buildCharacterEvolutionPromptMessages,
-    clone,
-    getEffectiveCharacterEvolutionSettings,
-    normalizeCharacterEvolutionDefaults,
-    normalizeCharacterEvolutionProposal,
-    normalizeCharacterEvolutionPrivacy,
-    normalizeCharacterEvolutionSectionConfigs,
-    normalizeCharacterEvolutionSettings,
-    normalizeCharacterEvolutionState,
-    sanitizeStateForEvolution,
-} = require('../llm/character_evolution.cjs');
-
 function registerEvolutionRoutes(arg = {}) {
     const {
         app,
@@ -33,6 +19,18 @@ function registerEvolutionRoutes(arg = {}) {
         executeInternalLLMTextCompletion,
         applyStateCommands,
         readStateLastEventId,
+        createCharacterEvolutionRepository = require('../services/character_evolution_repository.cjs').createCharacterEvolutionRepository,
+        createCharacterEvolutionVersionStore = require('../services/character_evolution_version_store.cjs').createCharacterEvolutionVersionStore,
+        buildCharacterEvolutionPromptMessages = require('../llm/character_evolution.cjs').buildCharacterEvolutionPromptMessages,
+        clone = require('../llm/character_evolution.cjs').clone,
+        getEffectiveCharacterEvolutionSettings = require('../llm/character_evolution.cjs').getEffectiveCharacterEvolutionSettings,
+        normalizeCharacterEvolutionProposal = require('../llm/character_evolution.cjs').normalizeCharacterEvolutionProposal,
+        normalizeCharacterEvolutionPrivacy = require('../llm/character_evolution.cjs').normalizeCharacterEvolutionPrivacy,
+        normalizeCharacterEvolutionSectionConfigs = require('../llm/character_evolution.cjs').normalizeCharacterEvolutionSectionConfigs,
+        normalizeCharacterEvolutionSettings = require('../llm/character_evolution.cjs').normalizeCharacterEvolutionSettings,
+        normalizeCharacterEvolutionState = require('../llm/character_evolution.cjs').normalizeCharacterEvolutionState,
+        safeParseEvolutionJson = require('../llm/character_evolution.cjs').safeParseEvolutionJson,
+        sanitizeStateForEvolution = require('../llm/character_evolution.cjs').sanitizeStateForEvolution,
     } = arg;
 
     if (!app || typeof app.get !== 'function' || typeof app.post !== 'function') {
@@ -42,207 +40,31 @@ function registerEvolutionRoutes(arg = {}) {
         throw new Error('registerEvolutionRoutes requires safeResolve.');
     }
 
-    async function readJsonFile(filePath) {
-        const raw = JSON.parse(await fs.readFile(filePath, 'utf-8'));
-        return raw?.character || raw?.chat || raw?.data || raw || {};
-    }
-
-    async function loadCharacterAndSettings(characterId) {
-        const settingsPath = safeResolve(dataDirs.root, 'settings.json');
-        const charDir = safeResolve(dataDirs.characters, characterId);
-        const charPath = safeResolve(charDir, 'character.json');
-        if (!existsSync(settingsPath)) {
-            throw new LLMHttpError(404, 'SETTINGS_NOT_FOUND', 'Server settings are not initialized.');
-        }
-        if (!existsSync(charPath)) {
-            throw new LLMHttpError(404, 'CHARACTER_NOT_FOUND', `Character not found: ${characterId}`);
-        }
-        const settingsRaw = JSON.parse(await fs.readFile(settingsPath, 'utf-8'));
-        const settings = settingsRaw?.data || settingsRaw || {};
-        const character = await readJsonFile(charPath);
-        return {
-            settings: {
-                ...settings,
-                characterEvolutionDefaults: normalizeCharacterEvolutionDefaults(settings.characterEvolutionDefaults),
-            },
-            character: {
-                ...character,
-                characterEvolution: normalizeCharacterEvolutionSettings(character.characterEvolution),
-            },
-            charDir,
-            charPath,
-        };
-    }
-
-    async function loadChat(characterId, chatId) {
-        const chatPath = safeResolve(dataDirs.characters, `${characterId}/chats/${chatId}.json`);
-        if (!existsSync(chatPath)) {
-            throw new LLMHttpError(404, 'CHAT_NOT_FOUND', `Chat not found: ${chatId}`);
-        }
-        return {
-            chat: await readJsonFile(chatPath),
-            chatPath,
-        };
-    }
+    const repository = createCharacterEvolutionRepository({
+        applyStateCommands,
+        dataDirs,
+        existsSync,
+        fs,
+        LLMHttpError,
+        readStateLastEventId,
+        safeResolve,
+    });
+    const versionStore = createCharacterEvolutionVersionStore({
+        existsSync,
+        fs,
+    });
+    const { loadCharacterAndSettings, loadChat, replaceCharacterWithRetry } = repository;
+    const {
+        cleanupStagedVersionFile,
+        finalizeVersionFile,
+        mergeVersionMetas,
+        readVersionMetasFromDisk,
+        resolveVersionFilePath,
+        stageVersionFile,
+    } = versionStore;
 
     function makeProposalId() {
         return `evo_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
-    }
-
-    async function replaceCharacterWithRetry(characterId, nextCharacter, source) {
-        if (typeof applyStateCommands !== 'function') {
-            throw new LLMHttpError(500, 'STATE_COMMANDS_UNAVAILABLE', 'Internal state command service is unavailable.');
-        }
-        const baseEventId = await readStateLastEventId();
-        try {
-            await applyStateCommands([
-                {
-                    type: 'character.replace',
-                    charId: characterId,
-                    character: nextCharacter,
-                },
-            ], source, { baseEventId });
-            return;
-        } catch (error) {
-            const conflicts = Array.isArray(error?.result?.conflicts) ? error.result.conflicts : [];
-            const isStale = conflicts.some((entry) => entry?.code === 'STALE_BASE_EVENT');
-            if (isStale) {
-                throw new LLMHttpError(409, 'EVOLUTION_STATE_CONFLICT', 'Character evolution changed while processing. Refresh and retry.');
-            }
-            throw error;
-        }
-    }
-
-    async function stageVersionFile(characterDir, version, payload) {
-        const statesDir = path.join(characterDir, 'states');
-        await fs.mkdir(statesDir, { recursive: true });
-        const stagedPath = path.join(
-            statesDir,
-            `.v${version}.${Date.now()}.${Math.random().toString(36).slice(2, 10)}.pending.json`
-        );
-        await fs.writeFile(
-            stagedPath,
-            JSON.stringify(payload, null, 2),
-            'utf-8'
-        );
-        return {
-            stagedPath,
-            finalPath: path.join(statesDir, `v${version}.json`),
-        };
-    }
-
-    async function cleanupStagedVersionFile(stagedPath) {
-        if (!stagedPath) {
-            return;
-        }
-        try {
-            await fs.unlink(stagedPath);
-        } catch {}
-    }
-
-    async function finalizeVersionFile(versionFile) {
-        if (!versionFile?.stagedPath || !versionFile?.finalPath) {
-            return null;
-        }
-        try {
-            await fs.rename(versionFile.stagedPath, versionFile.finalPath);
-            return versionFile.finalPath;
-        } catch {
-            try {
-                await fs.copyFile(versionFile.stagedPath, versionFile.finalPath);
-                await cleanupStagedVersionFile(versionFile.stagedPath);
-                return versionFile.finalPath;
-            } catch {
-                return versionFile.stagedPath;
-            }
-        }
-    }
-
-    async function readVersionMetasFromDisk(characterDir) {
-        const statesDir = path.join(characterDir, 'states');
-        if (!existsSync(statesDir)) {
-            return [];
-        }
-        const files = await fs.readdir(statesDir);
-        const versionFiles = new Map();
-        for (const fileName of files) {
-            const finalMatch = /^v(\d+)\.json$/.exec(fileName);
-            const stagedMatch = /^\.v(\d+)\..+\.pending\.json$/.exec(fileName);
-            const match = finalMatch || stagedMatch;
-            if (!match) continue;
-            const version = Number(match[1]);
-            if (!Number.isFinite(version)) continue;
-            const current = versionFiles.get(version);
-            if (finalMatch) {
-                versionFiles.set(version, {
-                    fileName,
-                    version,
-                    priority: 2,
-                });
-                continue;
-            }
-            if (!current || current.priority < 2) {
-                if (!current || fileName > current.fileName) {
-                    versionFiles.set(version, {
-                        fileName,
-                        version,
-                        priority: 1,
-                    });
-                }
-            }
-        }
-
-        const versions = [];
-        for (const entry of versionFiles.values()) {
-            try {
-                const payload = JSON.parse(await fs.readFile(path.join(statesDir, entry.fileName), 'utf-8'));
-                versions.push({
-                    version: Math.max(0, Math.floor(entry.version)),
-                    chatId: typeof payload?.chatId === 'string' ? payload.chatId : null,
-                    acceptedAt: Number.isFinite(Number(payload?.acceptedAt)) ? Number(payload.acceptedAt) : 0,
-                });
-            } catch {}
-        }
-        return versions.sort((left, right) => left.version - right.version);
-    }
-
-    async function resolveVersionFilePath(characterDir, version) {
-        const statesDir = path.join(characterDir, 'states');
-        const finalPath = path.join(statesDir, `v${version}.json`);
-        if (existsSync(finalPath)) {
-            return finalPath;
-        }
-        if (!existsSync(statesDir)) {
-            return null;
-        }
-        const stagedFiles = (await fs.readdir(statesDir))
-            .filter((entry) => entry.startsWith(`.v${version}.`) && entry.endsWith('.pending.json'))
-            .sort();
-        if (stagedFiles.length === 0) {
-            return null;
-        }
-        return path.join(statesDir, stagedFiles[stagedFiles.length - 1]);
-    }
-
-    function mergeVersionMetas(preferred, fallback) {
-        const merged = new Map();
-        for (const entry of Array.isArray(fallback) ? fallback : []) {
-            if (!entry || !Number.isFinite(Number(entry.version))) continue;
-            merged.set(Number(entry.version), {
-                version: Math.max(0, Math.floor(Number(entry.version))),
-                chatId: typeof entry.chatId === 'string' ? entry.chatId : null,
-                acceptedAt: Number.isFinite(Number(entry.acceptedAt)) ? Number(entry.acceptedAt) : 0,
-            });
-        }
-        for (const entry of Array.isArray(preferred) ? preferred : []) {
-            if (!entry || !Number.isFinite(Number(entry.version))) continue;
-            merged.set(Number(entry.version), {
-                version: Math.max(0, Math.floor(Number(entry.version))),
-                chatId: typeof entry.chatId === 'string' ? entry.chatId : null,
-                acceptedAt: Number.isFinite(Number(entry.acceptedAt)) ? Number(entry.acceptedAt) : 0,
-            });
-        }
-        return [...merged.values()].sort((left, right) => left.version - right.version);
     }
 
     function resolveEffectiveEvolutionSettings(settings, character) {
@@ -395,7 +217,7 @@ function registerEvolutionRoutes(arg = {}) {
             messages: promptMessages,
             taskLabel: 'character_evolution_handoff',
         });
-        const parsed = require('../llm/character_evolution.cjs').safeParseEvolutionJson(rawResult);
+        const parsed = safeParseEvolutionJson(rawResult);
         if (!parsed) {
             req._characterEvolutionAudit.rawResult = rawResult;
             req._characterEvolutionAudit.metadata = {
@@ -480,10 +302,6 @@ function registerEvolutionRoutes(arg = {}) {
         if (!pendingProposal) {
             throw new LLMHttpError(404, 'PENDING_PROPOSAL_NOT_FOUND', 'No pending proposal exists for this character.');
         }
-        if (storedEvolution.lastProcessedChatId && storedEvolution.lastProcessedChatId === pendingProposal.sourceChatId) {
-            throw new LLMHttpError(409, 'CHAT_ALREADY_PROCESSED', 'This chat has already been accepted.');
-        }
-
         const body = (req.body && typeof req.body === 'object') ? req.body : {};
         const proposedState = sanitizeStateForEvolution(
             normalizeCharacterEvolutionState(body.proposedState || pendingProposal.proposedState),
@@ -492,7 +310,9 @@ function registerEvolutionRoutes(arg = {}) {
         );
         const recoveredVersions = mergeVersionMetas(
             storedEvolution.stateVersions,
-            await readVersionMetasFromDisk(charDir),
+            await readVersionMetasFromDisk(charDir, {
+                includeStagedThroughVersion: storedEvolution.currentStateVersion || 0,
+            }),
         );
         const nextVersion = Math.max(
             storedEvolution.currentStateVersion || 0,
@@ -573,7 +393,9 @@ function registerEvolutionRoutes(arg = {}) {
         const evolution = normalizeCharacterEvolutionSettings(character.characterEvolution);
         const versions = mergeVersionMetas(
             evolution.stateVersions,
-            await readVersionMetasFromDisk(charDir),
+            await readVersionMetasFromDisk(charDir, {
+                includeStagedThroughVersion: evolution.currentStateVersion || 0,
+            }),
         );
         sendJson(res, 200, {
             ok: true,
@@ -594,9 +416,14 @@ function registerEvolutionRoutes(arg = {}) {
         if (!Number.isFinite(version) || version < 0) {
             throw new LLMHttpError(400, 'INVALID_VERSION', 'version must be a positive number.');
         }
+        const { character } = await loadCharacterAndSettings(characterId);
+        const evolution = normalizeCharacterEvolutionSettings(character.characterEvolution);
+        const committedVersion = (version > 0 && version <= evolution.currentStateVersion)
+            || evolution.stateVersions.some((entry) => Number(entry?.version) === Math.floor(version));
         const versionPath = await resolveVersionFilePath(
             safeResolve(dataDirs.characters, characterId),
             Math.floor(version),
+            { allowStaged: committedVersion },
         );
         if (!versionPath) {
             throw new LLMHttpError(404, 'VERSION_NOT_FOUND', `Evolution version not found: ${version}`);

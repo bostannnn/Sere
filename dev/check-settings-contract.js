@@ -41,8 +41,6 @@ const checks = [
       "{#if submenu === 2 || submenu === -1}",
       "class=\"ds-settings-page-title ds-settings-inline-actions action-rail\"",
       "class=\"ds-settings-inline-actions action-rail\"",
-      "class=\"ds-settings-inline-actions ds-settings-inline-actions-fluid action-rail\"",
-      "class=\"ds-settings-section ds-settings-card\"",
       "class=\"ds-settings-card ds-settings-card-stack\"",
     ],
   },

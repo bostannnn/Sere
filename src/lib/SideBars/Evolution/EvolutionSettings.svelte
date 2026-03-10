@@ -30,8 +30,14 @@
     import EvolutionSetupPanel from "./EvolutionSetupPanel.svelte"
     import EvolutionWorkspaceTabs from "./EvolutionWorkspaceTabs.svelte"
     import {
-        acceptEvolutionProposalAction,
+        cloneEvolutionSettingsSections,
+        cloneEvolutionState,
         getEvolutionProposalIdentity,
+        withAcceptedEvolutionState,
+        withPendingEvolutionProposal,
+    } from "src/ts/character-evolution/workflow"
+    import {
+        acceptEvolutionProposalAction,
         loadEvolutionVersionState,
         openEvolutionGlobalDefaults,
         persistEvolutionCharacter,
@@ -50,14 +56,6 @@
 
     function isSingleCharacter(value: character | groupChat | null | undefined): value is character {
         return !!value && value.type !== "group"
-    }
-
-    function cloneState(value: CharacterEvolutionState | null | undefined): CharacterEvolutionState | null {
-        return value ? structuredClone(value) : null
-    }
-
-    function cloneSections(value: CharacterEvolutionSectionConfig[] | null | undefined): CharacterEvolutionSectionConfig[] {
-        return structuredClone(value ?? [])
     }
 
     function clonePrivacy(value: CharacterEvolutionPrivacySettings | null | undefined): CharacterEvolutionPrivacySettings {
@@ -218,12 +216,12 @@
         }
 
         if (characterEntry.characterEvolution.useGlobalDefaults) {
-            sectionConfigDraft = cloneSections(evolutionSettings?.sectionConfigs ?? createDefaultCharacterEvolutionSectionConfigs())
+            sectionConfigDraft = cloneEvolutionSettingsSections(evolutionSettings?.sectionConfigs ?? createDefaultCharacterEvolutionSectionConfigs())
             privacyDraft = clonePrivacy(evolutionSettings?.privacy)
             return
         }
 
-        sectionConfigDraft = cloneSections(characterEntry.characterEvolution.sectionConfigs)
+        sectionConfigDraft = cloneEvolutionSettingsSections(characterEntry.characterEvolution.sectionConfigs)
         privacyDraft = clonePrivacy(characterEntry.characterEvolution.privacy)
     })
 
@@ -246,7 +244,7 @@
         }
 
         currentStateDraftKey = nextKey
-        currentStateDraft = cloneState(characterEntry?.characterEvolution.currentState)
+        currentStateDraft = cloneEvolutionState(characterEntry?.characterEvolution.currentState)
     })
 
     $effect(() => {
@@ -335,11 +333,7 @@
         accepting = true
         try {
             await rejectEvolutionProposalAction(characterEntry.chaId)
-            characterEntry.characterEvolution = {
-                ...characterEntry.characterEvolution,
-                pendingProposal: null,
-            }
-            commitCharacter(characterEntry)
+            commitCharacter(withPendingEvolutionProposal(characterEntry, null))
             if (currentCharacter?.chaId === characterEntry.chaId) {
                 proposalDraft = null
                 proposalDraftKey = null
@@ -367,33 +361,16 @@
                 createNextChat,
             })
 
-            characterEntry.characterEvolution.currentState =
-                payload.state as typeof characterEntry.characterEvolution.currentState
-            const acceptedVersion =
-                Number(payload.version) || characterEntry.characterEvolution.currentStateVersion
-            const acceptedAt =
-                Number((payload as { acceptedAt?: number | string }).acceptedAt) || 0
-            const nextStateVersions = [
-                {
-                    version: acceptedVersion,
-                    chatId: acceptedSourceChatId,
-                    acceptedAt,
-                },
-                ...(Array.isArray(characterEntry.characterEvolution.stateVersions)
-                    ? characterEntry.characterEvolution.stateVersions.filter((entry) => Number(entry?.version) !== acceptedVersion)
-                    : []),
-            ]
-            characterEntry.characterEvolution = {
-                ...characterEntry.characterEvolution,
-                currentState: payload.state as typeof characterEntry.characterEvolution.currentState,
-                currentStateVersion: acceptedVersion,
-                pendingProposal: null,
-                lastProcessedChatId: acceptedSourceChatId,
-                stateVersions: nextStateVersions,
-            }
-            commitCharacter(characterEntry)
-            currentStateDraft = cloneState(characterEntry.characterEvolution.currentState)
-            currentStateDraftKey = `${characterEntry.chaId}:${acceptedVersion}`
+            const nextCharacter = withAcceptedEvolutionState({
+                characterEntry,
+                state: payload.state as CharacterEvolutionState,
+                version: payload.version,
+                acceptedAt: (payload as { acceptedAt?: number | string }).acceptedAt,
+                sourceChatId: acceptedSourceChatId,
+            })
+            commitCharacter(nextCharacter)
+            currentStateDraft = cloneEvolutionState(nextCharacter.characterEvolution.currentState)
+            currentStateDraftKey = `${nextCharacter.chaId}:${nextCharacter.characterEvolution.currentStateVersion}`
             if (currentCharacter?.chaId === characterEntry.chaId) {
                 proposalDraft = null
                 proposalDraftKey = null
@@ -445,11 +422,10 @@
             if (!freshCharacterEntry) {
                 return
             }
-            freshCharacterEntry.characterEvolution = {
-                ...freshCharacterEntry.characterEvolution,
-                pendingProposal: payload.proposal as typeof freshCharacterEntry.characterEvolution.pendingProposal,
-            }
-            commitCharacter(freshCharacterEntry)
+            commitCharacter(withPendingEvolutionProposal(
+                freshCharacterEntry,
+                payload.proposal as typeof freshCharacterEntry.characterEvolution.pendingProposal,
+            ))
             alertNormal("Evolution proposal was regenerated for the accepted chat.")
         } catch (error) {
             alertError(getCharacterEvolutionErrorMessage(error))

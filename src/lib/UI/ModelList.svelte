@@ -66,14 +66,14 @@
 
     const providerOptions = $derived.by(() => {
         const next: ProviderOption[] = []
-        const seen = new Set<string>()
+        const seenIds: string[] = []
         const flatModels = getModelList({
             groupedByProvider: false
         })
         for (const model of flatModels) {
             const providerId = getProviderId(model.id)
-            if (!providerId || seen.has(providerId)) continue
-            seen.add(providerId)
+            if (!providerId || seenIds.includes(providerId)) continue
+            seenIds.push(providerId)
             next.push({
                 id: providerId,
                 label: getProviderLabel(providerId),

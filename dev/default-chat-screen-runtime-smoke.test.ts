@@ -896,7 +896,7 @@ describe("default chat screen runtime smoke", () => {
     menuButton!.click();
     await flushUi();
 
-    let handoffButton = Array.from(document.querySelectorAll(".ds-chat-side-menu-item")).find(
+    const handoffButton = Array.from(document.querySelectorAll(".ds-chat-side-menu-item")).find(
       (element) => (element as HTMLButtonElement).getAttribute("aria-label") === "Character evolution handoff",
     ) as HTMLButtonElement | undefined;
     expect(handoffButton).toBeDefined();

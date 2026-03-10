@@ -125,6 +125,7 @@ vi.mock(import("src/ts/stores.svelte"), async () => {
   const { writable } = await import("svelte/store");
   return {
     DBState: shared.dbState,
+    OtherBotSettingsSubMenuIndex: writable<number | null>(null),
     selectedCharID: writable(0),
   };
 });
@@ -153,6 +154,7 @@ vi.mock(import("src/ts/process/memory/hypav3"), () => ({
 
 vi.mock(import("src/ts/globalApi.svelte"), () => ({
   downloadFile: async () => {},
+  saveAsset: async () => "assets/mock-asset.png",
 }));
 
 vi.mock(import("src/ts/util"), () => ({

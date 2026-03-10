@@ -172,9 +172,9 @@
     <SettingsSubTabs
         className="other-bots-tabs"
         items={[
-            { id: 0, label: "Memory" },
+            { id: 0, label: language.longTermMemory },
             { id: 1, label: "TTS" },
-            { id: 2, label: "Emotion" },
+            { id: 2, label: language.emotionImage },
             { id: 3, label: "Evolution" },
         ]}
         selectedId={submenu}

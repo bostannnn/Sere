@@ -5,11 +5,9 @@ import { decodeRPack, encodeRPack } from '../rpack/rpack_js';
 import { encode as encodeMsgpack, decode as decodeMsgpack } from 'msgpackr/index-no-eval';
 import * as fflate from 'fflate';
 import { cloneDefaultPromptTemplate, normalizePromptTemplate } from './defaultPrompts';
-import { migrateRemovedProviderSelections, stripLegacyProviderFields } from './database.normalizers';
+import { stripRemovedProviderFields } from './database.normalizers';
 import type { PromptItem, PromptItemPlain } from '../process/prompt';
 import type { Database, botPreset } from './database.types';
-
-export const REMOVED_PROVIDER_MIGRATION_NOTICE = 'Legacy removed providers were migrated to OpenRouter. Review Bot Settings and re-save any affected presets.';
 
 export const presetTemplate:botPreset = {
   name: 'New Preset',
@@ -186,7 +184,7 @@ function appendPreset(db: Database, preset: botPreset) {
 
 function sanitizePresetForExport(preset: botPreset): botPreset {
   const sanitized = safeStructuredClone(preset);
-  stripLegacyProviderFields(sanitized as unknown as Record<string, unknown>);
+  stripRemovedProviderFields(sanitized as unknown as Record<string, unknown>);
   sanitized.openAIKey = '';
   sanitized.forceReplaceUrl = '';
   sanitized.forceReplaceUrl2 = '';
@@ -281,7 +279,7 @@ export function copyPresetInDatabase(db: Database, id: number) {
 }
 
 export function setPresetOnDatabase(db: Database, newPres: botPreset) {
-  stripLegacyProviderFields(newPres as unknown as Record<string, unknown>);
+  stripRemovedProviderFields(newPres as unknown as Record<string, unknown>);
   db.apiType = newPres.apiType ?? db.apiType;
   db.temperature = newPres.temperature ?? db.temperature;
   db.maxContext = newPres.maxContext ?? db.maxContext;
@@ -365,12 +363,6 @@ export function setPresetOnDatabase(db: Database, newPres: botPreset) {
   db.modelTools = safeStructuredClone(newPres.modelTools ?? []);
   db.verbosity = newPres.verbosity ?? 1;
   db.dynamicOutput = newPres.dynamicOutput;
-
-  const removedModelMigrationNotices = new Set(db.removedModelMigrationNotice ?? []);
-  if (migrateRemovedProviderSelections(db)) {
-    removedModelMigrationNotices.add(REMOVED_PROVIDER_MIGRATION_NOTICE);
-  }
-  db.removedModelMigrationNotice = [...removedModelMigrationNotices];
 
   return db;
 }
@@ -482,6 +474,7 @@ export function applyImportedPresetToDatabase(db: Database, importedPreset: unkn
 
   const generic = preset as unknown as botPreset;
   generic.name ??= 'Imported';
+  stripRemovedProviderFields(generic as unknown as Record<string, unknown>);
   if (!Array.isArray(db.botPresets)) {
     db.botPresets = [];
   }

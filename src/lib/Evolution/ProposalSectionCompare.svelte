@@ -25,7 +25,7 @@
         currentState,
         proposedState = $bindable(),
         change = null,
-        privacy = {
+        privacy: _privacy = {
             allowCharacterIntimatePreferences: false,
             allowUserIntimatePreferences: false,
         },

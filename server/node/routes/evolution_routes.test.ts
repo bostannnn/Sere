@@ -433,6 +433,60 @@ describe("registerEvolutionRoutes", () => {
     }));
   });
 
+  it("allows accepting a replayed proposal for an already accepted chat", async () => {
+    writeJson(path.join(dataDirs.characters, characterId, "character.json"), {
+      character: {
+        chaId: characterId,
+        type: "character",
+        name: "Eva",
+        desc: "desc",
+        personality: "personality",
+        characterEvolution: {
+          enabled: true,
+          useGlobalDefaults: true,
+          currentStateVersion: 1,
+          currentState: {
+            relationship: {
+              trustLevel: "steady",
+              dynamic: "already accepted once",
+            },
+          },
+          stateVersions: [
+            {
+              version: 1,
+              chatId,
+              acceptedAt: 1000,
+            },
+          ],
+          lastProcessedChatId: chatId,
+        },
+      },
+    });
+
+    const { postHandlers } = buildHandlers();
+    const handoff = postHandlers.get("/data/character-evolution/handoff");
+    const accept = postHandlers.get("/data/character-evolution/:charId/proposal/accept");
+    expect(handoff).toBeTruthy();
+    expect(accept).toBeTruthy();
+
+    const replayRes = createRes();
+    await handoff!(createReq({ characterId, chatId, forceReplay: true }), replayRes);
+    expect(replayRes.statusCode).toBe(200);
+
+    const acceptRes = createRes();
+    await accept!(createReq({}, { charId: characterId }), acceptRes);
+
+    expect(acceptRes.statusCode).toBe(200);
+    expect(acceptRes.payload).toEqual(expect.objectContaining({
+      version: 2,
+    }));
+
+    const characterFile = JSON.parse(readFileSync(path.join(dataDirs.characters, characterId, "character.json"), "utf-8"));
+    expect(characterFile.character.characterEvolution.currentStateVersion).toBe(2);
+    expect(characterFile.character.characterEvolution.lastProcessedChatId).toBe(chatId);
+    expect(characterFile.character.characterEvolution.pendingProposal).toBeNull();
+  });
+
   it("keeps an accepted version readable when snapshot finalization falls back to the staged file", async () => {
     const { postHandlers, getHandlers } = buildHandlers({
       fsOverride: {
@@ -477,6 +531,54 @@ describe("registerEvolutionRoutes", () => {
       version: expect.objectContaining({
         version: 1,
       }),
+    }));
+  });
+
+  it("does not expose staged-only versions before the character state commit succeeds", async () => {
+    const statesDir = path.join(dataDirs.characters, characterId, "states");
+    mkdirSync(statesDir, { recursive: true });
+    writeJson(path.join(statesDir, ".v1.crash.pending.json"), {
+      version: 1,
+      chatId,
+      acceptedAt: 123,
+      state: {
+        relationship: {
+          trustLevel: "high",
+          dynamic: "should stay hidden",
+        },
+      },
+    });
+
+    const { getHandlers } = buildHandlers();
+    const listVersions = getHandlers.get("/data/character-evolution/:charId/versions");
+    const getVersion = getHandlers.get("/data/character-evolution/:charId/versions/:version");
+    expect(listVersions).toBeTruthy();
+    expect(getVersion).toBeTruthy();
+
+    const listRes = createRes();
+    await listVersions!({
+      method: "GET",
+      originalUrl: "/data/character-evolution/test",
+      body: {},
+      params: { charId: characterId },
+    }, listRes);
+
+    expect(listRes.statusCode).toBe(200);
+    expect(listRes.payload).toEqual(expect.objectContaining({
+      versions: [],
+    }));
+
+    const getRes = createRes();
+    await getVersion!({
+      method: "GET",
+      originalUrl: "/data/character-evolution/test",
+      body: {},
+      params: { charId: characterId, version: "1" },
+    }, getRes);
+
+    expect(getRes.statusCode).toBe(404);
+    expect(getRes.payload).toEqual(expect.objectContaining({
+      error: "VERSION_NOT_FOUND",
     }));
   });
 
