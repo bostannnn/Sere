@@ -86,7 +86,6 @@ function resolveLegacySummarySlotAllocation(hypaSettings, totalSlots) {
     const recentRatio = Number.isFinite(recentRatioRaw) ? Math.max(0, Math.min(1, recentRatioRaw)) : 0;
     const similarRatio = Number.isFinite(similarRatioRaw) ? Math.max(0, Math.min(1, similarRatioRaw)) : 0;
     const ratioSum = recentRatio + similarRatio;
-    const normalizedRecentRatio = ratioSum > 1 ? recentRatio / ratioSum : recentRatio;
     const normalizedSimilarRatio = ratioSum > 1 ? similarRatio / ratioSum : similarRatio;
     const similarSlots = Math.max(0, Math.floor(totalSlots * normalizedSimilarRatio));
     const recentSlots = Math.max(0, totalSlots - similarSlots);

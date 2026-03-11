@@ -5,7 +5,6 @@ const { existsSync } = require('fs');
 const LOGS_DIR_NAME = 'logs';
 const LLM_LOG_DIR_NAME = 'llm-execution';
 const LEGACY_LLM_LOG_FILE_NAME = 'llm-execution.jsonl';
-const LEGACY_LLM_LOG_FILE_PREFIX = 'llm-execution';
 const REDACTED = '[REDACTED]';
 const TRUNCATED = '[TRUNCATED]';
 const MAX_DEPTH = 8;
@@ -37,11 +36,6 @@ function isSensitiveLogKey(key) {
         return false;
     }
     return SENSITIVE_KEY_REGEX.test(normalized);
-}
-
-function parseBooleanEnv(name) {
-    const value = String(process.env[name] || '').trim().toLowerCase();
-    return value === '1' || value === 'true' || value === 'yes' || value === 'on';
 }
 
 function getLogMode() {

@@ -1,8 +1,6 @@
 import type {
   Chat,
   Database,
-  character,
-  groupChat,
 } from "src/ts/storage/database.types";
 import type {
   MemoryPreset,

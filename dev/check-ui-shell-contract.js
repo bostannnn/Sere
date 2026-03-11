@@ -98,8 +98,6 @@ const alertCardExportModalFile = "/Users/andrewbostan/Documents/RisuAII/src/lib/
 const requestLogsViewerFile = "/Users/andrewbostan/Documents/RisuAII/src/lib/Others/RequestLogsViewer.svelte";
 const hypaModalFile = "/Users/andrewbostan/Documents/RisuAII/src/lib/Others/MemoryPanel.svelte";
 const hypaModalHeaderFile = "/Users/andrewbostan/Documents/RisuAII/src/lib/Others/MemoryModal/modal-header.svelte";
-const hypaBulkResummaryFile = "/Users/andrewbostan/Documents/RisuAII/src/lib/Others/MemoryModal/bulk-resummary-result.svelte";
-const hypaCategoryManagerFile = "/Users/andrewbostan/Documents/RisuAII/src/lib/Others/MemoryModal/category-manager-modal.svelte";
 const hypaBulkEditActionsFile = "/Users/andrewbostan/Documents/RisuAII/src/lib/Others/MemoryModal/bulk-edit-actions.svelte";
 const hypaTagManagerFile = "/Users/andrewbostan/Documents/RisuAII/src/lib/Others/MemoryModal/tag-manager-modal.svelte";
 const hypaSummaryItemFile = "/Users/andrewbostan/Documents/RisuAII/src/lib/Others/MemoryModal/modal-summary-item.svelte";
@@ -165,8 +163,6 @@ const alertCardExportModalContent = readFile(alertCardExportModalFile);
 const requestLogsViewerContent = readFile(requestLogsViewerFile);
 const hypaModalContent = readFile(hypaModalFile);
 const hypaModalHeaderContent = readFile(hypaModalHeaderFile);
-const hypaBulkResummaryContent = readFile(hypaBulkResummaryFile);
-const hypaCategoryManagerContent = readFile(hypaCategoryManagerFile);
 const hypaBulkEditActionsContent = readFile(hypaBulkEditActionsFile);
 const hypaTagManagerContent = readFile(hypaTagManagerFile);
 const hypaSummaryItemContent = readFile(hypaSummaryItemFile);
@@ -685,7 +681,7 @@ ensureIncludes(hypaModalContent, hypaModalFile, "class=\"ds-memory-modal-manual-
 ensureIncludes(hypaModalContent, hypaModalFile, "class=\"ds-memory-modal-manual-submit ds-ui-button ds-ui-button-size-md ds-ui-button--primary\"", failures);
 ensureIncludes(hypaModalContent, hypaModalFile, "class=\"ds-memory-modal-debug-textarea control-field\"", failures);
 ensureIncludes(hypaModalContent, hypaModalFile, "import SettingsSubTabs from \"src/lib/Setting/SettingsSubTabs.svelte\";", failures);
-ensureIncludes(hypaModalContent, hypaModalFile, "className=\"ds-memory-memory-tabs\"", failures);
+ensureIncludes(hypaModalContent, hypaModalFile, "className=\"ds-memory-tabs\"", failures);
 ensureNotRegex(
   hypaModalContent,
   hypaModalFile,
@@ -708,38 +704,15 @@ ensureIncludes(hypaModalHeaderContent, hypaModalHeaderFile, ".hypa-modal-actions
 ensureIncludes(hypaModalHeaderContent, hypaModalHeaderFile, ".hypa-modal-icon-btn.icon-btn.icon-btn--md {", failures);
 ensureIncludes(hypaModalHeaderContent, hypaModalHeaderFile, ".hypa-modal-dropdown-panel.panel-shell {", failures);
 ensureIncludes(hypaModalHeaderContent, hypaModalHeaderFile, ".hypa-modal-dropdown-actions.action-rail {", failures);
-ensureIncludes(hypaBulkResummaryContent, hypaBulkResummaryFile, "<div class=\"hypa-resummary-actions action-rail\">", failures);
-ensureIncludes(hypaBulkResummaryContent, hypaBulkResummaryFile, "class=\"hypa-resummary-icon-btn icon-btn icon-btn--sm\"", failures);
-ensureIncludes(hypaBulkResummaryContent, hypaBulkResummaryFile, "class=\"hypa-resummary-icon-btn hypa-resummary-icon-btn-warning icon-btn icon-btn--sm\"", failures);
-ensureIncludes(hypaBulkResummaryContent, hypaBulkResummaryFile, "class=\"hypa-resummary-icon-btn hypa-resummary-icon-btn-accent icon-btn icon-btn--sm\"", failures);
-ensureIncludes(hypaBulkResummaryContent, hypaBulkResummaryFile, "class=\"hypa-resummary-textarea control-field\"", failures);
-ensureIncludes(hypaBulkResummaryContent, hypaBulkResummaryFile, ".hypa-resummary-actions.action-rail {", failures);
-ensureIncludes(hypaBulkResummaryContent, hypaBulkResummaryFile, ".hypa-resummary-icon-btn.icon-btn.icon-btn--sm {", failures);
-ensureIncludes(hypaBulkResummaryContent, hypaBulkResummaryFile, ".hypa-resummary-textarea.control-field {", failures);
-ensureIncludes(hypaCategoryManagerContent, hypaCategoryManagerFile, "class=\"hypa-category-modal panel-shell\"", failures);
-ensureIncludes(hypaCategoryManagerContent, hypaCategoryManagerFile, "class=\"hypa-category-header-actions action-rail\"", failures);
-ensureIncludes(hypaCategoryManagerContent, hypaCategoryManagerFile, "class=\"hypa-category-icon-btn icon-btn icon-btn--sm\"", failures);
-ensureIncludes(hypaCategoryManagerContent, hypaCategoryManagerFile, "class=\"hypa-category-icon-btn hypa-category-icon-btn-accent icon-btn icon-btn--sm\"", failures);
-ensureIncludes(hypaCategoryManagerContent, hypaCategoryManagerFile, "class=\"hypa-category-icon-btn hypa-category-icon-btn-danger icon-btn icon-btn--sm\"", failures);
-ensureIncludes(hypaCategoryManagerContent, hypaCategoryManagerFile, "class=\"hypa-category-list list-shell\"", failures);
-ensureIncludes(hypaCategoryManagerContent, hypaCategoryManagerFile, "class=\"hypa-category-edit-input control-field\"", failures);
-ensureIncludes(hypaCategoryManagerContent, hypaCategoryManagerFile, "class=\"hypa-category-empty empty-state\"", failures);
-ensureIncludes(hypaCategoryManagerContent, hypaCategoryManagerFile, ".hypa-category-modal.panel-shell {", failures);
-ensureIncludes(hypaCategoryManagerContent, hypaCategoryManagerFile, ".hypa-category-header-actions.action-rail,", failures);
-ensureIncludes(hypaCategoryManagerContent, hypaCategoryManagerFile, ".hypa-category-icon-btn.icon-btn.icon-btn--sm {", failures);
-ensureIncludes(hypaCategoryManagerContent, hypaCategoryManagerFile, ".hypa-category-list.list-shell {", failures);
-ensureIncludes(hypaCategoryManagerContent, hypaCategoryManagerFile, ".hypa-category-edit-input.control-field {", failures);
-ensureIncludes(hypaCategoryManagerContent, hypaCategoryManagerFile, ".hypa-category-empty.empty-state {", failures);
 ensureIncludes(hypaBulkEditActionsContent, hypaBulkEditActionsFile, "class=\"hypa-bulk-shell panel-shell\"", failures);
 ensureIncludes(hypaBulkEditActionsContent, hypaBulkEditActionsFile, "class=\"hypa-bulk-row action-rail\"", failures);
-ensureIncludes(hypaBulkEditActionsContent, hypaBulkEditActionsFile, "class=\"hypa-bulk-left action-rail\"", failures);
 ensureIncludes(hypaBulkEditActionsContent, hypaBulkEditActionsFile, "class=\"hypa-bulk-right action-rail\"", failures);
 ensureIncludes(hypaBulkEditActionsContent, hypaBulkEditActionsFile, "class=\"hypa-bulk-input-row action-rail\"", failures);
 ensureIncludes(hypaBulkEditActionsContent, hypaBulkEditActionsFile, "class=\"hypa-bulk-select control-field\"", failures);
 ensureIncludes(hypaBulkEditActionsContent, hypaBulkEditActionsFile, "class=\"hypa-bulk-input control-field\"", failures);
 ensureIncludes(hypaBulkEditActionsContent, hypaBulkEditActionsFile, ".hypa-bulk-shell.panel-shell {", failures);
 ensureIncludes(hypaBulkEditActionsContent, hypaBulkEditActionsFile, ".hypa-bulk-row.action-rail {", failures);
-ensureIncludes(hypaBulkEditActionsContent, hypaBulkEditActionsFile, ".hypa-bulk-left.action-rail,", failures);
+ensureIncludes(hypaBulkEditActionsContent, hypaBulkEditActionsFile, ".hypa-bulk-right.action-rail,", failures);
 ensureIncludes(hypaBulkEditActionsContent, hypaBulkEditActionsFile, ".hypa-bulk-select.control-field {", failures);
 ensureIncludes(hypaBulkEditActionsContent, hypaBulkEditActionsFile, ".hypa-bulk-input.control-field {", failures);
 ensureNotIncludes(hypaModalContent, hypaModalFile, "<ModalFooter", failures);
@@ -795,13 +768,13 @@ ensureIncludes(
 ensureIncludes(
   stylesContent,
   stylesFile,
-  ".ds-memory-memory-tabs .ds-settings-tabs {\n  overflow: hidden;\n}",
+  ".ds-memory-tabs .ds-settings-tabs {\n  overflow: hidden;\n}",
   failures,
 );
 ensureIncludes(
   stylesContent,
   stylesFile,
-  ".ds-memory-memory-tabs .ds-settings-tab {\n  flex: 1 1 0;\n  min-width: 0;\n}",
+  ".ds-memory-tabs .ds-settings-tab {\n  flex: 1 1 0;\n  min-width: 0;\n}",
   failures,
 );
 

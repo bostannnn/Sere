@@ -103,7 +103,7 @@ vi.mock(import("src/lang"), () => ({
     removeConfirm: "Remove ",
     successExport: "Exported",
     successImport: "Imported",
-    hypaV3Settings: {
+    memorySettings: {
       descriptionLabel: "Description",
       supaMemoryPromptPlaceHolder: "Prompt placeholder",
       maxMemoryTokensRatioLabel: "Max ratio",

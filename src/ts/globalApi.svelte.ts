@@ -1423,8 +1423,13 @@ const pipeFetchLog = (fetchLogIndex: number, readableStream: ReadableStream<Uint
     const splited = readableStream.tee();
     
     (async () => {
-        const text = await (new Response(splited[0])).text()
-        fetchLog[fetchLogIndex].response = text
+        try {
+            const text = await (new Response(splited[0])).text()
+            fetchLog[fetchLogIndex].response = text
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error ?? 'unknown stream read failure')
+            fetchLog[fetchLogIndex].response = `[response stream unavailable: ${message}]`
+        }
     })()
     
     return splited[1]

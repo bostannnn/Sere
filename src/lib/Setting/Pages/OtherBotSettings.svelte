@@ -49,9 +49,7 @@
     let memoryRecentSummarySlots = $state(0);
     let memorySimilarSummarySlots = $state(0);
     let memoryDoNotSummarizeUserMessage = $state(false);
-    const memorySettingsLanguage = $derived(
-        language.memorySettings ?? language.hypaV3Settings
-    );
+    const memorySettingsLanguage = $derived(language.memorySettings);
     const visibleEmotionCharacters = $derived.by(() =>
         (DBState.db.characters ?? []).filter((char) => Boolean(char) && !char.trashTime)
     );
@@ -246,7 +244,10 @@
         return Math.min(Math.max(parsed, 0), maxSlots);
     }
 
-    function deriveLegacySimilarSlots(settings: Record<string, unknown>, maxSelectedSummaries: number): number {
+    function deriveLegacySimilarSlots(
+        settings: { recentMemoryRatio?: unknown; similarMemoryRatio?: unknown },
+        maxSelectedSummaries: number
+    ): number {
         const rawRecentRatio = Number(settings.recentMemoryRatio ?? 0);
         const rawSimilarRatio = Number(settings.similarMemoryRatio ?? 0);
         const recentRatio = Number.isFinite(rawRecentRatio) ? Math.max(0, Math.min(1, rawRecentRatio)) : 0;

@@ -22,6 +22,12 @@ vi.mock(import("src/ts/stores.svelte"), async () => {
   const uiShellV2Enabled = writable(true);
   const openRulebookManager = writable(false);
   const memoryModalOpen = writable(false);
+  const memoryProgressStore = writable({
+    open: false,
+    miniMsg: "",
+    msg: "",
+    subMsg: "",
+  });
   const hypaV3ProgressStore = writable({
     open: false,
     miniMsg: "",
@@ -77,6 +83,7 @@ vi.mock(import("src/ts/stores.svelte"), async () => {
     appRouteStore,
     openRulebookManager,
     memoryModalOpen,
+    memoryProgressStore,
     hypaV3ProgressStore,
     selIdState,
   };

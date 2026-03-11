@@ -57,9 +57,6 @@ vi.mock(import("src/lib/Others/MemoryModal/modal-summary-item.svelte"), async ()
 vi.mock(import("src/lib/Others/MemoryModal/bulk-edit-actions.svelte"), async () => ({
   default: (await import("./test-stubs/SimplePanelStub.svelte")).default,
 }));
-vi.mock(import("src/lib/Others/MemoryModal/bulk-resummary-result.svelte"), async () => ({
-  default: (await import("./test-stubs/SimplePanelStub.svelte")).default,
-}));
 
 import MemoryPanel from "src/lib/Others/MemoryPanel.svelte";
 import { DBState, selectedCharID } from "src/ts/stores.svelte";

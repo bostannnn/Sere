@@ -91,9 +91,6 @@ vi.mock(import("src/lib/Others/MemoryModal/modal-summary-item.svelte"), async ()
 vi.mock(import("src/lib/Others/MemoryModal/bulk-edit-actions.svelte"), async () => ({
   default: (await import("./test-stubs/SimplePanelStub.svelte")).default,
 }));
-vi.mock(import("src/lib/Others/MemoryModal/bulk-resummary-result.svelte"), async () => ({
-  default: (await import("./test-stubs/SimplePanelStub.svelte")).default,
-}));
 
 vi.mock(import("src/lib/UI/GUI/SelectInput.svelte"), async () => ({
   default: (await import("./test-stubs/BindableFieldStub.svelte")).default,

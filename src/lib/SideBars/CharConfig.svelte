@@ -551,7 +551,6 @@
         return char as CharacterEditorState
     }
 
-    // eslint-disable-next-line svelte/prefer-writable-derived -- editorCharacter is mutated in-place throughout this component
     let editorCharacter = $state<CharacterEditorState | null>(null)
     let editorCharacterKey = $state<string | null>(null)
 

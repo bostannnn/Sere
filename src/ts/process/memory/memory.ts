@@ -6,7 +6,6 @@ import {
 } from "src/ts/storage/database.svelte";
 import { type OpenAIChat } from "../index.svelte";
 import { unloadEngine } from "../webllm";
-import { memoryProgressStore } from "src/ts/stores.svelte";
 import { type ChatTokenizer } from "src/ts/tokenizer";
 import {
   type MemoryData,
