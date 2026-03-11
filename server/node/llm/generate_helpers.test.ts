@@ -675,7 +675,7 @@ describe("generate_helpers", () => {
     expect(result.request?.maxTokens).toBe(4);
   });
 
-  it("clamps output maxTokens to the remaining context budget", async () => {
+  it("trims chat history to preserve the requested output budget", async () => {
     const { dataRoot, characterId, chatId } = await createDataRoot();
     cleanup.push(dataRoot);
     await writeFile(
@@ -694,15 +694,30 @@ describe("generate_helpers", () => {
     const helpers = createHelpersHarness({
       dataRoot,
       extractLatestUserMessage: () => "",
-      estimatePromptTokens: () => 240,
+      estimatePromptTokens: (messages) => {
+        const costs: Record<string, number> = {
+          "system-large": 60,
+          "older-chat": 70,
+          "recent-chat": 70,
+          "newest-chat": 70,
+        };
+        return (messages as Array<Record<string, unknown>>).reduce((sum, msg) => {
+          const key = String(msg.content || "");
+          return sum + (costs[key] || 0);
+        }, 0);
+      },
       buildGeneratePromptMessages: async () => ({
         messages: [
           { role: "system", content: "system-large" },
-          { role: "user", content: "recent-chat" },
+          { role: "user", content: "older-chat" },
+          { role: "assistant", content: "recent-chat" },
+          { role: "user", content: "newest-chat" },
         ],
         promptBlocks: [
           { index: 0, role: "system", title: "Main Prompt", source: "template" },
           { index: 1, role: "user", title: "Chat History", source: "chat" },
+          { index: 2, role: "assistant", title: "Chat History", source: "chat" },
+          { index: 3, role: "user", title: "Chat History", source: "chat" },
         ],
       }),
     });
@@ -715,10 +730,15 @@ describe("generate_helpers", () => {
       request: { requestBody: {}, maxTokens: 100 },
     });
 
-    expect(result.request?.maxTokens).toBe(60);
+    expect((result.request?.messages || []).map((msg: Record<string, unknown>) => msg.content)).toEqual([
+      "system-large",
+      "recent-chat",
+      "newest-chat",
+    ]);
+    expect(result.request?.maxTokens).toBe(100);
   });
 
-  it("fails when prompt exceeds max context and no chat history can be trimmed", async () => {
+  it("fails when prompt exceeds the reserved-output budget and no chat history can be trimmed", async () => {
     const { dataRoot, characterId, chatId } = await createDataRoot();
     cleanup.push(dataRoot);
     await writeFile(
@@ -750,7 +770,7 @@ describe("generate_helpers", () => {
         chatId,
         continue: true,
         streaming: false,
-        request: { requestBody: {}, maxTokens: 10 },
+        request: { requestBody: {}, maxTokens: 100 },
       }),
     ).rejects.toMatchObject({
       code: "MAX_CONTEXT_EXCEEDED",

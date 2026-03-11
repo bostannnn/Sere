@@ -204,18 +204,26 @@ function createGenerateHelpers(arg = {}) {
         }
     }
 
-    async function trimPromptMessagesToContext(messages, promptBlocks, maxContextTokens) {
-        if (!Array.isArray(messages) || messages.length === 0 || !Number.isFinite(Number(maxContextTokens)) || maxContextTokens <= 0) {
+    async function trimPromptMessagesToContext(messages, promptBlocks, maxInputTokens, options = {}) {
+        if (!Array.isArray(messages) || messages.length === 0 || !Number.isFinite(Number(maxInputTokens))) {
             return 0;
         }
         let inputTokens = Number(await Promise.resolve(estimatePromptTokens(messages))) || 0;
-        while (inputTokens > maxContextTokens) {
+        while (inputTokens > maxInputTokens) {
             const trimIndex = getOldestChatMessageIndex(promptBlocks, messages.length);
             if (!Number.isInteger(trimIndex)) {
+                const reservedOutputTokens = Number(options.reservedOutputTokens);
+                const maxContextTokens = Number(options.maxContextTokens);
+                const reserveSuffix = Number.isFinite(reservedOutputTokens) && reservedOutputTokens > 0
+                    ? ` after reserving ${reservedOutputTokens} output tokens`
+                    : '';
+                const contextSuffix = Number.isFinite(maxContextTokens) && maxContextTokens > 0
+                    ? ` within max context size (${maxContextTokens})`
+                    : '';
                 throw new LLMHttpError(
                     400,
                     'MAX_CONTEXT_EXCEEDED',
-                    `Input token count (${inputTokens}) exceeds max context size (${maxContextTokens}), but no removable chat history remains.`
+                    `Input token count (${inputTokens}) exceeds allowed prompt budget (${maxInputTokens})${contextSuffix}${reserveSuffix}, but no removable chat history remains.`
                 );
             }
             removePromptMessageAtIndex(messages, promptBlocks, trimIndex);
@@ -777,9 +785,6 @@ function createGenerateHelpers(arg = {}) {
             throw new LLMHttpError(400, 'INVALID_MESSAGES', 'No messages available for generation. Provide userMessage or existing chat history.');
         }
 
-        const maxContextTokens = normalizeMaxContextTokens(rawBody, settings);
-        const inputTokens = await trimPromptMessagesToContext(messages, promptBlocks, maxContextTokens);
-
         const requestTemplateBody = safeJsonClone(rawBody?.request?.requestBody, {});
         const maxTokensFromRequestTemplate =
             Number(rawBody?.request?.maxTokens) ||
@@ -793,6 +798,19 @@ function createGenerateHelpers(arg = {}) {
         let resolvedMaxTokens = Number.isFinite(Number(maxTokens))
             ? Number(maxTokens)
             : (Number.isFinite(Number(settings?.maxResponse)) ? Number(settings.maxResponse) : 1024);
+        const maxContextTokens = normalizeMaxContextTokens(rawBody, settings);
+        const reservedOutputTokens = resolvedMaxTokens > 0 ? resolvedMaxTokens : 0;
+        const inputTokens = maxContextTokens > 0
+            ? await trimPromptMessagesToContext(
+                messages,
+                promptBlocks,
+                Math.max(0, maxContextTokens - reservedOutputTokens),
+                {
+                    maxContextTokens,
+                    reservedOutputTokens,
+                }
+            )
+            : (Number(await Promise.resolve(estimatePromptTokens(messages))) || 0);
         if (maxContextTokens > 0 && inputTokens > 0 && (inputTokens + resolvedMaxTokens) > maxContextTokens) {
             const remainingBudget = maxContextTokens - inputTokens;
             if (remainingBudget <= 0) {
