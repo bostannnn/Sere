@@ -36,7 +36,7 @@
         onReject = () => {},
         onClose = () => {},
         loading = false,
-        sourceLabel = "Review the next state before accepting it into this character.",
+        sourceLabel = "Review the exact edits before accepting them. Each row shows the current value, the proposed result, and whether that row is being added, changed, or removed.",
     }: Props = $props();
 </script>
 
@@ -44,7 +44,7 @@
     <header class="evolution-review-header">
         <div class="evolution-review-header-copy">
             <span class="evolution-review-kicker">Character Evolution Review</span>
-            <h2 class="evolution-review-title">Compare current state to proposed state</h2>
+            <h2 class="evolution-review-title">Review exact edits before accepting</h2>
             <p class="evolution-review-note">{sourceLabel}</p>
         </div>
         <div class="evolution-review-actions">

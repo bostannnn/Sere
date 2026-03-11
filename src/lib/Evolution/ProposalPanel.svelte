@@ -91,12 +91,12 @@
             <div class="proposal-panel-header-copy">
                 <span class="ds-settings-label">Pending Evolution Proposal</span>
                 <span class="ds-settings-label-muted-sm">
-                    Current accepted state is on the left. Proposed next state is on the right. Only changed sections are shown.
+                    Each section is broken into concrete edits. Left shows what exists now, right shows what will be saved, and badges mark added, changed, or removed rows.
                 </span>
             </div>
             <div class="proposal-panel-meta">
                 <span class="proposal-panel-meta-value">{visibleCompareSections.length}</span>
-                <span class="ds-settings-label-muted-sm">changed sections</span>
+                <span class="ds-settings-label-muted-sm">sections with edits</span>
             </div>
         </div>
 

@@ -1002,7 +1002,7 @@
                         onReject={rejectEvolutionProposal}
                         onClose={() => { showEvolutionProposal = false }}
                         loading={evolutionBusy}
-                        sourceLabel="Only changed sections are shown. Current state is locked on the left, and you can still edit the proposed state on the right before accepting it."
+                        sourceLabel="Review the exact edits before accepting them. Each row shows what exists now, what will be saved, and whether that row is being added, changed, or removed."
                     />
                 </div>
             {:else}
