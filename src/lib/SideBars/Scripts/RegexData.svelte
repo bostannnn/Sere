@@ -155,7 +155,11 @@ interface Props {
 
                     <span class="script-item-subsection-label">Order Flag</span>
                     <NumberInput value={getOrder(value.flag)} onChange={(e)=>{
-                        changeOrder(parseInt(e.currentTarget.value))
+                        const nextOrder = e.currentTarget.valueAsNumber
+                        if(!Number.isFinite(nextOrder)){
+                            return
+                        }
+                        changeOrder(Math.trunc(nextOrder))
                     }} />
                     
                 </Accordion>

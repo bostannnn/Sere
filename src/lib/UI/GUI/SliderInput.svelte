@@ -14,12 +14,11 @@
         name="Enable slider"
         check={!isSliderDisabled()}
         onChange={(checked) => {
-          onchange?.();
           if (checked) {
-            value = getMinValue();
+            commitValue(getMinValue());
             return;
           }
-          value = -1000;
+          commitValue(-1000);
         }}
       />
     </div>
@@ -44,8 +43,7 @@
       aria-valuenow={getSliderAriaValue()}
       oninput={(event) => {
         const target = event.currentTarget as HTMLInputElement;
-        value = normalizeValue(Number(target.value));
-        onchange?.();
+        commitValue(normalizeValue(Number(target.value)));
       }}
     />
   </div>
@@ -87,6 +85,13 @@
     customText = undefined,
     onchange
   }: Props = $props();
+
+    function commitValue(nextValue: number) {
+        if (value !== nextValue) {
+            value = nextValue;
+        }
+        onchange?.();
+    }
 
     function getMinValue() {
         return Number.isFinite(min) ? min : 0;

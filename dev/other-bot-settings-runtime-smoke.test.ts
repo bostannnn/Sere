@@ -173,23 +173,11 @@ vi.mock(import("src/lib/UI/Accordion.svelte"), async () => ({
   default: (await import("./test-stubs/AccordionOpenStub.svelte")).default,
 }));
 
-vi.mock(import("src/lib/UI/GUI/NumberInput.svelte"), async () => ({
-  default: (await import("./test-stubs/BindableFieldStub.svelte")).default,
-}));
-
 vi.mock(import("src/lib/UI/GUI/TextInput.svelte"), async () => ({
   default: (await import("./test-stubs/BindableFieldStub.svelte")).default,
 }));
 
 vi.mock(import("src/lib/UI/GUI/EmbeddingModelSelect.svelte"), async () => ({
-  default: (await import("./test-stubs/BindableFieldStub.svelte")).default,
-}));
-
-vi.mock(import("src/lib/UI/GUI/SliderInput.svelte"), async () => ({
-  default: (await import("./test-stubs/BindableFieldStub.svelte")).default,
-}));
-
-vi.mock(import("src/lib/UI/GUI/CheckInput.svelte"), async () => ({
   default: (await import("./test-stubs/BindableFieldStub.svelte")).default,
 }));
 
@@ -213,14 +201,21 @@ async function flushUi() {
 }
 
 describe("other bots settings runtime smoke", () => {
-  function getValueFieldFollowingLabel(labelText: string): HTMLInputElement | null {
+  function getInputFollowingLabel(
+    labelText: string,
+    selector = 'input[type="text"], input[type="number"], input[type="range"]',
+  ): HTMLInputElement | null {
     const labels = Array.from(document.querySelectorAll(".ds-settings-label"));
     const label = labels.find((node) => (node.textContent ?? "").trim() === labelText);
     if (!label) return null;
 
     let next: Element | null = label.nextElementSibling;
     while (next) {
-      const nested = next.querySelector?.('[data-testid="bindable-field-value"]');
+      if (next instanceof HTMLInputElement && next.matches(selector)) {
+        return next;
+      }
+
+      const nested = next.querySelector?.(selector);
       if (nested instanceof HTMLInputElement) {
         return nested;
       }
@@ -281,7 +276,7 @@ describe("other bots settings runtime smoke", () => {
     app = mount(OtherBotSettings, { target });
     await flushUi();
 
-    const messagesPerSummaryInput = getValueFieldFollowingLabel("Messages Per Summary");
+    const messagesPerSummaryInput = getInputFollowingLabel("Messages Per Summary");
     expect(messagesPerSummaryInput).not.toBeNull();
 
     messagesPerSummaryInput!.value = "24";
@@ -296,5 +291,51 @@ describe("other bots settings runtime smoke", () => {
     expect(legacySettings?.periodicSummarizationInterval).toBe(24);
     expect(legacySettings?.maxChatsPerSummary).toBe(24);
     expect(shared.dbState.db.hypaV3Settings).toBe(shared.dbState.db.memorySettings);
+  });
+
+  it("keeps temporary empty number edits stable while slider updates commit through the shared preset mirror", async () => {
+    const target = document.createElement("div");
+    document.body.appendChild(target);
+    app = mount(OtherBotSettings, { target });
+    await flushUi();
+
+    const messagesPerSummaryInput = getInputFollowingLabel(
+      "Messages Per Summary",
+      'input[type="number"]',
+    );
+    const memoryRatioInput = getInputFollowingLabel("Memory ratio", 'input[type="range"]');
+
+    expect(messagesPerSummaryInput).not.toBeNull();
+    expect(memoryRatioInput).not.toBeNull();
+
+    messagesPerSummaryInput!.value = "";
+    messagesPerSummaryInput!.dispatchEvent(new Event("input", { bubbles: true }));
+    await flushUi();
+
+    expect(messagesPerSummaryInput!.value).toBe("");
+
+    memoryRatioInput!.value = "0.72";
+    memoryRatioInput!.dispatchEvent(new Event("input", { bubbles: true }));
+    await flushUi();
+
+    const presetSettingsAfterSlider = shared.dbState.db.memoryPresets?.[0]?.settings as Record<
+      string,
+      unknown
+    > | undefined;
+
+    expect(messagesPerSummaryInput!.value).toBe("");
+    expect(presetSettingsAfterSlider?.memoryTokensRatio).toBe(0.72);
+
+    messagesPerSummaryInput!.value = "24";
+    messagesPerSummaryInput!.dispatchEvent(new Event("input", { bubbles: true }));
+    await flushUi();
+
+    const presetSettings = shared.dbState.db.memoryPresets?.[0]?.settings as Record<string, unknown> | undefined;
+    const legacySettings = shared.dbState.db.memorySettings as Record<string, unknown> | undefined;
+
+    expect(presetSettings?.periodicSummarizationInterval).toBe(24);
+    expect(presetSettings?.maxChatsPerSummary).toBe(24);
+    expect(legacySettings?.periodicSummarizationInterval).toBe(24);
+    expect(legacySettings?.maxChatsPerSummary).toBe(24);
   });
 });

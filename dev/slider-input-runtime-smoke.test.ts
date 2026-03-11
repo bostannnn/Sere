@@ -7,11 +7,8 @@ vi.mock(import("src/lang"), () => ({
   },
 }));
 
-vi.mock(import("src/lib/UI/GUI/CheckInput.svelte"), async () => ({
-  default: (await import("./test-stubs/BindableFieldStub.svelte")).default,
-}));
-
-import SliderInput from "src/lib/UI/GUI/SliderInput.svelte";
+import SliderInputHarness from "./test-stubs/SliderInputHarness.svelte";
+import DisableableSliderInputHarness from "./test-stubs/DisableableSliderInputHarness.svelte";
 
 let app: Record<string, unknown> | undefined;
 
@@ -25,20 +22,11 @@ describe("slider input runtime smoke", () => {
   });
 
   it("commits the updated value before notifying the parent", async () => {
-    const onchange = vi.fn();
     const target = document.createElement("div");
     document.body.appendChild(target);
 
-    app = mount(SliderInput, {
+    app = mount(SliderInputHarness, {
       target,
-      props: {
-        min: 0,
-        max: 1,
-        step: 0.01,
-        fixed: 2,
-        value: 0.12,
-        onchange,
-      },
     });
     await tick();
 
@@ -49,9 +37,46 @@ describe("slider input runtime smoke", () => {
     slider!.dispatchEvent(new Event("input", { bubbles: true }));
     await tick();
 
-    expect(onchange).toHaveBeenCalledTimes(1);
     expect(slider!.value).toBe("0.5");
     expect(slider!.getAttribute("aria-valuenow")).toBe("0.5");
     expect(target.querySelector(".ds-ui-slider-value")?.textContent?.trim()).toBe("0.50");
+    expect(target.querySelector('[data-testid="slider-bound-value"]')?.textContent).toBe("0.5");
+    expect(target.querySelector('[data-testid="slider-callback-values"]')?.textContent).toBe(
+      "0.5",
+    );
+  });
+
+  it("uses the same update ordering when toggling a disableable slider", async () => {
+    const target = document.createElement("div");
+    document.body.appendChild(target);
+
+    app = mount(DisableableSliderInputHarness, { target });
+    await tick();
+
+    const checkbox = target.querySelector('input[type="checkbox"]') as HTMLInputElement | null;
+    const slider = target.querySelector('input[type="range"]') as HTMLInputElement | null;
+
+    expect(checkbox).not.toBeNull();
+    expect(slider).not.toBeNull();
+    expect(slider?.disabled).toBe(true);
+
+    checkbox!.checked = true;
+    checkbox!.dispatchEvent(new Event("change", { bubbles: true }));
+    await tick();
+
+    expect(target.querySelector('[data-testid="slider-bound-value"]')?.textContent).toBe("2");
+    expect(target.querySelector('[data-testid="slider-callback-values"]')?.textContent).toBe("2");
+    expect(slider!.disabled).toBe(false);
+    expect(slider!.value).toBe("2");
+
+    checkbox!.checked = false;
+    checkbox!.dispatchEvent(new Event("change", { bubbles: true }));
+    await tick();
+
+    expect(target.querySelector('[data-testid="slider-bound-value"]')?.textContent).toBe("-1000");
+    expect(target.querySelector('[data-testid="slider-callback-values"]')?.textContent).toBe(
+      "2|-1000",
+    );
+    expect(target.querySelector(".ds-ui-slider-value")?.textContent?.trim()).toBe("Disabled");
   });
 });

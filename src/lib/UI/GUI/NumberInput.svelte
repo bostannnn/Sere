@@ -44,32 +44,81 @@
         lg: "ds-ui-input-size-lg",
     };
 
-    function syncBoundValue(event: Event & {
-        currentTarget: EventTarget & HTMLInputElement;
-    }) {
-        const rawValue = event.currentTarget.value;
-        if (rawValue === "") {
+    const formatValue = (nextValue: number) => {
+        if (!Number.isFinite(nextValue)) {
+            return "";
+        }
+        return String(nextValue);
+    };
+
+    let inputRef = $state<HTMLInputElement | null>(null);
+    let draftValue = $state(formatValue(value));
+    let isEditing = $state(false);
+
+    $effect(() => {
+        if (isEditing) {
             return;
         }
 
+        const nextDraftValue = formatValue(value);
+        if (draftValue !== nextDraftValue) {
+            draftValue = nextDraftValue;
+        }
+        if (inputRef && inputRef.value !== nextDraftValue) {
+            inputRef.value = nextDraftValue;
+        }
+    });
+
+    function syncBoundValue(rawValue: string) {
+        draftValue = rawValue;
+        if (rawValue === "") {
+            return false;
+        }
+
         const parsedValue = Number(rawValue);
-        if (Number.isFinite(parsedValue) && value !== parsedValue) {
+        if (!Number.isFinite(parsedValue)) {
+            return false;
+        }
+
+        if (value !== parsedValue) {
             value = parsedValue;
         }
+        return true;
     }
 
     function handleInput(event: Event & {
         currentTarget: EventTarget & HTMLInputElement;
     }) {
-        syncBoundValue(event);
+        isEditing = true;
+        syncBoundValue(event.currentTarget.value);
         onInput(event);
     }
 
     function handleChange(event: Event & {
         currentTarget: EventTarget & HTMLInputElement;
     }) {
-        syncBoundValue(event);
+        const committed = syncBoundValue(event.currentTarget.value);
         onChange(event);
+        if (!committed) {
+            const nextDraftValue = formatValue(value);
+            draftValue = nextDraftValue;
+            event.currentTarget.value = nextDraftValue;
+        }
+    }
+
+    function handleFocus() {
+        isEditing = true;
+    }
+
+    function handleBlur(event: FocusEvent & {
+        currentTarget: EventTarget & HTMLInputElement;
+    }) {
+        isEditing = false;
+        const nextDraftValue = formatValue(value);
+        draftValue = nextDraftValue;
+        if (event.currentTarget.value !== nextDraftValue) {
+            event.currentTarget.value = nextDraftValue;
+        }
     }
 </script>
 
@@ -80,13 +129,16 @@
     class:ds-ui-fill-height={fullh}
     class:ds-ui-input-disabled={disabled}
     type="number"
+    bind:this={inputRef}
     {min}
     {max}
     {id}
     {disabled}
-    value={Number.isFinite(value) ? value : ''}
+    value={draftValue}
+    onfocus={handleFocus}
     oninput={handleInput}
     onchange={handleChange}
+    onblur={handleBlur}
     {placeholder}
 />
 
