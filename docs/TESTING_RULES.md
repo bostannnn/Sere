@@ -34,7 +34,7 @@ pnpm run check:server:contracts  # Server runtime contract checks
 
 Both must pass. No exceptions. See `CONVENTIONS.md` section VI for merge requirements.
 
-When a change touches `src/lib/Others/HypaV3Modal.svelte` or helpers under `src/lib/Others/HypaV3Modal/`, also run:
+When a change touches [`src/lib/Others/MemoryPanel.svelte`](/Users/andrewbostan/Documents/RisuAII/src/lib/Others/MemoryPanel.svelte) or helpers under [`src/lib/Others/MemoryModal/`](/Users/andrewbostan/Documents/RisuAII/src/lib/Others/MemoryModal), also run:
 
 ```bash
 pnpm exec vitest run dev/hypa-modal-embedded-manual-runtime-smoke.test.ts
@@ -343,13 +343,12 @@ The `/scripts/*` rule in `.gitignore` ignores all scripts by default. Add explic
 
 | File | Type | Coverage |
 |------|------|----------|
-| `scripts/test-memory-unit.cjs` | Unit | HypaV3 memory pipeline core logic (7 suites) |
-| `server/node/routes/hypav3_manual_routes.test.ts` | Unit (Vitest) | Manual summarize route contract (`promptOverride`, `promptSource`, scoped debug payload) |
-| `server/node/routes/hypav3_trace_routes.test.ts` | Unit (Vitest) | Trace route guardrails (route-level auth short-circuit, `safeResolve` invalid-path handling) |
-| `server/node/routes/hypav3_resummary_routes.test.ts` | Unit (Vitest) | Re-summarize route guardrails (route-level auth short-circuit, `safeResolve` invalid-path handling) |
-| `server/node/llm/hypav3_prompt_override.test.ts` | Unit (Vitest) | Prompt-override helper behavior and prompt-source precedence |
+| `scripts/test-memory-unit.cjs` | Unit | Memory pipeline core logic (6 suites) |
+| `server/node/memory/manual_routes.test.ts` | Unit (Vitest) | Manual summarize route contract (`promptOverride`, `promptSource`, scoped debug payload) |
+| `server/node/memory/trace_routes.test.ts` | Unit (Vitest) | Trace route guardrails (route-level auth short-circuit, `safeResolve` invalid-path handling) |
+| `server/node/memory/prompt_override.test.ts` | Unit (Vitest) | Prompt-override helper behavior and prompt-source precedence |
 | `scripts/test-server-auth.js` | Smoke | Password auth — set, change, lockout |
-| `scripts/test-server-memory.js` | Smoke | HypaV3 trace endpoints + character/chat/settings CRUD |
+| `scripts/test-server-memory.js` | Smoke | Memory trace endpoints + character/chat/settings CRUD |
 
 ---
 
@@ -366,7 +365,7 @@ After all command checks pass, open the prototype in a browser and verify:
 
 Use `docs/UI_CHANGE_CHECKLIST.md` as the pass/fail criteria for each step.
 
-When the change touches HypaV3 Memory sidebar/manual summarize flows, also run:
+When the change touches Memory sidebar/manual summarize flows, also run:
 
 1. `docs/qa/memory-tab-manual-checklist.md`
 

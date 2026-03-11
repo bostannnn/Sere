@@ -96,13 +96,13 @@ const alertCompFile = "/Users/andrewbostan/Documents/RisuAII/src/lib/Others/Aler
 const alertChoicePanelsFile = "/Users/andrewbostan/Documents/RisuAII/src/lib/Others/AlertComp/AlertChoicePanels.svelte";
 const alertCardExportModalFile = "/Users/andrewbostan/Documents/RisuAII/src/lib/Others/AlertComp/AlertCardExportModal.svelte";
 const requestLogsViewerFile = "/Users/andrewbostan/Documents/RisuAII/src/lib/Others/RequestLogsViewer.svelte";
-const hypaModalFile = "/Users/andrewbostan/Documents/RisuAII/src/lib/Others/HypaV3Modal.svelte";
-const hypaModalHeaderFile = "/Users/andrewbostan/Documents/RisuAII/src/lib/Others/HypaV3Modal/modal-header.svelte";
-const hypaBulkResummaryFile = "/Users/andrewbostan/Documents/RisuAII/src/lib/Others/HypaV3Modal/bulk-resummary-result.svelte";
-const hypaCategoryManagerFile = "/Users/andrewbostan/Documents/RisuAII/src/lib/Others/HypaV3Modal/category-manager-modal.svelte";
-const hypaBulkEditActionsFile = "/Users/andrewbostan/Documents/RisuAII/src/lib/Others/HypaV3Modal/bulk-edit-actions.svelte";
-const hypaTagManagerFile = "/Users/andrewbostan/Documents/RisuAII/src/lib/Others/HypaV3Modal/tag-manager-modal.svelte";
-const hypaSummaryItemFile = "/Users/andrewbostan/Documents/RisuAII/src/lib/Others/HypaV3Modal/modal-summary-item.svelte";
+const hypaModalFile = "/Users/andrewbostan/Documents/RisuAII/src/lib/Others/MemoryPanel.svelte";
+const hypaModalHeaderFile = "/Users/andrewbostan/Documents/RisuAII/src/lib/Others/MemoryModal/modal-header.svelte";
+const hypaBulkResummaryFile = "/Users/andrewbostan/Documents/RisuAII/src/lib/Others/MemoryModal/bulk-resummary-result.svelte";
+const hypaCategoryManagerFile = "/Users/andrewbostan/Documents/RisuAII/src/lib/Others/MemoryModal/category-manager-modal.svelte";
+const hypaBulkEditActionsFile = "/Users/andrewbostan/Documents/RisuAII/src/lib/Others/MemoryModal/bulk-edit-actions.svelte";
+const hypaTagManagerFile = "/Users/andrewbostan/Documents/RisuAII/src/lib/Others/MemoryModal/tag-manager-modal.svelte";
+const hypaSummaryItemFile = "/Users/andrewbostan/Documents/RisuAII/src/lib/Others/MemoryModal/modal-summary-item.svelte";
 
 const appContent = readFile(appFile);
 const appShellContent = readFile(appShellFile);
@@ -676,27 +676,27 @@ ensureIncludes(requestLogsViewerContent, requestLogsViewerFile, ".request-log-co
 ensureIncludes(requestLogsViewerContent, requestLogsViewerFile, ".alert-requestlog-empty.empty-state {", failures);
 ensureIncludes(requestLogsViewerContent, requestLogsViewerFile, ".alert-requestlog-list.list-shell {", failures);
 ensureIncludes(requestLogsViewerContent, requestLogsViewerFile, ".alert-requestlog-card.panel-shell {", failures);
-ensureIncludes(hypaModalContent, hypaModalFile, "class=\"ds-hypa-modal-convert-card panel-shell\"", failures);
-ensureIncludes(hypaModalContent, hypaModalFile, "class=\"ds-hypa-modal-convert-button control-chip\"", failures);
-ensureIncludes(hypaModalContent, hypaModalFile, "class=\"ds-hypa-modal-empty-note empty-state\"", failures);
-ensureIncludes(hypaModalContent, hypaModalFile, "class=\"ds-hypa-modal-search-input control-field\"", failures);
-ensureIncludes(hypaModalContent, hypaModalFile, "class=\"ds-hypa-modal-search-nav-button icon-btn icon-btn--sm\"", failures);
-ensureIncludes(hypaModalContent, hypaModalFile, "class=\"ds-hypa-modal-manual-input control-field\"", failures);
-ensureIncludes(hypaModalContent, hypaModalFile, "class=\"ds-hypa-modal-manual-submit ds-ui-button ds-ui-button-size-md ds-ui-button--primary\"", failures);
-ensureIncludes(hypaModalContent, hypaModalFile, "class=\"ds-hypa-modal-debug-textarea control-field\"", failures);
+ensureIncludes(hypaModalContent, hypaModalFile, "class=\"ds-memory-modal-convert-card panel-shell\"", failures);
+ensureIncludes(hypaModalContent, hypaModalFile, "class=\"ds-memory-modal-convert-button control-chip\"", failures);
+ensureIncludes(hypaModalContent, hypaModalFile, "class=\"ds-memory-modal-empty-note empty-state\"", failures);
+ensureIncludes(hypaModalContent, hypaModalFile, "class=\"ds-memory-modal-search-input control-field\"", failures);
+ensureIncludes(hypaModalContent, hypaModalFile, "class=\"ds-memory-modal-search-nav-button icon-btn icon-btn--sm\"", failures);
+ensureIncludes(hypaModalContent, hypaModalFile, "class=\"ds-memory-modal-manual-input control-field\"", failures);
+ensureIncludes(hypaModalContent, hypaModalFile, "class=\"ds-memory-modal-manual-submit ds-ui-button ds-ui-button-size-md ds-ui-button--primary\"", failures);
+ensureIncludes(hypaModalContent, hypaModalFile, "class=\"ds-memory-modal-debug-textarea control-field\"", failures);
 ensureIncludes(hypaModalContent, hypaModalFile, "import SettingsSubTabs from \"src/lib/Setting/SettingsSubTabs.svelte\";", failures);
-ensureIncludes(hypaModalContent, hypaModalFile, "className=\"ds-hypa-memory-tabs\"", failures);
+ensureIncludes(hypaModalContent, hypaModalFile, "className=\"ds-memory-memory-tabs\"", failures);
 ensureNotRegex(
   hypaModalContent,
   hypaModalFile,
-  /class="ds-hypa-modal-convert-button control-chip"[\s\S]{0,120}tabindex="-1"/,
+  /class="ds-memory-modal-convert-button control-chip"[\s\S]{0,120}tabindex="-1"/,
   failures,
   "convert button must remain keyboard reachable",
 );
 ensureNotRegex(
   hypaModalContent,
   hypaModalFile,
-  /class="ds-hypa-modal-search-nav-button icon-btn icon-btn--sm"[\s\S]{0,140}tabindex="-1"/,
+  /class="ds-memory-modal-search-nav-button icon-btn icon-btn--sm"[\s\S]{0,140}tabindex="-1"/,
   failures,
   "search nav buttons must remain keyboard reachable",
 );
@@ -743,17 +743,17 @@ ensureIncludes(hypaBulkEditActionsContent, hypaBulkEditActionsFile, ".hypa-bulk-
 ensureIncludes(hypaBulkEditActionsContent, hypaBulkEditActionsFile, ".hypa-bulk-select.control-field {", failures);
 ensureIncludes(hypaBulkEditActionsContent, hypaBulkEditActionsFile, ".hypa-bulk-input.control-field {", failures);
 ensureNotIncludes(hypaModalContent, hypaModalFile, "<ModalFooter", failures);
-ensureIncludes(hypaTagManagerContent, hypaTagManagerFile, "class=\"ds-hypa-tag-modal panel-shell\"", failures);
-ensureIncludes(hypaTagManagerContent, hypaTagManagerFile, "class=\"ds-hypa-tag-close icon-btn icon-btn--sm\"", failures);
-ensureIncludes(hypaTagManagerContent, hypaTagManagerFile, "class=\"ds-hypa-tag-add-row action-rail\"", failures);
-ensureIncludes(hypaTagManagerContent, hypaTagManagerFile, "class=\"ds-hypa-tag-input control-field\"", failures);
-ensureIncludes(hypaTagManagerContent, hypaTagManagerFile, "class=\"ds-hypa-tag-list list-shell\"", failures);
-ensureIncludes(hypaTagManagerContent, hypaTagManagerFile, "class=\"ds-hypa-tag-edit-input control-field\"", failures);
-ensureIncludes(hypaTagManagerContent, hypaTagManagerFile, "class=\"ds-hypa-tag-icon-btn ds-hypa-tag-icon-btn-save icon-btn icon-btn--sm\"", failures);
-ensureIncludes(hypaTagManagerContent, hypaTagManagerFile, "class=\"ds-hypa-tag-icon-btn ds-hypa-tag-icon-btn-cancel icon-btn icon-btn--sm\"", failures);
-ensureIncludes(hypaTagManagerContent, hypaTagManagerFile, "class=\"ds-hypa-tag-icon-btn ds-hypa-tag-icon-btn-edit icon-btn icon-btn--sm\"", failures);
-ensureIncludes(hypaTagManagerContent, hypaTagManagerFile, "class=\"ds-hypa-tag-icon-btn ds-hypa-tag-icon-btn-delete icon-btn icon-btn--sm\"", failures);
-ensureIncludes(hypaTagManagerContent, hypaTagManagerFile, "class=\"ds-hypa-tag-empty empty-state\"", failures);
+ensureIncludes(hypaTagManagerContent, hypaTagManagerFile, "class=\"ds-memory-tag-modal panel-shell\"", failures);
+ensureIncludes(hypaTagManagerContent, hypaTagManagerFile, "class=\"ds-memory-tag-close icon-btn icon-btn--sm\"", failures);
+ensureIncludes(hypaTagManagerContent, hypaTagManagerFile, "class=\"ds-memory-tag-add-row action-rail\"", failures);
+ensureIncludes(hypaTagManagerContent, hypaTagManagerFile, "class=\"ds-memory-tag-input control-field\"", failures);
+ensureIncludes(hypaTagManagerContent, hypaTagManagerFile, "class=\"ds-memory-tag-list list-shell\"", failures);
+ensureIncludes(hypaTagManagerContent, hypaTagManagerFile, "class=\"ds-memory-tag-edit-input control-field\"", failures);
+ensureIncludes(hypaTagManagerContent, hypaTagManagerFile, "class=\"ds-memory-tag-icon-btn ds-memory-tag-icon-btn-save icon-btn icon-btn--sm\"", failures);
+ensureIncludes(hypaTagManagerContent, hypaTagManagerFile, "class=\"ds-memory-tag-icon-btn ds-memory-tag-icon-btn-cancel icon-btn icon-btn--sm\"", failures);
+ensureIncludes(hypaTagManagerContent, hypaTagManagerFile, "class=\"ds-memory-tag-icon-btn ds-memory-tag-icon-btn-edit icon-btn icon-btn--sm\"", failures);
+ensureIncludes(hypaTagManagerContent, hypaTagManagerFile, "class=\"ds-memory-tag-icon-btn ds-memory-tag-icon-btn-delete icon-btn icon-btn--sm\"", failures);
+ensureIncludes(hypaTagManagerContent, hypaTagManagerFile, "class=\"ds-memory-tag-empty empty-state\"", failures);
 ensureIncludes(hypaSummaryItemContent, hypaSummaryItemFile, "class=\"hypa-summary-root panel-shell\"", failures);
 ensureIncludes(hypaSummaryItemContent, hypaSummaryItemFile, "class=\"hypa-summary-metric-chip control-chip\"", failures);
 ensureIncludes(hypaSummaryItemContent, hypaSummaryItemFile, "class=\"hypa-summary-row-inline action-rail\"", failures);
@@ -771,37 +771,37 @@ ensureIncludes(hypaSummaryItemContent, hypaSummaryItemFile, ".hypa-summary-toggl
 ensureIncludes(hypaSummaryItemContent, hypaSummaryItemFile, ".hypa-summary-textarea.control-field {", failures);
 ensureIncludes(hypaSummaryItemContent, hypaSummaryItemFile, ".hypa-summary-textarea-focus.control-field:focus {", failures);
 ensureIncludes(hypaSummaryItemContent, hypaSummaryItemFile, ".hypa-summary-chatmemo-button.control-chip {", failures);
-ensureIncludes(stylesContent, stylesFile, ".ds-hypa-tag-modal.panel-shell {", failures);
-ensureIncludes(stylesContent, stylesFile, ".ds-hypa-tag-close.icon-btn.icon-btn--sm {", failures);
-ensureIncludes(stylesContent, stylesFile, ".ds-hypa-tag-add-row.action-rail {", failures);
-ensureIncludes(stylesContent, stylesFile, ".ds-hypa-tag-input.control-field,", failures);
-ensureIncludes(stylesContent, stylesFile, ".ds-hypa-tag-list.list-shell {", failures);
-ensureIncludes(stylesContent, stylesFile, ".ds-hypa-tag-icon-btn.icon-btn.icon-btn--sm {", failures);
-ensureIncludes(stylesContent, stylesFile, ".ds-hypa-tag-empty.empty-state {", failures);
-ensureIncludes(stylesContent, stylesFile, ".ds-hypa-modal-convert-card.panel-shell {", failures);
-ensureIncludes(stylesContent, stylesFile, ".ds-hypa-modal-convert-button.control-chip {", failures);
-ensureIncludes(stylesContent, stylesFile, ".ds-hypa-modal-empty-note.empty-state {", failures);
-ensureIncludes(stylesContent, stylesFile, ".ds-hypa-modal-search-input.control-field {", failures);
-ensureIncludes(stylesContent, stylesFile, ".ds-hypa-modal-search-nav-button.icon-btn.icon-btn--sm {", failures);
-ensureIncludes(stylesContent, stylesFile, ".ds-hypa-modal-manual-input.control-field {", failures);
-ensureIncludes(stylesContent, stylesFile, ".ds-hypa-modal-manual-submit.ds-ui-button {", failures);
-ensureIncludes(stylesContent, stylesFile, ".ds-hypa-modal-debug-textarea.control-field {", failures);
+ensureIncludes(stylesContent, stylesFile, ".ds-memory-tag-modal.panel-shell {", failures);
+ensureIncludes(stylesContent, stylesFile, ".ds-memory-tag-close.icon-btn.icon-btn--sm {", failures);
+ensureIncludes(stylesContent, stylesFile, ".ds-memory-tag-add-row.action-rail {", failures);
+ensureIncludes(stylesContent, stylesFile, ".ds-memory-tag-input.control-field,", failures);
+ensureIncludes(stylesContent, stylesFile, ".ds-memory-tag-list.list-shell {", failures);
+ensureIncludes(stylesContent, stylesFile, ".ds-memory-tag-icon-btn.icon-btn.icon-btn--sm {", failures);
+ensureIncludes(stylesContent, stylesFile, ".ds-memory-tag-empty.empty-state {", failures);
+ensureIncludes(stylesContent, stylesFile, ".ds-memory-modal-convert-card.panel-shell {", failures);
+ensureIncludes(stylesContent, stylesFile, ".ds-memory-modal-convert-button.control-chip {", failures);
+ensureIncludes(stylesContent, stylesFile, ".ds-memory-modal-empty-note.empty-state {", failures);
+ensureIncludes(stylesContent, stylesFile, ".ds-memory-modal-search-input.control-field {", failures);
+ensureIncludes(stylesContent, stylesFile, ".ds-memory-modal-search-nav-button.icon-btn.icon-btn--sm {", failures);
+ensureIncludes(stylesContent, stylesFile, ".ds-memory-modal-manual-input.control-field {", failures);
+ensureIncludes(stylesContent, stylesFile, ".ds-memory-modal-manual-submit.ds-ui-button {", failures);
+ensureIncludes(stylesContent, stylesFile, ".ds-memory-modal-debug-textarea.control-field {", failures);
 ensureIncludes(
   stylesContent,
   stylesFile,
-  ".ds-hypa-modal-scroll {\n  display: flex;\n  flex-direction: column;\n  gap: var(--ds-space-2);\n  overflow-y: auto;\n  overflow-x: hidden;",
+  ".ds-memory-modal-scroll {\n  display: flex;\n  flex-direction: column;\n  gap: var(--ds-space-2);\n  overflow-y: auto;\n  overflow-x: hidden;",
   failures,
 );
 ensureIncludes(
   stylesContent,
   stylesFile,
-  ".ds-hypa-memory-tabs .ds-settings-tabs {\n  overflow: hidden;\n}",
+  ".ds-memory-memory-tabs .ds-settings-tabs {\n  overflow: hidden;\n}",
   failures,
 );
 ensureIncludes(
   stylesContent,
   stylesFile,
-  ".ds-hypa-memory-tabs .ds-settings-tab {\n  flex: 1 1 0;\n  min-width: 0;\n}",
+  ".ds-memory-memory-tabs .ds-settings-tab {\n  flex: 1 1 0;\n  min-width: 0;\n}",
   failures,
 );
 

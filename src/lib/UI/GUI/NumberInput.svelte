@@ -13,6 +13,9 @@
         onChange?: (event: Event & {
             currentTarget: EventTarget & HTMLInputElement;
         }) => unknown;
+        onInput?: (event: Event & {
+            currentTarget: EventTarget & HTMLInputElement;
+        }) => unknown;
         className?: string;
         disabled?: boolean;
         placeholder?: string;
@@ -29,6 +32,7 @@
         fullwidth = false,
         fullh = false,
         onChange = () => {},
+        onInput = () => {},
         className = '',
         disabled = false,
         placeholder
@@ -53,6 +57,7 @@
     {id}
     {disabled}
     bind:value
+    oninput={onInput}
     onchange={onChange}
     {placeholder}
 />

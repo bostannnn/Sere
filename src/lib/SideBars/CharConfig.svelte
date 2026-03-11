@@ -18,6 +18,7 @@
     import { getElevenTTSVoices, getWebSpeechTTSVoices, getVOICEVOXVoices, oaiVoices, getNovelAIVoices } from "src/ts/process/tts";
     import { getFileSrc } from "src/ts/globalApi.svelte";
     import { addGroupChar, rmCharFromGroup } from "src/ts/process/group";
+    import { getCharacterMemoryPromptOverride, setCharacterMemoryPromptOverride } from "src/ts/process/memory/storage";
     import TextInput from "../UI/GUI/TextInput.svelte";
     import NumberInput from "../UI/GUI/NumberInput.svelte";
     import TextAreaInput from "../UI/GUI/TextAreaInput.svelte";
@@ -57,9 +58,8 @@
             depth: number
             prompt: string
         }
-        hypaV3PromptOverride: {
+        memoryPromptOverride: {
             summarizationPrompt: string
-            reSummarizationPrompt: string
         }
         newGenData: {
             emotionInstructions: string
@@ -449,16 +449,11 @@
         }
         char.depth_prompt.depth = typeof char.depth_prompt.depth === 'number' ? char.depth_prompt.depth : 0
         char.depth_prompt.prompt = typeof char.depth_prompt.prompt === 'string' ? char.depth_prompt.prompt : ''
-        char.hypaV3PromptOverride ??= {
-            summarizationPrompt: '',
-            reSummarizationPrompt: '',
-        }
-        char.hypaV3PromptOverride.summarizationPrompt = typeof char.hypaV3PromptOverride.summarizationPrompt === 'string'
-            ? char.hypaV3PromptOverride.summarizationPrompt
-            : ''
-        char.hypaV3PromptOverride.reSummarizationPrompt = typeof char.hypaV3PromptOverride.reSummarizationPrompt === 'string'
-            ? char.hypaV3PromptOverride.reSummarizationPrompt
-            : ''
+        setCharacterMemoryPromptOverride(char, {
+            summarizationPrompt: typeof getCharacterMemoryPromptOverride(char)?.summarizationPrompt === 'string'
+                ? getCharacterMemoryPromptOverride(char)?.summarizationPrompt
+                : ''
+        })
         char.newGenData ??= {
             prompt: '',
             negative: '',
@@ -557,10 +552,22 @@
     }
 
     // eslint-disable-next-line svelte/prefer-writable-derived -- editorCharacter is mutated in-place throughout this component
-    let editorCharacter = $state<CharacterEditorState | null>(ensureEditorCharacter())
+    let editorCharacter = $state<CharacterEditorState | null>(null)
+    let editorCharacterKey = $state<string | null>(null)
 
     $effect(() => {
-        editorCharacter = ensureEditorCharacter()
+        const selectedIndex = $selectedCharID
+        const selected = DBState.db.characters[selectedIndex]
+        const nextEditorCharacterKey = selected && selected.type === 'character'
+            ? (selected.chaId ?? `character-${selectedIndex}`)
+            : null
+
+        if (editorCharacterKey === nextEditorCharacterKey) {
+            return
+        }
+
+        editorCharacterKey = nextEditorCharacterKey
+        editorCharacter = untrack(() => ensureEditorCharacter())
     })
 
     $effect(() => {

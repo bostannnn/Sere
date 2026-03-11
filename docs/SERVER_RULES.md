@@ -17,7 +17,7 @@ The server owns all execution that requires:
 - Persistent file I/O (characters, chats, settings, assets)
 - LLM execution (prompt assembly, tokenization, provider dispatch)
 - RAG (ingestion, embedding, similarity search)
-- Memory summarization (HypaV3)
+- Memory summarization
 
 The client is allowed to:
 - Call server endpoints via `globalFetch` or `fetch`

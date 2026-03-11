@@ -39,8 +39,8 @@ const shared = vi.hoisted(() => {
 
 vi.mock(import("src/lang"), () => ({
   language: {
-    hypaV3Modal: {
-      titleLabel: "HypaV3",
+    memoryModal: {
+      titleLabel: "Memory",
       unclassified: "Unclassified",
       noSummariesLabel: "No summaries yet",
       resetConfirmMessage: "Reset?",
@@ -72,23 +72,23 @@ vi.mock(import("src/ts/alert"), () => ({
   alertToast: () => {},
 }));
 
-vi.mock(import("src/lib/Others/HypaV3Modal/utils"), () => ({
+vi.mock(import("src/lib/Others/MemoryModal/utils"), () => ({
   shouldShowSummary: () => true,
   isGuidLike: () => false,
   parseSelectionInput: () => new Set<number>(),
   alertConfirmTwice: async () => false,
 }));
 
-vi.mock(import("src/lib/Others/HypaV3Modal/modal-header.svelte"), async () => ({
+vi.mock(import("src/lib/Others/MemoryModal/modal-header.svelte"), async () => ({
   default: (await import("./test-stubs/SimplePanelStub.svelte")).default,
 }));
-vi.mock(import("src/lib/Others/HypaV3Modal/modal-summary-item.svelte"), async () => ({
+vi.mock(import("src/lib/Others/MemoryModal/modal-summary-item.svelte"), async () => ({
   default: (await import("./test-stubs/SimplePanelStub.svelte")).default,
 }));
-vi.mock(import("src/lib/Others/HypaV3Modal/bulk-edit-actions.svelte"), async () => ({
+vi.mock(import("src/lib/Others/MemoryModal/bulk-edit-actions.svelte"), async () => ({
   default: (await import("./test-stubs/SimplePanelStub.svelte")).default,
 }));
-vi.mock(import("src/lib/Others/HypaV3Modal/bulk-resummary-result.svelte"), async () => ({
+vi.mock(import("src/lib/Others/MemoryModal/bulk-resummary-result.svelte"), async () => ({
   default: (await import("./test-stubs/SimplePanelStub.svelte")).default,
 }));
 
@@ -102,8 +102,8 @@ vi.mock(import("src/lib/UI/GUI/TextAreaInput.svelte"), async () => ({
   default: (await import("./test-stubs/BindableFieldStub.svelte")).default,
 }));
 
-import HypaV3Modal from "src/lib/Others/HypaV3Modal.svelte";
-import { DBState, hypaV3ModalOpen, selectedCharID } from "src/ts/stores.svelte";
+import MemoryPanel from "src/lib/Others/MemoryPanel.svelte";
+import { DBState, memoryModalOpen, selectedCharID } from "src/ts/stores.svelte";
 
 let app: Record<string, unknown> | undefined;
 let target: HTMLDivElement | undefined;
@@ -163,7 +163,7 @@ describe("hypa modal manual async race runtime smoke", () => {
       hypaV3Presets: [],
     } as never;
     selectedCharID.set(0);
-    hypaV3ModalOpen.set(true);
+    memoryModalOpen.set(true);
 
     document.body.innerHTML = "";
     target = document.createElement("div");
@@ -188,13 +188,13 @@ describe("hypa modal manual async race runtime smoke", () => {
       }),
     );
 
-    app = mount(HypaV3Modal, {
+    app = mount(MemoryPanel, {
       target: target!,
       props: { embedded: true },
     });
     await flushUi();
 
-    const summarizeButton = target?.querySelector(".ds-hypa-modal-manual-submit") as HTMLButtonElement | null;
+    const summarizeButton = target?.querySelector(".ds-memory-modal-manual-submit") as HTMLButtonElement | null;
     expect(summarizeButton).not.toBeNull();
     summarizeButton?.click();
     await flushUi();
@@ -251,15 +251,15 @@ describe("hypa modal manual async race runtime smoke", () => {
       }),
     );
 
-    app = mount(HypaV3Modal, {
+    app = mount(MemoryPanel, {
       target: target!,
       props: { embedded: false },
     });
     await flushUi();
 
-    const summarizeButton = target?.querySelector(".ds-hypa-modal-manual-submit") as HTMLButtonElement | null;
+    const summarizeButton = target?.querySelector(".ds-memory-modal-manual-submit") as HTMLButtonElement | null;
     const chatSelectValueInput = target?.querySelector(
-      ".ds-hypa-modal-chat-select [data-testid='bindable-field-value']",
+      ".ds-memory-modal-chat-select [data-testid='bindable-field-value']",
     ) as HTMLInputElement | null;
     expect(summarizeButton).not.toBeNull();
     expect(chatSelectValueInput).not.toBeNull();
@@ -320,13 +320,13 @@ describe("hypa modal manual async race runtime smoke", () => {
       }),
     );
 
-    app = mount(HypaV3Modal, {
+    app = mount(MemoryPanel, {
       target: target!,
       props: { embedded: true },
     });
     await flushUi();
 
-    const summarizeButton = target?.querySelector(".ds-hypa-modal-manual-submit") as HTMLButtonElement | null;
+    const summarizeButton = target?.querySelector(".ds-memory-modal-manual-submit") as HTMLButtonElement | null;
     expect(summarizeButton).not.toBeNull();
     summarizeButton?.click();
     await flushUi();

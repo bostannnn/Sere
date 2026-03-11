@@ -15,6 +15,7 @@ import { saveServerDatabase } from "./storage/serverDb";
 import { importCharacter } from "./characterCards";
 import { getNewChatFirstMessageIndex as resolveNewChatFirstMessageIndex } from "./newChatFirstMessage";
 import { PngChunk } from "./pngChunk";
+import { getCharacterMemoryPromptOverride, setCharacterMemoryPromptOverride } from "./process/memory/storage";
 const characterLog = (..._args: unknown[]) => {};
 
 export function createNewCharacter() {
@@ -612,16 +613,11 @@ export function characterFormatUpdate(indexOrCharacter:number|character, arg:{
             cha.postHistoryInstructions = null
         }
         cha.additionalText ??= ''
-        cha.hypaV3PromptOverride ??= {
-            summarizationPrompt: '',
-            reSummarizationPrompt: '',
-        }
-        cha.hypaV3PromptOverride.summarizationPrompt = typeof cha.hypaV3PromptOverride.summarizationPrompt === 'string'
-            ? cha.hypaV3PromptOverride.summarizationPrompt
-            : ''
-        cha.hypaV3PromptOverride.reSummarizationPrompt = typeof cha.hypaV3PromptOverride.reSummarizationPrompt === 'string'
-            ? cha.hypaV3PromptOverride.reSummarizationPrompt
-            : ''
+        setCharacterMemoryPromptOverride(cha, {
+            summarizationPrompt: typeof getCharacterMemoryPromptOverride(cha)?.summarizationPrompt === 'string'
+                ? getCharacterMemoryPromptOverride(cha)?.summarizationPrompt
+                : ''
+        })
         cha.depth_prompt ??= {
             depth: 0,
             prompt: ''
@@ -751,9 +747,8 @@ export function createBlankChar():character{
             effect: []
         }],
         additionalText: '',
-        hypaV3PromptOverride: {
+        memoryPromptOverride: {
             summarizationPrompt: '',
-            reSummarizationPrompt: '',
         },
     }
 }

@@ -140,7 +140,7 @@ function getTemplateCardFallbackTitle(cardType, cardType2 = '') {
     if (cardType === 'lorebook') return 'Lorebook';
     if (cardType === 'postEverything') return 'Post Everything';
     if (cardType === 'chat' || cardType === 'chatML' || cardType === 'chatml') return 'Chat History';
-    if (cardType === 'memory') return 'HypaMemory';
+    if (cardType === 'memory') return 'Memory';
     if (cardType === 'rulebookRag') return 'Rulebook RAG';
     if (cardType === 'gameState') return 'Game State';
     if (cardType === 'characterState') return 'Character State';
@@ -642,7 +642,9 @@ function buildGenerateProviderRequest(provider, model, messages, maxTokens, stre
     requestBody.messages = messages;
     if (Number.isFinite(Number(maxTokens))) {
         const normalizedMaxTokens = Number(maxTokens);
-        if (!Number.isFinite(Number(requestBody.max_tokens)) && !Number.isFinite(Number(requestBody.max_completion_tokens))) {
+        if (Number.isFinite(Number(requestBody.max_completion_tokens))) {
+            requestBody.max_completion_tokens = normalizedMaxTokens;
+        } else {
             requestBody.max_tokens = normalizedMaxTokens;
         }
     }

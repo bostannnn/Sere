@@ -74,7 +74,7 @@ vi.mock(import("src/ts/stores.svelte"), async () => {
     bookmarkListOpen: writable(false),
     CharConfigSubMenu: writable(0),
     MobileGUI: writable(false),
-    hypaV3ModalOpen: writable(false),
+    memoryModalOpen: writable(false),
   };
 });
 
@@ -257,7 +257,7 @@ vi.mock(import("src/lib/SideBars/GameStateEditor.svelte"), async () => ({
 vi.mock(import("src/lib/SideBars/Evolution/EvolutionSettings.svelte"), async () => ({
   default: (await import("./test-stubs/SimplePanelStub.svelte")).default,
 }));
-vi.mock(import("src/lib/Others/HypaV3Modal.svelte"), async () => ({
+vi.mock(import("src/lib/Others/MemoryPanel.svelte"), async () => ({
   default: (await import("./test-stubs/SimplePanelStub.svelte")).default,
 }));
 

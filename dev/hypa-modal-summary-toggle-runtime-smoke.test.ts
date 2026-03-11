@@ -3,9 +3,9 @@ import { mount, tick, unmount } from "svelte";
 
 vi.mock(import("src/lang"), () => ({
   language: {
-    ToggleHypaMemory: "Toggle HypaMemory",
-    hypaV3Modal: {
-      titleLabel: "HypaV3",
+    ToggleMemory: "Toggle HypaMemory",
+    memoryModal: {
+      titleLabel: "Memory",
       unclassified: "Unclassified",
       noSummariesLabel: "No summaries yet",
       resetConfirmMessage: "Reset?",
@@ -41,27 +41,27 @@ vi.mock(import("src/ts/alert"), () => ({
   alertToast: () => {},
 }));
 
-vi.mock(import("src/lib/Others/HypaV3Modal/utils"), () => ({
+vi.mock(import("src/lib/Others/MemoryModal/utils"), () => ({
   shouldShowSummary: () => true,
   isGuidLike: () => false,
   parseSelectionInput: () => new Set<number>(),
   alertConfirmTwice: async () => false,
 }));
 
-vi.mock(import("src/lib/Others/HypaV3Modal/modal-header.svelte"), async () => ({
+vi.mock(import("src/lib/Others/MemoryModal/modal-header.svelte"), async () => ({
   default: (await import("./test-stubs/SimplePanelStub.svelte")).default,
 }));
-vi.mock(import("src/lib/Others/HypaV3Modal/modal-summary-item.svelte"), async () => ({
+vi.mock(import("src/lib/Others/MemoryModal/modal-summary-item.svelte"), async () => ({
   default: (await import("./test-stubs/SimplePanelStub.svelte")).default,
 }));
-vi.mock(import("src/lib/Others/HypaV3Modal/bulk-edit-actions.svelte"), async () => ({
+vi.mock(import("src/lib/Others/MemoryModal/bulk-edit-actions.svelte"), async () => ({
   default: (await import("./test-stubs/SimplePanelStub.svelte")).default,
 }));
-vi.mock(import("src/lib/Others/HypaV3Modal/bulk-resummary-result.svelte"), async () => ({
+vi.mock(import("src/lib/Others/MemoryModal/bulk-resummary-result.svelte"), async () => ({
   default: (await import("./test-stubs/SimplePanelStub.svelte")).default,
 }));
 
-import HypaV3Modal from "src/lib/Others/HypaV3Modal.svelte";
+import MemoryPanel from "src/lib/Others/MemoryPanel.svelte";
 import { DBState, selectedCharID } from "src/ts/stores.svelte";
 
 let app: Record<string, unknown> | undefined;
@@ -123,7 +123,7 @@ describe("hypa modal summary toggle runtime smoke", () => {
   });
 
   it("shows the HypaMemory toggle on Summary and removes it from Settings", async () => {
-    app = mount(HypaV3Modal, {
+    app = mount(MemoryPanel, {
       target: target!,
       props: { embedded: true },
     });

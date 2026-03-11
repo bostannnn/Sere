@@ -4,7 +4,7 @@ import type { NAISettings } from '../process/models/nai';
 import type { ColorScheme } from '../gui/colorscheme';
 import type { PromptItem, PromptSettings } from '../process/prompt';
 import type { OobaChatCompletionRequestParams } from '../model/ooba';
-import type { HypaV3Settings, HypaV3Preset, SerializableHypaV3Data } from '../process/memory/hypav3';
+import type { MemorySettings, MemoryPreset, SerializableMemoryData } from '../process/memory/memory';
 import type { OnnxModelFiles } from '../process/transformers';
 import type { RisuModule } from '../process/modules';
 import type { SerializableHypaV2Data } from '../process/memory/hypav2';
@@ -289,9 +289,13 @@ export interface Database{
     presetRegex: customscript[]
     banCharacterset:string[]
     showPromptComparison:boolean
+    memoryEnabled?:boolean
+    memorySettings?: MemorySettings
+    memoryPresets?: MemoryPreset[]
+    memoryPresetId?: number
     hypaV3:boolean
-    hypaV3Settings: HypaV3Settings // legacy
-    hypaV3Presets: HypaV3Preset[]
+    hypaV3Settings: MemorySettings // legacy
+    hypaV3Presets: MemoryPreset[]
     hypaV3PresetId: number
     OaiCompAPIKeys: {[key:string]:string}
     inlayErrorResponse:boolean
@@ -386,10 +390,32 @@ export interface Database{
     alwaysScrollToNewMessage?: boolean
     newMessageButtonStyle?: string
     createFolderOnBranch?:boolean
+    memoryDebug?:{
+        timestamp:number
+        model:string
+        prompt:string
+        input:string
+        formatted:{role:string, content:string}[]
+        rawResponse?:string
+        characterId?:string
+        chatId?:string
+        start?:number
+        end?:number
+        source?:"manual"|"periodic"
+        promptSource?:"request_override"|"character_override"|"preset_or_default"
+        periodic?:{
+            totalChats:number
+            lastIndex:number
+            newMessages:number
+            interval:number
+            toSummarizeCount:number
+            skippedReason?:string
+            chatName?:string
+        }
+    }
     hypaV3Debug?:{
         timestamp:number
         model:string
-        isResummarize:boolean
         prompt:string
         input:string
         formatted:{role:string, content:string}[]
@@ -462,9 +488,8 @@ export interface loreBook{
     folder?:string
 }
 
-export interface HypaV3PromptOverride {
+export interface MemoryPromptOverride {
     summarizationPrompt?: string
-    reSummarizationPrompt?: string
 }
 
 export type CharacterEvolutionConfidence = 'suspected' | 'likely' | 'confirmed'
@@ -730,7 +755,8 @@ export interface character{
     prebuiltAssetCommand?:boolean
     prebuiltAssetStyle?:string
     prebuiltAssetExclude?:string[]
-    hypaV3PromptOverride?: HypaV3PromptOverride
+    memoryPromptOverride?: MemoryPromptOverride
+    hypaV3PromptOverride?: MemoryPromptOverride
     modules?:string[]
     gameState?: Record<string, any>
     characterEvolution?: CharacterEvolutionSettings
@@ -820,7 +846,8 @@ export interface groupChat{
     prebuiltAssetCommand?:boolean
     prebuiltAssetStyle?:string
     prebuiltAssetExclude?:string[]
-    hypaV3PromptOverride?: HypaV3PromptOverride
+    memoryPromptOverride?: MemoryPromptOverride
+    hypaV3PromptOverride?: MemoryPromptOverride
     modules?:string[]
     gameState?: Record<string, any>
     characterEvolution?: CharacterEvolutionSettings
@@ -983,7 +1010,8 @@ export interface Chat{
     id?:string
     bindedPersona?:string
     fmIndex?:number
-    hypaV3Data?:SerializableHypaV3Data
+    memoryData?:SerializableMemoryData
+    hypaV3Data?:SerializableMemoryData
     folderId?:string
     lastDate?:number
     bookmarks?: string[];

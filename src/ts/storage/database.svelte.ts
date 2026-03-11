@@ -9,7 +9,16 @@ import { prebuiltNAIpresets } from '../process/templates/templates';
 import { defaultColorScheme } from '../gui/colorscheme';
 import { LLMFormat } from '../model/modellist';
 import type { HypaModel } from '../process/memory/hypamemory';
-import { createHypaV3Preset } from '../process/memory/hypav3'
+import { createMemoryPreset } from '../process/memory/memory'
+import {
+    setCharacterMemoryPromptOverride,
+    setChatMemoryData,
+    setDbMemoryDebug,
+    setDbMemoryEnabled,
+    setDbMemoryPresetId,
+    setDbMemoryPresets,
+    setDbMemorySettings,
+} from '../process/memory/storage';
 import { defaultHotkeys } from '../defaulthotkeys';
 import { DBState, selectedCharID } from '../stores.svelte';
 import { DEFAULT_EMOTION_PROMPT } from '../process/emotion/defaultPrompt';
@@ -91,11 +100,16 @@ export function setDatabase(data:Database){
     ensureDatabaseEvolutionDefaults(data)
     for (const char of data.characters) {
         ensureCharacterEvolution(char)
+        setCharacterMemoryPromptOverride(
+            char,
+            char.memoryPromptOverride ?? char.hypaV3PromptOverride ?? { summarizationPrompt: '' }
+        )
         if (!Array.isArray(char?.chats)) {
             continue
         }
         for (const chat of char.chats) {
             normalizeChatBackground(chat)
+            setChatMemoryData(chat, chat.memoryData ?? chat.hypaV3Data)
         }
     }
     if(checkNullish(data.apiType)){
@@ -484,33 +498,41 @@ export function setDatabase(data:Database){
     data.OaiCompAPIKeys ??= {}
     data.globalRagSettings = resolveGlobalRagSettings(data.globalRagSettings)
     data.reasoningEffort ??= 0
-    data.hypaV3Presets ??= [
-        createHypaV3Preset("Default", {
+    const normalizedMemoryPresets = data.memoryPresets ?? data.hypaV3Presets ?? [
+        createMemoryPreset("Default", {
             summarizationPrompt: data.supaMemoryPrompt ? data.supaMemoryPrompt : "",
-            ...data.hypaV3Settings
+            ...(data.memorySettings ?? data.hypaV3Settings)
         })
     ]
-    if (data.hypaV3Presets.length > 0) {
-        data.hypaV3Presets = data.hypaV3Presets.map((preset, i) =>
-            createHypaV3Preset(
+    if (normalizedMemoryPresets.length > 0) {
+        const mappedPresets = normalizedMemoryPresets.map((preset, i) =>
+            createMemoryPreset(
                 preset.name || `Preset ${i + 1}`,
                 preset.settings || {}
             )
         )
-        for (const preset of data.hypaV3Presets) {
+        for (const preset of mappedPresets) {
             // Periodic summarization is interval-driven; keep it enabled for migrated presets.
             preset.settings.periodicSummarizationEnabled = true
         }
+        setDbMemoryPresets(data, mappedPresets)
+    } else {
+        setDbMemoryPresets(data, normalizedMemoryPresets)
     }
-    data.hypaV3PresetId ??= 0
-    // Long-term memory migration: keep runtime on HypaV3 only.
-    data.hypaV3 = true
+    setDbMemorySettings(
+        data,
+        (data.memorySettings ?? data.hypaV3Settings ?? createMemoryPreset('Default').settings)
+    )
+    setDbMemoryPresetId(data, data.memoryPresetId ?? data.hypaV3PresetId ?? 0)
+    setDbMemoryDebug(data, data.memoryDebug ?? data.hypaV3Debug)
+    // Keep runtime on the neutral memory contract while mirroring legacy fields during migration.
+    setDbMemoryEnabled(data, data.memoryEnabled ?? data.hypaV3 ?? true)
     data.hypav2 = false
     data.hanuraiEnable = false
     data.hanuraiSplit = false
     data.supaModelType = 'none'
     data.hypaMemory = false
-    data.memoryAlgorithmType = 'hypaMemoryV3'
+    data.memoryAlgorithmType = 'buildMemoryContext'
     data.showDeprecatedTriggerV2 ??= false
     data.returnCSSError ??= true
     data.useExperimentalGoogleTranslator ??= false

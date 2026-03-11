@@ -36,7 +36,7 @@ vi.mock(import("src/ts/util"), () => ({
 
 vi.mock(import("src/lang"), () => ({
   language: {
-    ToggleHypaMemory: "Hypa memory",
+    ToggleMemory: "Hypa memory",
   },
 }));
 

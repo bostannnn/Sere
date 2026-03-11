@@ -145,8 +145,8 @@ vi.mock(import("src/ts/alert"), () => ({
   alertNormal: vi.fn(),
 }));
 
-vi.mock(import("src/ts/process/memory/hypav3"), () => ({
-  createHypaV3Preset: () => ({
+vi.mock(import("src/ts/process/memory/memory"), () => ({
+  createMemoryPreset: () => ({
     name: "Generated",
     settings: createHypaPresetSettings(),
   }),

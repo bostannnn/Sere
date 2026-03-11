@@ -66,7 +66,7 @@ Note: `resourceDir` itself is safe (always a hardcoded string from the call site
 **Affected files** (spot-checked):
 - `content_routes.cjs` — several handlers, especially the dynamic `jsonResourceHandlers` body
 - `legacy_routes.cjs` — older handlers written before the pattern was established
-- `hypav3_trace_routes.cjs` — trace handlers
+- `trace_routes.cjs` — memory trace handlers
 
 **Pattern to apply:**
 ```javascript

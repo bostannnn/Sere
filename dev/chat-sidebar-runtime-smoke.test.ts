@@ -8,7 +8,7 @@ vi.mock(import("src/ts/stores.svelte"), async () => {
   const CharEmotion = writable<Record<string, [string, string, number][]>>({});
   const ReloadGUIPointer = writable(0);
   const CharConfigSubMenu = writable(0);
-  const hypaV3ModalOpen = writable(false);
+  const memoryModalOpen = writable(false);
   const bookmarkListOpen = writable(false);
   const selIdState = { selId: 0 };
   const DBState = {
@@ -56,7 +56,7 @@ vi.mock(import("src/ts/stores.svelte"), async () => {
     CharEmotion,
     ReloadGUIPointer,
     CharConfigSubMenu,
-    hypaV3ModalOpen,
+    memoryModalOpen,
     bookmarkListOpen,
     selIdState,
   };
@@ -110,7 +110,7 @@ vi.mock(import("src/lib/SideBars/CharConfig.svelte"), async () => ({
 vi.mock(import("src/lib/SideBars/Evolution/EvolutionSettings.svelte"), async () => ({
   default: (await import("./test-stubs/SimplePanelStub.svelte")).default,
 }));
-vi.mock(import("src/lib/Others/HypaV3Modal.svelte"), async () => ({
+vi.mock(import("src/lib/Others/MemoryPanel.svelte"), async () => ({
   default: (await import("./test-stubs/SimplePanelStub.svelte")).default,
 }));
 

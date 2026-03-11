@@ -3,6 +3,7 @@
     value?: string | number;
     check?: boolean;
     className?: string;
+    onValueChange?: (value: string) => unknown;
     oninput?: (event: Event & {
       currentTarget: EventTarget & HTMLInputElement;
     }) => unknown;
@@ -17,6 +18,7 @@
     value = $bindable(),
     check = $bindable(),
     className = "",
+    onValueChange = () => {},
     oninput = () => {},
     onchange = () => {},
     onChange = () => {},
@@ -30,10 +32,12 @@
     value={String(value ?? "")}
     oninput={(event) => {
       value = event.currentTarget.value;
+      onValueChange(event.currentTarget.value);
       oninput(event);
     }}
     onchange={(event) => {
       value = event.currentTarget.value;
+      onValueChange(event.currentTarget.value);
       onchange(event);
     }}
   />

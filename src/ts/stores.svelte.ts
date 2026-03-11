@@ -81,8 +81,8 @@ export const alertStore = writable({
     type: 'none',
     msg: 'n',
 } as alertData)
-export const hypaV3ModalOpen = writable(false)
-export const hypaV3ProgressStore = writable({
+export const memoryModalOpen = writable(false)
+export const memoryProgressStore = writable({
     open: false,
     miniMsg: '',
     msg: '',
@@ -222,12 +222,6 @@ ReloadGUIPointer.subscribe(() => {
 $effect.root(() => {
     selectedCharID.subscribe((v) => {
         selIdState.selId = v
-
-        if (DBState?.db?.characters?.[selIdState.selId]) {
-            if (DBState.db.hypaV3 && DBState.db.hypaV3Presets?.[DBState.db.hypaV3PresetId]?.settings?.alwaysToggleOn) {
-                DBState.db.characters[selIdState.selId].supaMemory = true;
-            }
-        }
     })
     $effect(() => {
         $state.snapshot(DBState.db.modules)

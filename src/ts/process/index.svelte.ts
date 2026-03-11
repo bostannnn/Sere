@@ -32,14 +32,15 @@ import { addRerolls } from "./prereroll";
 import { runImageEmbedding } from "./transformers";
 import { runLuaEditTrigger } from "./scriptings";
 import { getModelInfo, LLMFlags } from "../model/modellist";
-import { hypaMemoryV3 } from "./memory/hypav3";
+import { buildMemoryContext } from "./memory/memory";
+import { getChatMemoryData, getDbMemoryEnabled, setChatMemoryData } from "./memory/storage";
 import { getModuleAssets, getModuleToggles } from "./modules";
 import { addFetchLog, readImage } from "../globalApi.svelte";
 import { rulebookRag } from "./rag/rag";
 import { convertInlineImagesToInlays } from "./inlineInlays";
 import { syncGameStateFromServer, updateGameStateFromMessage } from "./gameStateSync";
 import { ensureGenerationMessageTarget } from "./generationMessageTarget";
-import { tryServerHypaMerge } from "./hypaSync";
+import { tryServerMemoryMerge } from "./memorySync";
 import type { RagResult, RulebookMetadata } from "./rag/types";
 const processLog = (..._args: unknown[]) => {};
 
@@ -260,7 +261,7 @@ export async function sendChat(chatProcessIndex = -1,arg:{
     }
     let lastSnapshotSyncAlertAt = 0
     let snapshotSyncAuthRetryInFlight = false
-    let attemptedServerHypaMerge = false
+    let attemptedServerMemoryMerge = false
 
     function extractHttpStatusFromError(error: unknown): number | null {
         const message = `${(error as Error | undefined)?.message ?? error ?? ''}`
@@ -296,30 +297,30 @@ export async function sendChat(chatProcessIndex = -1,arg:{
         const activeChat = activeChar?.chats?.[selectedChatIndex()];
         if (!activeChar?.chaId || !activeChat?.id) return;
         if (
-            !attemptedServerHypaMerge
-            && DBState.db.hypaV3 === true
+            !attemptedServerMemoryMerge
+            && getDbMemoryEnabled(DBState.db) === true
             && activeChar?.supaMemory === true
         ) {
-            const mergeResult = await tryServerHypaMerge({
-                attempted: attemptedServerHypaMerge,
+            const mergeResult = await tryServerMemoryMerge({
+                attempted: attemptedServerMemoryMerge,
                 enabled: true,
                 charId: activeChar.chaId,
                 chatId: activeChat.id,
-                localData: activeChat.hypaV3Data,
+                localData: getChatMemoryData(activeChat),
                 fetchSnapshot: fetchServerStateSnapshot,
             })
-            attemptedServerHypaMerge = mergeResult.attempted
+            attemptedServerMemoryMerge = mergeResult.attempted
             if (mergeResult.error) {
-                processLog('[Sync] Failed to fetch server HypaV3 snapshot before save:', mergeResult.error)
+                processLog('[Sync] Failed to fetch server memory snapshot before save:', mergeResult.error)
             }
             if (mergeResult.merged && mergeResult.data) {
                 try {
                     const cloned = JSON.parse(JSON.stringify(mergeResult.data))
-                    activeChat.hypaV3Data = cloned
-                    DBState.db.characters[selectedChar].chats[selectedChatIndex()].hypaV3Data = cloned
+                    setChatMemoryData(activeChat, cloned)
+                    setChatMemoryData(DBState.db.characters[selectedChar].chats[selectedChatIndex()], cloned)
                     DBState.db.characters[selectedChar].chats = [...DBState.db.characters[selectedChar].chats]
                 } catch (mergeError) {
-                    processLog('[Sync] Failed to apply merged server HypaV3 snapshot:', mergeError)
+                    processLog('[Sync] Failed to apply merged server memory snapshot:', mergeError)
                 }
             }
         }
@@ -1113,17 +1114,17 @@ export async function sendChat(chatProcessIndex = -1,arg:{
         currentTokens += await tokenizer.tokenizeChat(chat)
     }
     
-    if(!isNodeServer && nowChatroom.supaMemory && DBState.db.hypaV3){
+    if(!isNodeServer && nowChatroom.supaMemory && getDbMemoryEnabled(DBState.db)){
         stageTimings.stage1Duration = Date.now() - stageTimings.stage1Start
         chatProcessStage.set(2)
         stageTimings.stage2Start = Date.now()
-        processLog("Current chat's hypaV3 Data: ", $state.snapshot(currentChat.hypaV3Data))
-        const sp = await hypaMemoryV3(chats, currentTokens, maxContextTokens, currentChat, nowChatroom, tokenizer)
+        processLog("Current chat's memory data: ", $state.snapshot(getChatMemoryData(currentChat)))
+        const sp = await buildMemoryContext(chats, currentTokens, maxContextTokens, currentChat, nowChatroom, tokenizer)
         if(sp.error){
             // Save new summary
             if (sp.memory) {
-                currentChat.hypaV3Data = sp.memory
-                DBState.db.characters[selectedChar].chats[selectedChatIndex()].hypaV3Data = currentChat.hypaV3Data
+                setChatMemoryData(currentChat, sp.memory)
+                setChatMemoryData(DBState.db.characters[selectedChar].chats[selectedChatIndex()], sp.memory)
                 DBState.db.characters[selectedChar].chats = [...DBState.db.characters[selectedChar].chats]
             }
             processLog(sp)
@@ -1132,12 +1133,15 @@ export async function sendChat(chatProcessIndex = -1,arg:{
         }
         chats = sp.chats
         currentTokens = sp.currentTokens
-        currentChat.hypaV3Data = sp.memory ?? currentChat.hypaV3Data
-        DBState.db.characters[selectedChar].chats[selectedChatIndex()].hypaV3Data = currentChat.hypaV3Data
+        setChatMemoryData(currentChat, sp.memory ?? getChatMemoryData(currentChat))
+        setChatMemoryData(
+            DBState.db.characters[selectedChar].chats[selectedChatIndex()],
+            getChatMemoryData(currentChat)
+        )
         DBState.db.characters[selectedChar].chats = [...DBState.db.characters[selectedChar].chats]
 
         currentChat = DBState.db.characters[selectedChar].chats[selectedChatIndex()];
-        processLog("[Expected to be updated] chat's HypaV3Data: ", $state.snapshot(currentChat.hypaV3Data))
+        processLog("[Expected to be updated] chat's memoryData: ", $state.snapshot(getChatMemoryData(currentChat)))
         stageTimings.stage2Duration = Date.now() - stageTimings.stage2Start
         chatProcessStage.set(1)
     }

@@ -34,7 +34,7 @@ The Node.js server owns all LLM execution, prompt assembly, RAG, and memory. The
 │       │   ├── index.svelte.ts # Chat orchestration (large — active split target)
 │       │   ├── request/        # LLM request handlers (openAI.ts, request.ts, etc.)
 │       │   ├── rag/            # Client RAG delegates (server ingest/search, progress handling)
-│       │   ├── memory/         # HypaV3 memory client
+│       │   ├── memory/         # Memory client
 │       │   ├── mcp/            # MCP integration
 │       │   └── prompt.ts       # Prompt assembly types
 │       ├── storage/            # Storage layer (database.svelte.ts, serverDb.ts, etc.)
@@ -50,7 +50,7 @@ The Node.js server owns all LLM execution, prompt assembly, RAG, and memory. The
 │   │   ├── storage_routes.cjs  # /data/settings, /data/characters, /data/chats
 │   │   ├── rag_routes.cjs      # /data/rag/* + /data/embeddings + /data/transformers/*
 │   │   ├── content_routes.cjs  # /data/assets, /data/prompts, /data/themes, etc.
-│   │   ├── memory_routes.cjs   # /data/memory/hypav3/*
+│   │   ├── memory_routes.cjs   # /data/memory/*
 │   │   ├── proxy_routes.cjs    # /data/proxy
 │   │   ├── legacy_routes.cjs   # /data/auth/*, /data/storage/* (backward compat)
 │   │   ├── system_routes.cjs   # /, retired /api/* (410)
@@ -59,7 +59,7 @@ The Node.js server owns all LLM execution, prompt assembly, RAG, and memory. The
 │       ├── engine.cjs          # Provider dispatch
 │       ├── prompt.cjs          # Prompt assembly
 │       ├── lorebook.cjs        # Lorebook injection
-│       ├── memory.cjs          # HypaV3 memory
+│       ├── memory.cjs          # Memory runtime
 │       ├── audit.cjs           # Durable JSONL execution log
 │       ├── [provider].cjs      # One file per LLM provider (openai, anthropic, etc.)
 │       └── ...
@@ -83,7 +83,7 @@ The Node.js server owns all LLM execution, prompt assembly, RAG, and memory. The
 
 `AlertComp` is now a thin modal router in [`src/lib/Others/AlertComp.svelte`](/Users/andrewbostan/Documents/RisuAII/src/lib/Others/AlertComp.svelte). Its alert-mode implementations live under [`src/lib/Others/AlertComp/`](/Users/andrewbostan/Documents/RisuAII/src/lib/Others/AlertComp) as focused subcomponents and helpers.
 
-`HypaV3Modal.svelte` is now a thin shell around [`src/lib/Others/HypaV3Modal/useHypaV3Modal.svelte.ts`](/Users/andrewbostan/Documents/RisuAII/src/lib/Others/HypaV3Modal/useHypaV3Modal.svelte.ts) and focused helper modules in [`src/lib/Others/HypaV3Modal/`](/Users/andrewbostan/Documents/RisuAII/src/lib/Others/HypaV3Modal). Keep new memory-modal behavior in those split files so staged changes continue to satisfy the 500 LOC gate.
+[`MemoryPanel.svelte`](/Users/andrewbostan/Documents/RisuAII/src/lib/Others/MemoryPanel.svelte) is backed by [`src/lib/Others/MemoryModal/useMemoryModal.svelte.ts`](/Users/andrewbostan/Documents/RisuAII/src/lib/Others/MemoryModal/useMemoryModal.svelte.ts) and focused helper modules in [`src/lib/Others/MemoryModal/`](/Users/andrewbostan/Documents/RisuAII/src/lib/Others/MemoryModal). Keep new memory-modal behavior in those split files so staged changes continue to satisfy the 500 LOC gate.
 
 ---
 
@@ -173,7 +173,7 @@ pnpm build
 
 For server-first mode locally: run both `pnpm dev` and `pnpm run runserver`. The client at `localhost:5173` proxies API calls to the server at `localhost:6001`.
 
-Memory sidebar note: in embedded right-sidebar Memory mode, manual HypaV3 summarize (`Start/End + Summarize`) always targets the currently active chat (`chatPage`).
+Memory sidebar note: in embedded right-sidebar Memory mode, manual summarize (`Start/End + Summarize`) always targets the currently active chat (`chatPage`).
 
 ### Git Hook Setup (one-time per clone)
 
@@ -331,7 +331,7 @@ Covers the mandatory server-feature test requirement (Section 4 — unit tests +
 ## 8. Current State and Active Work
 
 ### What is complete
-- **Server-first architecture**: Node.js server handles all LLM execution (15+ providers), prompt assembly, RAG ingestion and search, HypaV3 memory summarization
+- **Server-first architecture**: Node.js server handles all LLM execution (15+ providers), prompt assembly, RAG ingestion and search, memory summarization
 - **Template-controlled server RAG**: server builds `<Rules Context>` and injects it only into `rulebookRag` prompt-template slots; if no slot exists, prompt trace records `no_template_slot` instead of hard-prepending
 - **Server decomposition**: `server.cjs` decomposed from 5k+ LOC into 40+ focused modules using DI pattern
 - **Client gating**: `isNodeServer` is forced `true` for server-only runtime
@@ -413,10 +413,10 @@ pnpm run smoke:server:auth
 
 | Script / command | What it tests | Writes data? | Needs clean root? |
 |-----------------|--------------|-------------|-------------------|
-| `node scripts/test-memory-unit.cjs` | HypaV3 memory pipeline — pure functions, no server | No | No |
+| `node scripts/test-memory-unit.cjs` | Memory pipeline — pure functions, no server | No | No |
 | `smoke:server:safe` | Storage CRUD, LLM phase A dispatch, memory API | Yes (`RISU_STORAGE_TEST_ALLOW_WRITE=1`) | No |
 | `smoke:server:auth` | Password set / change / lockout flow | Yes (sets a server password) | **Yes** |
-| `smoke:memory:api` | HypaV3 memory trace endpoints | Yes | No |
+| `smoke:memory:api` | Memory trace endpoints | Yes | No |
 | `smoke:migration:api` | Migration smoke pack | Yes | No |
 | `smoke:app:auto` | Full app smoke (automated) | Read-heavy | No |
 

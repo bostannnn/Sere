@@ -4,7 +4,7 @@ import { mount, tick, unmount } from "svelte";
 
 vi.mock(import("src/lang"), () => ({
   language: {
-    hypaV3Modal: {
+    memoryModal: {
       titleLabel: "Hypa V3",
     },
   },
@@ -13,14 +13,14 @@ vi.mock(import("src/lang"), () => ({
 vi.mock(import("src/ts/stores.svelte"), async () => {
   const { writable } = await import("svelte/store");
   return {
-    hypaV3ModalOpen: writable(false),
+    memoryModalOpen: writable(false),
     settingsOpen: writable(false),
     SettingsMenuIndex: writable(-1),
   };
 });
 
-import ModalHeader from "src/lib/Others/HypaV3Modal/modal-header.svelte";
-import { hypaV3ModalOpen, settingsOpen, SettingsMenuIndex } from "src/ts/stores.svelte";
+import ModalHeader from "src/lib/Others/MemoryModal/modal-header.svelte";
+import { memoryModalOpen, settingsOpen, SettingsMenuIndex } from "src/ts/stores.svelte";
 
 let mountedApps: Array<Record<string, unknown>> = [];
 
@@ -40,7 +40,7 @@ describe("hypa modal runtime smoke", () => {
     document.body.innerHTML = "";
     settingsOpen.set(false);
     SettingsMenuIndex.set(-1);
-    hypaV3ModalOpen.set(true);
+    memoryModalOpen.set(true);
     mountedApps = [];
   });
 
@@ -78,12 +78,12 @@ describe("hypa modal runtime smoke", () => {
     await flushUi();
     expect(get(settingsOpen)).toBe(true);
     expect(get(SettingsMenuIndex)).toBe(2);
-    expect(get(hypaV3ModalOpen)).toBe(false);
+    expect(get(memoryModalOpen)).toBe(false);
 
-    hypaV3ModalOpen.set(true);
+    memoryModalOpen.set(true);
     actionButtons[actionButtons.length - 1]?.click();
     await flushUi();
-    expect(get(hypaV3ModalOpen)).toBe(false);
+    expect(get(memoryModalOpen)).toBe(false);
   });
 
   it("keeps dropdown action surface on shared primitives", async () => {

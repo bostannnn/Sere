@@ -22,7 +22,7 @@ vi.mock(import("src/lang"), () => {
     chatList: "Chat list",
     autoMode: "Auto mode",
     ttsStop: "Stop TTS",
-    hypaMemoryV3Modal: "Hypa memory",
+    memoryModal: "Hypa memory",
     branchedText: "Branched from {}",
     noMessage: "No message",
     copy: "Copy",
@@ -63,7 +63,7 @@ vi.mock(import("src/ts/stores.svelte"), async () => {
     selectedCharID: writable(0),
     SizeStore: writable({ w: 1280, h: 900 }),
     createSimpleCharacter: (character: unknown) => character,
-    hypaV3ModalOpen: writable(false),
+    memoryModalOpen: writable(false),
     ScrollToMessageStore: { value: -1 },
     comfyProgressStore: writable({
       active: false,

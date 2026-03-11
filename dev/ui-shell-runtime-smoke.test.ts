@@ -21,7 +21,7 @@ vi.mock(import("src/ts/stores.svelte"), async () => {
   const selectedCharID = writable(-1);
   const uiShellV2Enabled = writable(true);
   const openRulebookManager = writable(false);
-  const hypaV3ModalOpen = writable(false);
+  const memoryModalOpen = writable(false);
   const hypaV3ProgressStore = writable({
     open: false,
     miniMsg: "",
@@ -76,7 +76,7 @@ vi.mock(import("src/ts/stores.svelte"), async () => {
     uiShellV2Enabled,
     appRouteStore,
     openRulebookManager,
-    hypaV3ModalOpen,
+    memoryModalOpen,
     hypaV3ProgressStore,
     selIdState,
   };
@@ -115,10 +115,10 @@ vi.mock(import("src/lib/Mobile/MobileFooter.svelte"), async () => ({
 vi.mock(import("src/lib/Setting/Pages/CustomGUISettingMenu.svelte"), async () => ({
   default: (await import("./test-stubs/SimplePanelStub.svelte")).default,
 }));
-vi.mock(import("src/lib/Others/HypaV3Modal.svelte"), async () => ({
+vi.mock(import("src/lib/Others/MemoryPanel.svelte"), async () => ({
   default: (await import("./test-stubs/SimplePanelStub.svelte")).default,
 }));
-vi.mock(import("src/lib/Others/HypaV3Progress.svelte"), async () => ({
+vi.mock(import("src/lib/Others/MemoryProgress.svelte"), async () => ({
   default: (await import("./test-stubs/SimplePanelStub.svelte")).default,
 }));
 vi.mock(import("src/lib/UI/PopupList.svelte"), async () => ({
@@ -168,7 +168,7 @@ import {
   SettingsMenuIndex,
   appRouteStore,
   bookmarkListOpen,
-  hypaV3ModalOpen,
+  memoryModalOpen,
   openPersonaList,
   openPresetList,
   openRulebookManager,
@@ -227,7 +227,7 @@ describe("ui shell runtime smoke", () => {
     bookmarkListOpen.set(false);
     popupStore.children = null;
     popupStore.openId = 0;
-    hypaV3ModalOpen.set(false);
+    memoryModalOpen.set(false);
     DBState.db.characters = [
       {
         chaId: "char-1",
@@ -752,7 +752,7 @@ describe("ui shell runtime smoke", () => {
     openPresetList.set(true);
     openPersonaList.set(true);
     bookmarkListOpen.set(true);
-    hypaV3ModalOpen.set(true);
+    memoryModalOpen.set(true);
 
     settingsOpen.set(true);
     selectedCharID.set(-1);
@@ -763,7 +763,7 @@ describe("ui shell runtime smoke", () => {
     expect(get(openPresetList)).toBe(false);
     expect(get(openPersonaList)).toBe(false);
     expect(get(bookmarkListOpen)).toBe(false);
-    expect(get(hypaV3ModalOpen)).toBe(true);
+    expect(get(memoryModalOpen)).toBe(true);
 
     settingsOpen.set(false);
     openRulebookManager.set(true);
@@ -857,11 +857,11 @@ describe("ui shell runtime smoke", () => {
     await flushUi();
     expect(get(bookmarkListOpen)).toBe(false);
 
-    hypaV3ModalOpen.set(true);
+    memoryModalOpen.set(true);
     await flushUi();
     window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
     await flushUi();
-    expect(get(hypaV3ModalOpen)).toBe(true);
+    expect(get(memoryModalOpen)).toBe(true);
   });
 
   it("closes right sidebar on Escape", async () => {

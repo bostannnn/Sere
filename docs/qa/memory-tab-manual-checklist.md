@@ -7,7 +7,7 @@ Commit: __________
 Build/Env: __________
 
 ## Scope
-This checklist is for the right-sidebar Memory redesign and HypaV3 manual summarize correctness:
+This checklist is for the right-sidebar Memory redesign and manual summarize correctness:
 - Memory as third sidebar tab (`Chat`, `Character`, `Memory`)
 - Memory internal subtabs (`Summary`, `Settings`, `Log`)
 - Per-character prompt override
@@ -34,7 +34,7 @@ This checklist is for the right-sidebar Memory redesign and HypaV3 manual summar
 - [ ] `TC-02` Mobile top tabs show exactly 3 tabs and all 3 have equal width.
 - [ ] `TC-03` No horizontal scroll appears in Memory panel on desktop or mobile.
 - [ ] `TC-04` Memory panel opens without clipping/overlap artifacts.
-- [ ] `TC-05` Memory panel does not show legacy `HypaV3` title header text.
+- [ ] `TC-05` Memory panel does not show legacy `Hypa` title/header text.
 
 ## Batch 2: Memory UI Structure (Current Design)
 - [ ] `TC-06` Inside Memory, second-level tabs are `Summary`, `Settings`, `Log`.

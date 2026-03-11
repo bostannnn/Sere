@@ -10,7 +10,7 @@ export const languageEnglish = {
         description: "Character Description",
         personaPrompt: "Persona Prompt",
         plain: "Plain Prompt",
-        memory: "Supa/HypaMemory",
+        memory: "Memory",
         postEverything: "End-Injected Prompts",
     },
     errors: {
@@ -126,7 +126,7 @@ export const languageEnglish = {
             "This option is used to set the number of responses to generate on support models. other then first response will be act as cached reroll. this can reduce the cost of the model, but it can also increase the cost if you use it without reroll.",
         requestretrys: "This option is used to set the number of request retrys when request fails.",
         emotionPrompt: "This option is used to set the prompt that is used to detect emotion. if it is blank, it will use the default prompt.",
-        removePunctuationHypa: "If enabled, it will remove punctuation before executing HypaMemory.",
+        removePunctuationHypa: "If enabled, it will remove punctuation before executing memory processing.",
         additionalParams:
             'Additional parameters that would be added to the request body. if you want to exclude some parameters, you can put `{{none}}` to the value. if you want to add a header instead of body, you can put `header::` in front of the key like `header::Authorization`. if you want value as json, you can put `json::` in front of the value like `json::{"key":"value"}`. otherwise, type of the value would be determined automatically.',
         antiClaudeOverload:
@@ -230,7 +230,7 @@ export const languageEnglish = {
         hideAllImagesDesc: "Hides bot icons, bot image assets, and RisuRealm cover images.",
         embedding:
             "Embedding model is used for similarity search across multiple features:\n\n" +
-            "- **Long Term Memory**: HypaV2, HypaV3, Hanurai Memory, and SupaMemory (with HypaMemory enabled)\n" +
+            "- **Long Term Memory**: HypaV2, Memory, Hanurai Memory, and SupaMemory (with Memory enabled)\n" +
             "- **Additional Text**: Matching character additional info based on context\n" +
             "- **Dynamic Assets**: Finding similar asset names when exact match is not found\n" +
             "- **Emotion Images**: When Emotion method is set to 'embedding'\n" +
@@ -912,8 +912,8 @@ export const languageEnglish = {
     promptTemplate: "Prompt Template",
     customInnerFormat: "Custom Inner Format",
     innerFormat: "Inner Format",
-    HypaMemory: "HypaMemory",
-    ToggleHypaMemory: "Toggle HypaMemory",
+    HypaMemory: "Memory",
+    ToggleMemory: "Toggle Memory",
     resetPromptTemplateConfirm: "Do you really want to reset prompt template?",
     emotionMethod: "Emotion Method",
     continueResponse: "Continue Response",
@@ -1177,7 +1177,6 @@ export const languageEnglish = {
     seperateParameters: "Separate Parameters",
     seperateParametersEnabled: "Enable Separate Parameters",
     summarizationPrompt: "Summarization Prompt",
-    reSummarizationPrompt: "Re-Summarizaion Prompt",
     translatorPrompt: "Translation Prompt",
     translateBeforeHTMLFormatting: "Translate Before HTML Formatting",
     retranslate: "Retranslate",
@@ -1225,30 +1224,22 @@ export const languageEnglish = {
     delimiter: "Delimiter",
     deleteCount: "Delete Count",
     triggerEffRunAxLLM: "Run Auxiliary Model",
-    hypaV3Settings: {
-        descriptionLabel: "HypaMemory V3 is a long-term memory system that uses both summarization and vector search.",
+    memorySettings: {
+        descriptionLabel: "Memory is a long-term memory system that uses both summarization and vector search.",
         supaMemoryPromptPlaceHolder: "Leave it blank to use default",
         maxMemoryTokensRatioLabel: "Max Memory Tokens Ratio (Estimated)",
         maxMemoryTokensRatioError: "Unable to calculate Max Memory Tokens Ratio",
         memoryTokensRatioLabel: "Memory Tokens Ratio",
-        extraSummarizationRatioLabel: "Extra Summarization Ratio",
-        maxChatsPerSummaryLabel: "Max Messages Per Summary",
-        recentMemoryRatioLabel: "Recent Memory Ratio",
-        similarMemoryRatioLabel: "Similar Memory Ratio",
-        randomMemoryRatioLabel: "Random Memory Ratio",
-        enableSimilarityCorrectionLabel: "Enable Similarity Correction",
-        preserveOrphanedMemoryLabel: "Preserve Orphaned Memory",
-        applyRegexScriptWhenRerollingLabel: "Apply Regex Script When Rerolling",
         doNotSummarizeUserMessageLabel: "Do Not Summarize User Message",
     },
-    hypaV3Modal: {
-        titleLabel: "HypaV3",
-        resetConfirmMessage: "This action cannot be undone. Do you want to reset HypaV3 data?",
-        resetConfirmSecondMessage: "This action is irreversible. Do you really, really want to reset HypaV3 data?",
-        convertLabel: "No summaries yet, but you may convert HypaV2 data to V3.",
-        convertButton: "Convert to V3",
-        convertSuccessMessage: "Successfully converted HypaV2 data to V3",
-        convertErrorMessage: "Failed to convert HypaV2 data to V3: {0}",
+    memoryModal: {
+        titleLabel: "Memory",
+        resetConfirmMessage: "This action cannot be undone. Do you want to reset memory data?",
+        resetConfirmSecondMessage: "This action is irreversible. Do you really, really want to reset memory data?",
+        convertLabel: "No summaries yet, but you may convert HypaV2 data to Memory.",
+        convertButton: "Convert to Memory",
+        convertSuccessMessage: "Successfully converted HypaV2 data to Memory",
+        convertErrorMessage: "Failed to convert HypaV2 data to Memory: {0}",
         noSummariesLabel: "No summaries yet",
         searchPlaceholder: "Enter #N, ID, or query",
         summaryNumberLabel: "Summary #{0}",
@@ -1266,15 +1257,12 @@ export const languageEnglish = {
         connectedMessageTranslationLabel: "Translation",
         nextSummarizationFirstMessageLabel: "First Message",
         nextSummarizationNoMessageIdLabel: "No Message ID",
-        nextSummarizationLabel: "HypaV3 will summarize [{0}]",
+        nextSummarizationLabel: "Memory will summarize [{0}]",
         nextSummarizationNoMessagesFoundLabel: "WARN: No messages found",
         nextSummarizationLoadingError: "Error loading next summarization target: {0}",
-        summarizationConditionLabel: "Tip: HypaV3 begins summarization when input tokens exceed the maximum context size.",
+        summarizationConditionLabel: "Tip: Memory begins summarization when input tokens exceed the maximum context size.",
         emptySelectedFirstMessageLabel: "WARN: Selected first message is empty",
         unclassified: "Unclassified",
-        reSummarize: "Re-summarize",
-        reSummarizing: "Re-summarizing...",
-        reSummarizeResult: "Re-summarization result",
         retry: "Retry",
         translate: "Translate",
         tag: "Tag",
@@ -1356,7 +1344,7 @@ export const languageEnglish = {
     igpPrompt: "IGP Prompt",
     useTokenizerCaching: "Tokenizer Caching",
     hypaMemoryV2Modal: "Hypa V2 Modal",
-    hypaMemoryV3Modal: "Hypa V3 Modal",
+    buildMemoryContextModal: "Memory Modal",
     memoryTab: "Memory",
     promptInfoInsideChat: "Add Prompt Info to Chat",
     promptTextInfoInsideChat: "Add Prompt Text to Chat",

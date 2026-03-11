@@ -127,7 +127,7 @@ function registerLLMRoutes(arg = {}) {
                     await appendMemoryTraceAudit({
                         req,
                         reqId,
-                        endpoint: toStringOrEmpty(trace?.endpoint) || 'hypav3_periodic_summarize',
+                        endpoint: toStringOrEmpty(trace?.endpoint) || 'memory_periodic_summarize',
                         mode: 'memory',
                         provider: trace?.provider || null,
                         characterId: toStringOrEmpty(req.body?.characterId) || null,
@@ -141,8 +141,8 @@ function registerLLMRoutes(arg = {}) {
                             characterId: toStringOrEmpty(req.body?.characterId) || null,
                             chatId: toStringOrEmpty(req.body?.chatId) || null,
                         },
-                        path: '/data/memory/hypav3/periodic-summarize/trace',
-                        traceTitle: 'HypaV3 Periodic Summarization',
+                        path: '/data/memory/periodic-summarize/trace',
+                        traceTitle: 'Memory Periodic Summarization',
                         error: trace?.error || null,
                     });
                 },
@@ -205,7 +205,7 @@ function registerLLMRoutes(arg = {}) {
                     await appendMemoryTraceAudit({
                         req,
                         reqId,
-                        endpoint: toStringOrEmpty(trace?.endpoint) || 'hypav3_periodic_summarize',
+                        endpoint: toStringOrEmpty(trace?.endpoint) || 'memory_periodic_summarize',
                         mode: 'memory',
                         provider: trace?.provider || null,
                         characterId: toStringOrEmpty(req.body?.characterId) || null,
@@ -219,8 +219,8 @@ function registerLLMRoutes(arg = {}) {
                             characterId: toStringOrEmpty(req.body?.characterId) || null,
                             chatId: toStringOrEmpty(req.body?.chatId) || null,
                         },
-                        path: '/data/memory/hypav3/periodic-summarize/trace',
-                        traceTitle: 'HypaV3 Periodic Summarization',
+                        path: '/data/memory/periodic-summarize/trace',
+                        traceTitle: 'Memory Periodic Summarization',
                         error: trace?.error || null,
                     });
                 },

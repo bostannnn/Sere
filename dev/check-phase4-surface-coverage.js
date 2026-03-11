@@ -131,7 +131,7 @@ const PHASE4_UNCOVERED_MATRIX = [
     ],
   },
   {
-    file: "src/lib/Others/HypaV3Progress.svelte",
+    file: "src/lib/Others/MemoryProgress.svelte",
     classification: "migrate",
     owner: "ui-shell-contract",
     rationale: "Progress controls enforce explicit icon/button semantics with deterministic labels.",
@@ -142,7 +142,7 @@ const PHASE4_UNCOVERED_MATRIX = [
     ],
   },
   {
-    file: "src/lib/Others/HypaV3Modal/modal-footer.svelte",
+    file: "src/lib/Others/MemoryModal/modal-footer.svelte",
     classification: "migrate",
     owner: "ui-shell-contract",
     rationale: "Hypa modal footer keeps control-field semantics for summarization target preview and explicit error-state typography.",

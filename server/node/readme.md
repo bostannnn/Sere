@@ -102,10 +102,10 @@ RISU_STORAGE_TEST_ALLOW_WRITE=1 RISU_DATA_TEST_URL=http://localhost:6001 node sc
 # LLM migration phase A
 RISU_DATA_TEST_URL=http://localhost:6001 node scripts/test-server-llm-phaseA.js
 
-# HypaV3 memory pipeline (unit — no server needed)
+# Memory pipeline (unit — no server needed)
 node scripts/test-memory-unit.cjs
 
-# HypaV3 memory pipeline (integration — requires server)
+# Memory pipeline (integration — requires server)
 RISU_STORAGE_TEST_ALLOW_WRITE=1 RISU_DATA_TEST_URL=http://localhost:6001 node scripts/test-server-memory.js
 
 # Auth flow
@@ -118,7 +118,7 @@ RISU_STORAGE_TEST_ALLOW_WRITE=1 RISU_DATA_TEST_URL=http://localhost:6001 node de
 **Or via npm scripts (server must already be running on :6001):**
 
 ```bash
-pnpm run smoke:memory:api     # HypaV3 memory integration tests
+pnpm run smoke:memory:api     # Memory integration tests
 pnpm run smoke:server:auth    # Auth flow
 pnpm run smoke:server:safe    # Storage + LLM + memory (combined)
 ```

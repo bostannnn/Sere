@@ -13,6 +13,7 @@ import { PngChunk } from "./pngChunk"
 import type { OnnxModelFiles } from "./process/transformers"
 import { CharXImporter, CharXSkippableChecker, CharXWriter } from "./process/processzip"
 import { exportModule, readModule, type RisuModule } from "./process/modules"
+import { getCharacterMemoryPromptOverride } from "./process/memory/storage";
 const characterCardsLog = (..._args: unknown[]) => {};
 
 
@@ -582,11 +583,9 @@ function convertOffSpecCards(charaData:OldTavernChar|CharacterCardV2Risu, imgp:s
         loreExt: loreExt,
         loreSettings: loresettings,
         chatFolders: [],
-        hypaV3PromptOverride: {
+        memoryPromptOverride: {
             summarizationPrompt: '',
-            reSummarizationPrompt: '',
         },
-        
     }
 }
 
@@ -913,12 +912,9 @@ async function importCharacterCardSpec(card:CharacterCardV2Risu|CharacterCardV3,
         lowLevelAccess: risuext?.lowLevelAccess ?? false,
         defaultVariables: data?.extensions?.risuai?.defaultVariables ?? '',
         chatFolders: [],
-        hypaV3PromptOverride: {
-            summarizationPrompt: typeof data?.extensions?.risuai?.hypaV3PromptOverride?.summarizationPrompt === 'string'
-                ? data.extensions.risuai.hypaV3PromptOverride.summarizationPrompt
-                : '',
-            reSummarizationPrompt: typeof data?.extensions?.risuai?.hypaV3PromptOverride?.reSummarizationPrompt === 'string'
-                ? data.extensions.risuai.hypaV3PromptOverride.reSummarizationPrompt
+        memoryPromptOverride: {
+            summarizationPrompt: typeof (data?.extensions?.risuai?.memoryPromptOverride ?? data?.extensions?.risuai?.hypaV3PromptOverride)?.summarizationPrompt === 'string'
+                ? (data.extensions.risuai.memoryPromptOverride ?? data.extensions.risuai.hypaV3PromptOverride).summarizationPrompt
                 : '',
         },
         prebuiltAssetCommand: data?.extensions?.risuai?.prebuiltAssetCommand ?? '',
@@ -1128,12 +1124,14 @@ function createBaseV2(char:character) {
                     triggerscript: char.triggerscript,
                     additionalText: char.additionalText,
                     randomAltFirstMessageOnNewChat: char.randomAltFirstMessageOnNewChat ?? false,
-                    hypaV3PromptOverride: {
-                        summarizationPrompt: typeof char.hypaV3PromptOverride?.summarizationPrompt === 'string'
-                            ? char.hypaV3PromptOverride.summarizationPrompt
+                    memoryPromptOverride: {
+                        summarizationPrompt: typeof getCharacterMemoryPromptOverride(char)?.summarizationPrompt === 'string'
+                            ? getCharacterMemoryPromptOverride(char)?.summarizationPrompt
                             : '',
-                        reSummarizationPrompt: typeof char.hypaV3PromptOverride?.reSummarizationPrompt === 'string'
-                            ? char.hypaV3PromptOverride.reSummarizationPrompt
+                    },
+                    hypaV3PromptOverride: {
+                        summarizationPrompt: typeof getCharacterMemoryPromptOverride(char)?.summarizationPrompt === 'string'
+                            ? getCharacterMemoryPromptOverride(char)?.summarizationPrompt
                             : '',
                     },
                     virtualscript: '', //removed dude to security issue
@@ -1558,12 +1556,14 @@ export function createBaseV3(char:character){
                     triggerscript: char.triggerscript,
                     additionalText: char.additionalText,
                     randomAltFirstMessageOnNewChat: char.randomAltFirstMessageOnNewChat ?? false,
-                    hypaV3PromptOverride: {
-                        summarizationPrompt: typeof char.hypaV3PromptOverride?.summarizationPrompt === 'string'
-                            ? char.hypaV3PromptOverride.summarizationPrompt
+                    memoryPromptOverride: {
+                        summarizationPrompt: typeof getCharacterMemoryPromptOverride(char)?.summarizationPrompt === 'string'
+                            ? getCharacterMemoryPromptOverride(char)?.summarizationPrompt
                             : '',
-                        reSummarizationPrompt: typeof char.hypaV3PromptOverride?.reSummarizationPrompt === 'string'
-                            ? char.hypaV3PromptOverride.reSummarizationPrompt
+                    },
+                    hypaV3PromptOverride: {
+                        summarizationPrompt: typeof getCharacterMemoryPromptOverride(char)?.summarizationPrompt === 'string'
+                            ? getCharacterMemoryPromptOverride(char)?.summarizationPrompt
                             : '',
                     },
                     virtualscript: '', //removed dude to security issue
@@ -1662,9 +1662,11 @@ type CharacterCardV2Risu = {
                 private?:boolean
                 additionalText?:string
                 randomAltFirstMessageOnNewChat?:boolean
+                memoryPromptOverride?:{
+                    summarizationPrompt?: string
+                }
                 hypaV3PromptOverride?:{
                     summarizationPrompt?: string
-                    reSummarizationPrompt?: string
                 }
                 virtualscript?:string
                 largePortrait?:boolean

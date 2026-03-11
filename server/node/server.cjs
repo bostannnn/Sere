@@ -22,9 +22,8 @@ const {
 } = require('./llm/index.cjs');
 const { registerLLMRoutes } = require('./routes/llm_routes.cjs');
 const { registerMemoryRoutes } = require('./routes/memory_routes.cjs');
-const { registerHypaV3TraceRoutes } = require('./routes/hypav3_trace_routes.cjs');
-const { registerHypaV3ManualRoutes } = require('./routes/hypav3_manual_routes.cjs');
-const { registerHypaV3ResummaryRoutes } = require('./routes/hypav3_resummary_routes.cjs');
+const { registerMemoryTraceRoutes } = require('./memory/trace_routes.cjs');
+const { registerMemoryManualRoutes } = require('./memory/manual_routes.cjs');
 const { registerRagRoutes } = require('./routes/rag_routes.cjs');
 const { registerContentRoutes } = require('./routes/content_routes.cjs');
 const { registerAuthRoutes } = require('./routes/auth_routes.cjs');
@@ -40,17 +39,17 @@ const { normalizeProvider } = require('./llm/constants.cjs');
 const { listOpenRouterModels } = require('./llm/openrouter.cjs');
 const {
     buildServerMemoryMessages,
-    planPeriodicHypaV3Summarization,
-    applyPeriodicHypaV3Summary,
+    planPeriodicMemorySummarization,
+    applyPeriodicMemorySummary,
     generateSummaryEmbedding,
-    resolveHypaV3Settings,
+    resolveMemorySettings,
     cleanSummaryOutput,
-} = require('./llm/memory.cjs');
+} = require('./memory/memory.cjs');
 const {
     normalizePromptOverride,
     applyPromptOverride,
     resolveManualPromptSource,
-} = require('./llm/hypav3_prompt_override.cjs');
+} = require('./memory/prompt_override.cjs');
 const promptPipeline = require('./llm/prompt.cjs');
 const { extractTextFromMessageContent } = require('./llm/tokenizer.cjs');
 const { stripThoughtBlocks } = require('./llm/scripts.cjs');
@@ -58,7 +57,7 @@ const { createAuditPayloadBuilders } = require('./llm/audit_payloads.cjs');
 const { createExecutionHelpers } = require('./llm/execution_helpers.cjs');
 const { createGenerateHelpers } = require('./llm/generate_helpers.cjs');
 const { createExecuteRouteHandler } = require('./llm/execute_route_handler.cjs');
-const { createHypaHelpers } = require('./llm/hypa_helpers.cjs');
+const { createMemoryHelpers } = require('./memory/helpers.cjs');
 const { createTraceAuditors } = require('./llm/trace_audit.cjs');
 const { createServerRuntimeHelpers } = require('./server_runtime.cjs');
 const { createServerDataHelpers } = require('./server_data_helpers.cjs');
@@ -259,17 +258,16 @@ installDataApiMiddleware();
 
 const {
     buildExecutionAuditRequest,
-    buildHypaV3AuditRequestPayload,
-    buildHypaV3AuditResponsePayload,
+    buildMemoryAuditRequestPayload,
+    buildMemoryAuditResponsePayload,
     buildMemoryTraceResponsePayload,
-    resolveHypaSummaryProviderModel,
-    sanitizeHypaSummarizationContent,
-    convertStoredMessageForHypaSummary,
-    buildHypaSummarizationPromptMessages,
-    normalizeHypaV3DataForEdit,
+    resolveMemorySummaryProviderModel,
+    convertStoredMessageForMemorySummary,
+    buildMemorySummarizationPromptMessages,
+    normalizeMemoryDataForEdit,
     persistChatDataToRaw,
     executeInternalLLMTextCompletion,
-    executeHypaSummaryFromMessages,
+    executeMemorySummaryFromMessages,
     appendMemoryTraceAudit,
     buildGenerateExecutionPayload,
     handleLLMExecutePost,
@@ -277,7 +275,7 @@ const {
     createAuditPayloadBuilders,
     createExecutionHelpers,
     createGenerateHelpers,
-    createHypaHelpers,
+    createMemoryHelpers,
     createTraceAuditors,
     createExecuteRouteHandler,
     toStringOrEmpty,
@@ -295,11 +293,11 @@ const {
     existsSync,
     dataDirs,
     safeJsonClone,
-    planPeriodicHypaV3Summarization,
-    applyPeriodicHypaV3Summary,
+    planPeriodicMemorySummarization,
+    applyPeriodicMemorySummary,
     generateSummaryEmbedding,
     buildServerMemoryMessages,
-    resolveHypaV3Settings,
+    resolveMemorySettings,
     cleanSummaryOutput,
     appendLLMAudit,
     getReqIdFromResponse,
@@ -344,19 +342,18 @@ registerServerRoutes({
     logLLMExecutionEnd,
     appendLLMAudit,
     appendMemoryTraceAudit,
-    buildHypaV3AuditRequestPayload,
-    buildHypaV3AuditResponsePayload,
+    buildMemoryAuditRequestPayload,
+    buildMemoryAuditResponsePayload,
     sendJson,
     toLLMErrorResponse,
-    resolveHypaV3Settings,
-    convertStoredMessageForHypaSummary,
-    buildHypaSummarizationPromptMessages,
-    resolveHypaSummaryProviderModel,
+    resolveMemorySettings,
+    convertStoredMessageForMemorySummary,
+    buildMemorySummarizationPromptMessages,
+    resolveMemorySummaryProviderModel,
     buildMemoryTraceResponsePayload,
-    normalizeHypaV3DataForEdit,
-    sanitizeHypaSummarizationContent,
-    planPeriodicHypaV3Summarization,
-    executeHypaSummaryFromMessages,
+    normalizeMemoryDataForEdit,
+    planPeriodicMemorySummarization,
+    executeMemorySummaryFromMessages,
     persistChatDataToRaw,
     cleanSummaryOutput,
     generateSummaryEmbedding,
@@ -415,9 +412,8 @@ registerServerRoutes({
     registerProxyRoutes,
     registerIntegrationRoutes,
     registerMemoryRoutes,
-    registerHypaV3TraceRoutes,
-    registerHypaV3ManualRoutes,
-    registerHypaV3ResummaryRoutes,
+    registerMemoryTraceRoutes,
+    registerMemoryManualRoutes,
     registerLLMRoutes,
     registerContentRoutes,
     registerAuthRoutes,

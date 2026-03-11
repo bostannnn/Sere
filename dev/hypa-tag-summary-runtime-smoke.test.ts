@@ -13,7 +13,7 @@ const hoisted = vi.hoisted(() => ({
                 { chatId: "m1", role: "user", data: "User message 1" },
                 { chatId: "m2", role: "char", data: "Character message 2" },
               ],
-              hypaV3Data: {
+              memoryData: {
                 summaries: [],
                 categories: [{ id: "", name: "Unclassified" }],
                 lastSelectedSummaries: [],
@@ -35,7 +35,7 @@ const hoisted = vi.hoisted(() => ({
 vi.mock(import("src/lang"), () => ({
   language: {
     add: "Add",
-    hypaV3Modal: {
+    memoryModal: {
       unclassified: "Unclassified",
       tagManagerTitle: "Tags #{0}",
       newTagName: "New tag",
@@ -68,9 +68,9 @@ vi.mock(import("src/ts/stores.svelte"), async () => {
   };
 });
 
-vi.mock(import("src/ts/process/memory/hypav3"), () => ({
+vi.mock(import("src/ts/process/memory/memory"), () => ({
   summarize: async () => "rerolled summary",
-  getCurrentHypaV3Preset: () => ({
+  getCurrentMemoryPreset: () => ({
     settings: {
       processRegexScript: false,
     },
@@ -85,7 +85,7 @@ vi.mock(import("src/ts/alert"), () => ({
   alertConfirm: async () => true,
 }));
 
-vi.mock(import("src/lib/Others/HypaV3Modal/utils"), () => ({
+vi.mock(import("src/lib/Others/MemoryModal/utils"), () => ({
   alertConfirmTwice: async () => true,
   handleDualAction: () => ({
     destroy: () => {},
@@ -99,8 +99,8 @@ vi.mock(import("src/lib/Others/HypaV3Modal/utils"), () => ({
   },
 }));
 
-import TagManagerModal from "src/lib/Others/HypaV3Modal/tag-manager-modal.svelte";
-import ModalSummaryItem from "src/lib/Others/HypaV3Modal/modal-summary-item.svelte";
+import TagManagerModal from "src/lib/Others/MemoryModal/tag-manager-modal.svelte";
+import ModalSummaryItem from "src/lib/Others/MemoryModal/modal-summary-item.svelte";
 import { DBState } from "src/ts/stores.svelte";
 
 let mountedApps: Array<Record<string, unknown>> = [];
@@ -119,7 +119,7 @@ function mountApp(component: unknown, target: HTMLElement, props: Record<string,
 describe("hypa tag/summary runtime smoke", () => {
   beforeEach(() => {
     document.body.innerHTML = "";
-    DBState.db.characters[0].chats[0].hypaV3Data = {
+    const memoryData = {
       summaries: [
         {
           text: "Summary text",
@@ -138,6 +138,8 @@ describe("hypa tag/summary runtime smoke", () => {
         lastRandomSummaries: [0],
       },
     };
+    DBState.db.characters[0].chats[0].memoryData = memoryData;
+    DBState.db.characters[0].chats[0].hypaV3Data = memoryData;
     mountedApps = [];
   });
 
@@ -162,21 +164,21 @@ describe("hypa tag/summary runtime smoke", () => {
     mountApp(TagManagerModal, firstTarget, { tagManagerState });
     await flushUi();
 
-    expect(firstTarget.querySelector(".ds-hypa-tag-modal.panel-shell")).not.toBeNull();
-    expect(firstTarget.querySelector(".ds-hypa-tag-close.icon-btn.icon-btn--sm")).not.toBeNull();
-    expect(firstTarget.querySelector(".ds-hypa-tag-add-row.action-rail")).not.toBeNull();
-    expect(firstTarget.querySelector(".ds-hypa-tag-input.control-field")).not.toBeNull();
-    expect(firstTarget.querySelector(".ds-hypa-tag-list.list-shell")).not.toBeNull();
-    expect(firstTarget.querySelector(".ds-hypa-tag-empty.empty-state")).not.toBeNull();
+    expect(firstTarget.querySelector(".ds-memory-tag-modal.panel-shell")).not.toBeNull();
+    expect(firstTarget.querySelector(".ds-memory-tag-close.icon-btn.icon-btn--sm")).not.toBeNull();
+    expect(firstTarget.querySelector(".ds-memory-tag-add-row.action-rail")).not.toBeNull();
+    expect(firstTarget.querySelector(".ds-memory-tag-input.control-field")).not.toBeNull();
+    expect(firstTarget.querySelector(".ds-memory-tag-list.list-shell")).not.toBeNull();
+    expect(firstTarget.querySelector(".ds-memory-tag-empty.empty-state")).not.toBeNull();
 
-    const addInput = firstTarget.querySelector(".ds-hypa-tag-input.control-field") as HTMLInputElement | null;
+    const addInput = firstTarget.querySelector(".ds-memory-tag-input.control-field") as HTMLInputElement | null;
     expect(addInput).not.toBeNull();
     addInput!.value = "Lore";
     addInput!.dispatchEvent(new Event("input", { bubbles: true }));
     addInput!.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
     await flushUi();
 
-    const summary = DBState.db.characters[0].chats[0].hypaV3Data.summaries[0];
+    const summary = DBState.db.characters[0].chats[0].memoryData.summaries[0];
     expect(summary.tags).toContain("Lore");
 
     tagManagerState = {
@@ -189,15 +191,15 @@ describe("hypa tag/summary runtime smoke", () => {
     mountApp(TagManagerModal, secondTarget, { tagManagerState });
     await flushUi();
 
-    expect(secondTarget.querySelector(".ds-hypa-tag-label")?.textContent ?? "").toContain("#Lore");
+    expect(secondTarget.querySelector(".ds-memory-tag-label")?.textContent ?? "").toContain("#Lore");
 
     const editButton = secondTarget.querySelector(
-      ".ds-hypa-tag-icon-btn-edit.icon-btn.icon-btn--sm",
+      ".ds-memory-tag-icon-btn-edit.icon-btn.icon-btn--sm",
     ) as HTMLButtonElement | null;
     expect(editButton).not.toBeNull();
 
     const deleteButton = secondTarget.querySelector(
-      ".ds-hypa-tag-icon-btn-delete.icon-btn.icon-btn--sm",
+      ".ds-memory-tag-icon-btn-delete.icon-btn.icon-btn--sm",
     ) as HTMLButtonElement | null;
     expect(deleteButton).not.toBeNull();
   });
@@ -215,7 +217,7 @@ describe("hypa tag/summary runtime smoke", () => {
     mountApp(ModalSummaryItem, target, {
       summaryIndex: 0,
       chatIndex: 0,
-      hypaV3Data: DBState.db.characters[0].chats[0].hypaV3Data,
+      memoryData: DBState.db.characters[0].chats[0].memoryData,
       summaryItemStateMap,
       expandedMessageState: null,
       searchState: null,

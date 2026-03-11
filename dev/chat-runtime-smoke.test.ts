@@ -8,7 +8,7 @@ vi.mock(import("src/ts/stores.svelte"), async () => {
   const CharEmotion = writable<Record<string, [string, string, number][]>>({});
   const ReloadGUIPointer = writable(0);
   const CharConfigSubMenu = writable(0);
-  const hypaV3ModalOpen = writable(false);
+  const memoryModalOpen = writable(false);
   const bookmarkListOpen = writable(false);
   const selIdState = { selId: 0 };
   const DBState = {
@@ -51,7 +51,7 @@ vi.mock(import("src/ts/stores.svelte"), async () => {
     CharEmotion,
     ReloadGUIPointer,
     CharConfigSubMenu,
-    hypaV3ModalOpen,
+    memoryModalOpen,
     bookmarkListOpen,
     selIdState,
   };
@@ -65,7 +65,7 @@ vi.mock(import("src/lang"), () => ({
     errors: { onlyOneChat: "Only one chat" },
     removeConfirm: "Remove ",
     orderByOrder: "Order by order",
-    ToggleHypaMemory: "Toggle HypaMemory",
+    ToggleMemory: "Toggle HypaMemory",
     changeFolderColor: "Change folder color",
     cancel: "Cancel",
     doYouWantToUnbindCurrentPersona: "Unbind persona?",

@@ -19,7 +19,7 @@ RISU_DATA_TEST_URL=http://localhost:6001 node dev/run-migration-smoke-pack.js
 This pack currently validates:
 - server-first storage contract (`scripts/test-server-storage.js`)
 - migrated LLM providers preview/execute contracts (`scripts/test-server-llm-phaseA.js`)
-- HypaV3 memory endpoint contracts (`scripts/test-server-memory.js`)
+- Memory endpoint contracts (`scripts/test-server-memory.js`)
 - fixture character/chat/assets lifecycle (`dev/test-server-fixture-flow.js`)
 
 One-command full automated smoke (settings runtime + API pack, auto server start/stop):

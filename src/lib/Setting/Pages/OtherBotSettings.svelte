@@ -9,7 +9,6 @@
     import OptionInput from "src/lib/UI/GUI/OptionInput.svelte";
     import EmbeddingModelSelect from "src/lib/UI/GUI/EmbeddingModelSelect.svelte";
     import SliderInput from "src/lib/UI/GUI/SliderInput.svelte";
-    import Accordion from "src/lib/UI/Accordion.svelte";
     import CheckInput from "src/lib/UI/GUI/CheckInput.svelte";
     import TextAreaInput from "src/lib/UI/GUI/TextAreaInput.svelte";
     import { untrack } from "svelte";
@@ -17,7 +16,13 @@
     import { getCharToken } from "src/ts/tokenizer";
     import { PlusIcon, PencilIcon, TrashIcon, DownloadIcon, HardDriveUploadIcon } from "@lucide/svelte";
     import { alertError, alertInput, alertConfirm, alertNormal } from "src/ts/alert";
-    import { createHypaV3Preset } from "src/ts/process/memory/hypav3";
+    import { createMemoryPreset } from "src/ts/process/memory/memory";
+    import {
+        getDbMemoryPresetId,
+        getDbMemoryPresets,
+        setDbMemoryPresetId,
+        setDbMemoryPresets,
+    } from "src/ts/process/memory/storage";
     import { downloadFile } from "src/ts/globalApi.svelte";
     import { selectSingleFile } from "src/ts/util";
     import SettingsSubTabs from "src/lib/Setting/SettingsSubTabs.svelte";
@@ -31,9 +36,111 @@
     let emotionEmbeddingModel = $state<HypaModel>("MiniLM");
     let emotionPromptHydrated = $state(false);
     let emotionListCharacterId = $state("");
+    let selectedMemoryPresetId = $state(0);
+    let selectedEmbeddingModel = $state<HypaModel>("MiniLM");
+    let emotionPromptValue = $state("");
+    let customEmbeddingUrl = $state("");
+    let customEmbeddingKey = $state("");
+    let customEmbeddingModel = $state("");
+    let memorySummarizationPrompt = $state("");
+    let memoryTokensRatio = $state(0);
+    let memoryPeriodicSummarizationInterval = $state(10);
+    let memoryMaxSelectedSummaries = $state(4);
+    let memoryRecentSummarySlots = $state(0);
+    let memorySimilarSummarySlots = $state(0);
+    let memoryDoNotSummarizeUserMessage = $state(false);
+    const memorySettingsLanguage = $derived(
+        language.memorySettings ?? language.hypaV3Settings
+    );
     const visibleEmotionCharacters = $derived.by(() =>
         (DBState.db.characters ?? []).filter((char) => Boolean(char) && !char.trashTime)
     );
+
+    function ensureMemoryPresets() {
+        const presets = getDbMemoryPresets(DBState.db);
+        if (presets.length > 0) {
+            return presets;
+        }
+        const fallback = [createMemoryPreset("Default")];
+        setDbMemoryPresets(DBState.db, fallback);
+        return fallback;
+    }
+
+    function getSelectedMemorySettings() {
+        return ensureMemoryPresets()?.[selectedMemoryPresetId]?.settings;
+    }
+
+    function syncLocalMemorySettings(settings: NonNullable<ReturnType<typeof getSelectedMemorySettings>>) {
+        const nextSummarizationPrompt = settings.summarizationPrompt ?? "";
+        const nextMemoryTokensRatio = Number(settings.memoryTokensRatio ?? 0);
+        const nextPeriodicSummarizationInterval = Math.max(1, Math.floor(Number(settings.periodicSummarizationInterval ?? 10)));
+        const nextMaxSelectedSummaries = Math.max(1, Math.floor(Number(settings.maxSelectedSummaries ?? 4)));
+        const nextRecentSummarySlots = Math.max(0, Math.floor(Number(settings.recentSummarySlots ?? 0)));
+        const nextSimilarSummarySlots = Math.max(0, Math.floor(Number(settings.similarSummarySlots ?? 0)));
+        const nextDoNotSummarizeUserMessage = Boolean(settings.doNotSummarizeUserMessage);
+
+        if (memorySummarizationPrompt !== nextSummarizationPrompt) {
+            memorySummarizationPrompt = nextSummarizationPrompt;
+        }
+        if (memoryTokensRatio !== nextMemoryTokensRatio) {
+            memoryTokensRatio = nextMemoryTokensRatio;
+        }
+        if (memoryPeriodicSummarizationInterval !== nextPeriodicSummarizationInterval) {
+            memoryPeriodicSummarizationInterval = nextPeriodicSummarizationInterval;
+        }
+        if (memoryMaxSelectedSummaries !== nextMaxSelectedSummaries) {
+            memoryMaxSelectedSummaries = nextMaxSelectedSummaries;
+        }
+        if (memoryRecentSummarySlots !== nextRecentSummarySlots) {
+            memoryRecentSummarySlots = nextRecentSummarySlots;
+        }
+        if (memorySimilarSummarySlots !== nextSimilarSummarySlots) {
+            memorySimilarSummarySlots = nextSimilarSummarySlots;
+        }
+        if (memoryDoNotSummarizeUserMessage !== nextDoNotSummarizeUserMessage) {
+            memoryDoNotSummarizeUserMessage = nextDoNotSummarizeUserMessage;
+        }
+    }
+
+    function updateSelectedMemorySettings(
+        updater: (settings: NonNullable<ReturnType<typeof getSelectedMemorySettings>>) => void,
+        syncReason: 'max' | 'recent' | 'similar' | null = null
+    ) {
+        const presets = ensureMemoryPresets();
+        const settings = presets?.[selectedMemoryPresetId]?.settings;
+        if (!settings) return;
+
+        updater(settings);
+
+        if (syncReason) {
+            syncMemorySummarySettings(syncReason);
+        }
+
+        setDbMemoryPresets(DBState.db, presets);
+        syncLocalMemorySettings(settings);
+    }
+
+    function ensureCustomEmbeddingSettings() {
+        DBState.db.hypaCustomSettings ??= {
+            url: "",
+            key: "",
+            model: "",
+        };
+        return DBState.db.hypaCustomSettings;
+    }
+
+    function syncLocalCustomEmbeddingSettings() {
+        const settings = ensureCustomEmbeddingSettings();
+        if (customEmbeddingUrl !== (settings.url ?? "")) {
+            customEmbeddingUrl = settings.url ?? "";
+        }
+        if (customEmbeddingKey !== (settings.key ?? "")) {
+            customEmbeddingKey = settings.key ?? "";
+        }
+        if (customEmbeddingModel !== (settings.model ?? "")) {
+            customEmbeddingModel = settings.model ?? "";
+        }
+    }
 
     $effect(() => {
         if (!allowedSubmenus.has(submenu)) {
@@ -77,6 +184,44 @@
     });
 
     $effect(() => {
+        ensureMemoryPresets();
+        const nextPresetId = getDbMemoryPresetId(DBState.db);
+        if (selectedMemoryPresetId !== nextPresetId) {
+            selectedMemoryPresetId = nextPresetId;
+        }
+        const nextEmbeddingModel = (DBState.db.hypaModel ?? "MiniLM") as HypaModel;
+        if (selectedEmbeddingModel !== nextEmbeddingModel) {
+            selectedEmbeddingModel = nextEmbeddingModel;
+        }
+    });
+
+    $effect(() => {
+        if (getDbMemoryPresetId(DBState.db) !== selectedMemoryPresetId) {
+            setDbMemoryPresetId(DBState.db, selectedMemoryPresetId);
+        }
+    });
+
+    $effect(() => {
+        if ((DBState.db.hypaModel ?? "MiniLM") !== selectedEmbeddingModel) {
+            DBState.db.hypaModel = selectedEmbeddingModel;
+        }
+    });
+
+    $effect(() => {
+        const nextEmotionPrompt = DBState.db.emotionPrompt2 ?? "";
+        if (emotionPromptValue !== nextEmotionPrompt) {
+            emotionPromptValue = nextEmotionPrompt;
+        }
+        syncLocalCustomEmbeddingSettings();
+    });
+
+    $effect(() => {
+        const settings = getSelectedMemorySettings();
+        if (!settings) return;
+        syncLocalMemorySettings(settings);
+    });
+
+    $effect(() => {
         const chars = visibleEmotionCharacters;
         if (chars.length === 0) {
             emotionListCharacterId = "";
@@ -93,39 +238,75 @@
         }
     });
 
-    // HypaV3
-    $effect(() => {
-        const settings = DBState.db.hypaV3Presets?.[DBState.db.hypaV3PresetId]?.settings;
-        const currentValue = settings?.similarMemoryRatio;
+    function clampHypaSummarySlot(value: unknown, maxSlots: number, fallback: number): number {
+        const parsed = Math.floor(Number(value));
+        if (!Number.isFinite(parsed)) {
+            return fallback;
+        }
+        return Math.min(Math.max(parsed, 0), maxSlots);
+    }
 
-        if (!currentValue) return;
+    function deriveLegacySimilarSlots(settings: Record<string, unknown>, maxSelectedSummaries: number): number {
+        const rawRecentRatio = Number(settings.recentMemoryRatio ?? 0);
+        const rawSimilarRatio = Number(settings.similarMemoryRatio ?? 0);
+        const recentRatio = Number.isFinite(rawRecentRatio) ? Math.max(0, Math.min(1, rawRecentRatio)) : 0;
+        const similarRatio = Number.isFinite(rawSimilarRatio) ? Math.max(0, Math.min(1, rawSimilarRatio)) : 0;
+        const ratioSum = recentRatio + similarRatio;
+        const normalizedSimilarRatio = ratioSum > 1 ? (similarRatio / ratioSum) : similarRatio;
+        return Math.floor(maxSelectedSummaries * normalizedSimilarRatio);
+    }
+
+    function syncMemorySummarySettings(reason: 'max' | 'recent' | 'similar' = 'max') {
+        const presets = ensureMemoryPresets();
+        const settings = presets?.[selectedMemoryPresetId]?.settings;
+        if (!settings) return;
 
         untrack(() => {
-            const newValue = Math.min(currentValue, 1);
+            settings.periodicSummarizationInterval = Math.max(1, Math.floor(settings.periodicSummarizationInterval || 10));
+            settings.maxChatsPerSummary = settings.periodicSummarizationInterval;
 
-            settings.similarMemoryRatio = newValue;
+            const maxSelectedSummaries = Math.max(1, Math.floor(settings.maxSelectedSummaries || 4));
+            settings.maxSelectedSummaries = maxSelectedSummaries;
 
-            if (newValue + settings.recentMemoryRatio > 1) {
-                settings.recentMemoryRatio = 1 - newValue;
+            const fallbackSimilarSlots = deriveLegacySimilarSlots(settings, maxSelectedSummaries);
+            const fallbackRecentSlots = Math.max(0, maxSelectedSummaries - fallbackSimilarSlots);
+
+            let similarSummarySlots = clampHypaSummarySlot(
+                settings.similarSummarySlots,
+                maxSelectedSummaries,
+                fallbackSimilarSlots
+            );
+            let recentSummarySlots = clampHypaSummarySlot(
+                settings.recentSummarySlots,
+                maxSelectedSummaries,
+                fallbackRecentSlots
+            );
+
+            if (reason === 'recent') {
+                recentSummarySlots = clampHypaSummarySlot(recentSummarySlots, maxSelectedSummaries, fallbackRecentSlots);
+                similarSummarySlots = Math.max(0, maxSelectedSummaries - recentSummarySlots);
+            } else {
+                similarSummarySlots = clampHypaSummarySlot(similarSummarySlots, maxSelectedSummaries, fallbackSimilarSlots);
+                recentSummarySlots = Math.max(0, maxSelectedSummaries - similarSummarySlots);
             }
-        })
-    });
+
+            settings.recentSummarySlots = recentSummarySlots;
+            settings.similarSummarySlots = similarSummarySlots;
+            settings.recentMemoryRatio = parseFloat((recentSummarySlots / maxSelectedSummaries).toFixed(2));
+            settings.similarMemoryRatio = parseFloat((similarSummarySlots / maxSelectedSummaries).toFixed(2));
+        });
+
+        syncLocalMemorySettings(settings);
+    }
 
     $effect(() => {
-        const settings = DBState.db.hypaV3Presets?.[DBState.db.hypaV3PresetId]?.settings;
-        const currentValue = settings?.recentMemoryRatio;
-
-        if (!currentValue) return;
-
-        untrack(() => {
-            const newValue = Math.min(currentValue, 1);
-
-            settings.recentMemoryRatio = newValue;
-
-            if (newValue + settings.similarMemoryRatio > 1) {
-                settings.similarMemoryRatio = 1 - newValue;
-            }
-        })
+        const settings = DBState.db.memoryPresets?.[DBState.db.memoryPresetId]?.settings;
+        if (!settings) return;
+        const periodicSummarizationInterval = settings.periodicSummarizationInterval;
+        const maxSelectedSummaries = settings.maxSelectedSummaries;
+        void periodicSummarizationInterval;
+        void maxSelectedSummaries;
+        syncMemorySummarySettings('max');
     });
 
     async function getMaxMemoryRatio(): Promise<number> {
@@ -162,7 +343,6 @@
     function getEmotionListCharacter() {
         return visibleEmotionCharacters.find((char) => char.chaId === emotionListCharacterId);
     }
-    // End HypaV3
 </script>
 <h2 class="ds-settings-page-title">{language.otherBots}</h2>
 
@@ -244,17 +424,34 @@
 
         {#if isCustomEmbeddingModel(emotionEmbeddingModel)}
             <span class="ds-settings-label">URL</span>
-            <TextInput size="sm" bind:value={DBState.db.hypaCustomSettings.url}/>
+            <TextInput size="sm" value={customEmbeddingUrl} oninput={(event) => {
+                customEmbeddingUrl = event.currentTarget.value;
+                ensureCustomEmbeddingSettings().url = customEmbeddingUrl;
+            }}/>
             <span class="ds-settings-label">Key/Password</span>
-            <TextInput size="sm" hideText={DBState.db.hideApiKey} bind:value={DBState.db.hypaCustomSettings.key}/>
+            <TextInput size="sm" hideText={DBState.db.hideApiKey} value={customEmbeddingKey} oninput={(event) => {
+                customEmbeddingKey = event.currentTarget.value;
+                ensureCustomEmbeddingSettings().key = customEmbeddingKey;
+            }}/>
             <span class="ds-settings-label">Request Model</span>
-            <TextInput size="sm" bind:value={DBState.db.hypaCustomSettings.model}/>
+            <TextInput size="sm" value={customEmbeddingModel} oninput={(event) => {
+                customEmbeddingModel = event.currentTarget.value;
+                ensureCustomEmbeddingSettings().model = customEmbeddingModel;
+            }}/>
         {/if}
     {/if}
 
     {#if DBState.db.emotionProcesser === 'submodel'}
         <span class="ds-settings-label">{language.emotionPrompt} <Help key="emotionPrompt"/></span>
-        <TextAreaInput size="sm" bind:value={DBState.db.emotionPrompt2} placeholder={DEFAULT_EMOTION_PROMPT} />
+        <TextAreaInput
+            size="sm"
+            value={emotionPromptValue}
+            onValueChange={(value) => {
+                emotionPromptValue = value;
+                DBState.db.emotionPrompt2 = value;
+            }}
+            placeholder={DEFAULT_EMOTION_PROMPT}
+        />
     {/if}
 
     <span class="ds-settings-label">Emotion List Character</span>
@@ -285,63 +482,63 @@
 
 {#if submenu === 0}
     <div class="ds-settings-section">
-        <span class="ds-settings-label-muted-sm ds-settings-text-wrap-fluid">{language.hypaV3Settings.descriptionLabel}</span>
+        <span class="ds-settings-label-muted-sm ds-settings-text-wrap-fluid">{memorySettingsLanguage.descriptionLabel}</span>
         <span class="ds-settings-label">Preset</span>
-        <SelectInput bind:value={DBState.db.hypaV3PresetId}>
-            {#each DBState.db.hypaV3Presets as preset, i (preset.name + i)}
+        <SelectInput bind:value={selectedMemoryPresetId}>
+            {#each ensureMemoryPresets() as preset, i (preset.name + i)}
                 <OptionInput value={i}>{preset.name}</OptionInput>
             {/each}
         </SelectInput>
 
         <div class="ds-settings-inline-actions action-rail">
             <Button size="sm" className="ds-settings-icon-action ds-settings-icon-action-compact icon-btn icon-btn--sm" onclick={() => {
-                const newPreset = createHypaV3Preset()
-                const presets = DBState.db.hypaV3Presets
+                const newPreset = createMemoryPreset()
+                const presets = ensureMemoryPresets()
 
                 presets.push(newPreset)
-                DBState.db.hypaV3Presets = presets
-                DBState.db.hypaV3PresetId = DBState.db.hypaV3Presets.length - 1
+                setDbMemoryPresets(DBState.db, presets)
+                setDbMemoryPresetId(DBState.db, presets.length - 1)
             }}>
                 <PlusIcon size={18}/>
             </Button>
 
             <Button size="sm" className="ds-settings-icon-action ds-settings-icon-action-compact icon-btn icon-btn--sm" onclick={async () => {
-                const presets = DBState.db.hypaV3Presets
+                const presets = ensureMemoryPresets()
 
                 if(presets.length === 0){
                     alertError("There must be least one preset.")
                     return
                 }
 
-                const id = DBState.db.hypaV3PresetId
+                const id = selectedMemoryPresetId
                 const preset = presets[id]
                 const newName = await alertInput(`Enter new name for ${preset.name}`, [], preset.name)
 
                 if (!newName || newName.trim().length === 0) return
 
                 preset.name = newName
-                DBState.db.hypaV3Presets = presets
+                setDbMemoryPresets(DBState.db, presets)
             }}>
                 <PencilIcon size={18}/>
             </Button>
 
             <Button styled="danger" size="sm" className="ds-settings-icon-action ds-settings-icon-action-compact icon-btn icon-btn--sm" onclick={async () => {
-                const presets = DBState.db.hypaV3Presets
+                const presets = ensureMemoryPresets()
 
                 if(presets.length <= 1){
                     alertError("There must be least one preset.")
                     return
                 }
 
-                const id = DBState.db.hypaV3PresetId
+                const id = selectedMemoryPresetId
                 const preset = presets[id]
                 const confirmed = await alertConfirm(`${language.removeConfirm}${preset.name}`)
 
                 if (!confirmed) return
 
-                DBState.db.hypaV3PresetId = 0
+                setDbMemoryPresetId(DBState.db, 0)
                 presets.splice(id, 1)
-                DBState.db.hypaV3Presets = presets
+                setDbMemoryPresets(DBState.db, presets)
             }}>
                 <TrashIcon size={18}/>
             </Button>
@@ -350,14 +547,14 @@
 
             <Button size="sm" className="ds-settings-icon-action ds-settings-icon-action-compact icon-btn icon-btn--sm" onclick={async() => {
                 try {
-                    const presets = DBState.db.hypaV3Presets
+                    const presets = ensureMemoryPresets()
                     
                     if(presets.length === 0){
                         alertError("There must be least one preset.")
                         return
                     }
 
-                    const id = DBState.db.hypaV3PresetId
+                    const id = selectedMemoryPresetId
                     const preset = presets[id]
                     const bytesExport = Buffer.from(JSON.stringify({
                         type: 'risu',
@@ -365,7 +562,7 @@
                         data: preset
                     }), 'utf-8')
                     
-                    await downloadFile(`hypaV3_export_${preset.name}.json`, bytesExport)
+                    await downloadFile(`memory_export_${preset.name}.json`, bytesExport)
                     alertNormal(language.successExport)
                 } catch (error) {
                     alertError(`${error}`)
@@ -385,15 +582,15 @@
 
                     if(objImport.type !== 'risu' || !objImport.data) return
 
-                    const newPreset = createHypaV3Preset(
+                    const newPreset = createMemoryPreset(
                         objImport.data.name || "Imported Preset",
                         objImport.data.settings || {}
                     );
-                    const presets = DBState.db.hypaV3Presets
+                    const presets = ensureMemoryPresets()
                     
                     presets.push(newPreset)
-                    DBState.db.hypaV3Presets = presets
-                    DBState.db.hypaV3PresetId = DBState.db.hypaV3Presets.length - 1
+                    setDbMemoryPresets(DBState.db, presets)
+                    setDbMemoryPresetId(DBState.db, presets.length - 1)
 
                     alertNormal(language.successImport)
                 } catch (error) {
@@ -404,75 +601,105 @@
             </Button>
         </div>
 
-        {#if DBState.db.hypaV3Presets?.[DBState.db.hypaV3PresetId]?.settings}
-            {@const settings = DBState.db.hypaV3Presets[DBState.db.hypaV3PresetId].settings}
-
+        {#if getSelectedMemorySettings()}
                 <span class="ds-settings-label">Summarization Model</span>
                 <span class="ds-settings-label-muted-sm">Uses Auxiliary Model</span>
                 <span class="ds-settings-label">{language.summarizationPrompt} <Help key="summarizationPrompt"/></span>
                 <div>
-                    <TextAreaInput size="sm" placeholder={language.hypaV3Settings.supaMemoryPromptPlaceHolder} bind:value={settings.summarizationPrompt} />
-                </div>
-                <span class="ds-settings-label">{language.reSummarizationPrompt}</span>
-                <div>
-                    <TextAreaInput size="sm" placeholder={language.hypaV3Settings.supaMemoryPromptPlaceHolder} bind:value={settings.reSummarizationPrompt} />
-                </div>
-                <div>
-                    <Check name="Allow thinking for summaries" bind:check={settings.summarizationAllowThinking} />
+                    <TextAreaInput
+                        size="sm"
+                        placeholder={memorySettingsLanguage.supaMemoryPromptPlaceHolder}
+                        value={memorySummarizationPrompt}
+                        onValueChange={(value) => {
+                            memorySummarizationPrompt = value;
+                            updateSelectedMemorySettings((settings) => {
+                                settings.summarizationPrompt = value;
+                            });
+                        }}
+                    />
                 </div>
                 {#await getMaxMemoryRatio() then maxMemoryRatio}
-                <span class="ds-settings-label">{language.hypaV3Settings.maxMemoryTokensRatioLabel}</span>
+                <span class="ds-settings-label">{memorySettingsLanguage.maxMemoryTokensRatioLabel}</span>
                 <NumberInput disabled size="sm" value={maxMemoryRatio} />
                 {:catch _error}
-                <span class="ds-settings-note-danger">{language.hypaV3Settings.maxMemoryTokensRatioError}</span>
+                <span class="ds-settings-note-danger">{memorySettingsLanguage.maxMemoryTokensRatioError}</span>
                 {/await}
-                <span class="ds-settings-label">{language.hypaV3Settings.memoryTokensRatioLabel}</span>
-                <SliderInput min={0} max={1} step={0.01} fixed={2} bind:value={settings.memoryTokensRatio} />
-                <span class="ds-settings-label">{language.hypaV3Settings.extraSummarizationRatioLabel}</span>
-                <SliderInput min={0} max={1 - settings.memoryTokensRatio} step={0.01} fixed={2} bind:value={settings.extraSummarizationRatio} />
-                <span class="ds-settings-label">Summarize Every X Messages</span>
-                <NumberInput size="sm" min={1} bind:value={settings.periodicSummarizationInterval} />
-                <span class="ds-settings-label">{language.hypaV3Settings.recentMemoryRatioLabel}</span>
-                <SliderInput min={0} max={1} step={0.01} fixed={2} bind:value={settings.recentMemoryRatio} />
-                <span class="ds-settings-label">{language.hypaV3Settings.similarMemoryRatioLabel}</span>
-                <SliderInput min={0} max={1} step={0.01} fixed={2} bind:value={settings.similarMemoryRatio} />
-                <span class="ds-settings-label">{language.hypaV3Settings.randomMemoryRatioLabel}</span>
-                <NumberInput disabled size="sm" value={parseFloat((1 - settings.recentMemoryRatio - settings.similarMemoryRatio).toFixed(2))} />
+                <span class="ds-settings-label">{memorySettingsLanguage.memoryTokensRatioLabel}</span>
+                <SliderInput
+                    min={0}
+                    max={1}
+                    step={0.01}
+                    fixed={2}
+                    bind:value={memoryTokensRatio}
+                    onchange={() => {
+                        updateSelectedMemorySettings((settings) => {
+                            settings.memoryTokensRatio = memoryTokensRatio;
+                        });
+                    }}
+                />
+                <span class="ds-settings-label">Messages Per Summary</span>
+                <NumberInput
+                    size="sm"
+                    min={1}
+                    bind:value={memoryPeriodicSummarizationInterval}
+                    onInput={() => {
+                        updateSelectedMemorySettings((settings) => {
+                            settings.periodicSummarizationInterval = memoryPeriodicSummarizationInterval;
+                        }, 'max');
+                    }}
+                />
+                <span class="ds-settings-label">Max Summaries In Prompt</span>
+                <NumberInput
+                    size="sm"
+                    min={1}
+                    max={32}
+                    bind:value={memoryMaxSelectedSummaries}
+                    onInput={() => {
+                        updateSelectedMemorySettings((settings) => {
+                            settings.maxSelectedSummaries = memoryMaxSelectedSummaries;
+                        }, 'max');
+                    }}
+                />
+                <span class="ds-settings-label">Recent Summary Slots</span>
+                <NumberInput
+                    size="sm"
+                    min={0}
+                    max={memoryMaxSelectedSummaries}
+                    bind:value={memoryRecentSummarySlots}
+                    onInput={() => {
+                        updateSelectedMemorySettings((settings) => {
+                            settings.recentSummarySlots = memoryRecentSummarySlots;
+                        }, 'recent');
+                    }}
+                />
+                <span class="ds-settings-label">Similar Summary Slots</span>
+                <NumberInput
+                    size="sm"
+                    min={0}
+                    max={memoryMaxSelectedSummaries}
+                    bind:value={memorySimilarSummarySlots}
+                    onInput={() => {
+                        updateSelectedMemorySettings((settings) => {
+                            settings.similarSummarySlots = memorySimilarSummarySlots;
+                        }, 'similar');
+                    }}
+                />
                 <div>
-                    <Check name={language.hypaV3Settings.preserveOrphanedMemoryLabel} bind:check={settings.preserveOrphanedMemory} />
+                    <Check
+                        name={memorySettingsLanguage.doNotSummarizeUserMessageLabel}
+                        check={memoryDoNotSummarizeUserMessage}
+                        onChange={(check) => {
+                            memoryDoNotSummarizeUserMessage = check;
+                            updateSelectedMemorySettings((settings) => {
+                                settings.doNotSummarizeUserMessage = check;
+                            });
+                        }}
+                    />
                 </div>
-                <div>
-                    <Check name={language.hypaV3Settings.applyRegexScriptWhenRerollingLabel} bind:check={settings.processRegexScript} />
-                </div>
-                <div>
-                    <Check name={language.hypaV3Settings.doNotSummarizeUserMessageLabel} bind:check={settings.doNotSummarizeUserMessage} />
-                </div>
-                <Accordion name="Advanced Settings" styled>
-                    <div>
-                        <Check name="Use Experimental Implementation" bind:check={settings.useExperimentalImpl} />
-                    </div>
-                    <div>
-                        <Check name="Always Toggle On" bind:check={settings.alwaysToggleOn} />
-                    </div>
-                    {#if settings.useExperimentalImpl}
-                        <span class="ds-settings-label">Summarization Requests Per Minute</span>
-                        <NumberInput size="sm" min={1} bind:value={settings.summarizationRequestsPerMinute} />
-                        <span class="ds-settings-label">Summarization Max Concurrent</span>
-                        <NumberInput size="sm" min={1} max={10} bind:value={settings.summarizationMaxConcurrent} />
-                        <span class="ds-settings-label">Embedding Requests Per Minute</span>
-                        <NumberInput size="sm" min={1} bind:value={settings.embeddingRequestsPerMinute} />
-                        <span class="ds-settings-label">Embedding Max Concurrent</span>
-                        <NumberInput size="sm" min={1} max={10} bind:value={settings.embeddingMaxConcurrent} />
-                    {:else}
-                        <div>
-                            <Check name={language.hypaV3Settings.enableSimilarityCorrectionLabel} bind:check={settings.enableSimilarityCorrection} />
-                        </div>
-                    {/if}
-                </Accordion>
         {/if}
 
         <span class="ds-settings-label">{language.embedding} <Help key="embedding"/></span>
-        <EmbeddingModelSelect bind:value={DBState.db.hypaModel} />
+        <EmbeddingModelSelect bind:value={selectedEmbeddingModel} />
 
         {#if isOpenAIEmbeddingModel(DBState.db.hypaModel)}
             <span class="ds-settings-label">OpenAI API Key</span>
@@ -481,11 +708,20 @@
 
         {#if isCustomEmbeddingModel(DBState.db.hypaModel)}
             <span class="ds-settings-label">URL</span>
-            <TextInput size="sm" bind:value={DBState.db.hypaCustomSettings.url}/>
+            <TextInput size="sm" value={customEmbeddingUrl} oninput={(event) => {
+                customEmbeddingUrl = event.currentTarget.value;
+                ensureCustomEmbeddingSettings().url = customEmbeddingUrl;
+            }}/>
             <span class="ds-settings-label">Key/Password</span>
-            <TextInput size="sm" bind:value={DBState.db.hypaCustomSettings.key}/>
+            <TextInput size="sm" value={customEmbeddingKey} oninput={(event) => {
+                customEmbeddingKey = event.currentTarget.value;
+                ensureCustomEmbeddingSettings().key = customEmbeddingKey;
+            }}/>
             <span class="ds-settings-label">Request Model</span>
-            <TextInput size="sm" bind:value={DBState.db.hypaCustomSettings.model}/>
+            <TextInput size="sm" value={customEmbeddingModel} oninput={(event) => {
+                customEmbeddingModel = event.currentTarget.value;
+                ensureCustomEmbeddingSettings().model = customEmbeddingModel;
+            }}/>
         {/if}
     </div>
 {/if}

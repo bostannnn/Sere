@@ -2,7 +2,7 @@
     import { tick } from "svelte";
     import SideChatList from "../SideBars/SideChatList.svelte";
     import CharConfig from "../SideBars/CharConfig.svelte";
-    import HypaV3Modal from "../Others/HypaV3Modal.svelte";
+    import MemoryPanel from "../Others/MemoryPanel.svelte";
     import EvolutionSettings from "../SideBars/Evolution/EvolutionSettings.svelte";
     import { DBState, selectedCharID } from "src/ts/stores.svelte";
 
@@ -253,7 +253,7 @@
                         handleRightPanelTabKeydown(event, "memory")
                     }}
                 >
-                    <HypaV3Modal embedded />
+                    <MemoryPanel embedded />
                 </div>
             {:else}
             <div
