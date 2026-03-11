@@ -224,6 +224,8 @@ async function requestAnthropicServerExecution(arg: RequestDataArgumentExtended,
                 const decoder = new TextDecoder();
                 let parserData = '';
                 let acc = '';
+                let sawDoneEvent = false;
+                let sawErrorEvent = false;
                 while (true) {
                     const { done, value } = await reader.read();
                     if (done) break;
@@ -241,18 +243,27 @@ async function requestAnthropicServerExecution(arg: RequestDataArgumentExtended,
                                 acc += (parsed.text || '');
                                 controller.enqueue({ "0": acc });
                             } else if (parsed.type === 'done') {
+                                sawDoneEvent = true;
                                 if (parsed.newCharEtag) {
                                     controller.enqueue({ "__newCharEtag": parsed.newCharEtag });
                                 }
                                 controller.close();
                                 return;
                             } else if (parsed.type === 'error' || parsed.type === 'fail') {
+                                sawErrorEvent = true;
                                 controller.enqueue({ "0": `Error: ${parsed.message || parsed.error || 'Server stream failed'}` });
                                 controller.close();
                                 return;
                             }
                         } catch {}
                     }
+                }
+                if (!sawDoneEvent && !sawErrorEvent) {
+                    controller.enqueue({
+                        "__error": "Server stream ended before done event.",
+                        "__errorCode": "UPSTREAM_STREAM_INCOMPLETE",
+                        "__status": "502",
+                    });
                 }
                 controller.close();
             },

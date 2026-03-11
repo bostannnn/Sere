@@ -236,6 +236,12 @@ describe("execute_route_handler streaming safety", () => {
                     value: encoder.encode('data: {"choices":[{"delta":{"content":"A"}}]}\n\n'),
                 };
             }
+            if (readCalls === 2) {
+                return {
+                    done: false,
+                    value: encoder.encode('data: [DONE]\n\n'),
+                };
+            }
             return { done: true };
         });
         const harness = createHarness({
@@ -260,10 +266,20 @@ describe("execute_route_handler streaming safety", () => {
         const encoder = new TextEncoder();
         const nativeReq = new MockReq();
         const nativeRes = new MockRes();
-        const { stream } = createStreamFromRead(async () => ({
-            done: true,
-            value: encoder.encode(""),
-        }));
+        let readCalls = 0;
+        const { stream } = createStreamFromRead(async () => {
+            readCalls += 1;
+            if (readCalls === 1) {
+                return {
+                    done: false,
+                    value: encoder.encode("data: [DONE]\n\n"),
+                };
+            }
+            return {
+                done: true,
+                value: encoder.encode(""),
+            };
+        });
         const nativeHarness = createHarness({
             executeLLM: async () => stream,
         });
@@ -336,6 +352,71 @@ describe("execute_route_handler streaming safety", () => {
         expect(audit?.ok).toBe(true);
     });
 
+    it("rejects upstream EOF without an explicit completion signal", async () => {
+        const encoder = new TextEncoder();
+        const req = new MockReq();
+        const res = new MockRes();
+        let readCalls = 0;
+        const { stream } = createStreamFromRead(async () => {
+            readCalls += 1;
+            if (readCalls === 1) {
+                return {
+                    done: false,
+                    value: encoder.encode('data: {"choices":[{"delta":{"content":"Hello"}}]}\n\n'),
+                };
+            }
+            return { done: true };
+        });
+        const harness = createHarness({
+            executeLLM: async () => stream,
+        });
+
+        await harness.handleLLMExecutePost(req, res, {}, "execute");
+
+        const frames = toSSEDataFrames(res.text())
+            .filter((entry) => entry !== "[DONE]")
+            .map((entry) => JSON.parse(entry));
+
+        expect(frames.some((payload: Record<string, unknown>) => payload.type === "fail")).toBe(true);
+
+        const audit = harness.appendLLMAudit.mock.calls.at(-1)?.[0];
+        expect(audit?.status).toBe(502);
+        expect(audit?.error?.error).toBe("UPSTREAM_STREAM_INCOMPLETE");
+    });
+
+    it("accepts streamed completion when upstream emits finish_reason without [DONE]", async () => {
+        const encoder = new TextEncoder();
+        const req = new MockReq();
+        const res = new MockRes();
+        let readCalls = 0;
+        const { stream } = createStreamFromRead(async () => {
+            readCalls += 1;
+            if (readCalls === 1) {
+                return {
+                    done: false,
+                    value: encoder.encode('data: {"choices":[{"delta":{"content":"Hello"},"finish_reason":"stop"}]}\n\n'),
+                };
+            }
+            return { done: true };
+        });
+        const harness = createHarness({
+            executeLLM: async () => stream,
+        });
+
+        await harness.handleLLMExecutePost(req, res, {}, "execute");
+
+        const frames = toSSEDataFrames(res.text())
+            .filter((entry) => entry !== "[DONE]")
+            .map((entry) => JSON.parse(entry));
+
+        expect(frames.some((payload: Record<string, unknown>) => payload.type === "chunk" && payload.text === "Hello")).toBe(true);
+        expect(frames.some((payload: Record<string, unknown>) => payload.type === "done")).toBe(true);
+
+        const audit = harness.appendLLMAudit.mock.calls.at(-1)?.[0];
+        expect(audit?.status).toBe(200);
+        expect(audit?.ok).toBe(true);
+    });
+
     it("audits exactly one CLIENT_DISCONNECTED outcome when disconnect happens during final done-frame delivery", async () => {
         const encoder = new TextEncoder();
         const req = new MockReq();
@@ -355,7 +436,7 @@ describe("execute_route_handler streaming safety", () => {
             if (readCalls === 1) {
                 return {
                     done: false,
-                    value: encoder.encode('data: {"choices":[{"delta":{"content":"final text"}}]}\n\n'),
+                    value: encoder.encode('data: {"choices":[{"delta":{"content":"final text"}}]}\n\ndata: [DONE]\n\n'),
                 };
             }
             return { done: true };
@@ -449,7 +530,7 @@ describe("execute_route_handler streaming safety", () => {
             if (readCalls === 1) {
                 return {
                     done: false,
-                    value: encoder.encode('data: {"choices":[{"delta":{"content":"<Thoughts>hidden</Thoughts>"}}]}\n\n'),
+                    value: encoder.encode('data: {"choices":[{"delta":{"content":"<Thoughts>hidden</Thoughts>"}}]}\n\ndata: [DONE]\n\n'),
                 };
             }
             return { done: true };
@@ -649,6 +730,12 @@ describe("execute_route_handler visible output guard", () => {
                 return {
                     done: false,
                     value: encoder.encode('data: {"choices":[{"delta":{"content":"internal step and visible"}}]}\n\n'),
+                };
+            }
+            if (readCalls === 3) {
+                return {
+                    done: false,
+                    value: encoder.encode('data: [DONE]\n\n'),
                 };
             }
             return { done: true };

@@ -1299,6 +1299,8 @@ export async function requestOpenAIResponseAPI(arg:RequestDataArgumentExtended):
 function getTranStream(arg:RequestDataArgumentExtended):TransformStream<Uint8Array, StreamResponseChunk> {
     let dataUint:Uint8Array|Buffer = new Uint8Array([])
     let reasoningContent = ""
+    let sawDoneEvent = false
+    let sawTerminalError = false
     const db = getDatabase()
 
     return new TransformStream<Uint8Array, StreamResponseChunk>({
@@ -1313,6 +1315,7 @@ function getTranStream(arg:RequestDataArgumentExtended):TransformStream<Uint8Arr
                         try {
                             const rawChunk = data.replace("data: ", "").trim()
                             if(rawChunk === "[DONE]"){
+                                sawDoneEvent = true
                                 // This block handles non-server [DONE]
                                 if(arg.modelInfo.flags.includes(LLMFlags.deepSeekThinkingOutput)){
                                     readed["0"] = readed["0"].replace(/(.*)<\/think>/gms, (m, p1) => {
@@ -1350,6 +1353,7 @@ function getTranStream(arg:RequestDataArgumentExtended):TransformStream<Uint8Arr
                                         readed["0"] += (parsed.text || "");
                                         continue;
                                     } else if (parsed.type === 'fail' || parsed.type === 'error') {
+                                        sawTerminalError = true;
                                         const errorMessage = typeof parsed.message === 'string' && parsed.message.trim()
                                             ? parsed.message.trim()
                                             : (typeof parsed.error === 'string' && parsed.error.trim()
@@ -1368,6 +1372,7 @@ function getTranStream(arg:RequestDataArgumentExtended):TransformStream<Uint8Arr
                                         control.enqueue(readed);
                                         return;
                                     } else if (parsed.type === 'done') {
+                                        sawDoneEvent = true;
                                         if (parsed.newCharEtag) {
                                             readed["__newCharEtag"] = parsed.newCharEtag;
                                         }
@@ -1468,7 +1473,17 @@ function getTranStream(arg:RequestDataArgumentExtended):TransformStream<Uint8Arr
             } catch {
                 
             }
-        }        
+        },
+        flush(control) {
+            if (sawDoneEvent || sawTerminalError) {
+                return;
+            }
+            control.enqueue({
+                "__error": "Server stream ended before done event.",
+                "__errorCode": "UPSTREAM_STREAM_INCOMPLETE",
+                "__status": "502",
+            });
+        }
     })
 }
 

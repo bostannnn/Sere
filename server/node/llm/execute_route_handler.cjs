@@ -409,6 +409,7 @@ function createExecuteRouteHandler(arg = {}) {
                 let anthropicThinkingOpen = false;
                 let openrouterReasoningOpen = false;
                 let sseBuffer = '';
+                let sawExplicitStreamCompletion = false;
                 let clientDisconnected = false;
                 let terminalStateCommitted = false;
 
@@ -454,6 +455,52 @@ function createExecuteRouteHandler(arg = {}) {
                         res.on('drain', onDrain);
                         res.on('close', onClose);
                         res.on('error', onError);
+                    });
+                };
+
+                const hasExplicitStreamCompletion = (data) => {
+                    if (!data || typeof data !== 'object') {
+                        return false;
+                    }
+
+                    const eventType = typeof data.type === 'string'
+                        ? data.type.trim().toLowerCase()
+                        : '';
+                    if (eventType === 'message_stop' || eventType === 'response.completed') {
+                        return true;
+                    }
+
+                    const choice = data?.choices?.[0];
+                    if (choice && typeof choice === 'object') {
+                        const finishReason = typeof choice.finish_reason === 'string'
+                            ? choice.finish_reason.trim()
+                            : '';
+                        if (finishReason) {
+                            return true;
+                        }
+                    }
+
+                    const deltaStopReason = typeof data?.delta?.stop_reason === 'string'
+                        ? data.delta.stop_reason.trim()
+                        : '';
+                    if (deltaStopReason) {
+                        return true;
+                    }
+
+                    const stopReason = typeof data?.stop_reason === 'string'
+                        ? data.stop_reason.trim()
+                        : '';
+                    if (stopReason) {
+                        return true;
+                    }
+
+                    const candidates = Array.isArray(data?.candidates) ? data.candidates : [];
+                    return candidates.some((candidate) => {
+                        if (!candidate || typeof candidate !== 'object') return false;
+                        const finishReason = typeof candidate.finishReason === 'string'
+                            ? candidate.finishReason.trim()
+                            : '';
+                        return !!finishReason;
                     });
                 };
 
@@ -535,12 +582,19 @@ function createExecuteRouteHandler(arg = {}) {
                     }
                     if (dataLines.length === 0) return;
                     const payload = dataLines.join('\n').trim();
-                    if (!payload || payload === '[DONE]') return;
+                    if (!payload) return;
+                    if (payload === '[DONE]') {
+                        sawExplicitStreamCompletion = true;
+                        return;
+                    }
                     let data = null;
                     try {
                         data = JSON.parse(payload);
                     } catch {
                         return;
+                    }
+                    if (hasExplicitStreamCompletion(data)) {
+                        sawExplicitStreamCompletion = true;
                     }
                     const text = extractTextFromEvent(data);
                     if (!text) return;
@@ -591,6 +645,14 @@ function createExecuteRouteHandler(arg = {}) {
                         fullText += '</Thoughts>\n\n';
                         await writeSSEEvent({ type: 'chunk', text: '</Thoughts>\n\n' });
                         openrouterReasoningOpen = false;
+                    }
+
+                    if (!sawExplicitStreamCompletion) {
+                        throw new LLMHttpError(
+                            502,
+                            'UPSTREAM_STREAM_INCOMPLETE',
+                            'Upstream stream ended before an explicit completion signal.'
+                        );
                     }
 
                     assertVisibleModelOutput(normalized.mode, fullText, {
