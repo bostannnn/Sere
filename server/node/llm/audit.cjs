@@ -3,8 +3,9 @@ const fs = require('fs/promises');
 const { existsSync } = require('fs');
 
 const LOGS_DIR_NAME = 'logs';
-const LLM_LOG_FILE_NAME = 'llm-execution.jsonl';
-const LLM_LOG_FILE_PREFIX = 'llm-execution';
+const LLM_LOG_DIR_NAME = 'llm-execution';
+const LEGACY_LLM_LOG_FILE_NAME = 'llm-execution.jsonl';
+const LEGACY_LLM_LOG_FILE_PREFIX = 'llm-execution';
 const REDACTED = '[REDACTED]';
 const TRUNCATED = '[TRUNCATED]';
 const MAX_DEPTH = 8;
@@ -24,6 +25,8 @@ const NON_SENSITIVE_LOG_KEYS = new Set([
 const DEFAULT_LOG_MODE = 'full';
 const ALLOWED_LOG_MODES = new Set(['full', 'compact', 'metadata']);
 let lastPruneAtMs = 0;
+let lastFileTimestampMs = -1;
+let sameTimestampSequence = 0;
 
 function isSensitiveLogKey(key) {
     const normalized = String(key || '').trim().toLowerCase();
@@ -57,15 +60,94 @@ function getLogRetentionDays() {
     return Math.floor(raw);
 }
 
-function getLogFilePath(dataRoot, timestampMs = Date.now()) {
-    if (!parseBooleanEnv('RISU_LLM_LOG_SPLIT_DAILY')) {
-        return path.join(dataRoot, LOGS_DIR_NAME, LLM_LOG_FILE_NAME);
-    }
+function formatUtcDateParts(timestampMs) {
     const dt = new Date(timestampMs);
-    const yyyy = dt.getUTCFullYear();
-    const mm = String(dt.getUTCMonth() + 1).padStart(2, '0');
-    const dd = String(dt.getUTCDate()).padStart(2, '0');
-    return path.join(dataRoot, LOGS_DIR_NAME, `${LLM_LOG_FILE_PREFIX}-${yyyy}-${mm}-${dd}.jsonl`);
+    return {
+        yyyy: dt.getUTCFullYear(),
+        mm: String(dt.getUTCMonth() + 1).padStart(2, '0'),
+        dd: String(dt.getUTCDate()).padStart(2, '0'),
+        hh: String(dt.getUTCHours()).padStart(2, '0'),
+        min: String(dt.getUTCMinutes()).padStart(2, '0'),
+        ss: String(dt.getUTCSeconds()).padStart(2, '0'),
+        ms: String(dt.getUTCMilliseconds()).padStart(3, '0'),
+    };
+}
+
+function toSafeSlug(value, fallback = 'unknown') {
+    const normalized = String(value || '')
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '');
+    return normalized || fallback;
+}
+
+function buildSourceSlug(entry) {
+    if (!entry || typeof entry !== 'object') {
+        return 'audit';
+    }
+    const endpoint = toSafeSlug(entry.endpoint || entry.path || 'audit', 'audit');
+    const mode = toSafeSlug(entry.mode || '', '');
+    if (!mode) {
+        return endpoint;
+    }
+    return `${endpoint}-${mode}`;
+}
+
+function buildRequestSlug(entry) {
+    if (!entry || typeof entry !== 'object') {
+        return 'no-request-id';
+    }
+    return toSafeSlug(entry.requestId || entry.provider || entry.method || 'no-request-id', 'no-request-id');
+}
+
+function getEntryLogsRoot(dataRoot) {
+    return path.join(dataRoot, LOGS_DIR_NAME, LLM_LOG_DIR_NAME);
+}
+
+function getLogFilePath(dataRoot, timestampMs = Date.now(), entry = {}) {
+    const { yyyy, mm, dd, hh, min, ss, ms } = formatUtcDateParts(timestampMs);
+    const dayDir = `${yyyy}-${mm}-${dd}`;
+    const fileName = `${yyyy}-${mm}-${dd}T${hh}-${min}-${ss}.${ms}Z__${buildSourceSlug(entry)}__${buildRequestSlug(entry)}.json`;
+    return path.join(getEntryLogsRoot(dataRoot), dayDir, fileName);
+}
+
+function nextFileSequence(timestampMs) {
+    if (timestampMs === lastFileTimestampMs) {
+        sameTimestampSequence += 1;
+    } else {
+        lastFileTimestampMs = timestampMs;
+        sameTimestampSequence = 0;
+    }
+    return sameTimestampSequence;
+}
+
+function getUniqueLogFilePath(dataRoot, timestampMs = Date.now(), entry = {}) {
+    const basePath = getLogFilePath(dataRoot, timestampMs, entry);
+    const sequence = nextFileSequence(timestampMs);
+    if (sequence === 0) {
+        return basePath;
+    }
+    const ext = path.extname(basePath);
+    const baseWithoutExt = basePath.slice(0, ext ? -ext.length : undefined);
+    return `${baseWithoutExt}__${String(sequence).padStart(4, '0')}${ext}`;
+}
+
+async function listLegacyLogFiles(dataRoot) {
+    const logsDir = path.join(dataRoot, LOGS_DIR_NAME);
+    if (!existsSync(logsDir)) {
+        return [];
+    }
+    const files = await fs.readdir(logsDir, { withFileTypes: true });
+    return files
+        .filter((entry) => entry.isFile())
+        .map((entry) => entry.name)
+        .filter((name) =>
+            name === LEGACY_LLM_LOG_FILE_NAME ||
+            /^llm-execution-\d{4}-\d{2}-\d{2}\.jsonl$/.test(name)
+        )
+        .sort()
+        .map((name) => path.join(logsDir, name));
 }
 
 function compactEntry(entry) {
@@ -119,21 +201,16 @@ function metadataEntry(entry) {
     return out;
 }
 
-async function listLogFiles(dataRoot) {
-    const logsDir = path.join(dataRoot, LOGS_DIR_NAME);
-    if (!existsSync(logsDir)) {
+async function listEntryLogDayDirs(dataRoot) {
+    const logsRoot = getEntryLogsRoot(dataRoot);
+    if (!existsSync(logsRoot)) {
         return [];
     }
-    const files = await fs.readdir(logsDir, { withFileTypes: true });
-    return files
-        .filter((entry) => entry.isFile())
+    return (await fs.readdir(logsRoot, { withFileTypes: true }))
+        .filter((entry) => entry.isDirectory())
         .map((entry) => entry.name)
-        .filter((name) =>
-            name === LLM_LOG_FILE_NAME ||
-            /^llm-execution-\d{4}-\d{2}-\d{2}\.jsonl$/.test(name)
-        )
         .sort()
-        .map((name) => path.join(logsDir, name));
+        .reverse();
 }
 
 async function pruneOldLogsIfNeeded(dataRoot, nowMs = Date.now()) {
@@ -146,8 +223,31 @@ async function pruneOldLogsIfNeeded(dataRoot, nowMs = Date.now()) {
     }
     lastPruneAtMs = nowMs;
     const cutoffMs = nowMs - (retentionDays * 24 * 60 * 60 * 1000);
-    const files = await listLogFiles(dataRoot);
-    for (const filePath of files) {
+    const logsRoot = getEntryLogsRoot(dataRoot);
+    const dayDirs = await listEntryLogDayDirs(dataRoot);
+    for (const dayDir of dayDirs) {
+        const dirPath = path.join(logsRoot, dayDir);
+        let dayFiles = [];
+        try {
+            dayFiles = await fs.readdir(dirPath, { withFileTypes: true });
+        } catch {
+            continue;
+        }
+        for (const dayFile of dayFiles) {
+            if (!dayFile.isFile() || !dayFile.name.endsWith('.json')) continue;
+            const filePath = path.join(dirPath, dayFile.name);
+            try {
+                const stat = await fs.stat(filePath);
+                if (stat.mtimeMs < cutoffMs) {
+                    await fs.unlink(filePath);
+                }
+            } catch {
+                // Ignore single-file pruning failures.
+            }
+        }
+    }
+    const legacyFiles = await listLegacyLogFiles(dataRoot);
+    for (const filePath of legacyFiles) {
         try {
             const stat = await fs.stat(filePath);
             if (stat.mtimeMs < cutoffMs) {
@@ -155,6 +255,22 @@ async function pruneOldLogsIfNeeded(dataRoot, nowMs = Date.now()) {
             }
         } catch {
             // Ignore single-file pruning failures.
+        }
+    }
+    if (!existsSync(logsRoot)) {
+        return;
+    }
+    const remainingDayDirs = await fs.readdir(logsRoot, { withFileTypes: true });
+    for (const dayDir of remainingDayDirs) {
+        if (!dayDir.isDirectory()) continue;
+        const dirPath = path.join(logsRoot, dayDir.name);
+        try {
+            const remaining = await fs.readdir(dirPath);
+            if (remaining.length === 0) {
+                await fs.rmdir(dirPath);
+            }
+        } catch {
+            // Ignore empty-dir cleanup failures.
         }
     }
 }
@@ -211,9 +327,6 @@ async function appendExecutionLog(dataRoot, entry) {
     }
     const nowMs = Date.now();
     const logMode = getLogMode();
-    const filePath = getLogFilePath(dataRoot, nowMs);
-    const logsDir = path.dirname(filePath);
-    await fs.mkdir(logsDir, { recursive: true });
     let payload = {
         timestamp: new Date().toISOString(),
         ...sanitizeValue(entry),
@@ -223,8 +336,12 @@ async function appendExecutionLog(dataRoot, entry) {
     } else if (logMode === 'metadata') {
         payload = metadataEntry(payload);
     }
-    await fs.appendFile(filePath, `${JSON.stringify(payload)}\n`, 'utf-8');
+    const filePath = getUniqueLogFilePath(dataRoot, nowMs, payload);
+    const logsDir = path.dirname(filePath);
+    await fs.mkdir(logsDir, { recursive: true });
+    await fs.writeFile(filePath, JSON.stringify(payload), 'utf-8');
     await pruneOldLogsIfNeeded(dataRoot, nowMs);
+    return filePath;
 }
 
 function parseLine(line) {
@@ -261,6 +378,43 @@ function matchesFilter(entry, filters) {
         }
     }
     return true;
+}
+
+async function collectMatchingEntriesFromEntryStore(dataRoot, filters, limit, out) {
+    const logsRoot = getEntryLogsRoot(dataRoot);
+    const dayDirs = await listEntryLogDayDirs(dataRoot);
+    for (const dayDir of dayDirs) {
+        if (out.length >= limit) {
+            return;
+        }
+        const dirPath = path.join(logsRoot, dayDir);
+        let dayFiles;
+        try {
+            dayFiles = (await fs.readdir(dirPath, { withFileTypes: true }))
+                .filter((entry) => entry.isFile() && entry.name.endsWith('.json'))
+                .map((entry) => entry.name)
+                .sort()
+                .reverse();
+        } catch {
+            continue;
+        }
+        for (const fileName of dayFiles) {
+            if (out.length >= limit) {
+                return;
+            }
+            const filePath = path.join(dirPath, fileName);
+            try {
+                const raw = await fs.readFile(filePath, 'utf-8');
+                const entry = parseLine(raw);
+                if (!entry || !matchesFilter(entry, filters)) {
+                    continue;
+                }
+                out.push(entry);
+            } catch {
+                // Ignore single-file read failures.
+            }
+        }
+    }
 }
 
 async function collectMatchingEntriesFromFileEnd(filePath, filters, limit, out) {
@@ -304,8 +458,9 @@ async function collectMatchingEntriesFromFileEnd(filePath, filters, limit, out) 
 }
 
 async function readExecutionLogs(dataRoot, query = {}) {
-    const filePaths = await listLogFiles(dataRoot);
-    if (filePaths.length === 0) {
+    const entryDayDirs = await listEntryLogDayDirs(dataRoot);
+    const legacyFiles = await listLegacyLogFiles(dataRoot);
+    if (entryDayDirs.length === 0 && legacyFiles.length === 0) {
         return [];
     }
     const limit = Math.max(1, Math.min(500, Number(query.limit) || 100));
@@ -319,8 +474,12 @@ async function readExecutionLogs(dataRoot, query = {}) {
     };
 
     const result = [];
-    for (let fileIdx = filePaths.length - 1; fileIdx >= 0; fileIdx--) {
-        const filePath = filePaths[fileIdx];
+    await collectMatchingEntriesFromEntryStore(dataRoot, filters, limit, result);
+    if (result.length >= limit) {
+        return result;
+    }
+    for (let fileIdx = legacyFiles.length - 1; fileIdx >= 0; fileIdx--) {
+        const filePath = legacyFiles[fileIdx];
         await collectMatchingEntriesFromFileEnd(filePath, filters, limit, result);
         if (result.length >= limit) {
             return result;

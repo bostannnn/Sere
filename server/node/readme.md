@@ -49,15 +49,17 @@ Set `RISU_DEV_NODE_API=0` before `pnpm dev` to disable this behavior.
   - `RISU_AUTH_TOKEN=<sha256 password digest>`
 
 ## Durable LLM Logs
-- Log file: `data/logs/llm-execution.jsonl`
+- Log directory: `data/logs/llm-execution/YYYY-MM-DD/*.json`
+- File naming: `YYYY-MM-DDTHH-MM-SS.mmmZ__{endpoint-or-source}__{request-id}.json`
 - Endpoint: `GET /data/llm/logs`
 - Filters: `limit`, `chatId`, `requestId`, `endpoint`, `provider`, `status`, `since`
 - Sensitive fields (keys/tokens/password-like fields) are redacted in persisted logs.
 - Optional log mode env vars:
   - `RISU_LLM_LOG_MODE=full|compact|metadata` (default: `full`)
-  - `RISU_LLM_LOG_SPLIT_DAILY=1` to write daily files (`llm-execution-YYYY-MM-DD.jsonl`)
   - `RISU_LLM_LOG_RETENTION_DAYS=<N>` to purge old log files
   - `RISU_AUDIT_INCLUDE_FULL_GENERATE_REQUEST=1` to keep full `/data/llm/generate` request payloads in durable logs (default: compact summary only)
+- Backward compatibility:
+  - `GET /data/llm/logs` still reads older legacy `data/logs/llm-execution.jsonl` files if they exist.
 
 ## Current LLM Migration Limits
 - Provider support in server execution is currently OpenRouter + OpenAI + DeepSeek + Anthropic + Google + Ollama + Kobold + NovelAI.
