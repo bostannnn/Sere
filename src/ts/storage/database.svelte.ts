@@ -29,6 +29,7 @@ import {
 import type {
     Chat,
     Database,
+    Message,
     botPreset,
     character,
     groupChat,
@@ -649,6 +650,73 @@ export function getCurrentCharacter(options:getDatabaseOptions = {}):character|g
     return char
 }
 
+export function resolveSelectedCharacter(
+    characters: Array<character | groupChat> | undefined | null,
+    selectedCharacterIndex: number,
+): character | groupChat | null {
+    if (!Array.isArray(characters) || selectedCharacterIndex < 0) {
+        return null
+    }
+    return characters[selectedCharacterIndex] ?? null
+}
+
+export function resolveSafeChatIndex(
+    chats: Chat[] | undefined | null,
+    chatPage: number | undefined | null,
+): number {
+    if (!Array.isArray(chats) || chats.length === 0) {
+        return -1
+    }
+    if (!Number.isInteger(chatPage) || chatPage < 0 || chatPage >= chats.length) {
+        return 0
+    }
+    return chatPage
+}
+
+export function resolveSelectedChat(
+    currentCharacter: character | groupChat | null | undefined,
+): Chat | null {
+    const chatIndex = resolveSafeChatIndex(currentCharacter?.chats, currentCharacter?.chatPage)
+    if (chatIndex < 0) {
+        return null
+    }
+    return currentCharacter?.chats?.[chatIndex] ?? null
+}
+
+export function resolveSelectedChatMessages(
+    currentCharacter: character | groupChat | null | undefined,
+): Message[] {
+    return resolveSelectedChat(currentCharacter)?.message ?? []
+}
+
+export function resolveSelectedChatState(
+    characters: Array<character | groupChat> | undefined | null,
+    selectedCharacterIndex: number,
+) {
+    const character = resolveSelectedCharacter(characters, selectedCharacterIndex)
+    const chatIndex = resolveSafeChatIndex(character?.chats, character?.chatPage)
+    const chat = chatIndex >= 0 ? character?.chats?.[chatIndex] ?? null : null
+    return {
+        character,
+        characterIndex: character ? selectedCharacterIndex : -1,
+        chat,
+        chatIndex,
+        messages: chat?.message ?? [],
+    }
+}
+
+export function repairCharacterChatPage(currentCharacter: character | groupChat | null | undefined): number {
+    if (!currentCharacter) {
+        return -1
+    }
+    const safeChatIndex = resolveSafeChatIndex(currentCharacter.chats, currentCharacter.chatPage)
+    const nextChatPage = safeChatIndex < 0 ? 0 : safeChatIndex
+    if (currentCharacter.chatPage !== nextChatPage) {
+        currentCharacter.chatPage = nextChatPage
+    }
+    return safeChatIndex
+}
+
 export function setCurrentCharacter(char:character|groupChat){
     if(!DBState.db.characters){
         DBState.db.characters = []
@@ -674,12 +742,16 @@ export function setCharacterByIndex(index:number,char:character|groupChat){
 
 export function getCurrentChat(){
     const char = getCurrentCharacter()
-    return char?.chats[char.chatPage]
+    return resolveSelectedChat(char)
 }
 
 export function setCurrentChat(chat:Chat){
     const char = getCurrentCharacter()
-    char.chats[char.chatPage] = chat
+    const safeChatIndex = resolveSafeChatIndex(char?.chats, char?.chatPage)
+    if (!char || safeChatIndex < 0) {
+        return
+    }
+    char.chats[safeChatIndex] = chat
     setCurrentCharacter(char)
 }
 

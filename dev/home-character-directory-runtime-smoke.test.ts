@@ -95,6 +95,18 @@ vi.mock(import("src/ts/util"), () => ({
   }),
 }));
 
+vi.mock(import("src/ts/storage/database.svelte"), () => ({
+  resolveSafeChatIndex: (chats: Array<unknown> | undefined, chatPage: number | undefined) => {
+    if (!Array.isArray(chats) || chats.length === 0) {
+      return -1;
+    }
+    if (!Number.isInteger(chatPage) || chatPage < 0 || chatPage >= chats.length) {
+      return 0;
+    }
+    return chatPage;
+  },
+}));
+
 import HomeCharacterDirectory from "src/lib/UI/HomeCharacterDirectory.svelte";
 import { DBState, selectedCharID } from "src/ts/stores.svelte";
 

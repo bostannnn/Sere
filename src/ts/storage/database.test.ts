@@ -27,8 +27,13 @@ vi.mock("../globalApi.svelte", () => ({
 import {
   DEFAULT_GLOBAL_RAG_SETTINGS,
   presetTemplate as presetTemplateFromDatabase,
+  repairCharacterChatPage,
   resolveChatBackgroundMode as resolveChatBackgroundModeFromDatabase,
   resolveGlobalRagSettings as resolveGlobalRagSettingsFromDatabase,
+  resolveSafeChatIndex,
+  resolveSelectedCharacter,
+  resolveSelectedChat,
+  resolveSelectedChatMessages,
   setDatabase,
 } from "./database.svelte";
 import {
@@ -247,6 +252,60 @@ describe("database module re-export contract", () => {
     expect(presetTemplateFromDatabase).toBe(presetTemplate);
     expect(resolveGlobalRagSettingsFromDatabase).toBe(resolveGlobalRagSettings);
     expect(resolveChatBackgroundModeFromDatabase).toBe(resolveChatBackgroundMode);
+  });
+});
+
+describe("selected chat helpers", () => {
+  const makeChat = (name: string) => ({
+    name,
+    note: `${name} note`,
+    message: [{ role: "user" as const, data: `${name} message` }],
+    localLore: [],
+    id: `${name}-id`,
+  });
+
+  it("returns null state when no selected character exists", () => {
+    expect(resolveSelectedCharacter([], -1)).toBeNull();
+    expect(resolveSelectedChat(null)).toBeNull();
+    expect(resolveSelectedChatMessages(null)).toEqual([]);
+  });
+
+  it("returns no chat when the selected character has no chats", () => {
+    const character = {
+      name: "No chats",
+      type: "character" as const,
+      chats: [],
+      chatPage: 4,
+    };
+
+    expect(resolveSafeChatIndex(character.chats, character.chatPage)).toBe(-1);
+    expect(resolveSelectedChat(character as never)).toBeNull();
+    expect(resolveSelectedChatMessages(character as never)).toEqual([]);
+    expect(repairCharacterChatPage(character as never)).toBe(-1);
+    expect(character.chatPage).toBe(0);
+  });
+
+  it("falls back to the first chat for out-of-range chatPage values", () => {
+    const chats = [makeChat("chat-1"), makeChat("chat-2")];
+    const character = {
+      name: "Has chats",
+      type: "character" as const,
+      chats,
+      chatPage: 99,
+    };
+
+    expect(resolveSafeChatIndex(chats as never, character.chatPage)).toBe(0);
+    expect(resolveSelectedChat(character as never)).toBe(chats[0]);
+    expect(resolveSelectedChatMessages(character as never)).toEqual(chats[0].message);
+    expect(repairCharacterChatPage(character as never)).toBe(0);
+    expect(character.chatPage).toBe(0);
+  });
+
+  it("defaults missing or negative chatPage values to the first chat", () => {
+    const chats = [makeChat("chat-1"), makeChat("chat-2")];
+
+    expect(resolveSafeChatIndex(chats as never, undefined)).toBe(0);
+    expect(resolveSafeChatIndex(chats as never, -4)).toBe(0);
   });
 });
 

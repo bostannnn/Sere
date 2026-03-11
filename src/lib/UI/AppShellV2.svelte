@@ -16,6 +16,11 @@
     } from "src/ts/stores.svelte";
     import { alertSelect } from "src/ts/alert";
     import { addCharacter } from "src/ts/characters";
+    import {
+        repairCharacterChatPage,
+        resolveSelectedCharacter,
+        resolveSelectedChat,
+    } from "src/ts/storage/database.svelte";
     import AppShellTopbar from "./AppShellTopbar.svelte";
     import AppShellStage from "./AppShellStage.svelte";
 
@@ -105,35 +110,20 @@
     }
 
     function resolveSelectedCharacterId(): string | null {
-        if ($selectedCharID < 0) {
-            return null;
-        }
-        return DBState.db.characters?.[$selectedCharID]?.chaId ?? null;
+        return resolveSelectedCharacter(DBState.db.characters, $selectedCharID)?.chaId ?? null;
     }
 
+    $effect(() => {
+        const selectedCharacter = resolveSelectedCharacter(DBState.db.characters, $selectedCharID);
+        repairCharacterChatPage(selectedCharacter);
+    });
+
     function resolveSelectedChatId(): string | null {
-        if ($selectedCharID < 0) {
-            return null;
-        }
-        const selectedCharacter = DBState.db.characters?.[$selectedCharID];
+        const selectedCharacter = resolveSelectedCharacter(DBState.db.characters, $selectedCharID);
         if (!selectedCharacter) {
             return null;
         }
-        const chats = selectedCharacter.chats ?? [];
-        if (chats.length === 0) {
-            return null;
-        }
-
-        const currentChatPage = selectedCharacter.chatPage;
-        const safeChatPage = Number.isInteger(currentChatPage) && currentChatPage >= 0 && currentChatPage < chats.length
-            ? currentChatPage
-            : 0;
-
-        if (safeChatPage !== currentChatPage) {
-            selectedCharacter.chatPage = safeChatPage;
-        }
-
-        return chats[safeChatPage]?.id ?? null;
+        return resolveSelectedChat(selectedCharacter)?.id ?? null;
     }
 
     const resolvedAppRoute = $derived.by((): AppRoute => {

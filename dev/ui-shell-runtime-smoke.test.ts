@@ -145,6 +145,35 @@ vi.mock(import("src/ts/storage/database.svelte"), () => ({
   importPreset: async () => {},
   getDatabase: () => ({ modules: [] }),
   setDatabase: () => {},
+  repairCharacterChatPage: (character: { chats?: Array<unknown>; chatPage: number } | null | undefined) => {
+    if (!character) {
+      return -1;
+    }
+    if (!Array.isArray(character.chats) || character.chats.length === 0) {
+      character.chatPage = 0;
+      return -1;
+    }
+    const safeIndex = !Number.isInteger(character.chatPage) || character.chatPage < 0 || character.chatPage >= character.chats.length
+      ? 0
+      : character.chatPage;
+    character.chatPage = safeIndex;
+    return safeIndex;
+  },
+  resolveSelectedCharacter: (characters: Array<unknown> | undefined, selectedCharIndex: number) => {
+    if (!Array.isArray(characters) || selectedCharIndex < 0) {
+      return null;
+    }
+    return characters[selectedCharIndex] ?? null;
+  },
+  resolveSelectedChat: (character: { chats?: Array<unknown>; chatPage?: number } | null | undefined) => {
+    if (!character || !Array.isArray(character.chats) || character.chats.length === 0) {
+      return null;
+    }
+    const safeIndex = !Number.isInteger(character.chatPage) || character.chatPage < 0 || character.chatPage >= character.chats.length
+      ? 0
+      : character.chatPage;
+    return character.chats[safeIndex] ?? null;
+  },
 }));
 vi.mock(import("src/ts/process/modules"), () => ({
   readModule: async () => null,
@@ -535,7 +564,7 @@ describe("ui shell runtime smoke", () => {
     expect(window.localStorage.getItem("risu:desktop-char-config-open")).toBe("0");
   });
 
-  it("falls back to first chat when the remembered chat index is missing", async () => {
+  it("falls back to the first chat when the remembered chat index is missing", async () => {
     settingsOpen.set(false);
     openRulebookManager.set(false);
     selectedCharID.set(-1);

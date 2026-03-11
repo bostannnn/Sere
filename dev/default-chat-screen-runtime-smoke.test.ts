@@ -259,12 +259,46 @@ vi.mock(import("src/ts/stores.svelte"), async () => {
 
 vi.mock(import("src/ts/storage/database.svelte"), async () => {
   const { DBState } = await import("src/ts/stores.svelte");
+  const resolveSafeChatIndex = (chats: Array<unknown> | undefined, chatPage: number | undefined) => {
+    if (!Array.isArray(chats) || chats.length === 0) {
+      return -1;
+    }
+    if (!Number.isInteger(chatPage) || chatPage < 0 || chatPage >= chats.length) {
+      return 0;
+    }
+    return chatPage;
+  };
+  const resolveSelectedChat = (character: { chats?: Array<unknown>; chatPage?: number } | null | undefined) => {
+    const chatIndex = resolveSafeChatIndex(character?.chats, character?.chatPage);
+    return chatIndex >= 0 ? character?.chats?.[chatIndex] ?? null : null;
+  };
   return {
     getDatabase: () => ({}),
     getCurrentCharacter: () => DBState.db.characters[0],
-    getCurrentChat: () => DBState.db.characters[0].chats[0],
+    getCurrentChat: () => resolveSelectedChat(DBState.db.characters[0]),
     setCurrentChat: (chat: unknown) => {
       DBState.db.characters[0].chats[0] = chat as (typeof DBState.db.characters)[number]["chats"][number];
+    },
+    repairCharacterChatPage: (character: { chats?: Array<unknown>; chatPage: number } | null | undefined) => {
+      if (!character) {
+        return -1;
+      }
+      const chatIndex = resolveSafeChatIndex(character.chats, character.chatPage);
+      character.chatPage = chatIndex < 0 ? 0 : chatIndex;
+      return chatIndex;
+    },
+    resolveSelectedChat,
+    resolveSelectedChatState: (characters: Array<{ chats?: Array<unknown>; chatPage?: number }> | undefined, selectedCharIndex: number) => {
+      const character = selectedCharIndex >= 0 ? characters?.[selectedCharIndex] ?? null : null;
+      const chatIndex = resolveSafeChatIndex(character?.chats, character?.chatPage);
+      const chat = chatIndex >= 0 ? character?.chats?.[chatIndex] ?? null : null;
+      return {
+        character,
+        characterIndex: character ? selectedCharIndex : -1,
+        chat,
+        chatIndex,
+        messages: chat?.message ?? [],
+      };
     },
   };
 });
@@ -707,6 +741,104 @@ describe("default chat screen runtime smoke", () => {
     await flushUi();
 
     expect(document.querySelector('[data-testid="simple-panel-stub"]')).not.toBeNull();
+  });
+
+  it("clamps an out-of-range selected chatPage on mount", async () => {
+    DBState.db.characters[0].chatPage = 99;
+    DBState.db.characters[0].chats = [
+      {
+        id: "chat-1",
+        name: "Chat 1",
+        fmIndex: -1,
+        message: [],
+        localLore: [],
+        modules: [],
+        note: "",
+        bindedPersona: "",
+      },
+      {
+        id: "chat-2",
+        name: "Chat 2",
+        fmIndex: -1,
+        message: [],
+        localLore: [],
+        modules: [],
+        note: "",
+        bindedPersona: "",
+      },
+    ];
+
+    const target = document.createElement("div");
+    document.body.appendChild(target);
+    app = mount(DefaultChatScreen, { target });
+    await flushUi();
+
+    expect(DBState.db.characters[0].chatPage).toBe(0);
+    expect(document.querySelector(".ds-chat-main-shell")).not.toBeNull();
+  });
+
+  it("renders safely when the selected character has no chats", async () => {
+    DBState.db.characters[0].chatPage = 7;
+    DBState.db.characters[0].chats = [];
+
+    const target = document.createElement("div");
+    document.body.appendChild(target);
+    app = mount(DefaultChatScreen, { target });
+    await flushUi();
+
+    expect(DBState.db.characters[0].chatPage).toBe(0);
+    expect(document.querySelector(".ds-chat-main-shell")).not.toBeNull();
+  });
+
+  it("keeps the chat shell mounted when selection exists but the character record is temporarily missing", async () => {
+    const originalCharacters = structuredClone(DBState.db.characters);
+    DBState.db.characters = [];
+    selectedCharID.set(0);
+
+    const target = document.createElement("div");
+    document.body.appendChild(target);
+    app = mount(DefaultChatScreen, { target });
+    await flushUi();
+
+    expect(document.querySelector(".ds-chat-main-shell")).not.toBeNull();
+    expect(document.querySelector('[data-testid="simple-panel-stub"]')).toBeNull();
+
+    DBState.db.characters = originalCharacters;
+  });
+
+  it("stays stable when selection changes while a send is in flight", async () => {
+    let resolveSend: (() => void) | null = null;
+    mocks.sendChat.mockImplementationOnce(async () => {
+      await new Promise<void>((resolve) => {
+        resolveSend = resolve;
+      });
+    });
+
+    const target = document.createElement("div");
+    document.body.appendChild(target);
+    app = mount(DefaultChatScreen, { target });
+    await flushUi();
+
+    const composerInput = document.querySelector(
+      ".ds-chat-composer-input.control-field",
+    ) as HTMLTextAreaElement | null;
+    expect(composerInput).not.toBeNull();
+
+    composerInput!.value = "Selection race";
+    composerInput!.dispatchEvent(new Event("input", { bubbles: true }));
+    await flushUi();
+
+    composerInput!.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    await flushUi();
+
+    selectedCharID.set(1);
+    await flushUi();
+
+    resolveSend?.();
+    await flushUi();
+
+    expect(mocks.sendChat).toHaveBeenCalledTimes(1);
+    expect(document.querySelector(".ds-chat-main-shell")).not.toBeNull();
   });
 
   it("keeps fixed composer and top-bar jump stable with long input/send flow", async () => {
