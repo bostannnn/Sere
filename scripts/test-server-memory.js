@@ -9,12 +9,15 @@
  * Environment variables:
  *   RISU_DATA_TEST_URL            — server base URL (default: http://localhost:6001)
  *   RISU_STORAGE_TEST_ALLOW_WRITE — must be "1" to allow write operations
+ *   RISU_SMOKE_ALLOW_LIVE_SETTINGS_REPLACE — set to "1" to allow settings.replace
+ *                                            against the default local server URL
  *   RISU_REQUIRE_LIVE_MODEL       — set to "1" to require manual summarize (live model) assertions
  */
 'use strict';
 
 const baseUrl = process.env.RISU_DATA_TEST_URL || 'http://localhost:6001';
 const ALLOW_WRITE = process.env.RISU_STORAGE_TEST_ALLOW_WRITE === '1';
+const ALLOW_LIVE_SETTINGS_REPLACE = process.env.RISU_SMOKE_ALLOW_LIVE_SETTINGS_REPLACE === '1';
 const REQUIRE_LIVE_MODEL = process.env.RISU_REQUIRE_LIVE_MODEL === '1';
 // Optional auth token (the hashed password, as returned by POST /data/auth/crypto).
 // Required when the server has password auth enabled.
@@ -27,6 +30,18 @@ const characterPromptOverrideA = 'Character-level summarization prompt A';
 const requestPromptOverrideB = 'Request-level summarization prompt B';
 let eventCursor = 0;
 let mutationCounter = 0;
+
+function isDefaultLocalServer(urlString) {
+  try {
+    const parsed = new URL(urlString);
+    const host = parsed.hostname.toLowerCase();
+    const port = parsed.port || (parsed.protocol === 'https:' ? '443' : '80');
+    const isLocalHost = host === 'localhost' || host === '127.0.0.1' || host === '::1';
+    return isLocalHost && port === '6001';
+  } catch {
+    return false;
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -174,6 +189,14 @@ async function main() {
   if (!ALLOW_WRITE) {
     console.error(
       'FAIL test-server-memory: set RISU_STORAGE_TEST_ALLOW_WRITE=1 to allow write operations.'
+    );
+    process.exit(1);
+  }
+
+  if (isDefaultLocalServer(baseUrl) && !ALLOW_LIVE_SETTINGS_REPLACE) {
+    console.error(
+      'FAIL test-server-memory: refusing to run against the default local server because this smoke performs settings.replace and can roll back live settings. ' +
+      'Re-run with RISU_SMOKE_ALLOW_LIVE_SETTINGS_REPLACE=1 only if that is intentional.'
     );
     process.exit(1);
   }

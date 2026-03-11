@@ -45,6 +45,7 @@
       oninput={(event) => {
         const target = event.currentTarget as HTMLInputElement;
         value = normalizeValue(Number(target.value));
+        onchange?.();
       }}
     />
   </div>

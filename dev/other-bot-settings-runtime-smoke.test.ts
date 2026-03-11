@@ -213,6 +213,23 @@ async function flushUi() {
 }
 
 describe("other bots settings runtime smoke", () => {
+  function getValueFieldFollowingLabel(labelText: string): HTMLInputElement | null {
+    const labels = Array.from(document.querySelectorAll(".ds-settings-label"));
+    const label = labels.find((node) => (node.textContent ?? "").trim() === labelText);
+    if (!label) return null;
+
+    let next: Element | null = label.nextElementSibling;
+    while (next) {
+      const nested = next.querySelector?.('[data-testid="bindable-field-value"]');
+      if (nested instanceof HTMLInputElement) {
+        return nested;
+      }
+      next = next.nextElementSibling;
+    }
+
+    return null;
+  }
+
   beforeEach(() => {
     shared.dbState.db = createDbState();
     selectedCharID.set(0);
@@ -256,5 +273,28 @@ describe("other bots settings runtime smoke", () => {
       { value: "char-visible-2", label: "Unnamed" },
     ]);
     expect(charSelect?.value).toBe("char-visible-1");
+  });
+
+  it("keeps the legacy memory settings mirror aligned with the selected preset", async () => {
+    const target = document.createElement("div");
+    document.body.appendChild(target);
+    app = mount(OtherBotSettings, { target });
+    await flushUi();
+
+    const messagesPerSummaryInput = getValueFieldFollowingLabel("Messages Per Summary");
+    expect(messagesPerSummaryInput).not.toBeNull();
+
+    messagesPerSummaryInput!.value = "24";
+    messagesPerSummaryInput!.dispatchEvent(new Event("input", { bubbles: true }));
+    await flushUi();
+
+    const presetSettings = shared.dbState.db.memoryPresets?.[0]?.settings as Record<string, unknown> | undefined;
+    const legacySettings = shared.dbState.db.memorySettings as Record<string, unknown> | undefined;
+
+    expect(presetSettings?.periodicSummarizationInterval).toBe(24);
+    expect(presetSettings?.maxChatsPerSummary).toBe(24);
+    expect(legacySettings?.periodicSummarizationInterval).toBe(24);
+    expect(legacySettings?.maxChatsPerSummary).toBe(24);
+    expect(shared.dbState.db.hypaV3Settings).toBe(shared.dbState.db.memorySettings);
   });
 });

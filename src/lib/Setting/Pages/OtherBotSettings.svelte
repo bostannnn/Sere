@@ -20,8 +20,10 @@
     import {
         getDbMemoryPresetId,
         getDbMemoryPresets,
+        getDbMemorySettings,
         setDbMemoryPresetId,
         setDbMemoryPresets,
+        setDbMemorySettings,
     } from "src/ts/process/memory/storage";
     import { downloadFile } from "src/ts/globalApi.svelte";
     import { selectSingleFile } from "src/ts/util";
@@ -66,6 +68,12 @@
 
     function getSelectedMemorySettings() {
         return ensureMemoryPresets()?.[selectedMemoryPresetId]?.settings;
+    }
+
+    function syncSelectedMemorySettingsMirror(settings: NonNullable<ReturnType<typeof getSelectedMemorySettings>>) {
+        if (getDbMemorySettings(DBState.db) !== settings) {
+            setDbMemorySettings(DBState.db, settings);
+        }
     }
 
     function syncLocalMemorySettings(settings: NonNullable<ReturnType<typeof getSelectedMemorySettings>>) {
@@ -114,6 +122,7 @@
             syncMemorySummarySettings(syncReason);
         }
 
+        syncSelectedMemorySettingsMirror(settings);
         setDbMemoryPresets(DBState.db, presets);
         syncLocalMemorySettings(settings);
     }
@@ -216,6 +225,7 @@
     $effect(() => {
         const settings = getSelectedMemorySettings();
         if (!settings) return;
+        syncSelectedMemorySettingsMirror(settings);
         syncLocalMemorySettings(settings);
     });
 
@@ -643,9 +653,14 @@
                     size="sm"
                     min={1}
                     bind:value={memoryPeriodicSummarizationInterval}
-                    onInput={() => {
+                    onInput={(event) => {
+                        const nextValue = event.currentTarget.valueAsNumber;
+                        if (!Number.isFinite(nextValue)) {
+                            return;
+                        }
+                        memoryPeriodicSummarizationInterval = nextValue;
                         updateSelectedMemorySettings((settings) => {
-                            settings.periodicSummarizationInterval = memoryPeriodicSummarizationInterval;
+                            settings.periodicSummarizationInterval = nextValue;
                         }, 'max');
                     }}
                 />
@@ -655,9 +670,14 @@
                     min={1}
                     max={32}
                     bind:value={memoryMaxSelectedSummaries}
-                    onInput={() => {
+                    onInput={(event) => {
+                        const nextValue = event.currentTarget.valueAsNumber;
+                        if (!Number.isFinite(nextValue)) {
+                            return;
+                        }
+                        memoryMaxSelectedSummaries = nextValue;
                         updateSelectedMemorySettings((settings) => {
-                            settings.maxSelectedSummaries = memoryMaxSelectedSummaries;
+                            settings.maxSelectedSummaries = nextValue;
                         }, 'max');
                     }}
                 />
@@ -667,9 +687,14 @@
                     min={0}
                     max={memoryMaxSelectedSummaries}
                     bind:value={memoryRecentSummarySlots}
-                    onInput={() => {
+                    onInput={(event) => {
+                        const nextValue = event.currentTarget.valueAsNumber;
+                        if (!Number.isFinite(nextValue)) {
+                            return;
+                        }
+                        memoryRecentSummarySlots = nextValue;
                         updateSelectedMemorySettings((settings) => {
-                            settings.recentSummarySlots = memoryRecentSummarySlots;
+                            settings.recentSummarySlots = nextValue;
                         }, 'recent');
                     }}
                 />
@@ -679,9 +704,14 @@
                     min={0}
                     max={memoryMaxSelectedSummaries}
                     bind:value={memorySimilarSummarySlots}
-                    onInput={() => {
+                    onInput={(event) => {
+                        const nextValue = event.currentTarget.valueAsNumber;
+                        if (!Number.isFinite(nextValue)) {
+                            return;
+                        }
+                        memorySimilarSummarySlots = nextValue;
                         updateSelectedMemorySettings((settings) => {
-                            settings.similarSummarySlots = memorySimilarSummarySlots;
+                            settings.similarSummarySlots = nextValue;
                         }, 'similar');
                     }}
                 />

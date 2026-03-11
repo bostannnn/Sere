@@ -43,6 +43,34 @@
         md: "ds-ui-input-size-md",
         lg: "ds-ui-input-size-lg",
     };
+
+    function syncBoundValue(event: Event & {
+        currentTarget: EventTarget & HTMLInputElement;
+    }) {
+        const rawValue = event.currentTarget.value;
+        if (rawValue === "") {
+            return;
+        }
+
+        const parsedValue = Number(rawValue);
+        if (Number.isFinite(parsedValue) && value !== parsedValue) {
+            value = parsedValue;
+        }
+    }
+
+    function handleInput(event: Event & {
+        currentTarget: EventTarget & HTMLInputElement;
+    }) {
+        syncBoundValue(event);
+        onInput(event);
+    }
+
+    function handleChange(event: Event & {
+        currentTarget: EventTarget & HTMLInputElement;
+    }) {
+        syncBoundValue(event);
+        onChange(event);
+    }
 </script>
 
 <input
@@ -56,9 +84,9 @@
     {max}
     {id}
     {disabled}
-    bind:value
-    oninput={onInput}
-    onchange={onChange}
+    value={Number.isFinite(value) ? value : ''}
+    oninput={handleInput}
+    onchange={handleChange}
     {placeholder}
 />
 

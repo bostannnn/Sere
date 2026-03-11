@@ -47,8 +47,15 @@ function stableHash(value: unknown) {
     return JSON.stringify(value ?? null);
 }
 
+function stripTransientSettingsFields(settings: Database) {
+    const snapshot = safeStructuredClone(settings) as Database;
+    delete snapshot.memoryDebug;
+    delete snapshot.hypaV3Debug;
+    return snapshot;
+}
+
 function stripCharacters(db: Database) {
-    const snapshot = safeStructuredClone(db) as Database;
+    const snapshot = stripTransientSettingsFields(db);
     delete snapshot.characters;
     return snapshot;
 }
