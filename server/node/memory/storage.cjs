@@ -3,6 +3,52 @@ function getMemoryData(chat) {
     return chat.memoryData || chat.hypaV3Data;
 }
 
+function cloneMemorySettingsLike(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return value;
+    return { ...value };
+}
+
+function cloneMemoryPresetLike(preset) {
+    if (!preset || typeof preset !== 'object' || Array.isArray(preset)) return preset;
+    return {
+        ...preset,
+        settings: cloneMemorySettingsLike(preset.settings),
+    };
+}
+
+function canonicalizeMemorySettingsShape(settings) {
+    if (!settings || typeof settings !== 'object') return settings;
+    const target = settings;
+    const rawPresets = Array.isArray(target.memoryPresets)
+        ? target.memoryPresets
+        : (Array.isArray(target.hypaV3Presets) ? target.hypaV3Presets : undefined);
+    const rawSettings = (target.memorySettings && typeof target.memorySettings === 'object')
+        ? target.memorySettings
+        : ((target.hypaV3Settings && typeof target.hypaV3Settings === 'object') ? target.hypaV3Settings : undefined);
+    const rawPresetId = target.memoryPresetId ?? target.hypaV3PresetId;
+    const rawEnabled = target.memoryEnabled ?? target.hypaV3;
+
+    if (rawPresets !== undefined) {
+        target.memoryPresets = rawPresets.map((preset) => cloneMemoryPresetLike(preset));
+    }
+    if (rawSettings !== undefined) {
+        target.memorySettings = cloneMemorySettingsLike(rawSettings);
+    }
+    if (rawPresetId !== undefined) {
+        target.memoryPresetId = Number.isFinite(Number(rawPresetId)) ? Number(rawPresetId) : 0;
+    }
+    if (rawEnabled !== undefined) {
+        target.memoryEnabled = Boolean(rawEnabled);
+    }
+
+    delete target.hypaV3Presets;
+    delete target.hypaV3Settings;
+    delete target.hypaV3PresetId;
+    delete target.hypaV3;
+
+    return target;
+}
+
 function setMemoryData(chat, data) {
     if (!chat || typeof chat !== 'object') return;
     if (chat.memoryData === data && chat.hypaV3Data === data) return;
@@ -64,6 +110,7 @@ function isMemoryEnabled(settings) {
 }
 
 module.exports = {
+    canonicalizeMemorySettingsShape,
     getMemoryData,
     setMemoryData,
     getMemoryPromptOverride,

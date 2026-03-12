@@ -1,6 +1,6 @@
 <script lang="ts">
      
-    import type { PromptItem, PromptItemChat } from "src/ts/process/prompt";
+    import type { PromptItem, PromptItemChat, PromptItemMemory } from "src/ts/process/prompt";
     import OptionInput from "./GUI/OptionInput.svelte";
     import TextAreaInput from "./GUI/TextAreaInput.svelte";
     import SelectInput from "./GUI/SelectInput.svelte";
@@ -42,16 +42,65 @@
         displayIndex: _displayIndex = -1
     }: Props = $props();
 
-    const chatPromptChange = () => {
-        const currentprompt = promptItem as PromptItemChat
-        if(currentprompt.rangeStart === -1000){
-            currentprompt.rangeStart = 0
-            currentprompt.rangeEnd = 'end'
-        }else{
-            currentprompt.rangeStart = -1000
-            currentprompt.rangeEnd = 'end'
+    type PromptItemWithRange = PromptItemChat | PromptItemMemory
+
+    function isPromptItemWithRange(item: PromptItem): item is PromptItemWithRange {
+        return item.type === 'chat' || item.type === 'memory'
+    }
+
+    function hasExplicitRange(item: PromptItemWithRange): boolean {
+        if(item.type === 'chat'){
+            return item.rangeStart !== -1000
         }
-        promptItem = currentprompt
+        return item.rangeStart !== undefined || item.rangeEnd !== undefined
+    }
+
+    function ensureMemoryRangeDefaults() {
+        if(promptItem.type !== 'memory'){
+            return
+        }
+        if(promptItem.rangeStart === undefined || promptItem.rangeEnd === undefined){
+            promptItem = {
+                ...promptItem,
+                rangeStart: promptItem.rangeStart ?? 0,
+                rangeEnd: promptItem.rangeEnd ?? 'end',
+            }
+        }
+    }
+
+    $effect(() => {
+        if(isOpened && promptItem.type === 'memory'){
+            ensureMemoryRangeDefaults()
+        }
+    })
+
+    const togglePromptRange = () => {
+        if(!isPromptItemWithRange(promptItem)){
+            return
+        }
+
+        if(hasExplicitRange(promptItem)){
+            if(promptItem.type === 'chat'){
+                promptItem = {
+                    ...promptItem,
+                    rangeStart: -1000,
+                    rangeEnd: 'end',
+                }
+                return
+            }
+
+            const nextPrompt = { ...promptItem }
+            delete nextPrompt.rangeStart
+            delete nextPrompt.rangeEnd
+            promptItem = nextPrompt
+            return
+        }
+
+        promptItem = {
+            ...promptItem,
+            rangeStart: 0,
+            rangeEnd: 'end',
+        }
     }
 
     function getPlainLabel(type2?: string){
@@ -249,6 +298,13 @@
                 promptItem.rangeStart = -1000
                 promptItem.rangeEnd = 'end'
             }
+            if(promptItem.type === 'memory'){
+                const memoryPrompt = { ...promptItem } as PromptItemMemory & { chatAsOriginalOnSystem?: boolean }
+                delete memoryPrompt.chatAsOriginalOnSystem
+                memoryPrompt.rangeStart = memoryPrompt.rangeStart ?? 0
+                memoryPrompt.rangeEnd = memoryPrompt.rangeEnd ?? 'end'
+                promptItem = memoryPrompt
+            }
         }} >
             <OptionInput value="plain">{language.formating.plain}</OptionInput>
             <OptionInput value="jailbreak">{language.formating.jailbreak}</OptionInput>
@@ -305,31 +361,34 @@
             <span>{language.format}</span>
             <TextAreaInput highlight bind:value={promptItem.innerFormat} placeholder={"Wrap current character evolution state with {{slot}} if needed."} />
         {/if}
-        {#if promptItem.type === 'chat'}
-            {#if promptItem.rangeStart !== -1000}
+        {#if promptItem.type === 'chat' || promptItem.type === 'memory'}
+            {@const showRangeInputs = promptItem.type === 'memory' || hasExplicitRange(promptItem)}
+            {#if showRangeInputs}
                 <span>{language.rangeStart}</span>
                 <NumberInput bind:value={promptItem.rangeStart} />
                 <span>{language.rangeEnd}</span>
                 {#if promptItem.rangeEnd === 'end'}
                     <NumberInput value={0} marginBottom  disabled/>
                     <CheckInput name={language.untilChatEnd} check={true} onChange={() => {
-                        if(promptItem.type === 'chat'){
+                        if(promptItem.type === 'chat' || promptItem.type === 'memory'){
                             promptItem.rangeEnd = 0
                         }
                     }} />
                 {:else}
                     <NumberInput bind:value={promptItem.rangeEnd} marginBottom />
                     <CheckInput name={language.untilChatEnd} check={false} onChange={() => {
-                        if(promptItem.type === 'chat'){
+                        if(promptItem.type === 'chat' || promptItem.type === 'memory'){
                             promptItem.rangeEnd = 'end'
                         }
                     }} />
                 {/if}
-                {#if DBState.db.promptSettings.sendChatAsSystem}
+                {#if promptItem.type === 'chat' && DBState.db.promptSettings.sendChatAsSystem}
                     <CheckInput name={language.chatAsOriginalOnSystem} bind:check={promptItem.chatAsOriginalOnSystem}/>
                 {/if}
             {/if}
-            <CheckInput name={language.advanced} check={promptItem.rangeStart !== -1000} onChange={chatPromptChange} className="ds-input-margin-top-sm ds-input-margin-bottom-sm"/>
+            {#if promptItem.type === 'chat'}
+                <CheckInput name={language.advanced} check={hasExplicitRange(promptItem)} onChange={togglePromptRange} className="ds-input-margin-top-sm ds-input-margin-bottom-sm"/>
+            {/if}
         {/if}
         {#if promptItem.type === 'authornote'}
             <span>{language.defaultPrompt}</span>

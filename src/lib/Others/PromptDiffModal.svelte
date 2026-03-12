@@ -2,7 +2,7 @@
     import { XIcon } from "@lucide/svelte"
     import { SvelteMap } from "svelte/reactivity"
     import { getDatabase, type PromptDiffPrefs } from "../../ts/storage/database.svelte"
-    import type { PromptItem, PromptItemPlain, PromptItemChatML, PromptItemTyped, PromptItemAuthorNote, PromptItemChat } from "src/ts/process/prompt.ts";
+    import type { PromptItem, PromptItemPlain, PromptItemChatML, PromptItemTyped, PromptItemMemory, PromptItemAuthorNote, PromptItemChat } from "src/ts/process/prompt.ts";
 
     interface Props {
         firstPresetId: number;
@@ -354,10 +354,12 @@
             item.type === 'description' ||
             item.type === 'lorebook' ||
             item.type === 'postEverything' ||
-            item.type === 'memory' ||
             item.type === 'rulebookRag' ||
             item.type === 'gameState' ||
             item.type === 'characterState'
+
+        const isPromptItemMemory = (item: PromptItem): item is PromptItemMemory =>
+            item.type === 'memory'
         
         const isPromptItemAuthorNote = (item: PromptItem): item is PromptItemAuthorNote =>
             item.type === 'authornote'
@@ -400,6 +402,18 @@
                         name: item.name ?? item.type.toUpperCase(),
                         header: `${item.type}`,
                         body: item.innerFormat ? item.innerFormat : null,
+                    })
+                    break
+                }
+
+                case isPromptItemMemory(item):{
+                    cards.push({
+                        kind: 'typed',
+                        name: item.name ?? item.type.toUpperCase(),
+                        header: `${item.type}`,
+                        body: item.innerFormat
+                            ? `${item.innerFormat}\n\nRange: ${item.rangeStart ?? 'default'} - ${item.rangeEnd ?? 'default'}`
+                            : `Range: ${item.rangeStart ?? 'default'} - ${item.rangeEnd ?? 'default'}`,
                     })
                     break
                 }

@@ -94,6 +94,46 @@ const SNAPSHOT_SYNC_MAX_ATTEMPTS = 3
 const SNAPSHOT_SYNC_RETRY_BASE_DELAY_MS = 350
 const dataUrlImageRegex = /data:image\/[a-zA-Z0-9.+-]+;base64,[A-Za-z0-9+/=]+/g;
 const markdownDataImageRegex = /!\[[^\]]*]\((data:image\/[a-zA-Z0-9.+-]+;base64,[^)]+)\)/g;
+const promptMemoryTag = "Past Events Summary"
+
+function normalizeTemplateRange<T>(items:T[], rangeStart?:number, rangeEnd?:number|'end'): T[] {
+    const source = Array.isArray(items) ? items : []
+    let start = Number.isFinite(Number(rangeStart)) ? Number(rangeStart) : 0
+    let end = (rangeEnd === 'end')
+        ? source.length
+        : (Number.isFinite(Number(rangeEnd)) ? Number(rangeEnd) : source.length)
+
+    if(start === -1000){
+        start = 0
+        end = source.length
+    }
+    if(start < 0){
+        start = source.length + start
+        if(start < 0){
+            start = 0
+        }
+    }
+    if(end < 0){
+        end = source.length + end
+        if(end < 0){
+            end = 0
+        }
+    }
+    if(start >= end){
+        return []
+    }
+    return source.slice(start, end)
+}
+
+function hasTemplateRangeConfig(rangeStart?:number, rangeEnd?:number|'end'): boolean {
+    return Number.isFinite(Number(rangeStart))
+        || rangeEnd === 'end'
+        || Number.isFinite(Number(rangeEnd))
+}
+
+function renderPromptMemoryContent(summaryItems:string[]): string {
+    return `<${promptMemoryTag}>\n${summaryItems.join('\n\n')}\n</${promptMemoryTag}>`
+}
 
 export async function sendChat(chatProcessIndex = -1,arg:{
     chatAdditonalTokens?:number,
@@ -816,29 +856,7 @@ export async function sendChat(chatProcessIndex = -1,arg:{
                     break
                 }
                 case 'chat':{
-                    let start = card.rangeStart
-                    let end = (card.rangeEnd === 'end') ? unformated.chats.length : card.rangeEnd
-                    if(start === -1000){
-                        start = 0
-                        end = unformated.chats.length
-                    }
-                    if(start < 0){
-                        start = unformated.chats.length + start
-                        if(start < 0){
-                            start = 0
-                        }
-                    }
-                    if(end < 0){
-                        end = unformated.chats.length + end
-                        if(end < 0){
-                            end = 0
-                        }
-                    }
-                    
-                    if(start >= end){
-                        break
-                    }
-                    let chats = unformated.chats.slice(start, end)
+                    let chats = normalizeTemplateRange(unformated.chats, card.rangeStart, card.rangeEnd)
 
                     if(usingPromptTemplate && DBState.db.promptSettings.sendChatAsSystem && (!card.chatAsOriginalOnSystem)){
                         chats = systemizeChat(chats)
@@ -874,6 +892,7 @@ export async function sendChat(chatProcessIndex = -1,arg:{
     }
 
     let chats:OpenAIChat[] = examples
+    let selectedMemorySummaryTexts:string[] = []
 
     if(!DBState.db.aiModel.startsWith('novelai') || DBState.db?.promptSettings?.trimStartNewChat){
         chats.push({
@@ -1133,6 +1152,9 @@ export async function sendChat(chatProcessIndex = -1,arg:{
         }
         chats = sp.chats
         currentTokens = sp.currentTokens
+        selectedMemorySummaryTexts = Array.isArray(sp.selectedSummaryTexts)
+            ? sp.selectedSummaryTexts.filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+            : []
         setChatMemoryData(currentChat, sp.memory ?? getChatMemoryData(currentChat))
         setChatMemoryData(
             DBState.db.characters[selectedChar].chats[selectedChatIndex()],
@@ -1534,35 +1556,15 @@ export async function sendChat(chatProcessIndex = -1,arg:{
                     break
                 }
                 case 'chat':{
-                    let start = card.rangeStart
-                    let end = (card.rangeEnd === 'end') ? unformated.chats.length : card.rangeEnd
-                    if(start === -1000){
-                        start = 0
-                        end = unformated.chats.length
-                    }
-                    if(start < 0){
-                        start = unformated.chats.length + start
-                        if(start < 0){
-                            start = 0
-                        }
-                    }
-                    if(end < 0){
-                        end = unformated.chats.length + end
-                        if(end < 0){
-                            end = 0
-                        }
-                    }
-                    
-                    if(start >= end){
+                    let chats = normalizeTemplateRange(unformated.chats, card.rangeStart, card.rangeEnd)
+                    if(chats.length === 0){
                         break
                     }
-
-                    let chats = unformated.chats.slice(start, end)
                     if(usingPromptTemplate && DBState.db.promptSettings.sendChatAsSystem && (!card.chatAsOriginalOnSystem)){
                         chats = systemizeChat(chats)
                     }
                     for(const item of chats){
-                        addPromptBlock(`Chat History (${start}..${end})`, item.role, item.content)
+                        addPromptBlock(`Chat History (${card.rangeStart}..${card.rangeEnd})`, item.role, item.content)
                     }
                     pushPrompts(chats)
 
@@ -1583,7 +1585,18 @@ export async function sendChat(chatProcessIndex = -1,arg:{
                     break
                 }
                 case 'memory':{
-                    const pmt = safeStructuredClone(memories)
+                    let pmt = safeStructuredClone(memories)
+                    if(hasTemplateRangeConfig(card.rangeStart, card.rangeEnd) && selectedMemorySummaryTexts.length > 0){
+                        const slicedSummaries = normalizeTemplateRange(selectedMemorySummaryTexts, card.rangeStart, card.rangeEnd)
+                        if(slicedSummaries.length === 0){
+                            break
+                        }
+                        pmt = [{
+                            role: 'system',
+                            content: renderPromptMemoryContent(slicedSummaries),
+                            memo: 'supaMemory',
+                        }]
+                    }
                     if(card.innerFormat && pmt.length > 0){
                         for(let i=0;i<pmt.length;i++){
                             pmt[i].content = risuChatParser(card.innerFormat, {chara: currentChar}).replace('{{slot}}', pmt[i].content)

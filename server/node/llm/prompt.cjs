@@ -17,6 +17,7 @@ const {
 
 const TRACE_AUDIT_MAX_MESSAGE_COUNT = 64;
 const TRACE_AUDIT_MAX_CONTENT_CHARS = 1200;
+const MEMORY_PROMPT_TAG = 'Past Events Summary';
 
 function safeJsonClone(value, fallback = null) {
     try {
@@ -180,8 +181,8 @@ function shiftPromptBlockIndices(promptBlocks, startIndex, delta) {
     }
 }
 
-function normalizeTemplateChatRange(chats, rangeStart, rangeEnd) {
-    const source = Array.isArray(chats) ? chats : [];
+function normalizeTemplateRange(items, rangeStart, rangeEnd) {
+    const source = Array.isArray(items) ? items : [];
     let start = Number.isFinite(Number(rangeStart)) ? Number(rangeStart) : 0;
     let end = rangeEnd === 'end'
         ? source.length
@@ -201,6 +202,20 @@ function normalizeTemplateChatRange(chats, rangeStart, rangeEnd) {
     }
     if (start >= end) return [];
     return source.slice(start, end);
+}
+
+function hasTemplateRangeConfig(card) {
+    if (!card || typeof card !== 'object') return false;
+    return Number.isFinite(Number(card.rangeStart))
+        || card.rangeEnd === 'end'
+        || Number.isFinite(Number(card.rangeEnd));
+}
+
+function renderMemoryPromptContent(summaryItems) {
+    const summaries = Array.isArray(summaryItems)
+        ? summaryItems.filter((item) => typeof item === 'string' && item.trim())
+        : [];
+    return `<${MEMORY_PROMPT_TAG}>\n${summaries.join('\n\n')}\n</${MEMORY_PROMPT_TAG}>`;
 }
 
 function convertStoredChatToOpenAIMessages(storedMessages, arg = {}) {
@@ -390,7 +405,7 @@ async function buildMessagesFromPromptTemplate(character, chat, settings, arg = 
                 break;
             }
             case 'chat': {
-                let slice = normalizeTemplateChatRange(unformatted.chats, card.rangeStart, card.rangeEnd);
+                let slice = normalizeTemplateRange(unformatted.chats, card.rangeStart, card.rangeEnd);
                 if (settings?.promptSettings?.sendChatAsSystem === true && card.chatAsOriginalOnSystem !== true) {
                     slice = systemizeChatMessages(slice);
                 }
@@ -416,6 +431,34 @@ async function buildMessagesFromPromptTemplate(character, chat, settings, arg = 
                         skipped: true,
                         reason: 'no_memory_data',
                     });
+                    break;
+                }
+                const summaryItems = Array.isArray(source[0]?.summaryItems) ? source[0].summaryItems : [];
+                if (hasTemplateRangeConfig(card) && summaryItems.length > 0) {
+                    const slicedSummaries = normalizeTemplateRange(summaryItems, card.rangeStart, card.rangeEnd);
+                    if (slicedSummaries.length === 0) {
+                        promptBlocks.push({
+                            role: 'system',
+                            title: blockTitle,
+                            source: 'template',
+                            skipped: true,
+                            reason: 'memory_range_empty',
+                        });
+                        break;
+                    }
+                    const rendered = renderTemplateSlot(
+                        card.innerFormat,
+                        renderMemoryPromptContent(slicedSummaries),
+                        character,
+                        settings
+                    );
+                    const parsed = parsePromptAsMessages(
+                        rendered,
+                        character,
+                        settings,
+                        normalizeTemplateRole(source[0]?.role)
+                    );
+                    pushPromptMessagesWithTitle(messages, promptBlocks, parsed, blockTitle, 'template');
                     break;
                 }
                 for (const item of source) {

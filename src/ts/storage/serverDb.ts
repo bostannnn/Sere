@@ -1,6 +1,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import { getDatabase, setDatabase, type Database, type character, type groupChat, type Chat } from "./database.svelte";
 import { isNodeServer } from "../platform";
+import { canonicalizeDbMemoryPersistenceShape } from "../process/memory/storage";
 import {
     enqueueCommand,
     fetchServerStateSnapshot,
@@ -51,7 +52,7 @@ function stripTransientSettingsFields(settings: Database) {
     const snapshot = safeStructuredClone(settings) as Database;
     delete snapshot.memoryDebug;
     delete snapshot.hypaV3Debug;
-    return snapshot;
+    return canonicalizeDbMemoryPersistenceShape(snapshot);
 }
 
 function stripCharacters(db: Database) {

@@ -516,6 +516,7 @@ async function buildMemoryContextMain(
       currentTokens,
       chats: newChats,
       memory: toSerializableMemoryData(data),
+      selectedSummaryTexts: [],
     };
   }
 
@@ -741,10 +742,14 @@ async function buildMemoryContextMain(
     (a, b) => data.summaries.indexOf(a) - data.summaries.indexOf(b)
   );
 
+  const selectedSummaryTexts = selectedSummaries.map((summary) =>
+    stripSummaryForPrompt(summary.text)
+  );
+
   // Generate final memory prompt
   const memory = wrapWithXml(
     memoryPromptTag,
-    selectedSummaries.map((e) => stripSummaryForPrompt(e.text)).join(summarySeparator)
+    selectedSummaryTexts.join(summarySeparator)
   );
   const realMemoryTokens = await tokenizer.tokenizeChat({
     role: "system",
@@ -817,5 +822,6 @@ async function buildMemoryContextMain(
     currentTokens,
     chats: newChats,
     memory: toSerializableMemoryData(data),
+    selectedSummaryTexts,
   };
 }

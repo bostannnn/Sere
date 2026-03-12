@@ -11,6 +11,65 @@ import type {
 
 type MemoryPromptOverride = { summarizationPrompt?: string };
 
+function cloneMemorySettingsLike<T>(value: T): T {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return value;
+  }
+  return { ...(value as Record<string, unknown>) } as T;
+}
+
+function cloneMemoryPresetLike<T>(preset: T): T {
+  if (!preset || typeof preset !== "object" || Array.isArray(preset)) {
+    return preset;
+  }
+  const next = { ...(preset as Record<string, unknown>) } as T & {
+    settings?: unknown;
+  };
+  next.settings = cloneMemorySettingsLike(next.settings);
+  return next;
+}
+
+export function canonicalizeDbMemoryPersistenceShape<
+  T extends Record<string, unknown>,
+>(value: T): T {
+  if (!value || typeof value !== "object") {
+    return value;
+  }
+
+  const target = value as T & Record<string, unknown>;
+  const rawPresets = Array.isArray(target.memoryPresets)
+    ? target.memoryPresets
+    : (Array.isArray(target.hypaV3Presets) ? target.hypaV3Presets : undefined);
+  const rawSettings =
+    target.memorySettings && typeof target.memorySettings === "object"
+      ? target.memorySettings
+      : (target.hypaV3Settings && typeof target.hypaV3Settings === "object"
+        ? target.hypaV3Settings
+        : undefined);
+  const rawPresetId = target.memoryPresetId ?? target.hypaV3PresetId;
+  const rawEnabled = target.memoryEnabled ?? target.hypaV3;
+
+  if (rawPresets !== undefined) {
+    target.memoryPresets = rawPresets.map((preset) => cloneMemoryPresetLike(preset));
+  }
+  if (rawSettings !== undefined) {
+    target.memorySettings = cloneMemorySettingsLike(rawSettings);
+  }
+  if (rawPresetId !== undefined) {
+    target.memoryPresetId = Number.isFinite(Number(rawPresetId)) ? Number(rawPresetId) : 0;
+  }
+  if (rawEnabled !== undefined) {
+    target.memoryEnabled = Boolean(rawEnabled);
+  }
+
+  delete target.hypaV3Presets;
+  delete target.hypaV3Settings;
+  delete target.hypaV3PresetId;
+  delete target.hypaV3;
+
+  return target;
+}
+
 export function getChatMemoryData(
   chat: Pick<Chat, "memoryData" | "hypaV3Data"> | null | undefined,
 ): SerializableMemoryData | undefined {
@@ -106,8 +165,14 @@ export function setDbMemoryPresets(
   db: Pick<Database, "memoryPresets" | "hypaV3Presets">,
   presets: MemoryPreset[],
 ): void {
-  db.memoryPresets = presets;
-  db.hypaV3Presets = presets;
+  const normalizedPresets = Array.isArray(presets)
+    ? presets.map((preset) => ({
+        ...preset,
+        settings: preset?.settings ? { ...preset.settings } : preset?.settings,
+      }))
+    : [];
+  db.memoryPresets = normalizedPresets;
+  db.hypaV3Presets = normalizedPresets;
 }
 
 export function getDbMemoryPresetId(

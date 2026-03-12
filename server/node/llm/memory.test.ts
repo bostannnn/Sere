@@ -119,6 +119,57 @@ describe("server memory controls", () => {
     expect(chat.memoryData.metrics.lastRecentSummaries).toEqual([3, 4]);
   });
 
+  it("exposes the full summary list for template range slicing even when prompt injection selects fewer summaries", async () => {
+    const settings = createSettings({
+      periodicSummarizationInterval: 24,
+      maxSelectedSummaries: 2,
+      recentSummarySlots: 2,
+      similarSummarySlots: 0,
+      memoryTokensRatio: 1,
+    });
+    const chat = {
+      message: [
+        { role: "user", data: "latest topic", chatId: "live-1" },
+      ],
+      memoryData: {
+        summaries: [
+          { text: "Summary 1", isImportant: false, embedding: [1, 0, 0] },
+          { text: "Summary 2", isImportant: false, embedding: [1, 0, 0] },
+          { text: "Summary 3", isImportant: false, embedding: [1, 0, 0] },
+          { text: "Summary 4", isImportant: false, embedding: [1, 0, 0] },
+          { text: "Summary 5", isImportant: false, embedding: [1, 0, 0] },
+        ],
+        metrics: {
+          lastImportantSummaries: [],
+          lastRecentSummaries: [],
+          lastSimilarSummaries: [],
+          lastRandomSummaries: [],
+        },
+      },
+    };
+
+    const memory = await buildServerMemoryMessages({
+      character: { supaMemory: true },
+      settings,
+      chat,
+      maxMemoryTokens: 1000,
+      maxPromptChars: 1000,
+    });
+
+    expect(memory).toHaveLength(1);
+    expect(memory[0]?.summaryItems).toEqual([
+      "Summary 1",
+      "Summary 2",
+      "Summary 3",
+      "Summary 4",
+      "Summary 5",
+    ]);
+    const content = String(memory[0]?.content || "");
+    expect(content).toContain("Summary 4");
+    expect(content).toContain("Summary 5");
+    expect(content).not.toContain("Summary 3");
+  });
+
   it("keeps token-budget trimming after retrieval", async () => {
     const settings = createSettings({
       maxSelectedSummaries: 3,

@@ -95,4 +95,5 @@ export interface MemoryResult {
   chats: OpenAIChat[];
   error?: string;
   memory?: SerializableMemoryData;
+  selectedSummaryTexts?: string[];
 }

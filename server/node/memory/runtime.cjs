@@ -400,6 +400,7 @@ async function buildServerMemoryMessages(arg = {}) {
         role: 'system',
         content: wrapWithXml(MEMORY_PROMPT_TAG, selectedTexts.join('\n\n')),
         memo: 'memory',
+        summaryItems: summaries.map((summary) => summary?.text || '').filter(Boolean),
     }];
 }
 

@@ -4,9 +4,28 @@ import { mount, tick, unmount } from "svelte";
 vi.mock(import("src/lang"), () => ({
   language: {
     Chat: "Chat",
+    name: "Name",
+    type: "Type",
+    rangeStart: "Range Start",
+    rangeEnd: "Range End",
+    untilChatEnd: "Until Chat End",
+    advanced: "Advanced",
+    format: "Format",
+    defaultPrompt: "Default Prompt",
+    customInnerFormat: "Custom Inner Format",
+    specialType: "Special Type",
+    prompt: "Prompt",
+    role: "Role",
+    depth: "Depth",
+    cachePoint: "Cache",
+    all: "All",
+    user: "User",
+    character: "Character",
+    systemPrompt: "System",
     mainPrompt: "Main Prompt",
     globalNote: "Global Note",
     jailbreakPrompt: "Jailbreak Prompt",
+    chatAsOriginalOnSystem: "Chat As Original",
     cot: "CoT",
     formating: {
       plain: "Plain",
@@ -108,5 +127,28 @@ describe("prompt data item runtime smoke", () => {
     ) as HTMLButtonElement[];
     expect(headerButtons.length).toBe(3);
     expect(headerButtons.every((button) => button.type === "button")).toBe(true);
+  });
+
+  it("shows memory range inputs when a memory block has an explicit range", async () => {
+    const target = document.createElement("div");
+    document.body.appendChild(target);
+    app = mount(PromptDataItem, {
+      target,
+      props: {
+        promptItem: {
+          type: "memory",
+          name: "Memory",
+          innerFormat: "{{slot}}",
+          rangeStart: 0,
+          rangeEnd: -2,
+        },
+        currentIndex: 0,
+        isOpened: true,
+      },
+    });
+    await flushUi();
+
+    const numberInputs = Array.from(document.querySelectorAll('input[type="number"]'));
+    expect(numberInputs.length).toBeGreaterThanOrEqual(2);
   });
 });

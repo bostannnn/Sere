@@ -17,6 +17,7 @@
     import { PlusIcon, PencilIcon, TrashIcon, DownloadIcon, HardDriveUploadIcon } from "@lucide/svelte";
     import { alertError, alertInput, alertConfirm, alertNormal } from "src/ts/alert";
     import { createMemoryPreset } from "src/ts/process/memory/memory";
+    import { setDatabase } from "src/ts/storage/database.svelte";
     import {
         getDbMemoryPresetId,
         getDbMemoryPresets,
@@ -124,6 +125,7 @@
 
         syncSelectedMemorySettingsMirror(settings);
         setDbMemoryPresets(DBState.db, presets);
+        setDatabase(structuredClone(DBState.db));
         syncLocalMemorySettings(settings);
     }
 
@@ -457,6 +459,7 @@
         <TextAreaInput
             size="sm"
             value={emotionPromptValue}
+            optimaizedInput={false}
             onValueChange={(value) => {
                 emotionPromptValue = value;
                 DBState.db.emotionPrompt2 = value;
@@ -621,6 +624,7 @@
                         size="sm"
                         placeholder={memorySettingsLanguage.supaMemoryPromptPlaceHolder}
                         value={memorySummarizationPrompt}
+                        optimaizedInput={false}
                         onValueChange={(value) => {
                             memorySummarizationPrompt = value;
                             updateSelectedMemorySettings((settings) => {

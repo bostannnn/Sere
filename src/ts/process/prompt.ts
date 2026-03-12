@@ -4,8 +4,9 @@ import { alertError, alertNormal } from "../alert";
 import type { OobaChatCompletionRequestParams } from "../model/ooba";
 const promptLog = (..._args: unknown[]) => {};
 
-export type PromptItem = PromptItemPlain|PromptItemTyped|PromptItemChat|PromptItemAuthorNote|PromptItemChatML|PromptItemCache
+export type PromptItem = PromptItemPlain|PromptItemTyped|PromptItemChat|PromptItemMemory|PromptItemAuthorNote|PromptItemChatML|PromptItemCache
 export type PromptType = PromptItem['type'];
+export type PromptRangeEnd = number|'end'
 export type PromptSettings = {
     assistantPrefill: string
     postEndInnerFormat: string
@@ -32,8 +33,16 @@ export interface PromptItemChatML {
 }
 
 export interface PromptItemTyped {
-    type: 'persona'|'description'|'lorebook'|'postEverything'|'memory'|'rulebookRag'|'gameState'|'characterState'
+    type: 'persona'|'description'|'lorebook'|'postEverything'|'rulebookRag'|'gameState'|'characterState'
     innerFormat?: string,
+    name?: string
+}
+
+export interface PromptItemMemory {
+    type: 'memory'
+    innerFormat?: string,
+    rangeStart?: number
+    rangeEnd?: PromptRangeEnd
     name?: string
 }
 
@@ -48,7 +57,7 @@ export interface PromptItemAuthorNote {
 export interface PromptItemChat {
     type: 'chat';
     rangeStart: number;
-    rangeEnd: number|'end';
+    rangeEnd: PromptRangeEnd;
     chatAsOriginalOnSystem?: boolean;
     name?: string
 }

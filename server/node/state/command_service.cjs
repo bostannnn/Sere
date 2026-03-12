@@ -1,4 +1,5 @@
 const path = require('path');
+const { canonicalizeMemorySettingsShape } = require('../memory/storage.cjs');
 
 function createCommandService(arg = {}) {
     const fs = arg.fs;
@@ -398,7 +399,7 @@ function createCommandService(arg = {}) {
         const nextSettings = (command?.settings && typeof command.settings === 'object')
             ? cloneValue(command.settings)
             : {};
-        settings.data = nextSettings || {};
+        settings.data = canonicalizeMemorySettingsShape(nextSettings || {}) || {};
         settings.workingRevision += 1;
         settings.touched = true;
 

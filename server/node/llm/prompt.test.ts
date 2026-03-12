@@ -2,6 +2,18 @@ import { describe, expect, it } from "vitest";
 
 import { buildGeneratePromptMessages, buildMessagesFromPromptTemplate } from "./prompt.cjs";
 
+function createMemoryBuilder(summaryItems: string[], content?: string) {
+  const renderedContent = content ?? `<Past Events Summary>\n${summaryItems.join("\n\n")}\n</Past Events Summary>`;
+  return async () => [
+    {
+      role: "system",
+      content: renderedContent,
+      memo: "memory",
+      summaryItems,
+    },
+  ];
+}
+
 describe("server prompt template slots", () => {
   it("emits rulebook and game state slot markers without inserting placeholder messages", async () => {
     const assembled = await buildMessagesFromPromptTemplate(
@@ -196,6 +208,124 @@ describe("server prompt template slots", () => {
         title: "Rulebook RAG",
         source: "template-slot",
         slot: "rulebookRag",
+      }),
+    ]);
+  });
+});
+
+describe("server prompt memory ranges", () => {
+  it("supports positive memory ranges", async () => {
+    const assembled = await buildMessagesFromPromptTemplate(
+      {},
+      {},
+      {
+        promptTemplate: [
+          { type: "memory", innerFormat: "{{slot}}", rangeStart: 1, rangeEnd: 3 },
+        ],
+      },
+      {
+        buildServerMemoryMessages: createMemoryBuilder(["Summary 1", "Summary 2", "Summary 3", "Summary 4"]),
+      },
+    );
+
+    const content = String(assembled?.messages?.[0]?.content || "");
+    expect(content).toContain("Summary 2");
+    expect(content).toContain("Summary 3");
+    expect(content).not.toContain("Summary 1");
+    expect(content).not.toContain("Summary 4");
+  });
+
+  it("supports negative memory ranges from the end", async () => {
+    const assembled = await buildMessagesFromPromptTemplate(
+      {},
+      {},
+      {
+        promptTemplate: [
+          { type: "memory", innerFormat: "{{slot}}", rangeStart: 0, rangeEnd: -2 },
+        ],
+      },
+      {
+        buildServerMemoryMessages: createMemoryBuilder(["Summary 1", "Summary 2", "Summary 3", "Summary 4"]),
+      },
+    );
+
+    const content = String(assembled?.messages?.[0]?.content || "");
+    expect(content).toContain("Summary 1");
+    expect(content).toContain("Summary 2");
+    expect(content).not.toContain("Summary 3");
+    expect(content).not.toContain("Summary 4");
+  });
+
+  it("supports memory range end markers", async () => {
+    const assembled = await buildMessagesFromPromptTemplate(
+      {},
+      {},
+      {
+        promptTemplate: [
+          { type: "memory", innerFormat: "{{slot}}", rangeStart: -2, rangeEnd: "end" },
+        ],
+      },
+      {
+        buildServerMemoryMessages: createMemoryBuilder(["Summary 1", "Summary 2", "Summary 3", "Summary 4"]),
+      },
+    );
+
+    const content = String(assembled?.messages?.[0]?.content || "");
+    expect(content).toContain("Summary 3");
+    expect(content).toContain("Summary 4");
+    expect(content).not.toContain("Summary 1");
+    expect(content).not.toContain("Summary 2");
+  });
+
+  it("skips memory blocks when the configured range is empty", async () => {
+    const assembled = await buildMessagesFromPromptTemplate(
+      {},
+      {},
+      {
+        promptTemplate: [
+          { type: "memory", innerFormat: "{{slot}}", rangeStart: 10, rangeEnd: "end" },
+          { type: "chat", rangeStart: 0, rangeEnd: "end" },
+        ],
+      },
+      {
+        userMessage: "hello",
+        buildServerMemoryMessages: createMemoryBuilder(["Summary 1", "Summary 2"]),
+      },
+    );
+
+    expect(assembled?.messages).toEqual([
+      expect.objectContaining({ role: "user", content: "hello" }),
+    ]);
+    expect(assembled?.promptBlocks).toContainEqual(
+      expect.objectContaining({
+        title: "Memory",
+        skipped: true,
+        reason: "memory_range_empty",
+      }),
+    );
+  });
+
+  it("keeps backward-compatible memory rendering when no range is configured", async () => {
+    const assembled = await buildMessagesFromPromptTemplate(
+      {},
+      {},
+      {
+        promptTemplate: [
+          { type: "memory", innerFormat: "{{slot}}" },
+        ],
+      },
+      {
+        buildServerMemoryMessages: createMemoryBuilder(
+          ["Summary 1", "Summary 2"],
+          "<Past Events Summary>\nOriginal combined memory block\n</Past Events Summary>",
+        ),
+      },
+    );
+
+    expect(assembled?.messages).toEqual([
+      expect.objectContaining({
+        role: "system",
+        content: "<Past Events Summary>\nOriginal combined memory block\n</Past Events Summary>",
       }),
     ]);
   });
