@@ -169,4 +169,46 @@ describe("prompt diff runtime smoke", () => {
     );
     expect(settled).toBe(true);
   });
+
+  it("renders character state prompt cards in card diff mode", async () => {
+    hoisted.db.botPresets = [
+      {
+        promptTemplate: [
+          {
+            type: "characterState",
+            name: "Character State",
+            role: "system",
+          },
+        ],
+      },
+      {
+        promptTemplate: [
+          {
+            type: "characterState",
+            name: "Character State",
+            role: "system",
+            systemPrompt: "Use the current state.",
+          },
+        ],
+      },
+    ];
+
+    const target = document.createElement("div");
+    document.body.appendChild(target);
+
+    app = mount(PromptDiffModal, {
+      target,
+      props: {
+        firstPresetId: 0,
+        secondPresetId: 1,
+        onClose: hoisted.onClose,
+      },
+    });
+
+    const settled = await waitForCondition(
+      () => target.textContent?.includes("Character State") ?? false,
+    );
+    expect(settled).toBe(true);
+    expect(target.textContent).toContain("Character State");
+  });
 });

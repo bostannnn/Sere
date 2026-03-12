@@ -3,19 +3,33 @@ import { get } from 'svelte/store';
 import { checkNullish, selectSingleFile } from '../util';
 import { changeLanguage, language } from '../../lang';
 import { downloadFile, saveAsset as saveImageGlobal } from '../globalApi.svelte';
-import { defaultAutoSuggestPrompt, defaultJailbreak, defaultMainPrompt } from './defaultPrompts';
+import { defaultAutoSuggestPrompt, normalizePromptTemplate } from './defaultPrompts';
 import { alertNormal } from '../alert';
 import { prebuiltNAIpresets } from '../process/templates/templates';
 import { defaultColorScheme } from '../gui/colorscheme';
 import { LLMFormat } from '../model/modellist';
-import type { HypaModel } from '../process/memory/hypamemory';
-import { createHypaV3Preset } from '../process/memory/hypav3'
+import type { EmbeddingModel } from '../process/memory/embeddings';
+import { createMemoryPreset } from '../process/memory/memory'
+import {
+    setCharacterMemoryPromptOverride,
+    setChatMemoryData,
+    setDbMemoryDebug,
+    setDbMemoryEnabled,
+    setDbMemoryPresetId,
+    setDbMemoryPresets,
+    setDbMemorySettings,
+} from '../process/memory/storage';
 import { defaultHotkeys } from '../defaulthotkeys';
 import { DBState, selectedCharID } from '../stores.svelte';
 import { DEFAULT_EMOTION_PROMPT } from '../process/emotion/defaultPrompt';
+import {
+    ensureCharacterEvolution,
+    ensureDatabaseEvolutionDefaults,
+} from '../characterEvolution';
 import type {
     Chat,
     Database,
+    Message,
     botPreset,
     character,
     groupChat,
@@ -24,10 +38,10 @@ import {
     DEFAULT_GLOBAL_RAG_SETTINGS,
     DEFAULT_OPENROUTER_REQUEST_MODEL,
     ensureComfyCommanderStateShape,
-    migrateRemovedProviderSelections,
     normalizeChatBackground,
     resolveChatBackgroundMode,
     resolveGlobalRagSettings,
+    stripRemovedProviderFields,
     type ChatBackgroundMode,
 } from './database.normalizers';
 import {
@@ -36,11 +50,8 @@ import {
     changeToPresetInDatabase,
     copyPresetInDatabase,
     decodeImportedPresetFile,
-    defaultAIN,
-    defaultOoba,
     encodeDownloadPresetBuffer,
     presetTemplate,
-    REMOVED_PROVIDER_MIGRATION_NOTICE,
     saveCurrentPresetInDatabase,
     setPresetOnDatabase,
     type PresetDownloadType,
@@ -49,8 +60,6 @@ import { isNodeServer } from "src/ts/platform"
 const dbStorageLog = (..._args: unknown[]) => {};
 
 export {
-    defaultAIN,
-    defaultOoba,
     presetTemplate,
     DEFAULT_GLOBAL_RAG_SETTINGS,
     resolveChatBackgroundMode,
@@ -63,7 +72,7 @@ export type * from './database.types';
 export const appVer = "2026.1.184" //<APP_VERSION_POINT>
 export const webAppSubVer = ''
 
-const emotionEmbeddingModels: Set<HypaModel> = new Set([
+const emotionEmbeddingModels: Set<EmbeddingModel> = new Set([
     'MiniLM',
     'MiniLMGPU',
     'nomic',
@@ -85,15 +94,27 @@ const emotionEmbeddingModels: Set<HypaModel> = new Set([
 ])
 
 export function setDatabase(data:Database){
+    stripRemovedProviderFields(data as unknown as Record<string, unknown>)
+    const legacyMemoryFields = data as unknown as Record<string, unknown>
+    delete legacyMemoryFields.maxSupaChunkSize
+    delete legacyMemoryFields.supaModelType
     if(checkNullish(data.characters)){
         data.characters = []
     }
+    ensureDatabaseEvolutionDefaults(data)
     for (const char of data.characters) {
+        ensureCharacterEvolution(char)
+        setCharacterMemoryPromptOverride(
+            char,
+            char.memoryPromptOverride ?? { summarizationPrompt: '' }
+        )
         if (!Array.isArray(char?.chats)) {
             continue
         }
         for (const chat of char.chats) {
+            delete (chat as unknown as Record<string, unknown>).lastMemory
             normalizeChatBackground(chat)
+            setChatMemoryData(chat, chat.memoryData)
         }
     }
     if(checkNullish(data.apiType)){
@@ -102,15 +123,7 @@ export function setDatabase(data:Database){
     if(checkNullish(data.openAIKey)){
         data.openAIKey = ''
     }
-    if(checkNullish(data.mainPrompt)){
-        data.mainPrompt = defaultMainPrompt
-    }
-    if(checkNullish(data.jailbreak)){
-        data.jailbreak = defaultJailbreak
-    }
-    if(checkNullish(data.globalNote)){
-        data.globalNote = ``
-    }
+    data.promptTemplate = normalizePromptTemplate(data.promptTemplate)
     if(checkNullish(data.temperature)){
         data.temperature = 80
     }
@@ -129,9 +142,6 @@ export function setDatabase(data:Database){
     if(checkNullish(data.aiModel)){
         data.aiModel = 'gemini-3-flash-preview'
     }
-    if(checkNullish(data.formatingOrder)){
-        data.formatingOrder = ['main','description', 'personaPrompt','chats','lastChat','jailbreak','lorebook', 'rulebookRag', 'globalNote', 'authorNote']
-    }
     if(checkNullish(data.loreBookDepth)){
         data.loreBookDepth = 5
     }
@@ -146,12 +156,6 @@ export function setDatabase(data:Database){
     }
     if (checkNullish(data.userNote)){
         data.userNote = ''
-    }
-    if(checkNullish(data.additionalPrompt)){
-        data.additionalPrompt = 'The assistant must act as {{char}}. user is {{user}}.'
-    }
-    if(checkNullish(data.descriptionPrefix)){
-        data.descriptionPrefix = 'description of {{char}}: '
     }
     if(checkNullish(data.forceReplaceUrl)){
         data.forceReplaceUrl = ''
@@ -176,12 +180,6 @@ export function setDatabase(data:Database){
     }
     if(checkNullish(data.customBackground)){
         data.customBackground = ''
-    }
-    if(checkNullish(data.textgenWebUIStreamURL)){
-        data.textgenWebUIStreamURL = 'wss://localhost/api/'
-    }
-    if(checkNullish(data.textgenWebUIBlockingURL)){
-        data.textgenWebUIBlockingURL = 'https://localhost/api/'
     }
     if(checkNullish(data.autoTranslate)){
         data.autoTranslate = false
@@ -221,7 +219,7 @@ export function setDatabase(data:Database){
         data.proxyKey = ""
     }
     if(checkNullish(data.botPresets)){
-        const defaultPreset = presetTemplate
+        const defaultPreset = structuredClone(presetTemplate)
         defaultPreset.name = "Default"
         data.botPresets = [defaultPreset]
     }
@@ -252,23 +250,14 @@ export function setDatabase(data:Database){
     if(checkNullish(data.voicevoxUrl)){
         data.voicevoxUrl = ''
     }
-    if(checkNullish(data.supaMemoryPrompt)){
-        data.supaMemoryPrompt = ''
-    }
     if(checkNullish(data.showMemoryLimit)){
         data.showMemoryLimit = false
     }
     if(checkNullish(data.showFirstMessagePages)){
         data.showFirstMessagePages = false
     }
-    if(checkNullish(data.supaMemoryKey)){
-        data.supaMemoryKey = ""
-    }
-    if(checkNullish(data.hypaMemoryKey)){
-        data.hypaMemoryKey = ""
-    }
-    if(checkNullish(data.supaModelType)){
-        data.supaModelType = "none"
+    if(checkNullish(data.memoryApiKey)){
+        data.memoryApiKey = ""
     }
     if(checkNullish(data.askRemoval)){
         data.askRemoval = true
@@ -281,13 +270,6 @@ export function setDatabase(data:Database){
             FontColorItalicBold: "#8C8D93",
             FontColorQuote1: '#8BE9FD',
             FontColorQuote2: '#FFB86C'
-        }
-    }
-    if(checkNullish(data.hordeConfig)){
-        data.hordeConfig = {
-            apiKey: "",
-            model: "",
-            softPrompt: ""
         }
     }
     if(checkNullish(data.novelai)){
@@ -313,12 +295,6 @@ export function setDatabase(data:Database){
     data.OAIPrediction ??= ''
     data.autoSuggestClean ??= true
     data.imageCompression ??= true
-    if(!data.formatingOrder.includes('personaPrompt')){
-        data.formatingOrder.splice(data.formatingOrder.indexOf('main'),0,'personaPrompt')
-    }
-    if(!data.formatingOrder.includes('rulebookRag')){
-        data.formatingOrder.splice(data.formatingOrder.indexOf('lorebook') + 1, 0, 'rulebookRag')
-    }
     data.selectedPersona ??= 0
     data.personaPrompt ??= ''
     data.personas ??= [{
@@ -329,8 +305,6 @@ export function setDatabase(data:Database){
         largePortrait: false
     }]
     data.classicMaxWidth ??= false
-    data.ooba ??= safeStructuredClone(defaultOoba)
-    data.ainconfig ??= safeStructuredClone(defaultAIN)
     data.openrouterKey ??= ''
     data.openrouterRequestModel ??= DEFAULT_OPENROUTER_REQUEST_MODEL
     data.openrouterSubRequestModel ??= data.openrouterRequestModel
@@ -340,8 +314,7 @@ export function setDatabase(data:Database){
     data.colorScheme ??= safeStructuredClone(defaultColorScheme)
     data.colorSchemeName ??= 'default'
     data.NAIsettings.starter ??= ""
-    data.hypaModel ??= 'MiniLM'
-    data.mancerHeader ??= ''
+    data.embeddingModel ??= 'MiniLM'
     const rawEmotionProcesser = data.emotionProcesser as string | undefined
     if(checkNullish(rawEmotionProcesser)){
         data.emotionProcesser = 'submodel'
@@ -352,8 +325,8 @@ export function setDatabase(data:Database){
     else if(rawEmotionProcesser === 'submodel'){
         data.emotionProcesser = 'submodel'
     }
-    else if(emotionEmbeddingModels.has(rawEmotionProcesser as HypaModel)){
-        data.emotionProcesser = rawEmotionProcesser as HypaModel
+    else if(emotionEmbeddingModels.has(rawEmotionProcesser as EmbeddingModel)){
+        data.emotionProcesser = rawEmotionProcesser as EmbeddingModel
     }
     else{
         data.emotionProcesser = 'submodel'
@@ -409,14 +382,12 @@ export function setDatabase(data:Database){
     data.openrouterFallback ??= true
     data.openrouterMiddleOut ??= false
     data.openrouterAllowReasoningOnlyForDeepSeekV32Speciale ??= false
-    data.removePunctuationHypa ??= true
     data.memoryLimitThickness ??= 1
     data.modules ??= []
     data.enabledModules ??= []
     data.additionalParams ??= []
     data.heightMode ??= 'normal'
     data.antiClaudeOverload ??= false
-    data.maxSupaChunkSize ??= 1200
     data.ollamaURL ??= ''
     data.ollamaModel ??= ''
     data.autoContinueChat ??= false
@@ -437,6 +408,8 @@ export function setDatabase(data:Database){
     }
     if (data.botPresets) {
         for (const preset of data.botPresets) {
+            stripRemovedProviderFields(preset as unknown as Record<string, unknown>)
+            preset.promptTemplate = normalizePromptTemplate(preset.promptTemplate)
             if (typeof preset.openrouterProvider === 'string') {
                 const oldProvider = preset.openrouterProvider as unknown as string;
                 preset.openrouterProvider = {
@@ -452,23 +425,7 @@ export function setDatabase(data:Database){
         only: [],
         ignore: []
     }
-    data.removedModelMigrationNotice ??= []
-    const removedModelMigrationNotices = new Set(data.removedModelMigrationNotice)
-    if (migrateRemovedProviderSelections(data)) {
-        removedModelMigrationNotices.add(REMOVED_PROVIDER_MIGRATION_NOTICE)
-    }
-    if (data.botPresets) {
-        for (const preset of data.botPresets) {
-            if (migrateRemovedProviderSelections(preset)) {
-                removedModelMigrationNotices.add(REMOVED_PROVIDER_MIGRATION_NOTICE)
-            }
-        }
-    }
-    data.removedModelMigrationNotice = [...removedModelMigrationNotices]
     data.useInstructPrompt ??= false
-    data.hanuraiEnable ??= false
-    data.hanuraiSplit ??= false
-    data.hanuraiTokens ??= 1000
     data.textAreaSize ??= 0
     data.sideBarSize ??= 0
     data.textAreaTextSize ??= 0
@@ -476,8 +433,6 @@ export function setDatabase(data:Database){
     data.customPromptTemplateToggle ??= ''
     data.globalChatVariables ??= {}
     data.templateDefaultVariables ??= ''
-    data.hypaAllocatedTokens ??= 3000
-    data.hypaChunkSize ??= 3000
     data.dallEQuality ??= 'standard'
     data.customTextTheme.FontColorQuote1 ??= '#8BE9FD'
     data.customTextTheme.FontColorQuote2 ??= '#FFB86C'
@@ -516,11 +471,6 @@ export function setDatabase(data:Database){
     data.customAPIFormat ??= LLMFormat.OpenAICompatible
     data.systemContentReplacement ??= `system: {{slot}}`
     data.systemRoleReplacement ??= 'user'
-    data.vertexAccessToken ??= ''
-    data.vertexAccessTokenExpires ??= 0
-    data.vertexClientEmail ??= ''
-    data.vertexPrivateKey ??= ''
-    data.vertexRegion ??= 'global'
     data.seperateParametersEnabled ??= false
     data.seperateParameters ??= {
         memory: {},
@@ -537,33 +487,36 @@ export function setDatabase(data:Database){
     data.OaiCompAPIKeys ??= {}
     data.globalRagSettings = resolveGlobalRagSettings(data.globalRagSettings)
     data.reasoningEffort ??= 0
-    data.hypaV3Presets ??= [
-        createHypaV3Preset("Default", {
-            summarizationPrompt: data.supaMemoryPrompt ? data.supaMemoryPrompt : "",
-            ...data.hypaV3Settings
+    const normalizedMemoryPresets = data.memoryPresets?.length ? data.memoryPresets : [
+        createMemoryPreset("Default", {
+            ...(data.memorySettings ?? {})
         })
     ]
-    if (data.hypaV3Presets.length > 0) {
-        data.hypaV3Presets = data.hypaV3Presets.map((preset, i) =>
-            createHypaV3Preset(
-                preset.name || `Preset ${i + 1}`,
-                preset.settings || {}
-            )
+    const mappedMemoryPresets = normalizedMemoryPresets.map((preset, i) =>
+        createMemoryPreset(
+            preset.name || `Preset ${i + 1}`,
+            preset.settings || {}
         )
-        for (const preset of data.hypaV3Presets) {
-            // Periodic summarization is interval-driven; keep it enabled for migrated presets.
-            preset.settings.periodicSummarizationEnabled = true
-        }
+    )
+    for (const preset of mappedMemoryPresets) {
+        // Periodic summarization is interval-driven; keep it enabled for migrated presets.
+        preset.settings.periodicSummarizationEnabled = true
     }
-    data.hypaV3PresetId ??= 0
-    // Long-term memory migration: keep runtime on HypaV3 only.
-    data.hypaV3 = true
-    data.hypav2 = false
-    data.hanuraiEnable = false
-    data.hanuraiSplit = false
-    data.supaModelType = 'none'
-    data.hypaMemory = false
-    data.memoryAlgorithmType = 'hypaMemoryV3'
+    setDbMemoryPresets(data, mappedMemoryPresets)
+    const normalizedMemoryPresetId = Math.min(
+        Math.max(Number(data.memoryPresetId ?? 0) || 0, 0),
+        Math.max(mappedMemoryPresets.length - 1, 0)
+    )
+    setDbMemoryPresetId(data, normalizedMemoryPresetId)
+    setDbMemorySettings(
+        data,
+        mappedMemoryPresets[normalizedMemoryPresetId]?.settings
+            ?? data.memorySettings
+            ?? createMemoryPreset('Default').settings
+    )
+    setDbMemoryDebug(data, data.memoryDebug)
+    setDbMemoryEnabled(data, data.memoryEnabled ?? true)
+    data.showDeprecatedTriggerV1 ??= false
     data.showDeprecatedTriggerV2 ??= false
     data.returnCSSError ??= true
     data.useExperimentalGoogleTranslator ??= false
@@ -571,10 +524,10 @@ export function setDatabase(data:Database){
         data.antiClaudeOverload = false
         data.antiServerOverloads = true
     }
-    data.hypaCustomSettings = {
-        url: data.hypaCustomSettings?.url ?? "",
-        key: data.hypaCustomSettings?.key ?? "",
-        model: data.hypaCustomSettings?.model ?? ""     
+    data.customEmbeddingSettings = {
+        url: data.customEmbeddingSettings?.url ?? "",
+        key: data.customEmbeddingSettings?.key ?? "",
+        model: data.customEmbeddingSettings?.model ?? ""     
     }
     data.doNotChangeSeperateModels ??= false
     data.modelTools ??= []
@@ -640,8 +593,6 @@ export function setDatabase(data:Database){
     data.autoScrollToNewMessage ??= true
     data.alwaysScrollToNewMessage ??= false
     data.newMessageButtonStyle ??= 'bottom-center'
-    data.echoMessage ??= "Echo Message"
-    data.echoDelay ??= 0
     if(!isNodeServer){
         //this is intended to forcely reduce the size of the database in web
         data.promptInfoInsideChat = false
@@ -682,6 +633,252 @@ export function getCurrentCharacter(options:getDatabaseOptions = {}):character|g
     return char
 }
 
+export function resolveSelectedCharacter(
+    characters: Array<character | groupChat> | undefined | null,
+    selectedCharacterIndex: number,
+): character | groupChat | null {
+    if (!Array.isArray(characters) || selectedCharacterIndex < 0) {
+        return null
+    }
+    return characters[selectedCharacterIndex] ?? null
+}
+
+export function resolveSafeChatIndex(
+    chats: Chat[] | undefined | null,
+    chatPage: number | undefined | null,
+): number {
+    if (!Array.isArray(chats) || chats.length === 0) {
+        return -1
+    }
+    if (!Number.isInteger(chatPage) || chatPage < 0 || chatPage >= chats.length) {
+        return 0
+    }
+    return chatPage
+}
+
+export function resolveSelectedChat(
+    currentCharacter: character | groupChat | null | undefined,
+): Chat | null {
+    const chatIndex = resolveSafeChatIndex(currentCharacter?.chats, currentCharacter?.chatPage)
+    if (chatIndex < 0) {
+        return null
+    }
+    return currentCharacter?.chats?.[chatIndex] ?? null
+}
+
+export function resolveSelectedChatMessages(
+    currentCharacter: character | groupChat | null | undefined,
+): Message[] {
+    return resolveSelectedChat(currentCharacter)?.message ?? []
+}
+
+export function resolveSelectedChatState(
+    characters: Array<character | groupChat> | undefined | null,
+    selectedCharacterIndex: number,
+) {
+    const character = resolveSelectedCharacter(characters, selectedCharacterIndex)
+    const chatIndex = resolveSafeChatIndex(character?.chats, character?.chatPage)
+    const chat = chatIndex >= 0 ? character?.chats?.[chatIndex] ?? null : null
+    return {
+        character,
+        characterIndex: character ? selectedCharacterIndex : -1,
+        chat,
+        chatIndex,
+        messages: chat?.message ?? [],
+    }
+}
+
+export interface ChatTargetRef {
+    characterId: string
+    chatId: string
+}
+
+type ChatTargetLookup = {
+    characterId: string
+    chatId?: string | null
+}
+
+export interface ResolvedChatState {
+    character: character | groupChat | null
+    characterIndex: number
+    chat: Chat | null
+    chatIndex: number
+    messages: Message[]
+}
+
+function createEmptyResolvedChatState(): ResolvedChatState {
+    return {
+        character: null,
+        characterIndex: -1,
+        chat: null,
+        chatIndex: -1,
+        messages: [],
+    }
+}
+
+export function resolveCharacterEntryIndexById(
+    characters: Array<character | groupChat> | undefined | null,
+    characterId: string,
+): number {
+    if (!characterId || !Array.isArray(characters)) {
+        return -1
+    }
+    return characters.findIndex((candidate) => candidate?.chaId === characterId)
+}
+
+export function resolveCharacterEntryById(
+    characters: Array<character | groupChat> | undefined | null,
+    characterId: string,
+): character | groupChat | null {
+    const characterIndex = resolveCharacterEntryIndexById(characters, characterId)
+    if (characterIndex < 0) {
+        return null
+    }
+    return characters?.[characterIndex] ?? null
+}
+
+export function resolveChatIndexById(
+    chats: Chat[] | undefined | null,
+    chatId: string,
+): number {
+    if (!chatId || !Array.isArray(chats)) {
+        return -1
+    }
+    return chats.findIndex((chat) => chat?.id === chatId)
+}
+
+export function resolveChatById(
+    currentCharacter: character | groupChat | null | undefined,
+    chatId: string,
+): Chat | null {
+    const chatIndex = resolveChatIndexById(currentCharacter?.chats, chatId)
+    if (chatIndex < 0) {
+        return null
+    }
+    return currentCharacter?.chats?.[chatIndex] ?? null
+}
+
+export function resolveChatStateByCharacterAndChatId(
+    characters: Array<character | groupChat> | undefined | null,
+    characterId: string,
+    chatId: string,
+): ResolvedChatState {
+    const characterIndex = resolveCharacterEntryIndexById(characters, characterId)
+    const character = characterIndex >= 0 ? characters?.[characterIndex] ?? null : null
+    const chatIndex = resolveChatIndexById(character?.chats, chatId)
+    const chat = chatIndex >= 0 ? character?.chats?.[chatIndex] ?? null : null
+    return {
+        character,
+        characterIndex,
+        chat,
+        chatIndex,
+        messages: chat?.message ?? [],
+    }
+}
+
+export function resolveChatStateByTarget(
+    characters: Array<character | groupChat> | undefined | null,
+    target: ChatTargetLookup | null | undefined,
+): ResolvedChatState {
+    if (!target?.characterId) {
+        return createEmptyResolvedChatState()
+    }
+
+    if (target.chatId) {
+        return resolveChatStateByCharacterAndChatId(
+            characters,
+            target.characterId,
+            target.chatId,
+        )
+    }
+
+    const characterIndex = resolveCharacterEntryIndexById(characters, target.characterId)
+    const character = characterIndex >= 0 ? characters?.[characterIndex] ?? null : null
+    const chatIndex = resolveSafeChatIndex(character?.chats, character?.chatPage)
+    const chat = chatIndex >= 0 ? character?.chats?.[chatIndex] ?? null : null
+    return {
+        character,
+        characterIndex,
+        chat,
+        chatIndex,
+        messages: chat?.message ?? [],
+    }
+}
+
+export function resolveSelectedChatTarget(
+    characters: Array<character | groupChat> | undefined | null,
+    selectedCharacterIndex: number,
+): ChatTargetRef | null {
+    const { character, chat } = resolveSelectedChatState(characters, selectedCharacterIndex)
+    if (!character?.chaId || !chat?.id) {
+        return null
+    }
+    return {
+        characterId: character.chaId,
+        chatId: chat.id,
+    }
+}
+
+export function setChatByCharacterAndChatId(
+    characters: Array<character | groupChat> | undefined | null,
+    characterId: string,
+    chatId: string,
+    chat: Chat,
+): boolean {
+    const { character, chatIndex } = resolveChatStateByCharacterAndChatId(characters, characterId, chatId)
+    if (!character || chatIndex < 0) {
+        return false
+    }
+    character.chats[chatIndex] = chat
+    return true
+}
+
+export function mutateChatByCharacterAndChatId(
+    characters: Array<character | groupChat> | undefined | null,
+    characterId: string,
+    chatId: string,
+    mutate: (chat: Chat, state: ResolvedChatState) => Chat | void,
+): boolean {
+    const state = resolveChatStateByCharacterAndChatId(characters, characterId, chatId)
+    if (!state.character || !state.chat || state.chatIndex < 0) {
+        return false
+    }
+
+    const nextChat = mutate(state.chat, state)
+    if (nextChat && nextChat !== state.chat) {
+        state.character.chats[state.chatIndex] = nextChat
+    }
+    return true
+}
+
+export function mutateChatByTarget(
+    characters: Array<character | groupChat> | undefined | null,
+    target: ChatTargetLookup | null | undefined,
+    mutate: (chat: Chat, state: ResolvedChatState) => Chat | void,
+): boolean {
+    if (!target?.characterId || !target.chatId) {
+        return false
+    }
+    return mutateChatByCharacterAndChatId(
+        characters,
+        target.characterId,
+        target.chatId,
+        mutate,
+    )
+}
+
+export function repairCharacterChatPage(currentCharacter: character | groupChat | null | undefined): number {
+    if (!currentCharacter) {
+        return -1
+    }
+    const safeChatIndex = resolveSafeChatIndex(currentCharacter.chats, currentCharacter.chatPage)
+    const nextChatPage = safeChatIndex < 0 ? 0 : safeChatIndex
+    if (currentCharacter.chatPage !== nextChatPage) {
+        currentCharacter.chatPage = nextChatPage
+    }
+    return safeChatIndex
+}
+
 export function setCurrentCharacter(char:character|groupChat){
     if(!DBState.db.characters){
         DBState.db.characters = []
@@ -707,12 +904,16 @@ export function setCharacterByIndex(index:number,char:character|groupChat){
 
 export function getCurrentChat(){
     const char = getCurrentCharacter()
-    return char?.chats[char.chatPage]
+    return resolveSelectedChat(char)
 }
 
 export function setCurrentChat(chat:Chat){
     const char = getCurrentCharacter()
-    char.chats[char.chatPage] = chat
+    const safeChatIndex = resolveSafeChatIndex(char?.chats, char?.chatPage)
+    if (!char || safeChatIndex < 0) {
+        return
+    }
+    char.chats[safeChatIndex] = chat
     setCurrentCharacter(char)
 }
 

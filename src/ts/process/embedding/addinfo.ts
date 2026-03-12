@@ -1,9 +1,9 @@
 import { type Chat, type character } from "src/ts/storage/database.svelte";
-import { HypaProcesser } from '../memory/hypamemory'
+import { EmbeddingProcessor } from '../memory/embeddings'
 import { getUserName } from "src/ts/util";
 
 export async function additionalInformations(char: character,chats:Chat,){
-    const processer = new HypaProcesser()
+    const processer = new EmbeddingProcessor()
 
     const info = char.additionalText
     if(info){

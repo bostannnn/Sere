@@ -1,8 +1,12 @@
 function createGenerateHelpers(arg = {}) {
+    const { getMemoryData, setMemoryData } = require('../memory/storage.cjs');
     const toStringOrEmpty = typeof arg.toStringOrEmpty === 'function'
         ? arg.toStringOrEmpty
         : ((value) => (typeof value === 'string' ? value.trim() : ''));
     const promptPipeline = arg.promptPipeline || {};
+    const estimatePromptTokens = typeof promptPipeline.estimatePromptTokens === 'function'
+        ? promptPipeline.estimatePromptTokens
+        : (() => 0);
     const parseLLMExecutionInput = typeof arg.parseLLMExecutionInput === 'function'
         ? arg.parseLLMExecutionInput
         : (() => ({}));
@@ -39,11 +43,11 @@ function createGenerateHelpers(arg = {}) {
     const normalizeProvider = typeof arg.normalizeProvider === 'function'
         ? arg.normalizeProvider
         : (() => 'unknown');
-    const planPeriodicHypaV3Summarization = typeof arg.planPeriodicHypaV3Summarization === 'function'
-        ? arg.planPeriodicHypaV3Summarization
+    const planPeriodicMemorySummarization = typeof arg.planPeriodicMemorySummarization === 'function'
+        ? arg.planPeriodicMemorySummarization
         : (() => ({ shouldRun: false, reason: 'not_planned' }));
-    const applyPeriodicHypaV3Summary = typeof arg.applyPeriodicHypaV3Summary === 'function'
-        ? arg.applyPeriodicHypaV3Summary
+    const applyPeriodicMemorySummary = typeof arg.applyPeriodicMemorySummary === 'function'
+        ? arg.applyPeriodicMemorySummary
         : (() => ({ updated: false, reason: 'not_applied' }));
     const generateSummaryEmbedding = typeof arg.generateSummaryEmbedding === 'function'
         ? arg.generateSummaryEmbedding
@@ -112,8 +116,8 @@ function createGenerateHelpers(arg = {}) {
                 .join('\n')
             : '';
         const totalChats = Array.isArray(chat?.message) ? chat.message.length : 0;
-        const previousLastIndex = Number.isFinite(Number(plan?.hypaData?.lastSummarizedMessageIndex))
-            ? Number(plan.hypaData.lastSummarizedMessageIndex)
+        const previousLastIndex = Number.isFinite(Number(plan?.memoryData?.lastSummarizedMessageIndex))
+            ? Number(plan.memoryData.lastSummarizedMessageIndex)
             : 0;
         const chunkEndIndex = Number.isFinite(Number(plan?.chunkEndIndex))
             ? Number(plan.chunkEndIndex)
@@ -124,7 +128,6 @@ function createGenerateHelpers(arg = {}) {
         return {
             timestamp: Date.now(),
             model: providerModel,
-            isResummarize: false,
             prompt: resolvePromptTextFromRows(promptRows),
             input: inputText,
             formatted: promptRows,
@@ -144,6 +147,89 @@ function createGenerateHelpers(arg = {}) {
                 chatName: toStringOrEmpty(chat?.name),
             },
         };
+    }
+
+    function normalizeMaxContextTokens(rawBody, settings) {
+        const candidates = [
+            rawBody?.maxContext,
+            rawBody?.request?.maxContext,
+            settings?.maxContext,
+        ];
+        for (const candidate of candidates) {
+            const value = Number(candidate);
+            if (Number.isFinite(value) && value > 0) {
+                return Math.max(256, Math.floor(value));
+            }
+        }
+        return 0;
+    }
+
+    function getOldestChatMessageIndex(promptBlocks, messagesLength) {
+        if (!Array.isArray(promptBlocks)) {
+            return null;
+        }
+        let best = null;
+        for (const block of promptBlocks) {
+            if (!block || typeof block !== 'object') continue;
+            if (block.source !== 'chat') continue;
+            const index = Number(block.index);
+            if (!Number.isInteger(index) || index < 0 || index >= messagesLength) continue;
+            if (best === null || index < best) {
+                best = index;
+            }
+        }
+        return best;
+    }
+
+    function removePromptMessageAtIndex(messages, promptBlocks, targetIndex) {
+        if (!Array.isArray(messages)) {
+            return;
+        }
+        messages.splice(targetIndex, 1);
+        if (!Array.isArray(promptBlocks)) {
+            return;
+        }
+        for (let i = promptBlocks.length - 1; i >= 0; i -= 1) {
+            const block = promptBlocks[i];
+            if (!block || typeof block !== 'object') continue;
+            const index = Number(block.index);
+            if (!Number.isInteger(index)) continue;
+            if (index === targetIndex) {
+                promptBlocks.splice(i, 1);
+                continue;
+            }
+            if (index > targetIndex) {
+                block.index = index - 1;
+            }
+        }
+    }
+
+    async function trimPromptMessagesToContext(messages, promptBlocks, maxInputTokens, options = {}) {
+        if (!Array.isArray(messages) || messages.length === 0 || !Number.isFinite(Number(maxInputTokens))) {
+            return 0;
+        }
+        let inputTokens = Number(await Promise.resolve(estimatePromptTokens(messages))) || 0;
+        while (inputTokens > maxInputTokens) {
+            const trimIndex = getOldestChatMessageIndex(promptBlocks, messages.length);
+            if (!Number.isInteger(trimIndex)) {
+                const reservedOutputTokens = Number(options.reservedOutputTokens);
+                const maxContextTokens = Number(options.maxContextTokens);
+                const reserveSuffix = Number.isFinite(reservedOutputTokens) && reservedOutputTokens > 0
+                    ? ` after reserving ${reservedOutputTokens} output tokens`
+                    : '';
+                const contextSuffix = Number.isFinite(maxContextTokens) && maxContextTokens > 0
+                    ? ` within max context size (${maxContextTokens})`
+                    : '';
+                throw new LLMHttpError(
+                    400,
+                    'MAX_CONTEXT_EXCEEDED',
+                    `Input token count (${inputTokens}) exceeds allowed prompt budget (${maxInputTokens})${contextSuffix}${reserveSuffix}, but no removable chat history remains.`
+                );
+            }
+            removePromptMessageAtIndex(messages, promptBlocks, trimIndex);
+            inputTokens = Number(await Promise.resolve(estimatePromptTokens(messages))) || 0;
+        }
+        return inputTokens;
     }
 
     async function readJsonFileWithRetry(filePath, retries = 3) {
@@ -277,11 +363,11 @@ function createGenerateHelpers(arg = {}) {
         };
     }
 
-    async function persistHypaDataWithRetry({
+    async function persistMemoryDataWithRetry({
         characterId,
         chatId,
         chatPath,
-        hypaV3Data,
+        memoryData,
         source,
     }) {
         if (!existsSync(chatPath) || typeof applyStateCommands !== 'function') {
@@ -293,7 +379,7 @@ function createGenerateHelpers(arg = {}) {
             const latestChat = toStoredChatObject(latestRaw);
             const nextChat = (latestChat && typeof latestChat === 'object') ? { ...latestChat } : {};
             nextChat.id = toStringOrEmpty(nextChat.id) || chatId;
-            nextChat.hypaV3Data = safeJsonClone(hypaV3Data, hypaV3Data);
+            setMemoryData(nextChat, safeJsonClone(memoryData, memoryData));
             try {
                 await applyStateCommands([
                     {
@@ -342,7 +428,7 @@ function createGenerateHelpers(arg = {}) {
                 maxTokens,
                 requestBody,
                 internalNoAssembly: true,
-                internalTask: 'hypav3_periodic_summary',
+                internalTask: 'memory_periodic_summary',
             },
         };
 
@@ -351,142 +437,189 @@ function createGenerateHelpers(arg = {}) {
         return extractExecutionResultText(executionResult).trim();
     }
 
-    async function maybeRunServerPeriodicHypaV3Summarization(payload = {}) {
+    async function maybeRunServerPeriodicMemorySummarization(payload = {}) {
         const character = payload.character || {};
         const chat = payload.chat || {};
         const settings = payload.settings || {};
         const characterId = toStringOrEmpty(payload.characterId);
         const chatId = toStringOrEmpty(payload.chatId);
 
-        const plan = planPeriodicHypaV3Summarization({
+        const initialPlan = planPeriodicMemorySummarization({
             character,
             chat,
             settings,
         });
 
-        if (!plan || plan.shouldRun !== true) {
-            if (plan && plan.shouldAdvanceIndex === true) {
-                const advanceResult = applyPeriodicHypaV3Summary({
+        if (!initialPlan || initialPlan.shouldRun !== true) {
+            if (initialPlan && initialPlan.shouldAdvanceIndex === true) {
+                const advanceResult = applyPeriodicMemorySummary({
                     chat,
-                    plan,
+                    plan: initialPlan,
                     summaryText: '',
                     settings,
                     character,
                 });
                 return {
                     updated: advanceResult.updated === true,
-                    reason: plan.reason || advanceResult.reason || 'index_advanced',
+                    reason: initialPlan.reason || advanceResult.reason || 'index_advanced',
                     trace: null,
                 };
             }
             return {
                 updated: false,
-                reason: plan?.reason || 'not_planned',
+                reason: initialPlan?.reason || 'not_planned',
                 trace: null,
             };
         }
 
-        const selectedModel = toStringOrEmpty(plan.selectedModel) || 'subModel';
-        let provider = '';
-        let model = '';
-        if (selectedModel === 'subModel') {
-            const selected = resolveGenerateModelSelection({ mode: 'memory' }, settings);
-            provider = toStringOrEmpty(selected.provider);
-            model = toStringOrEmpty(selected.model);
-        } else {
-            provider = normalizeProvider('', selectedModel);
-            model = selectedModel;
-        }
+        const dueWindowEndIndex = Number.isFinite(Number(initialPlan.windowEndIndex))
+            ? Number(initialPlan.windowEndIndex)
+            : Number(initialPlan.chunkEndIndex || 0);
 
-        if (!provider || provider === 'unknown' || !model) {
-            return {
-                updated: false,
-                reason: 'unsupported_summary_provider_or_model',
-                trace: {
-                    endpoint: 'hypav3_periodic_summarize',
-                    provider: provider || null,
-                    model: model || null,
-                    promptMessages: plan.promptMessages,
-                    status: 400,
-                    ok: false,
-                    error: {
-                        error: 'HYPAV3_MODEL_UNAVAILABLE',
-                        message: 'Unable to resolve summarization model/provider for periodic summary.',
-                    },
-                },
-            };
-        }
+        let plan = initialPlan;
+        let updatedAny = false;
+        let lastReason = initialPlan.reason || 'ready';
+        let lastTrace = null;
+        let iterations = 0;
 
-        let summaryText = '';
-        try {
-            summaryText = await executeInternalLLMTextCompletion({
-                provider,
-                model,
-                mode: 'memory',
-                characterId,
-                chatId,
-                maxTokens: 1024,
-                messages: plan.promptMessages,
-            });
-        } catch (summaryError) {
-            return {
-                updated: false,
-                reason: 'periodic_summary_execution_failed',
-                trace: {
-                    endpoint: 'hypav3_periodic_summarize',
+        while (plan && iterations < 16) {
+            iterations += 1;
+
+            if (plan.shouldRun !== true) {
+                if (plan.shouldAdvanceIndex === true) {
+                    const advanceResult = applyPeriodicMemorySummary({
+                        chat,
+                        plan,
+                        summaryText: '',
+                        settings,
+                        character,
+                    });
+                    updatedAny = updatedAny || advanceResult.updated === true;
+                    lastReason = plan.reason || advanceResult.reason || 'index_advanced';
+                } else {
+                    break;
+                }
+            } else {
+                const selectedModel = toStringOrEmpty(plan.selectedModel) || 'subModel';
+                let provider = '';
+                let model = '';
+                if (selectedModel === 'subModel') {
+                    const selected = resolveGenerateModelSelection({ mode: 'memory' }, settings);
+                    provider = toStringOrEmpty(selected.provider);
+                    model = toStringOrEmpty(selected.model);
+                } else {
+                    provider = normalizeProvider('', selectedModel);
+                    model = selectedModel;
+                }
+
+                if (!provider || provider === 'unknown' || !model) {
+                    return {
+                        updated: updatedAny,
+                        reason: 'unsupported_summary_provider_or_model',
+                        trace: {
+                            endpoint: 'memory_periodic_summarize',
+                            provider: provider || null,
+                            model: model || null,
+                            promptMessages: plan.promptMessages,
+                            status: 400,
+                            ok: false,
+                            error: {
+                                error: 'MEMORY_MODEL_UNAVAILABLE',
+                                message: 'Unable to resolve summarization model/provider for periodic summary.',
+                            },
+                        },
+                    };
+                }
+
+                let summaryText = '';
+                try {
+                    summaryText = await executeInternalLLMTextCompletion({
+                        provider,
+                        model,
+                        mode: 'memory',
+                        characterId,
+                        chatId,
+                        maxTokens: 1024,
+                        messages: plan.promptMessages,
+                    });
+                } catch (summaryError) {
+                    return {
+                        updated: updatedAny,
+                        reason: 'periodic_summary_execution_failed',
+                        trace: {
+                            endpoint: 'memory_periodic_summarize',
+                            provider,
+                            model,
+                            promptMessages: plan.promptMessages,
+                            status: 500,
+                            ok: false,
+                            error: {
+                                error: 'MEMORY_SUMMARY_EXECUTION_FAILED',
+                                message: String(summaryError?.message || summaryError || 'Periodic summary generation failed'),
+                            },
+                        },
+                    };
+                }
+
+                let summaryEmbedding = null;
+                try {
+                    summaryEmbedding = await generateSummaryEmbedding(summaryText, settings);
+                } catch (embeddingError) {
+                    console.error('[Memory] Summary embedding generation failed:', embeddingError);
+                    summaryEmbedding = null;
+                }
+
+                const applyResult = applyPeriodicMemorySummary({
+                    chat,
+                    plan,
+                    summaryText,
+                    summaryEmbedding,
+                    settings,
+                    character,
+                });
+
+                const applyResultMemoryData = applyResult?.memoryData || null;
+                if (applyResultMemoryData && typeof applyResultMemoryData === 'object') {
+                    applyResultMemoryData.lastPeriodicDebug = buildPeriodicDebugLog({
+                        chat,
+                        plan,
+                        model,
+                        summaryText,
+                        characterId,
+                        chatId,
+                    });
+                    setMemoryData(chat, applyResultMemoryData);
+                }
+
+                updatedAny = updatedAny || applyResult.updated === true;
+                lastReason = applyResult.reason || 'summary_applied';
+                lastTrace = {
+                    endpoint: 'memory_periodic_summarize',
                     provider,
                     model,
                     promptMessages: plan.promptMessages,
-                    status: 500,
-                    ok: false,
-                    error: {
-                        error: 'HYPAV3_SUMMARY_EXECUTION_FAILED',
-                        message: String(summaryError?.message || summaryError || 'Periodic summary generation failed'),
-                    },
-                },
-            };
-        }
+                    status: 200,
+                    ok: true,
+                };
+            }
 
-        let summaryEmbedding = null;
-        try {
-            summaryEmbedding = await generateSummaryEmbedding(summaryText, settings);
-        } catch (embeddingError) {
-            console.error('[HypaV3] Summary embedding generation failed:', embeddingError);
-            summaryEmbedding = null;
-        }
+            const currentIndex = Number(getMemoryData(chat)?.lastSummarizedMessageIndex || 0);
+            if (!Number.isFinite(dueWindowEndIndex) || currentIndex >= dueWindowEndIndex) {
+                break;
+            }
 
-        const applyResult = applyPeriodicHypaV3Summary({
-            chat,
-            plan,
-            summaryText,
-            summaryEmbedding,
-            settings,
-            character,
-        });
-
-        if (applyResult?.hypaV3Data && typeof applyResult.hypaV3Data === 'object') {
-            applyResult.hypaV3Data.lastPeriodicDebug = buildPeriodicDebugLog({
+            plan = planPeriodicMemorySummarization({
+                character,
                 chat,
-                plan,
-                model,
-                summaryText,
-                characterId,
-                chatId,
+                settings,
+                forceWindowEndIndex: dueWindowEndIndex,
             });
-            chat.hypaV3Data = applyResult.hypaV3Data;
         }
 
         return {
-            updated: applyResult.updated === true,
-            reason: applyResult.reason || 'summary_applied',
-            trace: {
-                endpoint: 'hypav3_periodic_summarize',
-                provider,
-                model,
-                promptMessages: plan.promptMessages,
-                status: 200,
-                ok: true,
-            },
+            updated: updatedAny,
+            reason: lastReason,
+            trace: lastTrace,
         };
     }
 
@@ -557,7 +690,7 @@ function createGenerateHelpers(arg = {}) {
         const chatRaw = await readJsonFileWithRetry(chatPath);
         const character = charRaw.character || charRaw.data || charRaw || {};
         let chat = chatRaw.chat || chatRaw.data || chatRaw || {};
-        const baselineHypaV3Data = safeJsonClone(chat.hypaV3Data, null);
+        const baselineMemoryData = safeJsonClone(getMemoryData(chat), null);
 
         // Hard invariant: user message must be durable before generation.
         if (!readOnlyTrace && !rawBody.continue && toStringOrEmpty(userMessage)) {
@@ -594,7 +727,7 @@ function createGenerateHelpers(arg = {}) {
         let shouldPersistServerChat = false;
         if (!readOnlyTrace) {
             try {
-                const periodicResult = await maybeRunServerPeriodicHypaV3Summarization({
+                const periodicResult = await maybeRunServerPeriodicMemorySummarization({
                     character,
                     chat,
                     settings,
@@ -605,14 +738,14 @@ function createGenerateHelpers(arg = {}) {
                     try {
                         await options.onPeriodicSummaryTrace(periodicResult.trace);
                     } catch (traceError) {
-                        console.error('[HypaV3] Failed to persist periodic summary trace:', traceError);
+                        console.error('[Memory] Failed to persist periodic summary trace:', traceError);
                     }
                 }
                 if (periodicResult.updated === true) {
                     shouldPersistServerChat = true;
                 }
             } catch (periodicError) {
-                console.error('[HypaV3] Server periodic summarization failed:', periodicError);
+                console.error('[Memory] Server periodic summarization failed:', periodicError);
             }
         }
 
@@ -627,23 +760,24 @@ function createGenerateHelpers(arg = {}) {
         const messages = Array.isArray(assembled?.messages) ? assembled.messages : [];
         const promptBlocks = Array.isArray(assembled?.promptBlocks) ? assembled.promptBlocks : [];
 
-        // buildServerMemoryMessages may update chat.hypaV3Data.metrics (selection tracking).
+        // buildServerMemoryMessages may update chat memory metrics (selection tracking).
         // Persist these back so similarity-based selection improves over time.
-        const hypaV3DataChanged = !isJsonEquivalent(baselineHypaV3Data, chat.hypaV3Data);
-        if (hypaV3DataChanged) {
+        const currentMemoryData = getMemoryData(chat);
+        const memoryDataChanged = !isJsonEquivalent(baselineMemoryData, currentMemoryData);
+        if (memoryDataChanged) {
             shouldPersistServerChat = true;
         }
         if (!readOnlyTrace && shouldPersistServerChat) {
             try {
-                await persistHypaDataWithRetry({
+                await persistMemoryDataWithRetry({
                     characterId,
                     chatId,
                     chatPath,
-                    hypaV3Data: chat.hypaV3Data,
-                    source: 'llm.generate.hypav3',
+                    memoryData: currentMemoryData,
+                    source: 'llm.generate.memory',
                 });
             } catch (metricsWriteError) {
-                console.error('[HypaV3] Failed to persist memory selection metrics:', metricsWriteError);
+                console.error('[Memory] Failed to persist memory selection metrics:', metricsWriteError);
             }
         }
 
@@ -661,9 +795,33 @@ function createGenerateHelpers(arg = {}) {
         const maxTokens = Number.isFinite(Number(rawBody.maxTokens))
             ? Number(rawBody.maxTokens)
             : (Number.isFinite(maxTokensFromRequestTemplate) ? Number(maxTokensFromRequestTemplate) : null);
-        const resolvedMaxTokens = Number.isFinite(Number(maxTokens))
+        let resolvedMaxTokens = Number.isFinite(Number(maxTokens))
             ? Number(maxTokens)
             : (Number.isFinite(Number(settings?.maxResponse)) ? Number(settings.maxResponse) : 1024);
+        const maxContextTokens = normalizeMaxContextTokens(rawBody, settings);
+        const reservedOutputTokens = resolvedMaxTokens > 0 ? resolvedMaxTokens : 0;
+        const inputTokens = maxContextTokens > 0
+            ? await trimPromptMessagesToContext(
+                messages,
+                promptBlocks,
+                Math.max(0, maxContextTokens - reservedOutputTokens),
+                {
+                    maxContextTokens,
+                    reservedOutputTokens,
+                }
+            )
+            : (Number(await Promise.resolve(estimatePromptTokens(messages))) || 0);
+        if (maxContextTokens > 0 && inputTokens > 0 && (inputTokens + resolvedMaxTokens) > maxContextTokens) {
+            const remainingBudget = maxContextTokens - inputTokens;
+            if (remainingBudget <= 0) {
+                throw new LLMHttpError(
+                    400,
+                    'MAX_CONTEXT_EXCEEDED',
+                    `Input token count (${inputTokens}) exceeds max context size (${maxContextTokens}), leaving no room for output tokens.`
+                );
+            }
+            resolvedMaxTokens = remainingBudget;
+        }
 
         const request = promptPipeline.buildGenerateProviderRequest(
             selection.provider,
@@ -707,7 +865,7 @@ function createGenerateHelpers(arg = {}) {
 
     return {
         executeInternalLLMTextCompletion,
-        maybeRunServerPeriodicHypaV3Summarization,
+        maybeRunServerPeriodicMemorySummarization,
         buildGenerateExecutionPayload,
     };
 }

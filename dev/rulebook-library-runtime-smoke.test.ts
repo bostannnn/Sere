@@ -1,5 +1,4 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { get } from "svelte/store";
 import { mount, tick, unmount } from "svelte";
 
 type MockRulebook = {
@@ -33,15 +32,10 @@ const mocks = vi.hoisted(() => ({
     }) => void;
     subscribe: (run: (value: unknown) => void) => () => void;
   } | null,
-  openRulebookManager: null as {
-    set: (value: boolean) => void;
-    subscribe: (run: (value: boolean) => void) => () => void;
-  } | null,
 }));
 
 vi.mock(import("src/ts/stores.svelte"), async () => {
   const { writable } = await import("svelte/store");
-  const openRulebookManager = writable(true);
   const ragProgressStore = writable({
     active: false,
     status: "idle",
@@ -52,7 +46,6 @@ vi.mock(import("src/ts/stores.svelte"), async () => {
     currentFileIndex: 0,
     totalFiles: 0,
   });
-  mocks.openRulebookManager = openRulebookManager;
   mocks.ragProgressStore = ragProgressStore;
 
   return {
@@ -73,7 +66,6 @@ vi.mock(import("src/ts/stores.svelte"), async () => {
         ],
       },
     },
-    openRulebookManager,
     ragProgressStore,
     selIdState: { selId: 0 },
     selectedCharID: writable(0),
@@ -176,7 +168,7 @@ describe("rulebook library runtime smoke", () => {
     }
   });
 
-  it("keeps legacy library controls and list/tab/action primitives stable", async () => {
+  it("keeps shell library drawer and card action primitives stable", async () => {
     mocks.rulebooks = [
       {
         id: "rb-1",
@@ -191,32 +183,18 @@ describe("rulebook library runtime smoke", () => {
     app = mount(RulebookLibrary, { target });
     await flushUi();
 
+    const drawer = target.querySelector('[data-testid="rulebook-right-sidebar-drawer"]') as HTMLElement | null;
+    expect(drawer).not.toBeNull();
+    expect(drawer?.classList.contains("drawer-elevation--right")).toBe(true);
+
+    const libraryTab = target.querySelector('[data-testid="rulebook-sidebar-tab-library"]') as HTMLButtonElement | null;
+    const settingsTab = target.querySelector('[data-testid="rulebook-sidebar-tab-settings"]') as HTMLButtonElement | null;
+    expect(libraryTab?.getAttribute("aria-selected")).toBe("true");
+    expect(settingsTab?.getAttribute("aria-selected")).toBe("false");
+
     const systemList = target.querySelector('[data-testid="rulebook-library-system-list"]') as HTMLElement | null;
     expect(systemList).not.toBeNull();
     expect(systemList?.classList.contains("list-shell")).toBe(true);
-
-    const toolbarActions = target.querySelector(
-      '[data-testid="rulebook-library-toolbar-actions"]',
-    ) as HTMLElement | null;
-    expect(toolbarActions).not.toBeNull();
-    expect(toolbarActions?.classList.contains("action-rail")).toBe(true);
-
-    const viewToggle = target.querySelector('[data-testid="rulebook-library-view-toggle"]') as HTMLElement | null;
-    expect(viewToggle).not.toBeNull();
-    expect(viewToggle?.classList.contains("seg-tabs")).toBe(true);
-
-    const toggleButtons = Array.from(
-      target.querySelectorAll(".rag-view-toggle-btn.seg-tab"),
-    ) as HTMLButtonElement[];
-    expect(toggleButtons.length).toBe(2);
-    expect(toggleButtons[0]?.getAttribute("aria-label")).toBe("Grid view");
-    expect(toggleButtons[0]?.getAttribute("aria-pressed")).toBe("true");
-    expect(toggleButtons[1]?.getAttribute("aria-label")).toBe("List view");
-    expect(toggleButtons[1]?.getAttribute("aria-pressed")).toBe("false");
-    toggleButtons[1]?.click();
-    await flushUi();
-    expect(toggleButtons[0]?.getAttribute("aria-pressed")).toBe("false");
-    expect(toggleButtons[1]?.getAttribute("aria-pressed")).toBe("true");
 
     const systemToggle = target.querySelector(".rag-tree-toggle.icon-btn.icon-btn--sm") as HTMLButtonElement | null;
     expect(systemToggle).not.toBeNull();
@@ -226,7 +204,7 @@ describe("rulebook library runtime smoke", () => {
     expect(systemToggle?.getAttribute("aria-expanded")).toBe("true");
 
     const contentArea = target.querySelector(".rag-content-area") as HTMLElement | null;
-    expect(contentArea?.classList.contains("is-list")).toBe(true);
+    expect(contentArea?.classList.contains("is-grid")).toBe(true);
     expect(contentArea?.classList.contains("list-shell")).toBe(true);
 
     const card = target.querySelector(".ds-settings-card.panel-shell.rag-book-card") as HTMLElement | null;
@@ -237,7 +215,7 @@ describe("rulebook library runtime smoke", () => {
     expect(actions?.classList.contains("action-rail")).toBe(true);
 
     const priorityButton = target.querySelector(
-      ".rag-book-action-btn",
+      ".rag-book-pin-btn, .rag-book-action-btn",
     ) as HTMLButtonElement | null;
     expect(priorityButton).not.toBeNull();
     priorityButton?.click();
@@ -272,7 +250,6 @@ describe("rulebook library runtime smoke", () => {
     app = mount(RulebookLibrary, {
       target,
       props: {
-        useShellChrome: true,
         rightSidebarOpen: true,
         rightSidebarTab: "library",
         registerShellActions: (actions) => {
@@ -347,7 +324,6 @@ describe("rulebook library runtime smoke", () => {
     app = mount(RulebookLibrary, {
       target,
       props: {
-        useShellChrome: true,
         isMobileShell: true,
         viewMode: "grid",
         registerShellActions: (actions) => {
@@ -400,7 +376,7 @@ describe("rulebook library runtime smoke", () => {
     expect(empty).toBeNull();
   });
 
-  it("keeps empty-state primitive and close behavior stable", async () => {
+  it("keeps empty-state primitive stable without standalone close chrome", async () => {
     mocks.rulebooks = [];
 
     const target = document.createElement("div");
@@ -413,15 +389,7 @@ describe("rulebook library runtime smoke", () => {
     expect(empty?.classList.contains("panel-shell")).toBe(true);
     expect(empty?.classList.contains("empty-state")).toBe(true);
 
-    const closeButton = target.querySelector("#rulebook-library-close") as HTMLButtonElement | null;
-    expect(closeButton).not.toBeNull();
-    expect(closeButton?.getAttribute("aria-label")).toBe("Close rulebook library");
-    expect(closeButton?.getAttribute("title")).toBe("Close rulebook library");
-    closeButton?.click();
-    await flushUi();
-
-    expect(mocks.openRulebookManager).not.toBeNull();
-    expect(get(mocks.openRulebookManager!)).toBe(false);
+    expect(target.querySelector("#rulebook-library-close")).toBeNull();
   });
 
   it("stages selected files and starts server-side ingestion from the drawer", async () => {
@@ -448,7 +416,6 @@ describe("rulebook library runtime smoke", () => {
     app = mount(RulebookLibrary, {
       target,
       props: {
-        useShellChrome: true,
         registerShellActions: (actions) => {
           shellActions = actions;
         },

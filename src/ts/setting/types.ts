@@ -105,8 +105,8 @@ export interface SettingItem {
     bindKey?: keyof Database;
     
     /**
-     * Path for nested object binding (e.g., 'ooba.top_p')
-     * Use when binding to nested properties like DBState.db.ooba.top_p
+     * Path for nested object binding (e.g., 'google.accessToken')
+     * Use when binding to nested properties like DBState.db.google.accessToken
      * Takes precedence over bindKey if both are specified
      */
     bindPath?: string;

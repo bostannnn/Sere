@@ -76,7 +76,7 @@ function createTraceAuditors(arg = {}) {
     async function appendMemoryTraceAudit({
         req,
         reqId,
-        endpoint = 'hypav3_memory',
+        endpoint = 'memory',
         mode = 'memory',
         provider = null,
         characterId = null,
@@ -99,7 +99,7 @@ function createTraceAuditors(arg = {}) {
             await appendLLMAudit({
                 requestId: reqId,
                 method: req?.method || 'POST',
-                path: path || req?.originalUrl || '/data/memory/hypav3/trace',
+                path: path || req?.originalUrl || '/data/memory/trace',
                 endpoint: `${endpoint}_trace`,
                 mode,
                 provider,

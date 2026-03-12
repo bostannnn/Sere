@@ -12,7 +12,6 @@ const shared = vi.hoisted(() => {
     formatversion: 5,
     loreBookToken: 8000,
     characterOrder: [] as string[],
-    mainPrompt: "",
     customBackground: "",
     userIcon: "",
   };
@@ -56,13 +55,6 @@ vi.mock("src/ts/alert", () => ({
   alertMd: vi.fn(),
   alertTOS: vi.fn(async () => true),
   waitAlert: vi.fn(async () => {}),
-}));
-
-vi.mock("src/ts/storage/defaultPrompts", () => ({
-  defaultJailbreak: "default-jailbreak",
-  defaultMainPrompt: "default-main",
-  oldJailbreak: "old-jailbreak",
-  oldMainPrompt: "old-main",
 }));
 
 vi.mock("src/ts/gui/animation", () => ({

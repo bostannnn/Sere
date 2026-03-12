@@ -8,7 +8,7 @@ Last reviewed: 2026-02-15
   - `POST /data/llm/preview`
   - `POST /data/llm/execute`
   - `POST /data/llm/generate` (Phase 2 scaffold: server-side minimal message assembly from `characterId` + `chatId` + `userMessage`)
-  - `GET /data/llm/logs` (durable JSONL execution logs)
+  - `GET /data/llm/logs` (durable JSON execution logs)
 - OpenRouter model catalog endpoint:
   - `GET /data/openrouter/models` (upstream fetch + cache fallback)
 - Server-side local model utilities:
@@ -40,7 +40,7 @@ Set `RISU_DEV_NODE_API=0` before `pnpm dev` to disable this behavior.
 - First run in node-server mode:
   - If no password exists, client prompts to set one on the first protected API call.
   - Password record is saved to `<dataRoot>/save/__password` as a `scrypt$...` hash record.
-    - default data root: `data/users/default`
+    - default data root: `data`
     - legacy fallback for existing installs: `./save/__password`
 - Change password in UI:
   - Open **Settings -> Advanced -> Server password status -> Change Server Password**.
@@ -49,13 +49,13 @@ Set `RISU_DEV_NODE_API=0` before `pnpm dev` to disable this behavior.
   - `RISU_AUTH_TOKEN=<sha256 password digest>`
 
 ## Durable LLM Logs
-- Log file: `data/logs/llm-execution.jsonl`
+- Log directory: `data/logs/llm-execution/YYYY-MM-DD/*.json`
+- File naming: `YYYY-MM-DDTHH-MM-SS.mmmZ__{endpoint-or-source}__{request-id}.json`
 - Endpoint: `GET /data/llm/logs`
 - Filters: `limit`, `chatId`, `requestId`, `endpoint`, `provider`, `status`, `since`
 - Sensitive fields (keys/tokens/password-like fields) are redacted in persisted logs.
 - Optional log mode env vars:
   - `RISU_LLM_LOG_MODE=full|compact|metadata` (default: `full`)
-  - `RISU_LLM_LOG_SPLIT_DAILY=1` to write daily files (`llm-execution-YYYY-MM-DD.jsonl`)
   - `RISU_LLM_LOG_RETENTION_DAYS=<N>` to purge old log files
   - `RISU_AUDIT_INCLUDE_FULL_GENERATE_REQUEST=1` to keep full `/data/llm/generate` request payloads in durable logs (default: compact summary only)
 
@@ -82,7 +82,7 @@ Set `RISU_DEV_NODE_API=0` before `pnpm dev` to disable this behavior.
 
 ## Smoke Tests
 
-Always use an isolated temp data root — never point smoke tests at `data/users/default`.
+Always use an isolated temp data root — never point smoke tests at `data`.
 
 **Terminal 1 — start clean server:**
 
@@ -100,10 +100,10 @@ RISU_STORAGE_TEST_ALLOW_WRITE=1 RISU_DATA_TEST_URL=http://localhost:6001 node sc
 # LLM migration phase A
 RISU_DATA_TEST_URL=http://localhost:6001 node scripts/test-server-llm-phaseA.js
 
-# HypaV3 memory pipeline (unit — no server needed)
+# Memory pipeline (unit — no server needed)
 node scripts/test-memory-unit.cjs
 
-# HypaV3 memory pipeline (integration — requires server)
+# Memory pipeline (integration — requires server)
 RISU_STORAGE_TEST_ALLOW_WRITE=1 RISU_DATA_TEST_URL=http://localhost:6001 node scripts/test-server-memory.js
 
 # Auth flow
@@ -116,7 +116,7 @@ RISU_STORAGE_TEST_ALLOW_WRITE=1 RISU_DATA_TEST_URL=http://localhost:6001 node de
 **Or via npm scripts (server must already be running on :6001):**
 
 ```bash
-pnpm run smoke:memory:api     # HypaV3 memory integration tests
+pnpm run smoke:memory:api     # Memory integration tests
 pnpm run smoke:server:auth    # Auth flow
 pnpm run smoke:server:safe    # Storage + LLM + memory (combined)
 ```

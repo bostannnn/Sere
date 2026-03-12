@@ -21,8 +21,7 @@ vi.mock(import("src/ts/stores.svelte"), async () => {
   const selectedCharID = writable(-1);
   const uiShellV2Enabled = writable(true);
   const openRulebookManager = writable(false);
-  const hypaV3ModalOpen = writable(false);
-  const hypaV3ProgressStore = writable({
+  const memoryProgressStore = writable({
     open: false,
     miniMsg: "",
     msg: "",
@@ -76,8 +75,7 @@ vi.mock(import("src/ts/stores.svelte"), async () => {
     uiShellV2Enabled,
     appRouteStore,
     openRulebookManager,
-    hypaV3ModalOpen,
-    hypaV3ProgressStore,
+    memoryProgressStore,
     selIdState,
   };
 });
@@ -115,10 +113,10 @@ vi.mock(import("src/lib/Mobile/MobileFooter.svelte"), async () => ({
 vi.mock(import("src/lib/Setting/Pages/CustomGUISettingMenu.svelte"), async () => ({
   default: (await import("./test-stubs/SimplePanelStub.svelte")).default,
 }));
-vi.mock(import("src/lib/Others/HypaV3Modal.svelte"), async () => ({
+vi.mock(import("src/lib/Others/MemoryPanel.svelte"), async () => ({
   default: (await import("./test-stubs/SimplePanelStub.svelte")).default,
 }));
-vi.mock(import("src/lib/Others/HypaV3Progress.svelte"), async () => ({
+vi.mock(import("src/lib/Others/MemoryProgress.svelte"), async () => ({
   default: (await import("./test-stubs/SimplePanelStub.svelte")).default,
 }));
 vi.mock(import("src/lib/UI/PopupList.svelte"), async () => ({
@@ -138,6 +136,35 @@ vi.mock(import("src/ts/storage/database.svelte"), () => ({
   importPreset: async () => {},
   getDatabase: () => ({ modules: [] }),
   setDatabase: () => {},
+  repairCharacterChatPage: (character: { chats?: Array<unknown>; chatPage: number } | null | undefined) => {
+    if (!character) {
+      return -1;
+    }
+    if (!Array.isArray(character.chats) || character.chats.length === 0) {
+      character.chatPage = 0;
+      return -1;
+    }
+    const safeIndex = !Number.isInteger(character.chatPage) || character.chatPage < 0 || character.chatPage >= character.chats.length
+      ? 0
+      : character.chatPage;
+    character.chatPage = safeIndex;
+    return safeIndex;
+  },
+  resolveSelectedCharacter: (characters: Array<unknown> | undefined, selectedCharIndex: number) => {
+    if (!Array.isArray(characters) || selectedCharIndex < 0) {
+      return null;
+    }
+    return characters[selectedCharIndex] ?? null;
+  },
+  resolveSelectedChat: (character: { chats?: Array<unknown>; chatPage?: number } | null | undefined) => {
+    if (!character || !Array.isArray(character.chats) || character.chats.length === 0) {
+      return null;
+    }
+    const safeIndex = !Number.isInteger(character.chatPage) || character.chatPage < 0 || character.chatPage >= character.chats.length
+      ? 0
+      : character.chatPage;
+    return character.chats[safeIndex] ?? null;
+  },
 }));
 vi.mock(import("src/ts/process/modules"), () => ({
   readModule: async () => null,
@@ -168,7 +195,6 @@ import {
   SettingsMenuIndex,
   appRouteStore,
   bookmarkListOpen,
-  hypaV3ModalOpen,
   openPersonaList,
   openPresetList,
   openRulebookManager,
@@ -227,7 +253,6 @@ describe("ui shell runtime smoke", () => {
     bookmarkListOpen.set(false);
     popupStore.children = null;
     popupStore.openId = 0;
-    hypaV3ModalOpen.set(false);
     DBState.db.characters = [
       {
         chaId: "char-1",
@@ -528,7 +553,7 @@ describe("ui shell runtime smoke", () => {
     expect(window.localStorage.getItem("risu:desktop-char-config-open")).toBe("0");
   });
 
-  it("falls back to first chat when the remembered chat index is missing", async () => {
+  it("falls back to the first chat when the remembered chat index is missing", async () => {
     settingsOpen.set(false);
     openRulebookManager.set(false);
     selectedCharID.set(-1);
@@ -601,6 +626,13 @@ describe("ui shell runtime smoke", () => {
     await flushUi();
     expect(get(appRouteStore).inspector).toBe("memory");
     expect((document.querySelector('[data-testid="app-chat-screen-stub"]') as HTMLElement | null)?.dataset.rightSidebarTab).toBe("memory");
+
+    const evolutionTab = document.querySelector('[data-testid="app-chat-sidebar-tab-evolution"]') as HTMLButtonElement | null;
+    expect(evolutionTab).not.toBeNull();
+    evolutionTab!.click();
+    await flushUi();
+    expect(get(appRouteStore).inspector).toBe("evolution");
+    expect((document.querySelector('[data-testid="app-chat-screen-stub"]') as HTMLElement | null)?.dataset.rightSidebarTab).toBe("evolution");
 
     const chatTab = document.querySelector('[data-testid="app-chat-sidebar-tab-chat"]') as HTMLButtonElement | null;
     expect(chatTab).not.toBeNull();
@@ -745,8 +777,6 @@ describe("ui shell runtime smoke", () => {
     openPresetList.set(true);
     openPersonaList.set(true);
     bookmarkListOpen.set(true);
-    hypaV3ModalOpen.set(true);
-
     settingsOpen.set(true);
     selectedCharID.set(-1);
     openRulebookManager.set(false);
@@ -756,8 +786,6 @@ describe("ui shell runtime smoke", () => {
     expect(get(openPresetList)).toBe(false);
     expect(get(openPersonaList)).toBe(false);
     expect(get(bookmarkListOpen)).toBe(false);
-    expect(get(hypaV3ModalOpen)).toBe(true);
-
     settingsOpen.set(false);
     openRulebookManager.set(true);
     await flushUi();
@@ -850,11 +878,6 @@ describe("ui shell runtime smoke", () => {
     await flushUi();
     expect(get(bookmarkListOpen)).toBe(false);
 
-    hypaV3ModalOpen.set(true);
-    await flushUi();
-    window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
-    await flushUi();
-    expect(get(hypaV3ModalOpen)).toBe(true);
   });
 
   it("closes right sidebar on Escape", async () => {

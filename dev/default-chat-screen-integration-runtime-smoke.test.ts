@@ -22,7 +22,7 @@ vi.mock(import("src/lang"), () => {
     chatList: "Chat list",
     autoMode: "Auto mode",
     ttsStop: "Stop TTS",
-    hypaMemoryV3Modal: "Hypa memory",
+    memoryModal: "Memory",
     branchedText: "Branched from {}",
     noMessage: "No message",
     copy: "Copy",
@@ -63,7 +63,6 @@ vi.mock(import("src/ts/stores.svelte"), async () => {
     selectedCharID: writable(0),
     SizeStore: writable({ w: 1280, h: 900 }),
     createSimpleCharacter: (character: unknown) => character,
-    hypaV3ModalOpen: writable(false),
     ScrollToMessageStore: { value: -1 },
     comfyProgressStore: writable({
       active: false,
@@ -96,7 +95,6 @@ vi.mock(import("src/ts/stores.svelte"), async () => {
         sideMenuDatabankButton: false,
         sideMenuRagSearchButton: false,
         sideMenuScreenshotButton: false,
-        sideMenuHypaMemoryButton: false,
         requestInfoInsideChat: true,
         translator: "enabled",
         translatorType: "none",
@@ -164,13 +162,65 @@ vi.mock(import("src/ts/stores.svelte"), async () => {
 
 vi.mock(import("src/ts/storage/database.svelte"), async () => {
   const { DBState } = await import("src/ts/stores.svelte");
+  const resolveSafeChatIndex = (chats: Array<unknown> | undefined, chatPage: number | undefined) => {
+    if (!Array.isArray(chats) || chats.length === 0) {
+      return -1;
+    }
+    if (!Number.isInteger(chatPage) || chatPage < 0 || chatPage >= chats.length) {
+      return 0;
+    }
+    return chatPage;
+  };
+  const resolveSelectedChat = (character: { chats?: Array<unknown>; chatPage?: number } | null | undefined) => {
+    const chatIndex = resolveSafeChatIndex(character?.chats, character?.chatPage);
+    return chatIndex >= 0 ? character?.chats?.[chatIndex] ?? null : null;
+  };
+  const resolveChatStateByCharacterAndChatId = (
+    characters: Array<{ chaId?: string; chats?: Array<{ id?: string; message?: unknown[] }> }> | undefined,
+    characterId: string,
+    chatId: string,
+  ) => {
+    const characterIndex = characters?.findIndex((entry) => entry?.chaId === characterId) ?? -1;
+    const character = characterIndex >= 0 ? characters?.[characterIndex] ?? null : null;
+    const chatIndex = character?.chats?.findIndex((entry) => entry?.id === chatId) ?? -1;
+    const chat = chatIndex >= 0 ? character?.chats?.[chatIndex] ?? null : null;
+    return {
+      character,
+      characterIndex,
+      chat,
+      chatIndex,
+      messages: chat?.message ?? [],
+    };
+  };
   return {
     getDatabase: () => ({}),
     getCurrentCharacter: () => DBState.db.characters[0],
-    getCurrentChat: () => DBState.db.characters[0].chats[0],
+    getCurrentChat: () => resolveSelectedChat(DBState.db.characters[0]),
     setCurrentChat: (chat: unknown) => {
       DBState.db.characters[0].chats[0] = chat as (typeof DBState.db.characters)[number]["chats"][number];
     },
+    repairCharacterChatPage: (character: { chats?: Array<unknown>; chatPage: number } | null | undefined) => {
+      if (!character) {
+        return -1;
+      }
+      const chatIndex = resolveSafeChatIndex(character.chats, character.chatPage);
+      character.chatPage = chatIndex < 0 ? 0 : chatIndex;
+      return chatIndex;
+    },
+    resolveSelectedChat,
+    resolveSelectedChatState: (characters: Array<{ chats?: Array<unknown>; chatPage?: number }> | undefined, selectedCharIndex: number) => {
+      const character = selectedCharIndex >= 0 ? characters?.[selectedCharIndex] ?? null : null;
+      const chatIndex = resolveSafeChatIndex(character?.chats, character?.chatPage);
+      const chat = chatIndex >= 0 ? character?.chats?.[chatIndex] ?? null : null;
+      return {
+        character,
+        characterIndex: character ? selectedCharIndex : -1,
+        chat,
+        chatIndex,
+        messages: chat?.message ?? [],
+      };
+    },
+    resolveChatStateByCharacterAndChatId,
   };
 });
 
@@ -466,5 +516,68 @@ describe("default chat screen integration runtime smoke", () => {
     await flushUi();
     expect(document.querySelector(".ds-chat-side-menu")).toBeNull();
     expect(menuButton?.getAttribute("aria-expanded")).toBe("false");
+  });
+
+  it("keeps the original stable target when selection changes during async send", async () => {
+    DBState.db.characters[0].chats = [
+      {
+        id: "chat-1",
+        name: "Chat One",
+        fmIndex: -1,
+        message: [],
+        localLore: [],
+        modules: [],
+        note: "",
+        bindedPersona: "",
+        bookmarks: [],
+        bookmarkNames: {},
+      },
+      {
+        id: "chat-2",
+        name: "Chat Two",
+        fmIndex: -1,
+        message: [],
+        localLore: [],
+        modules: [],
+        note: "",
+        bindedPersona: "",
+        bookmarks: [],
+        bookmarkNames: {},
+      },
+    ];
+    DBState.db.characters[0].chatPage = 0;
+
+    let resolveSend: (() => void) | null = null;
+    mocks.sendChat.mockImplementationOnce(
+      async () =>
+        await new Promise<void>((resolve) => {
+          resolveSend = resolve;
+        }),
+    );
+
+    await flushUi();
+
+    const composerInput = document.querySelector(
+      ".ds-chat-composer-input.control-field",
+    ) as HTMLTextAreaElement | null;
+    expect(composerInput).not.toBeNull();
+
+    composerInput!.value = "Stable target payload";
+    composerInput!.dispatchEvent(new Event("input", { bubbles: true }));
+    composerInput!.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    await flushUi();
+
+    DBState.db.characters[0].chatPage = 1;
+
+    expect(mocks.sendChat).toHaveBeenCalledTimes(1);
+    expect(mocks.sendChat.mock.calls[0]?.[1]).toMatchObject({
+      target: {
+        characterId: "char-1",
+        chatId: "chat-1",
+      },
+    });
+
+    resolveSend?.();
+    await flushUi();
   });
 });

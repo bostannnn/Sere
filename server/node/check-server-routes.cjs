@@ -191,7 +191,6 @@ const EXPLICIT_AUTH_FILES = new Set([
 ]);
 
 const ETAG_EXEMPT_FILES = new Set([
-    'legacy_routes.cjs',
     'rag_routes.cjs',
 ]);
 

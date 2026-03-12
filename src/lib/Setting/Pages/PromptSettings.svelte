@@ -18,6 +18,7 @@
     import ModelList from "src/lib/UI/ModelList.svelte";
     import { onDestroy, onMount } from "svelte";
     import {defaultAutoSuggestPrompt} from "../../../ts/storage/defaultPrompts";
+    import { normalizePromptTemplate } from "src/ts/storage/defaultPrompts";
     import SettingsSubTabs from "src/lib/Setting/SettingsSubTabs.svelte";
     import Button from "src/lib/UI/GUI/Button.svelte";
     import { SvelteSet } from "svelte/reactivity";
@@ -105,9 +106,13 @@
     openedItemIndices.clear()
     newOpenedIndices.forEach((index) => openedItemIndices.add(index))
 
-    DBState.db.promptTemplate = templates
+    DBState.db.promptTemplate = normalizePromptTemplate(templates)
     draggedIndex = -1
     dragOverIndex = -1
+  }
+
+  function assignPromptTemplate(templates: PromptItem[]) {
+    DBState.db.promptTemplate = normalizePromptTemplate(templates)
   }
 
   const handleKeyDown = (e: KeyboardEvent) => {
@@ -189,7 +194,7 @@
                         onRemove={() => {
                             const templates = DBState.db.promptTemplate
                             templates.splice(originalIndex, 1)
-                            DBState.db.promptTemplate = templates
+                            assignPromptTemplate(templates)
 
                             const newOpenedIndices = new SvelteSet<number>()
                             openedItemIndices.forEach((index) => {
@@ -215,7 +220,7 @@
                             const temp = templates[originalIndex]
                             templates[originalIndex] = templates[originalIndex + 1]
                             templates[originalIndex + 1] = temp
-                            DBState.db.promptTemplate = templates
+                            assignPromptTemplate(templates)
 
                             const newOpenedIndices = new SvelteSet<number>()
                             openedItemIndices.forEach((index) => {
@@ -238,7 +243,7 @@
                             const temp = templates[originalIndex]
                             templates[originalIndex] = templates[originalIndex - 1]
                             templates[originalIndex - 1] = temp
-                            DBState.db.promptTemplate = templates
+                            assignPromptTemplate(templates)
 
                             const newOpenedIndices = new SvelteSet<number>()
                             openedItemIndices.forEach((index) => {
@@ -266,7 +271,7 @@
                     role: "system",
                     type2: 'normal'
                 })
-                DBState.db.promptTemplate = value
+                assignPromptTemplate(value)
             }}><PlusIcon /></Button>
         </div>
 

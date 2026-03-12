@@ -20,6 +20,7 @@ export interface OpenRouterModelsState {
 const CLIENT_MODELS_CACHE_TTL_MS = 60 * 1000;
 let cachedState: OpenRouterModelsState | null = null;
 let cachedAtMs = 0;
+let inFlightStatePromise: Promise<OpenRouterModelsState> | null = null;
 
 function extractErrorMessage(data: unknown, fallback: string): string {
     const payload = data as {
@@ -114,7 +115,17 @@ export async function openRouterModelsWithState(arg: { forceRefresh?: boolean } 
         });
     }
 
-    const fetched = await fetchOpenRouterModelsFromServer(forceRefresh);
+    if (!forceRefresh && inFlightStatePromise) {
+        return inFlightStatePromise;
+    }
+
+    inFlightStatePromise = fetchOpenRouterModelsFromServer(forceRefresh);
+    let fetched: OpenRouterModelsState;
+    try {
+        fetched = await inFlightStatePromise;
+    } finally {
+        inFlightStatePromise = null;
+    }
 
     if (fetched.models.length > 0) {
         cachedState = fetched;

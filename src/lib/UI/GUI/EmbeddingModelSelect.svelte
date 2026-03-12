@@ -1,9 +1,9 @@
 <script lang="ts">
-    import type { HypaModel } from "src/ts/process/memory/hypamemory";
+    import type { EmbeddingModel } from "src/ts/process/memory/embeddings";
     import OptionInput from "./OptionInput.svelte";
     import SelectInput from "./SelectInput.svelte";
 
-    export let value: HypaModel = "MiniLM";
+    export let value: EmbeddingModel = "MiniLM";
     export let includeOpenAI = true;
     export let includeCustom = true;
     export let className = "";

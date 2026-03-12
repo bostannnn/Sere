@@ -5,7 +5,7 @@
     import { changeChar, getCharImage, removeChar } from "src/ts/characters";
     import { checkCharOrder } from "src/ts/globalApi.svelte";
     import { selectedCharID, DBState } from "src/ts/stores.svelte";
-    import type { Chat } from "src/ts/storage/database.svelte";
+    import { resolveSafeChatIndex } from "src/ts/storage/database.svelte";
     import { createCardTiltController } from "./cardTilt";
 
     interface Props {
@@ -39,16 +39,6 @@
 
     function getImageCacheKey(image: string, hideAllImages: boolean) {
         return `${hideAllImages ? "hidden" : "visible"}:${image}`;
-    }
-
-    function resolveSafeChatIndex(chats: Chat[], index: number) {
-        if (chats.length === 0) {
-            return -1;
-        }
-        if (Number.isInteger(index) && index >= 0 && index < chats.length) {
-            return index;
-        }
-        return 0;
     }
 
     function toPreviewText(value: string | undefined) {

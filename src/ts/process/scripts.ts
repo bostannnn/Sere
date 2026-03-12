@@ -7,7 +7,7 @@ import { language } from "src/lang";
 import { selectSingleFile } from "../util";
 import { assetRegex, type CbsConditions, risuChatParser as risuChatParserOrg, type simpleCharacterArgument } from "../parser.svelte";
 import { getModuleAssets, getModuleRegexScripts } from "./modules";
-import { HypaProcesser } from "./memory/hypamemory";
+import { EmbeddingProcessor } from "./memory/embeddings";
 import { runLuaEditTrigger } from "./scriptings";
 import { runTrigger } from "./triggers";
 const scriptsLog = (..._args: unknown[]) => {};
@@ -346,7 +346,7 @@ export async function processScriptFull(char:character|groupChat|simpleCharacter
             }
         }
 
-        const processer = new HypaProcesser()
+        const processer = new EmbeddingProcessor()
         await processer.addText(assetNames)
         const matches = data.matchAll(assetRegex)
 

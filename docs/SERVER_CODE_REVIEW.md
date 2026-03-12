@@ -6,6 +6,15 @@ Reviewer: Claude Sonnet
 
 ---
 
+## Update (2026-03-12, doc refresh)
+
+This document is a rolling audit log, not the canonical route map. Re-verify each item against the current code before treating it as open work.
+
+The following items from the older review are now implemented or superseded:
+- Path traversal guard for JSON content resources (`/data/prompts/:id`, `/data/themes/:id`, `/data/color_schemes/:id`) via `requireSafeSegment`.
+- `content_routes.cjs` now wraps handlers with `withAsyncRoute`.
+- Character evolution routes are now part of the active server surface and should be reviewed with the rest of `/data/*`.
+
 ## Update (2026-02-19, post-hardening pass)
 
 The following items from this review are now implemented:
@@ -59,14 +68,15 @@ Note: `resourceDir` itself is safe (always a hardcoded string from the call site
 
 ## P1 — Fix Before Next Significant Feature
 
-### 2. Async handlers missing try/catch in several route files
+### 2. Async error-handling strategy is still inconsistent across route files
 
-**Problem:** 50 async route handlers exist across route files; only ~34 try/catch blocks are present. Handlers without try/catch will cause unhandled promise rejections if an unexpected error occurs (e.g. disk full, JSON parse failure on a corrupt file). Express will log them but the client gets no response.
+**Problem:** The server no longer has the earlier `content_routes.cjs` gap, but error handling is still inconsistent across route files. Some files use route wrappers (`withAsyncRoute`), some use per-handler `try/catch`, and some still mix direct `res.send()` responses with custom catch logic. That makes it harder to reason about error shape and logging consistency.
 
 **Affected files** (spot-checked):
-- `content_routes.cjs` — several handlers, especially the dynamic `jsonResourceHandlers` body
-- `legacy_routes.cjs` — older handlers written before the pattern was established
-- `hypav3_trace_routes.cjs` — trace handlers
+- `llm_routes.cjs`
+- `rag_routes.cjs`
+- `system_routes.cjs`
+- `content_routes.cjs` still mixes wrapped handlers with direct `res.send()`/`res.status().send()` responses
 
 **Pattern to apply:**
 ```javascript
@@ -82,14 +92,13 @@ app.get('/data/foo/:id', async (req, res) => {
 
 ### 3. Inconsistent response shapes across older handlers
 
-**Problem:** Some handlers (mostly in `legacy_routes.cjs` and `system_routes.cjs`) use `res.send()` and `res.status().send()` directly instead of `sendJson`. This means:
+**Problem:** Some handlers still use `res.send()` and `res.status().send()` directly instead of `sendJson`. This means:
 - No `Content-Type: application/json` header on some error responses
 - Error shape varies (`{ ok: false, error: String(err) }` vs `{ error: 'CODE', message: '...' }`)
 
-**Examples:**
-- Several legacy handlers use raw `res.send()`
+**Current examples:** `system_routes.cjs` and parts of `content_routes.cjs`.
 
-**Fix:** Replace direct `res.send()` calls with `sendJson` in all route handlers. Standardise error shape to `{ error: 'CODE', message: '...' }`.
+**Fix:** Replace direct `res.send()` calls with `sendJson` in all route handlers where JSON is intended. Standardise error shape to `{ error: 'CODE', message: '...' }`.
 
 ### 4. `execute_route_handler.cjs` is at 465 lines — approaching split threshold
 
@@ -125,7 +134,7 @@ The ingest handler (~150 lines inline) does: request parsing → PDF detection �
 
 Logging uses raw `console.log`/`console.error` with ad-hoc prefixes like `[RAG]` and `[LLM]`. There's no structured log format, no severity levels tied to the prefix, and no way to filter by component in production.
 
-The LLM audit trail (`llm/audit.cjs`) is good and writes structured JSONL. The operational logs are not at that standard.
+The LLM audit trail (`llm/audit.cjs`) is good and writes structured JSON files. The operational logs are not at that standard.
 
 **Recommendation:** This is low urgency but when a logging library is introduced (even a thin wrapper), it should replace the ad-hoc prefixes with a consistent `{ level, component, message, ...meta }` shape.
 
@@ -135,26 +144,26 @@ The LLM audit trail (`llm/audit.cjs`) is good and writes structured JSONL. The o
 
 ### 8. No server-side input length limits on text fields
 
-Free-text fields in request bodies (e.g. character names, chat messages in legacy endpoints) have no maximum length validation. This can't cause data loss but can affect performance if someone sends extremely large payloads to non-streaming endpoints.
+Free-text fields in request bodies (e.g. character names, chat messages, and other non-streaming payloads) have no maximum length validation. This can't cause data loss but can affect performance if someone sends extremely large payloads to non-streaming endpoints.
 
 ### 9. `server_data_helpers.cjs` `sendConflict` reads the file twice on conflict
 
 On an ETag mismatch, `sendConflict` reads the file again to return the current state. This is a minor redundancy — the file was already read earlier in the handler. Not a correctness issue.
 
-### 10. `legacy_routes.cjs` OAuth handler has no CSRF protection
+### 10. Historical note: removed OAuth routes had no CSRF protection
 
-`GET /data/oauth/login` and `GET /data/oauth/callback` exist but have no state parameter validation. OAuth flows without CSRF token validation are technically vulnerable to CSRF attacks on the login initiation. Low risk in this deployment model (local server) but worth noting for any hosted deployment.
+The old `GET /data/oauth/login` and `GET /data/oauth/callback` flow had no state parameter validation. Those routes are no longer part of the active server surface, so this is historical debt rather than a current production issue.
 
 ---
 
 ## What Is Working Well
 
 - **DI pattern is applied consistently** across all 12 route files and all bootstrap helpers. No module imports infrastructure at module scope.
-- **`requireSafeSegment` and `safeResolve` are used correctly** in `storage_routes.cjs`, `rag_routes.cjs`, and asset handlers. The gap in `content_routes.cjs` is isolated.
-- **ETag concurrency is correct** in `storage_routes.cjs` (settings, characters, chats). The pattern is well-established.
+- **`requireSafeSegment` and `safeResolve` are used correctly** in `rag_routes.cjs` and the active file-backed content handlers. The gap in `content_routes.cjs` is isolated.
+- **ETag concurrency is correct** in the active content resource handlers. The pattern is well-established.
 - **Streaming is clean** — NDJSON terminal events (`done`/`error`) are sent consistently in `rag_routes.cjs` and `llm_routes.cjs`.
 - **No `eval`, `new Function`, or shell execution** anywhere in the server codebase.
-- **Audit trail** (`llm/audit.cjs`) writes structured JSONL with sensitive field redaction. Good foundation.
+- **Audit trail** (`llm/audit.cjs`) writes structured JSON files with sensitive field redaction. Good foundation.
 - **Module sizes** are well within limits except for `execute_route_handler.cjs` (465 lines, watch it).
 
 ---

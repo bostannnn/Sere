@@ -3,12 +3,11 @@
     import { DBState } from "src/ts/stores.svelte";
     import NumberInput from "../../UI/GUI/NumberInput.svelte";
     import EmbeddingModelSelect from "../../UI/GUI/EmbeddingModelSelect.svelte";
-    import type { HypaModel } from "src/ts/process/memory/hypamemory";
+    import type { EmbeddingModel } from "src/ts/process/memory/embeddings";
     import { DEFAULT_GLOBAL_RAG_SETTINGS } from "src/ts/storage/database.svelte";
 
     interface Props {
         section: "library" | "settings";
-        mode?: "legacy" | "drawer";
         systemTree?: Array<[string, Set<string>]>;
         expandedSystems?: Set<string>;
         selectedSystemFilter?: string;
@@ -22,7 +21,6 @@
 
     let {
         section,
-        mode = "legacy",
         systemTree = [],
         expandedSystems = new Set<string>(),
         selectedSystemFilter = "All",
@@ -34,7 +32,7 @@
         onClearFilters = () => {},
     }: Props = $props();
 
-    let ragModel = $state((DBState.db.globalRagSettings.model ?? DEFAULT_GLOBAL_RAG_SETTINGS.model) as HypaModel);
+    let ragModel = $state((DBState.db.globalRagSettings.model ?? DEFAULT_GLOBAL_RAG_SETTINGS.model) as EmbeddingModel);
     let ragTopK = $state(Number(DBState.db.globalRagSettings.topK ?? DEFAULT_GLOBAL_RAG_SETTINGS.topK));
     let ragMinScore = $state(Number(DBState.db.globalRagSettings.minScore ?? DEFAULT_GLOBAL_RAG_SETTINGS.minScore));
     let ragBudget = $state(Number(DBState.db.globalRagSettings.budget ?? DEFAULT_GLOBAL_RAG_SETTINGS.budget));
@@ -47,7 +45,7 @@
     });
 </script>
 
-<div class="rag-sidebar-shell" class:is-drawer={mode === "drawer"}>
+<div class="rag-sidebar-shell is-drawer">
     {#if section === "library"}
         <section class="rag-sidebar-section">
             <h3 class="rag-sidebar-title">Library</h3>

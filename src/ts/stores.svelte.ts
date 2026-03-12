@@ -36,7 +36,7 @@ export const SizeStore = writable({
 })
 
 export type AppWorkspace = "home" | "characters" | "chats" | "library" | "settings"
-export type AppInspector = "none" | "details" | "chat" | "character" | "memory"
+export type AppInspector = "none" | "details" | "chat" | "character" | "memory" | "evolution"
 
 export interface AppRoute {
     workspace: AppWorkspace
@@ -61,6 +61,8 @@ export const CurrentTriggerIdStore = writable<string | null>(null)
 export const CharEmotion = writable({} as {[key:string]: [string, string, number][]})
 export const ViewBoxsize = writable({ width: 12 * 16, height: 12 * 16 }); // Default width and height in pixels
 export const settingsOpen = writable(false)
+export const BotSettingsSubMenuIndex = writable<number | null>(null)
+export const OtherBotSettingsSubMenuIndex = writable<number | null>(null)
 export const moduleBackgroundEmbedding = writable('')
 export const openPresetList = writable(false)
 export const openPersonaList = writable(false)
@@ -79,8 +81,7 @@ export const alertStore = writable({
     type: 'none',
     msg: 'n',
 } as alertData)
-export const hypaV3ModalOpen = writable(false)
-export const hypaV3ProgressStore = writable({
+export const memoryProgressStore = writable({
     open: false,
     miniMsg: '',
     msg: '',
@@ -220,12 +221,6 @@ ReloadGUIPointer.subscribe(() => {
 $effect.root(() => {
     selectedCharID.subscribe((v) => {
         selIdState.selId = v
-
-        if (DBState?.db?.characters?.[selIdState.selId]) {
-            if (DBState.db.hypaV3 && DBState.db.hypaV3Presets?.[DBState.db.hypaV3PresetId]?.settings?.alwaysToggleOn) {
-                DBState.db.characters[selIdState.selId].supaMemory = true;
-            }
-        }
     })
     $effect(() => {
         $state.snapshot(DBState.db.modules)

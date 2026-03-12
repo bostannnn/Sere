@@ -21,14 +21,6 @@ export const advancedSettingsItems: SettingItem[] = [
         options: { min: 0 }
     },
 
-    // Prompts
-    {
-        id: 'adv.addPrompt', type: 'text', labelKey: 'additionalPrompt', bindKey: 'additionalPrompt',
-        helpKey: 'additionalPrompt'
-    },
-    {
-        id: 'adv.descPrefix', type: 'text', labelKey: 'descriptionPrefix', bindKey: 'descriptionPrefix'
-    },
     {
         id: 'adv.keiUrl', type: 'text', fallbackLabel: 'Kei Server URL', bindKey: 'keiServerURL',
         options: { placeholder: 'Leave it blank to use default' }
@@ -126,7 +118,6 @@ export const advancedSettingsItems: SettingItem[] = [
     },
 
     // More Toggles
-    { id: 'adv.remPunc', type: 'check', labelKey: 'removePunctuationHypa', bindKey: 'removePunctuationHypa', helpKey: 'removePunctuationHypa', classes: 'ds-settings-renderer-offset-md' },
     { id: 'adv.devTools', type: 'check', labelKey: 'enableDevTools', bindKey: 'enableDevTools', classes: 'ds-settings-renderer-offset-md' },
     { id: 'adv.scrollToActive', type: 'check', labelKey: 'enableScrollToActiveChar', bindKey: 'enableScrollToActiveChar', helpKey: 'enableScrollToActiveChar', classes: 'ds-settings-renderer-offset-md' },
 

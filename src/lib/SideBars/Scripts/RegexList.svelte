@@ -17,7 +17,21 @@
     let ele: HTMLDivElement = $state()
     let sorted = $state(0)
     let opened = 0
+
+    function replaceScriptAt(index: number, nextScript: customscript) {
+        value = value.map((entry, entryIndex) => {
+            return entryIndex === index ? nextScript : entry
+        })
+    }
+
+    function removeScriptAt(index: number) {
+        value = value.filter((_, entryIndex) => entryIndex !== index)
+    }
+
     const createStb = () => {
+        if (!ele) {
+            return
+        }
         stb = Sortable.create(ele, {
             onEnd: async () => {
                 const idx:number[] = []
@@ -71,23 +85,30 @@
                 <div class="regex-list-empty empty-state">No Scripts</div>
         {/if}
         {#each value as _customscript, i (i)}
-            <RegexData idx={i} bind:value={value[i]} onOpen={onOpen} onClose={onClose} onRemove={() => {
-                const customscript = value
-                customscript.splice(i, 1)
-                value = customscript
-            }}/>
+            <RegexData
+                idx={i}
+                value={value[i]}
+                onValueChange={(nextScript) => {
+                    replaceScriptAt(i, nextScript)
+                }}
+                onOpen={onOpen}
+                onClose={onClose}
+                onRemove={() => {
+                    removeScriptAt(i)
+                }}
+            />
         {/each}
     </div>
 {/key}
 {#if buttons}
     <div class="regex-list-actions action-rail">
         <button type="button" class="regex-list-action-btn icon-btn icon-btn--sm" title="Add script" aria-label="Add script" onclick={() => {
-            value.push({
-            comment: "",
-            in: "",
-            out: "",
-            type: "editinput"
-            })
+            value = [...value, {
+                comment: "",
+                in: "",
+                out: "",
+                type: "editinput"
+            }]
         }}>
             <PlusIcon />
         </button>

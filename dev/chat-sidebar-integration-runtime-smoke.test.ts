@@ -74,7 +74,6 @@ vi.mock(import("src/ts/stores.svelte"), async () => {
     bookmarkListOpen: writable(false),
     CharConfigSubMenu: writable(0),
     MobileGUI: writable(false),
-    hypaV3ModalOpen: writable(false),
   };
 });
 
@@ -158,6 +157,51 @@ vi.mock(import("src/ts/tokenizer"), () => ({
 
 vi.mock(import("src/ts/storage/database.svelte"), () => ({
   saveImage: async () => "asset-id",
+  repairCharacterChatPage: (character: { chats?: Array<unknown>; chatPage: number } | null | undefined) => {
+    if (!character) {
+      return -1;
+    }
+    if (!Array.isArray(character.chats) || character.chats.length === 0) {
+      character.chatPage = 0;
+      return -1;
+    }
+    if (!Number.isInteger(character.chatPage) || character.chatPage < 0 || character.chatPage >= character.chats.length) {
+      character.chatPage = 0;
+      return 0;
+    }
+    return character.chatPage;
+  },
+  resolveSelectedChat: (character: { chats?: Array<unknown>; chatPage?: number } | null | undefined) => {
+    if (!character || !Array.isArray(character.chats) || character.chats.length === 0) {
+      return null;
+    }
+    const safeIndex = !Number.isInteger(character.chatPage) || character.chatPage < 0 || character.chatPage >= character.chats.length
+      ? 0
+      : character.chatPage;
+    return character.chats[safeIndex] ?? null;
+  },
+  resolveSelectedChatState: (characters: Array<{ chats?: Array<unknown>; chatPage?: number }> | undefined, selectedCharIndex: number) => {
+    const character = selectedCharIndex >= 0 ? characters?.[selectedCharIndex] ?? null : null;
+    if (!character || !Array.isArray(character.chats) || character.chats.length === 0) {
+      return {
+        character,
+        characterIndex: character ? selectedCharIndex : -1,
+        chat: null,
+        chatIndex: -1,
+        messages: [],
+      };
+    }
+    const safeIndex = !Number.isInteger(character.chatPage) || character.chatPage < 0 || character.chatPage >= character.chats.length
+      ? 0
+      : character.chatPage;
+    return {
+      character,
+      characterIndex: selectedCharIndex,
+      chat: character.chats[safeIndex] ?? null,
+      chatIndex: safeIndex,
+      messages: character.chats[safeIndex]?.message ?? [],
+    };
+  },
   resolveChatBackgroundMode: (mode: unknown, backgroundImage: unknown) => {
     if (mode === "default" || mode === "custom" || mode === "inherit") {
       return mode;
@@ -254,11 +298,14 @@ vi.mock(import("src/lib/SideBars/Toggles.svelte"), async () => ({
 vi.mock(import("src/lib/SideBars/GameStateEditor.svelte"), async () => ({
   default: (await import("./test-stubs/SimplePanelStub.svelte")).default,
 }));
-vi.mock(import("src/lib/Others/HypaV3Modal.svelte"), async () => ({
+vi.mock(import("src/lib/SideBars/Evolution/EvolutionSettings.svelte"), async () => ({
+  default: (await import("./test-stubs/SimplePanelStub.svelte")).default,
+}));
+vi.mock(import("src/lib/Others/MemoryPanel.svelte"), async () => ({
   default: (await import("./test-stubs/SimplePanelStub.svelte")).default,
 }));
 
-import { CharConfigSubMenu, DBState, MobileGUI } from "src/ts/stores.svelte";
+import { CharConfigSubMenu, DBState, MobileGUI, selectedCharID } from "src/ts/stores.svelte";
 import { changeChatTo } from "src/ts/globalApi.svelte";
 import ChatRightSidebarHostHarness from "./test-stubs/ChatRightSidebarHostHarness.svelte";
 
@@ -554,6 +601,22 @@ describe("chat sidebar integration runtime smoke", () => {
 
     expect(document.querySelector(".side-chat-list-root")).toBeNull();
     expect((document.querySelector('[data-testid="host-right-tab-state"]') as HTMLElement | null)?.dataset.tab).toBe("character");
+  });
+
+  it("renders CharConfig safely when the selected chat is missing", async () => {
+    shared.DBState.db.characters[0].chatPage = 99;
+    shared.DBState.db.characters[0].chats = [];
+    selectedCharID.set(0);
+    await flushUi();
+
+    const characterTab = document.querySelector('[data-testid="chat-sidebar-tab-character"]') as HTMLButtonElement | null;
+    expect(characterTab).not.toBeNull();
+    characterTab!.click();
+    await flushUi();
+
+    expect(shared.DBState.db.characters[0].chatPage).toBe(0);
+    expect(document.querySelector(".char-config-root")).not.toBeNull();
+    expect(document.body.textContent).toContain("No chat selected.");
   });
 
   it("keeps character config top tabs available in mobile mode", async () => {

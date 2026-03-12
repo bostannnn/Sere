@@ -1,6 +1,6 @@
 # Server-Side Rules
 
-Last updated: 2026-02-19
+Last updated: 2026-03-12
 
 ---
 
@@ -17,7 +17,7 @@ The server owns all execution that requires:
 - Persistent file I/O (characters, chats, settings, assets)
 - LLM execution (prompt assembly, tokenization, provider dispatch)
 - RAG (ingestion, embedding, similarity search)
-- Memory summarization (HypaV3)
+- Memory summarization
 
 The client is allowed to:
 - Call server endpoints via `globalFetch` or `fetch`
@@ -46,13 +46,13 @@ if (isNodeServer) {
 
 | Layer | Responsibility | Examples |
 |-------|---------------|---------|
-| `routes/*.cjs` | HTTP handler only — parse request, call service, send response | `llm_routes.cjs`, `storage_routes.cjs` |
+| `routes/*.cjs` | HTTP handler entrypoint — parse request, call service/orchestration helpers, send response | `llm_routes.cjs`, `state_routes.cjs` |
 | `llm/*.cjs` | Domain logic — prompt, tokenizer, lorebook, provider dispatch | `engine.cjs`, `prompt.cjs` |
 | `rag/*.cjs` | RAG domain — ingest, embed, search | `engine.cjs`, `embedding.cjs` |
 | `server_*.cjs` | Bootstrap and cross-cutting infrastructure | `server_helpers.cjs`, `server_paths.cjs` |
 | `storage_utils.cjs` | Path safety and ETag primitives only | `safeResolve`, `computeEtag` |
 
-**Rule: route files must not contain business logic.** If a handler is more than ~20 lines of logic, extract it to a service module.
+**Rule: keep route files thin.** Avoid adding new business logic directly in route files. If a handler grows beyond ~20-40 lines or mixes validation, persistence, and domain orchestration, extract a service/helper module. Existing heavier route files are refactor debt, not a pattern to copy.
 
 ---
 
@@ -114,11 +114,11 @@ if (!name) {
 
 ### Response helpers
 
-Always use the provided helpers — never call `res.json()`, `res.send()`, or `res.status().json()` directly:
+Prefer the provided helpers for JSON APIs and shared contracts. In current code, some routes still use `res.send()` / `res.status().send()` for simple JSON or plain-text responses, but new endpoint code should default to `sendJson` for JSON responses and should never send raw exception objects directly.
 
 | Helper | When to use |
 |--------|-------------|
-| `sendJson(res, status, payload, etag?)` | All JSON responses |
+| `sendJson(res, status, payload, etag?)` | Preferred helper for JSON responses |
 | `sendSSE(res, payload)` | Single-event SSE (non-streaming) |
 | `res.write()` / `res.end()` | Streaming NDJSON only |
 | `sendConflict(res, filePath)` | ETag mismatch on PUT/PATCH |
@@ -137,7 +137,7 @@ sendJson(res, 400, { error: 'ERROR_CODE', message: 'Human-readable description' 
 
 ### Async error handling
 
-Every async handler must catch and respond — never let unhandled rejections crash the process:
+Every async handler must catch and respond, either inline or through a route wrapper such as `withAsyncRoute` — never let unhandled rejections crash the process:
 
 ```javascript
 app.post('/data/foo', async (req, res) => {
@@ -178,7 +178,7 @@ For nested paths built from multiple segments, use `safeResolve(baseDir, relPath
 All `PUT` and `PATCH` handlers that write JSON files must enforce optimistic concurrency:
 
 ```javascript
-app.put('/data/characters/:id', async (req, res) => {
+app.put('/data/prompts/:id', async (req, res) => {
   const ifMatch = requireIfMatch(req, res); // sends 412 if header missing
   if (!ifMatch) return;
 
@@ -241,10 +241,10 @@ res.end();
 Password-protected routes must check auth before any logic:
 
 ```javascript
-const { requireAuth } = arg; // injected auth helper
+const { requirePasswordAuth } = arg; // injected auth helper
 
 app.post('/data/sensitive', async (req, res) => {
-  if (!requireAuth(req, res)) return; // sends 401 if unauthenticated
+  if (!requirePasswordAuth(req, res)) return; // sends 401 if unauthenticated
   // ...
 });
 ```
@@ -278,14 +278,14 @@ For all other routes:
 
 ## VII. Module File Limits
 
-The 500 LOC limit from `CONVENTIONS.md` applies to server modules. Current reference sizes:
+The 500 LOC limit from `CONVENTIONS.md` still applies as the target for new work, but several existing server modules are already over the limit and should be split incrementally when touched. Current high-signal reference sizes:
 
 | Module | Lines | Status |
 |--------|-------|--------|
-| `server.cjs` | 283 | ✅ |
-| `routes/llm_routes.cjs` | ~250 | ✅ |
-| `llm/engine.cjs` | ~400 | ✅ |
-| `llm/execute_route_handler.cjs` | ~300 | ✅ |
+| `server.cjs` | ~430 | ✅ within limit |
+| `routes/llm_routes.cjs` | ~370 | ✅ within limit |
+| `llm/engine.cjs` | ~620 | Debt — split when touched |
+| `llm/execute_route_handler.cjs` | ~1030 | Debt — split before adding more behavior |
 
 If a module exceeds 500 lines, split by responsibility: extract a service module, a helpers module, or a sub-router (following existing slice naming: `_helpers.cjs`, `_routes.cjs`).
 
@@ -300,7 +300,7 @@ Before shipping a new server endpoint:
 - [ ] Path segments validated with `requireSafeSegment` or `safeResolve`
 - [ ] Request body validated (type checks, required field checks)
 - [ ] Error responses use `{ error, message }` shape via `sendJson`
-- [ ] Async handler wrapped in try/catch
+- [ ] Async handler wrapped in try/catch or a shared async route wrapper
 - [ ] Mutable resource writes use ETag concurrency (`requireIfMatch`)
 - [ ] Streaming responses send `{ status: 'done' }` or `{ status: 'error' }` terminal event
 - [ ] No secrets in response payloads
@@ -308,8 +308,8 @@ Before shipping a new server endpoint:
 - [ ] Route registered in `server_route_bootstrap.cjs`
 - [ ] Endpoint documented in `docs/SERVER_ARCHITECTURE.md`
 - [ ] **Unit tests** written for all new pure functions (`scripts/test-<domain>-unit.cjs`) — must pass with `node scripts/test-<domain>-unit.cjs`
-- [ ] **Smoke tests** written for all new HTTP endpoints (`scripts/test-server-<domain>.js`) — must pass against a clean server (`SERE_DATA_ROOT=/tmp/... node server/node/server.cjs`)
-- [ ] Both test files added as `.gitignore` exceptions and committed alongside the feature
+- [ ] **Smoke tests** written for all new HTTP endpoints (`scripts/test-server-<domain>.js`) — must pass against a clean server (`RISU_DATA_ROOT=/tmp/... node server/node/server.cjs`)
+- [ ] If the new test file matches ignored `/scripts/*` patterns, `.gitignore` exceptions are updated and committed alongside the feature
 
 ---
 

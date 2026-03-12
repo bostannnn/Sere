@@ -4,15 +4,15 @@ function registerServerRoutes(arg = {}) {
         registerProxyRoutes,
         registerIntegrationRoutes,
         registerMemoryRoutes,
-        registerHypaV3TraceRoutes,
-        registerHypaV3ManualRoutes,
-        registerHypaV3ResummaryRoutes,
+        registerMemoryTraceRoutes,
+        registerMemoryManualRoutes,
         registerLLMRoutes,
         registerContentRoutes,
         registerAuthRoutes,
         registerStateRoutes,
         registerSyncRoutes,
         registerRagRoutes,
+        registerEvolutionRoutes,
     } = arg;
 
     registerSystemRoutes({
@@ -50,19 +50,18 @@ function registerServerRoutes(arg = {}) {
         logLLMExecutionEnd: arg.logLLMExecutionEnd,
         appendLLMAudit: arg.appendLLMAudit,
         appendMemoryTraceAudit: arg.appendMemoryTraceAudit,
-        buildHypaV3AuditRequestPayload: arg.buildHypaV3AuditRequestPayload,
-        buildHypaV3AuditResponsePayload: arg.buildHypaV3AuditResponsePayload,
+        buildMemoryAuditRequestPayload: arg.buildMemoryAuditRequestPayload,
+        buildMemoryAuditResponsePayload: arg.buildMemoryAuditResponsePayload,
         sendJson: arg.sendJson,
         toLLMErrorResponse: arg.toLLMErrorResponse,
-        resolveHypaV3Settings: arg.resolveHypaV3Settings,
-        convertStoredMessageForHypaSummary: arg.convertStoredMessageForHypaSummary,
-        buildHypaSummarizationPromptMessages: arg.buildHypaSummarizationPromptMessages,
-        resolveHypaSummaryProviderModel: arg.resolveHypaSummaryProviderModel,
+        resolveMemorySettings: arg.resolveMemorySettings,
+        convertStoredMessageForMemorySummary: arg.convertStoredMessageForMemorySummary,
+        buildMemorySummarizationPromptMessages: arg.buildMemorySummarizationPromptMessages,
+        resolveMemorySummaryProviderModel: arg.resolveMemorySummaryProviderModel,
         buildMemoryTraceResponsePayload: arg.buildMemoryTraceResponsePayload,
-        normalizeHypaV3DataForEdit: arg.normalizeHypaV3DataForEdit,
-        sanitizeHypaSummarizationContent: arg.sanitizeHypaSummarizationContent,
-        planPeriodicHypaV3Summarization: arg.planPeriodicHypaV3Summarization,
-        executeHypaSummaryFromMessages: arg.executeHypaSummaryFromMessages,
+        normalizeMemoryDataForEdit: arg.normalizeMemoryDataForEdit,
+        planPeriodicMemorySummarization: arg.planPeriodicMemorySummarization,
+        executeMemorySummaryFromMessages: arg.executeMemorySummaryFromMessages,
         persistChatDataToRaw: arg.persistChatDataToRaw,
         cleanSummaryOutput: arg.cleanSummaryOutput,
         generateSummaryEmbedding: arg.generateSummaryEmbedding,
@@ -70,9 +69,8 @@ function registerServerRoutes(arg = {}) {
         applyPromptOverride: arg.applyPromptOverride,
         resolveManualPromptSource: arg.resolveManualPromptSource,
         applyStateCommands: arg.applyStateCommands,
-        traceRoutes: registerHypaV3TraceRoutes,
-        manualRoutes: registerHypaV3ManualRoutes,
-        resummaryRoutes: registerHypaV3ResummaryRoutes,
+        traceRoutes: registerMemoryTraceRoutes,
+        manualRoutes: registerMemoryManualRoutes,
     });
 
     registerLLMRoutes({
@@ -172,6 +170,30 @@ function registerServerRoutes(arg = {}) {
         requireSafeSegment: arg.requireSafeSegment,
         updateRulebookMetadata: arg.updateRulebookMetadata,
     });
+
+    if (typeof registerEvolutionRoutes === 'function') {
+        registerEvolutionRoutes({
+            app: arg.app,
+            fs: arg.fs,
+            dataDirs: arg.dataDirs,
+            existsSync: arg.existsSync,
+            LLMHttpError: arg.LLMHttpError,
+            isSafePathSegment: arg.isSafePathSegment,
+            requirePasswordAuth: arg.requirePasswordAuth,
+            safeResolve: arg.safeResolve,
+            getReqIdFromResponse: arg.getReqIdFromResponse,
+            toStringOrEmpty: arg.toStringOrEmpty,
+            sendJson: arg.sendJson,
+            toLLMErrorResponse: arg.toLLMErrorResponse,
+            logLLMExecutionStart: arg.logLLMExecutionStart,
+            logLLMExecutionEnd: arg.logLLMExecutionEnd,
+            appendLLMAudit: arg.appendLLMAudit,
+            buildExecutionAuditRequest: arg.buildExecutionAuditRequest,
+            executeInternalLLMTextCompletion: arg.executeInternalLLMTextCompletion,
+            applyStateCommands: arg.applyStateCommands,
+            readStateLastEventId: arg.readStateLastEventId,
+        });
+    }
 }
 
 module.exports = {

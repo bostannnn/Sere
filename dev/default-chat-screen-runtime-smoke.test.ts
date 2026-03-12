@@ -3,6 +3,44 @@ import { mount, tick, unmount } from "svelte";
 
 const mocks = vi.hoisted(() => ({
   sendChat: vi.fn(async () => {}),
+  createEvolutionProposal: vi.fn(async () => ({
+    proposal: {
+      proposalId: "proposal-1",
+      sourceChatId: "chat-1",
+      proposedState: {
+        relationship: { trustLevel: "higher", dynamic: "warmer after the last exchange" },
+        activeThreads: ["new job nerves"],
+        runningJokes: [],
+        characterLikes: [],
+        characterDislikes: [],
+        characterHabits: [],
+        characterBoundariesPreferences: [],
+        userFacts: [],
+        userRead: [],
+        userLikes: [],
+        userDislikes: [],
+        lastChatEnded: { state: "close", residue: "supportive" },
+        keyMoments: ["user opened up about work"],
+        characterIntimatePreferences: [],
+        userIntimatePreferences: [],
+      },
+      changes: [
+        {
+          sectionKey: "relationship",
+          summary: "The relationship became warmer.",
+          evidence: ["Character said they feel closer now."],
+        },
+      ],
+      createdAt: 1,
+    },
+  })),
+  acceptEvolutionProposalAction: vi.fn(async (arg: { proposedState: unknown; createNextChat?: boolean }) => ({
+    version: 1,
+    acceptedAt: 1234,
+    state: arg.proposedState,
+  })),
+  rejectEvolutionProposalAction: vi.fn(async () => ({ ok: true })),
+  changeChatTo: vi.fn(),
 }));
 
 const platformState = vi.hoisted(() => ({
@@ -24,7 +62,7 @@ vi.mock(import("src/lang"), () => ({
     chatList: "Chat list",
     autoMode: "Auto mode",
     ttsStop: "Stop TTS",
-    hypaMemoryV3Modal: "Hypa memory",
+    memoryModal: "Memory",
   },
 }));
 
@@ -34,10 +72,140 @@ vi.mock(import("uuid"), () => ({
 
 vi.mock(import("src/ts/stores.svelte"), async () => {
   const { writable } = await import("svelte/store");
+  const makeCharacter = (arg: {
+    chaId: string;
+    name: string;
+    chatId: string;
+    proposalId?: string | null;
+    trustLevel?: string;
+  }) => ({
+    chaId: arg.chaId,
+    type: "character",
+    name: arg.name,
+    image: "",
+    firstMessage: "Hello",
+    alternateGreetings: [],
+    creatorNotes: [],
+    removedQuotes: false,
+    largePortrait: false,
+    chatPage: 0,
+    chats: [
+      {
+        id: arg.chatId,
+        name: `${arg.name} Chat`,
+        fmIndex: -1,
+        message: [],
+        localLore: [],
+        modules: [],
+        note: "",
+        bindedPersona: "",
+      },
+    ],
+    characterEvolution: {
+      enabled: true,
+      useGlobalDefaults: false,
+      extractionProvider: "openrouter",
+      extractionModel: "anthropic/claude-3.5-haiku",
+      extractionMaxTokens: 2400,
+      extractionPrompt: "prompt",
+      sectionConfigs: [
+        {
+          key: "relationship",
+          label: "Relationship",
+          enabled: true,
+          includeInPrompt: true,
+          instruction: "Track trust shifts.",
+          kind: "object",
+          sensitive: false,
+        },
+        {
+          key: "activeThreads",
+          label: "Active Threads",
+          enabled: true,
+          includeInPrompt: true,
+          instruction: "Track open threads.",
+          kind: "list",
+          sensitive: false,
+        },
+        {
+          key: "lastChatEnded",
+          label: "Last Chat Ended",
+          enabled: true,
+          includeInPrompt: true,
+          instruction: "Track ending residue.",
+          kind: "object",
+          sensitive: false,
+        },
+        {
+          key: "keyMoments",
+          label: "Key Moments",
+          enabled: true,
+          includeInPrompt: true,
+          instruction: "Track key moments.",
+          kind: "list",
+          sensitive: false,
+        },
+      ],
+      privacy: {
+        allowCharacterIntimatePreferences: false,
+        allowUserIntimatePreferences: false,
+      },
+      currentStateVersion: 0,
+      currentState: {
+        relationship: { trustLevel: "", dynamic: "" },
+        activeThreads: [],
+        runningJokes: [],
+        characterLikes: [],
+        characterDislikes: [],
+        characterHabits: [],
+        characterBoundariesPreferences: [],
+        userFacts: [],
+        userRead: [],
+        userLikes: [],
+        userDislikes: [],
+        lastChatEnded: { state: "", residue: "" },
+        keyMoments: [],
+        characterIntimatePreferences: [],
+        userIntimatePreferences: [],
+      },
+      pendingProposal: arg.proposalId
+        ? {
+            proposalId: arg.proposalId,
+            sourceChatId: arg.chatId,
+            proposedState: {
+              relationship: { trustLevel: arg.trustLevel ?? "", dynamic: `${arg.name} dynamic` },
+              activeThreads: [`${arg.name} thread`],
+              runningJokes: [],
+              characterLikes: [],
+              characterDislikes: [],
+              characterHabits: [],
+              characterBoundariesPreferences: [],
+              userFacts: [],
+              userRead: [],
+              userLikes: [],
+              userDislikes: [],
+              lastChatEnded: { state: `${arg.name} close`, residue: `${arg.name} residue` },
+              keyMoments: [`${arg.name} moment`],
+              characterIntimatePreferences: [],
+              userIntimatePreferences: [],
+            },
+            changes: [
+              {
+                sectionKey: "relationship",
+                summary: `${arg.name} relationship changed.`,
+                evidence: [`${arg.name} evidence`],
+              },
+            ],
+            createdAt: 1,
+          }
+        : null,
+      lastProcessedChatId: null,
+      stateVersions: [],
+    },
+  });
   return {
     selectedCharID: writable(0),
     createSimpleCharacter: (character: unknown) => character,
-    hypaV3ModalOpen: writable(false),
     ScrollToMessageStore: { value: -1 },
     comfyProgressStore: writable({
       active: false,
@@ -65,7 +233,6 @@ vi.mock(import("src/ts/stores.svelte"), async () => {
         sideMenuDatabankButton: false,
         sideMenuRagSearchButton: false,
         sideMenuScreenshotButton: false,
-        sideMenuHypaMemoryButton: false,
         translator: "enabled",
         sendWithEnter: true,
         playMessage: false,
@@ -80,30 +247,8 @@ vi.mock(import("src/ts/stores.svelte"), async () => {
           },
         ],
         characters: [
-          {
-            chaId: "char-1",
-            type: "character",
-            name: "Character One",
-            image: "",
-            firstMessage: "Hello",
-            alternateGreetings: [],
-            creatorNotes: [],
-            removedQuotes: false,
-            largePortrait: false,
-            chatPage: 0,
-            chats: [
-              {
-                id: "chat-1",
-                name: "Chat One",
-                fmIndex: -1,
-                message: [],
-                localLore: [],
-                modules: [],
-                note: "",
-                bindedPersona: "",
-              },
-            ],
-          },
+          makeCharacter({ chaId: "char-1", name: "Character One", chatId: "chat-1" }),
+          makeCharacter({ chaId: "char-2", name: "Character Two", chatId: "chat-2" }),
         ],
       },
     },
@@ -112,13 +257,65 @@ vi.mock(import("src/ts/stores.svelte"), async () => {
 
 vi.mock(import("src/ts/storage/database.svelte"), async () => {
   const { DBState } = await import("src/ts/stores.svelte");
+  const resolveSafeChatIndex = (chats: Array<unknown> | undefined, chatPage: number | undefined) => {
+    if (!Array.isArray(chats) || chats.length === 0) {
+      return -1;
+    }
+    if (!Number.isInteger(chatPage) || chatPage < 0 || chatPage >= chats.length) {
+      return 0;
+    }
+    return chatPage;
+  };
+  const resolveSelectedChat = (character: { chats?: Array<unknown>; chatPage?: number } | null | undefined) => {
+    const chatIndex = resolveSafeChatIndex(character?.chats, character?.chatPage);
+    return chatIndex >= 0 ? character?.chats?.[chatIndex] ?? null : null;
+  };
+  const resolveChatStateByCharacterAndChatId = (
+    characters: Array<{ chaId?: string; chats?: Array<{ id?: string; message?: unknown[] }> }> | undefined,
+    characterId: string,
+    chatId: string,
+  ) => {
+    const characterIndex = characters?.findIndex((entry) => entry?.chaId === characterId) ?? -1;
+    const character = characterIndex >= 0 ? characters?.[characterIndex] ?? null : null;
+    const chatIndex = character?.chats?.findIndex((entry) => entry?.id === chatId) ?? -1;
+    const chat = chatIndex >= 0 ? character?.chats?.[chatIndex] ?? null : null;
+    return {
+      character,
+      characterIndex,
+      chat,
+      chatIndex,
+      messages: chat?.message ?? [],
+    };
+  };
   return {
     getDatabase: () => ({}),
     getCurrentCharacter: () => DBState.db.characters[0],
-    getCurrentChat: () => DBState.db.characters[0].chats[0],
+    getCurrentChat: () => resolveSelectedChat(DBState.db.characters[0]),
     setCurrentChat: (chat: unknown) => {
       DBState.db.characters[0].chats[0] = chat as (typeof DBState.db.characters)[number]["chats"][number];
     },
+    repairCharacterChatPage: (character: { chats?: Array<unknown>; chatPage: number } | null | undefined) => {
+      if (!character) {
+        return -1;
+      }
+      const chatIndex = resolveSafeChatIndex(character.chats, character.chatPage);
+      character.chatPage = chatIndex < 0 ? 0 : chatIndex;
+      return chatIndex;
+    },
+    resolveSelectedChat,
+    resolveSelectedChatState: (characters: Array<{ chats?: Array<unknown>; chatPage?: number }> | undefined, selectedCharIndex: number) => {
+      const character = selectedCharIndex >= 0 ? characters?.[selectedCharIndex] ?? null : null;
+      const chatIndex = resolveSafeChatIndex(character?.chats, character?.chatPage);
+      const chat = chatIndex >= 0 ? character?.chats?.[chatIndex] ?? null : null;
+      return {
+        character,
+        characterIndex: character ? selectedCharIndex : -1,
+        chat,
+        chatIndex,
+        messages: chat?.message ?? [],
+      };
+    },
+    resolveChatStateByCharacterAndChatId,
   };
 });
 
@@ -163,6 +360,111 @@ vi.mock(import("src/ts/globalApi.svelte"), () => ({
   chatFoldedState: { data: null },
   chatFoldedStateMessageIndex: { index: -1 },
   downloadFile: async () => {},
+  changeChatTo: mocks.changeChatTo,
+}));
+
+vi.mock(import("src/ts/characterEvolution"), () => {
+  const ensureState = (char: Record<string, unknown>) => char.characterEvolution as Record<string, unknown>;
+  return {
+    ensureCharacterEvolution: (char: Record<string, unknown>) => ensureState(char),
+    getEffectiveCharacterEvolutionSettings: (_db: unknown, char: Record<string, unknown>) => ensureState(char),
+  };
+});
+
+vi.mock(import("src/ts/evolution"), async () => {
+  const { DBState } = await import("src/ts/stores.svelte");
+
+  return {
+    createCharacterEvolutionProposal: mocks.createEvolutionProposal,
+    getCharacterEvolutionErrorMessage: (error: unknown) => String(error ?? "Unknown error"),
+    getPendingCharacterEvolutionProposal: (character: Record<string, unknown> | null | undefined) => character?.characterEvolution?.pendingProposal ?? null,
+    createNewChatAfterEvolution: async (charIndex: number) => {
+      const character = DBState.db.characters[charIndex];
+      character.chats.unshift({
+        id: "chat-2",
+        name: "New Chat 1",
+        fmIndex: -1,
+        message: [],
+        localLore: [],
+        modules: [],
+        note: "",
+        bindedPersona: "",
+      });
+      character.chatPage = 0;
+      mocks.changeChatTo(0);
+    },
+  };
+});
+
+vi.mock(import("src/ts/character-evolution/actions"), async () => {
+  const { DBState } = await import("src/ts/stores.svelte");
+
+  return {
+    acceptEvolutionProposalAction: async (arg: {
+      characterId: string;
+      proposedState: unknown;
+      createNextChat?: boolean;
+    }) => {
+      const payload = await mocks.acceptEvolutionProposalAction(arg);
+      if (arg.createNextChat) {
+        const characterIndex = DBState.db.characters.findIndex((entry) => entry?.type !== "group" && entry?.chaId === arg.characterId);
+        if (characterIndex >= 0) {
+          const character = DBState.db.characters[characterIndex];
+          character.chats.unshift({
+            id: "chat-2",
+            name: "New Chat 1",
+            fmIndex: -1,
+            message: [],
+            localLore: [],
+            modules: [],
+            note: "",
+            bindedPersona: "",
+          });
+          character.chatPage = 0;
+          mocks.changeChatTo(0);
+        }
+      }
+      return payload;
+    },
+    rejectEvolutionProposalAction: mocks.rejectEvolutionProposalAction,
+  };
+});
+
+vi.mock(import("src/ts/character-evolution/workflow"), () => ({
+  getEvolutionProposalIdentity: (characterId: string | undefined, proposal: { proposalId?: string; sourceChatId?: string; createdAt?: number } | null | undefined) => {
+    if (!characterId || !proposal) {
+      return null;
+    }
+    return `${characterId}:${proposal.proposalId ?? proposal.sourceChatId ?? "pending"}:${proposal.createdAt ?? 0}`;
+  },
+  withPendingEvolutionProposal: (characterEntry: Record<string, unknown>, proposal: unknown) => {
+    (characterEntry.characterEvolution as Record<string, unknown>).pendingProposal = proposal as Record<string, unknown> | null;
+    return characterEntry;
+  },
+  withAcceptedEvolutionState: (args: {
+    characterEntry: Record<string, unknown>;
+    state: Record<string, unknown>;
+    version?: number | string;
+    acceptedAt?: number | string;
+    sourceChatId: string | null;
+  }) => {
+    const evolution = args.characterEntry.characterEvolution as Record<string, unknown>;
+    const acceptedVersion = Number(args.version) || Number(evolution.currentStateVersion) || 0;
+    const acceptedAt = Number(args.acceptedAt) || 0;
+    evolution.currentState = args.state;
+    evolution.currentStateVersion = acceptedVersion;
+    evolution.pendingProposal = null;
+    evolution.lastProcessedChatId = args.sourceChatId;
+    evolution.stateVersions = [
+      {
+        version: acceptedVersion,
+        chatId: args.sourceChatId,
+        acceptedAt,
+      },
+      ...(((evolution.stateVersions as Array<{ version?: number }> | undefined) ?? []).filter((entry) => Number(entry?.version) !== acceptedVersion)),
+    ];
+    return args.characterEntry;
+  },
 }));
 
 vi.mock(import("src/ts/process/triggers"), () => ({
@@ -240,6 +542,10 @@ vi.mock(import("src/lib/SideBars/GameStateHUD.svelte"), async () => ({
   default: (await import("./test-stubs/SimplePanelStub.svelte")).default,
 }));
 
+vi.mock(import("src/lib/Evolution/ReviewWorkspace.svelte"), async () => ({
+  default: (await import("./test-stubs/DefaultChatScreenReviewWorkspaceStub.svelte")).default,
+}));
+
 import DefaultChatScreen from "src/lib/ChatScreens/DefaultChatScreen.svelte";
 import { DBState, selectedCharID } from "src/ts/stores.svelte";
 
@@ -254,12 +560,109 @@ async function flushUi() {
 describe("default chat screen runtime smoke", () => {
   beforeEach(() => {
     mocks.sendChat.mockClear();
+    mocks.createEvolutionProposal.mockClear();
+    mocks.acceptEvolutionProposalAction.mockClear();
+    mocks.rejectEvolutionProposalAction.mockClear();
+    mocks.changeChatTo.mockClear();
     platformState.isMobile = false;
     selectedCharID.set(0);
     DBState.db.fixedChatTextarea = false;
     DBState.db.newMessageButtonStyle = "floating-circle";
     DBState.db.useAutoTranslateInput = true;
     DBState.db.sendWithEnter = true;
+    DBState.db.characters[0] = {
+      ...DBState.db.characters[0],
+      name: "Character One",
+      chaId: "char-1",
+      chatPage: 0,
+      chats: [
+        {
+          id: "chat-1",
+          name: "Character One Chat",
+          fmIndex: -1,
+          message: [],
+          localLore: [],
+          modules: [],
+          note: "",
+          bindedPersona: "",
+        },
+      ],
+      characterEvolution: {
+        ...DBState.db.characters[0].characterEvolution,
+        currentStateVersion: 0,
+        currentState: {
+          relationship: { trustLevel: "", dynamic: "" },
+          activeThreads: [],
+          runningJokes: [],
+          characterLikes: [],
+          characterDislikes: [],
+          characterHabits: [],
+          characterBoundariesPreferences: [],
+          userFacts: [],
+          userRead: [],
+          userLikes: [],
+          userDislikes: [],
+          lastChatEnded: { state: "", residue: "" },
+          keyMoments: [],
+          characterIntimatePreferences: [],
+          userIntimatePreferences: [],
+        },
+        pendingProposal: null,
+        lastProcessedChatId: null,
+        stateVersions: [],
+      },
+    };
+    DBState.db.characters[1] = {
+      ...DBState.db.characters[1],
+      name: "Character Two",
+      chaId: "char-2",
+      chatPage: 0,
+      chats: [
+        {
+          id: "chat-2",
+          name: "Character Two Chat",
+          fmIndex: -1,
+          message: [],
+          localLore: [],
+          modules: [],
+          note: "",
+          bindedPersona: "",
+        },
+      ],
+      characterEvolution: {
+        ...DBState.db.characters[1].characterEvolution,
+        currentStateVersion: 0,
+        currentState: {
+          relationship: { trustLevel: "", dynamic: "" },
+          activeThreads: [],
+          runningJokes: [],
+          characterLikes: [],
+          characterDislikes: [],
+          characterHabits: [],
+          characterBoundariesPreferences: [],
+          userFacts: [],
+          userRead: [],
+          userLikes: [],
+          userDislikes: [],
+          lastChatEnded: { state: "", residue: "" },
+          keyMoments: [],
+          characterIntimatePreferences: [],
+          userIntimatePreferences: [],
+        },
+        pendingProposal: null,
+        lastProcessedChatId: null,
+        stateVersions: [],
+      },
+    };
+    const confirmMock = vi.fn(() => true);
+    vi.stubGlobal("confirm", confirmMock);
+    window.confirm = confirmMock;
+    vi.stubGlobal(
+      "safeStructuredClone",
+      <T>(value: T) => (typeof structuredClone === "function"
+        ? structuredClone(value)
+        : JSON.parse(JSON.stringify(value)) as T),
+    );
     document.body.innerHTML = "";
   });
 
@@ -268,6 +671,7 @@ describe("default chat screen runtime smoke", () => {
       await unmount(app);
       app = undefined;
     }
+    vi.unstubAllGlobals();
   });
 
   it("keeps composer controls on primitive classes", async () => {
@@ -293,20 +697,6 @@ describe("default chat screen runtime smoke", () => {
     ) as HTMLTextAreaElement | null;
     expect(translateInput).not.toBeNull();
 
-    const floatingActions = document.querySelector(
-      ".ds-chat-floating-actions.action-rail",
-    ) as HTMLElement | null;
-    expect(floatingActions).not.toBeNull();
-
-    const floatingMenuButton = document.querySelector(
-      ".ds-chat-floating-action-btn.icon-btn.icon-btn--sm",
-    ) as HTMLButtonElement | null;
-    expect(floatingMenuButton).not.toBeNull();
-    expect(floatingMenuButton?.getAttribute("type")).toBe("button");
-    expect(floatingMenuButton?.getAttribute("aria-label")).toBe("Open chat actions");
-    expect(floatingMenuButton?.getAttribute("aria-haspopup")).toBe("menu");
-    expect(floatingMenuButton?.getAttribute("aria-expanded")).toBe("false");
-
     const composerButtons = Array.from(
       document.querySelectorAll(".ds-chat-composer-action.icon-btn.icon-btn--sm"),
     ) as HTMLButtonElement[];
@@ -328,7 +718,7 @@ describe("default chat screen runtime smoke", () => {
       document.querySelectorAll(".ds-chat-side-menu-item.ds-ui-menu-item"),
     ) as HTMLButtonElement[];
     const sideMenuPanel = document.querySelector(
-      ".ds-chat-side-menu.panel-shell.ds-ui-menu",
+      ".ds-chat-side-menu.ds-chat-side-menu-composer.panel-shell.ds-ui-menu",
     ) as HTMLElement | null;
     expect(sideMenuPanel).not.toBeNull();
     expect(sideMenuPanel?.id).toBe("ds-chat-side-menu");
@@ -367,6 +757,104 @@ describe("default chat screen runtime smoke", () => {
     await flushUi();
 
     expect(document.querySelector('[data-testid="simple-panel-stub"]')).not.toBeNull();
+  });
+
+  it("clamps an out-of-range selected chatPage on mount", async () => {
+    DBState.db.characters[0].chatPage = 99;
+    DBState.db.characters[0].chats = [
+      {
+        id: "chat-1",
+        name: "Chat 1",
+        fmIndex: -1,
+        message: [],
+        localLore: [],
+        modules: [],
+        note: "",
+        bindedPersona: "",
+      },
+      {
+        id: "chat-2",
+        name: "Chat 2",
+        fmIndex: -1,
+        message: [],
+        localLore: [],
+        modules: [],
+        note: "",
+        bindedPersona: "",
+      },
+    ];
+
+    const target = document.createElement("div");
+    document.body.appendChild(target);
+    app = mount(DefaultChatScreen, { target });
+    await flushUi();
+
+    expect(DBState.db.characters[0].chatPage).toBe(0);
+    expect(document.querySelector(".ds-chat-main-shell")).not.toBeNull();
+  });
+
+  it("renders safely when the selected character has no chats", async () => {
+    DBState.db.characters[0].chatPage = 7;
+    DBState.db.characters[0].chats = [];
+
+    const target = document.createElement("div");
+    document.body.appendChild(target);
+    app = mount(DefaultChatScreen, { target });
+    await flushUi();
+
+    expect(DBState.db.characters[0].chatPage).toBe(0);
+    expect(document.querySelector(".ds-chat-main-shell")).not.toBeNull();
+  });
+
+  it("keeps the chat shell mounted when selection exists but the character record is temporarily missing", async () => {
+    const originalCharacters = structuredClone(DBState.db.characters);
+    DBState.db.characters = [];
+    selectedCharID.set(0);
+
+    const target = document.createElement("div");
+    document.body.appendChild(target);
+    app = mount(DefaultChatScreen, { target });
+    await flushUi();
+
+    expect(document.querySelector(".ds-chat-main-shell")).not.toBeNull();
+    expect(document.querySelector('[data-testid="simple-panel-stub"]')).toBeNull();
+
+    DBState.db.characters = originalCharacters;
+  });
+
+  it("stays stable when selection changes while a send is in flight", async () => {
+    let resolveSend: (() => void) | null = null;
+    mocks.sendChat.mockImplementationOnce(async () => {
+      await new Promise<void>((resolve) => {
+        resolveSend = resolve;
+      });
+    });
+
+    const target = document.createElement("div");
+    document.body.appendChild(target);
+    app = mount(DefaultChatScreen, { target });
+    await flushUi();
+
+    const composerInput = document.querySelector(
+      ".ds-chat-composer-input.control-field",
+    ) as HTMLTextAreaElement | null;
+    expect(composerInput).not.toBeNull();
+
+    composerInput!.value = "Selection race";
+    composerInput!.dispatchEvent(new Event("input", { bubbles: true }));
+    await flushUi();
+
+    composerInput!.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    await flushUi();
+
+    selectedCharID.set(1);
+    await flushUi();
+
+    resolveSend?.();
+    await flushUi();
+
+    expect(mocks.sendChat).toHaveBeenCalledTimes(1);
+    expect(document.querySelector(".ds-chat-main-shell")).not.toBeNull();
   });
 
   it("keeps fixed composer and top-bar jump stable with long input/send flow", async () => {
@@ -415,7 +903,11 @@ describe("default chat screen runtime smoke", () => {
     ) as HTMLButtonElement | null;
     expect(menuButton).not.toBeNull();
     expect(menuButton?.getAttribute("aria-expanded")).toBe("false");
-    menuButton!.click();
+    const reopenMenuButton = document.querySelector(
+      ".ds-chat-composer-action.ds-chat-composer-action-end.icon-btn.icon-btn--sm",
+    ) as HTMLButtonElement | null;
+    expect(reopenMenuButton).not.toBeNull();
+    reopenMenuButton!.click();
     await flushUi();
     expect(menuButton?.getAttribute("aria-expanded")).toBe("true");
     expect(document.querySelector(".ds-chat-side-menu")).not.toBeNull();
@@ -561,5 +1053,292 @@ describe("default chat screen runtime smoke", () => {
     translateInput!.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", shiftKey: true, bubbles: true }));
     await flushUi();
     expect(mocks.sendChat).toHaveBeenCalledTimes(0);
+  });
+
+  it("accepts an evolution proposal and creates a new chat from the review panel", async () => {
+    const target = document.createElement("div");
+    document.body.appendChild(target);
+    app = mount(DefaultChatScreen, { target });
+    await flushUi();
+
+    const menuButton = document.querySelector(
+      ".ds-chat-composer-action.ds-chat-composer-action-end.icon-btn.icon-btn--sm",
+    ) as HTMLButtonElement | null;
+    expect(menuButton).not.toBeNull();
+    menuButton!.click();
+    await flushUi();
+
+    const handoffButton = Array.from(document.querySelectorAll(".ds-chat-side-menu-item")).find(
+      (element) => (element as HTMLButtonElement).getAttribute("aria-label") === "Character evolution handoff",
+    ) as HTMLButtonElement | undefined;
+    expect(handoffButton).toBeDefined();
+    handoffButton!.click();
+    await flushUi();
+
+    const acceptAndCreateButton = document.querySelector(
+      '[data-testid="review-accept-create"]',
+    ) as HTMLButtonElement | null;
+    expect(acceptAndCreateButton).not.toBeNull();
+    acceptAndCreateButton!.click();
+    await flushUi();
+
+    expect(mocks.createEvolutionProposal).toHaveBeenCalledTimes(1);
+    expect(mocks.acceptEvolutionProposalAction).toHaveBeenCalledTimes(1);
+    expect(DBState.db.characters[0].characterEvolution.currentStateVersion).toBe(1);
+    expect(DBState.db.characters[0].characterEvolution.pendingProposal).toBeNull();
+    expect(DBState.db.characters[0].characterEvolution.lastProcessedChatId).toBe("chat-1");
+    expect(DBState.db.characters[0].characterEvolution.stateVersions).toEqual([
+      {
+        version: 1,
+        chatId: "chat-1",
+        acceptedAt: 1234,
+      },
+    ]);
+    expect(DBState.db.characters[0].chats).toHaveLength(2);
+    expect(DBState.db.characters[0].chats[0]?.name).toBe("New Chat 1");
+    expect(DBState.db.characters[0].chatPage).toBe(0);
+    expect(mocks.changeChatTo).toHaveBeenCalledWith(0);
+  });
+
+  it("records the accepted chat locally after accepting without creating a new one", async () => {
+    const target = document.createElement("div");
+    document.body.appendChild(target);
+    app = mount(DefaultChatScreen, { target });
+    await flushUi();
+
+    const menuButton = document.querySelector(
+      ".ds-chat-composer-action.ds-chat-composer-action-end.icon-btn.icon-btn--sm",
+    ) as HTMLButtonElement | null;
+    expect(menuButton).not.toBeNull();
+    menuButton!.click();
+    await flushUi();
+
+    const handoffButton = Array.from(document.querySelectorAll(".ds-chat-side-menu-item")).find(
+      (element) => (element as HTMLButtonElement).getAttribute("aria-label") === "Character evolution handoff",
+    ) as HTMLButtonElement | undefined;
+    expect(handoffButton).toBeDefined();
+    handoffButton!.click();
+    await flushUi();
+
+    const acceptButton = Array.from(document.querySelectorAll("button")).find(
+      (element) => (element as HTMLButtonElement).textContent?.trim() === "Accept",
+    ) as HTMLButtonElement | undefined;
+    expect(acceptButton).toBeDefined();
+    acceptButton!.click();
+    await flushUi();
+
+    expect(DBState.db.characters[0].characterEvolution.lastProcessedChatId).toBe("chat-1");
+  });
+
+  it("replays handoff for an already accepted chat when confirmed", async () => {
+    DBState.db.characters[0].characterEvolution.lastProcessedChatId = "chat-1";
+
+    const target = document.createElement("div");
+    document.body.appendChild(target);
+    app = mount(DefaultChatScreen, { target });
+    await flushUi();
+
+    const menuButton = document.querySelector(
+      ".ds-chat-composer-action.ds-chat-composer-action-end.icon-btn.icon-btn--sm",
+    ) as HTMLButtonElement | null;
+    expect(menuButton).not.toBeNull();
+    menuButton!.click();
+    await flushUi();
+
+    const handoffButton = Array.from(document.querySelectorAll(".ds-chat-side-menu-item")).find(
+      (element) => (element as HTMLButtonElement).getAttribute("aria-label") === "Character evolution handoff",
+    ) as HTMLButtonElement | undefined;
+    expect(handoffButton).toBeDefined();
+    expect(handoffButton?.textContent).toContain("Replay Accepted Chat");
+    handoffButton!.click();
+    await flushUi();
+
+    expect(mocks.createEvolutionProposal).toHaveBeenCalledTimes(1);
+    expect(mocks.createEvolutionProposal).toHaveBeenCalledWith("char-1", "chat-1", { forceReplay: true });
+  });
+
+  it("re-seeds the review draft when switching to a different character proposal", async () => {
+    DBState.db.characters[0].characterEvolution.pendingProposal = {
+      proposalId: "proposal-char-1",
+      sourceChatId: "chat-1",
+      proposedState: {
+        relationship: { trustLevel: "char-1", dynamic: "Character One dynamic" },
+        activeThreads: ["Character One thread"],
+        runningJokes: [],
+        characterLikes: [],
+        characterDislikes: [],
+        characterHabits: [],
+        characterBoundariesPreferences: [],
+        userFacts: [],
+        userRead: [],
+        userLikes: [],
+        userDislikes: [],
+        lastChatEnded: { state: "Character One close", residue: "Character One residue" },
+        keyMoments: ["Character One moment"],
+        characterIntimatePreferences: [],
+        userIntimatePreferences: [],
+      },
+      changes: [],
+      createdAt: 1,
+    };
+
+    const target = document.createElement("div");
+    document.body.appendChild(target);
+    app = mount(DefaultChatScreen, { target });
+    await flushUi();
+
+    DBState.db.characters[1].characterEvolution.pendingProposal = {
+      proposalId: "proposal-char-2",
+      sourceChatId: "chat-2",
+      proposedState: {
+        relationship: { trustLevel: "char-2", dynamic: "Character Two dynamic" },
+        activeThreads: ["Character Two thread"],
+        runningJokes: [],
+        characterLikes: [],
+        characterDislikes: [],
+        characterHabits: [],
+        characterBoundariesPreferences: [],
+        userFacts: [],
+        userRead: [],
+        userLikes: [],
+        userDislikes: [],
+        lastChatEnded: { state: "Character Two close", residue: "Character Two residue" },
+        keyMoments: ["Character Two moment"],
+        characterIntimatePreferences: [],
+        userIntimatePreferences: [],
+      },
+      changes: [],
+      createdAt: 1,
+    };
+    selectedCharID.set(1);
+    await flushUi();
+
+    const reviewPrompt = Array.from(document.querySelectorAll("button")).find(
+      (element) => (element as HTMLButtonElement).textContent?.includes("Pending evolution proposal"),
+    ) as HTMLButtonElement | undefined;
+    expect(reviewPrompt).toBeDefined();
+    reviewPrompt?.click();
+    await flushUi();
+
+    const acceptButton = Array.from(document.querySelectorAll("button")).find(
+      (element) => (element as HTMLButtonElement).textContent?.trim() === "Accept",
+    ) as HTMLButtonElement | undefined;
+    expect(acceptButton).toBeDefined();
+    acceptButton?.click();
+    await flushUi();
+
+    expect(mocks.acceptEvolutionProposalAction).toHaveBeenCalledTimes(1);
+    expect(mocks.acceptEvolutionProposalAction.mock.calls[0]?.[0]).toMatchObject({
+      characterId: "char-2",
+      proposedState: {
+        relationship: {
+          trustLevel: "char-2",
+          dynamic: "Character Two dynamic",
+        },
+      },
+    });
+  });
+
+  it("keeps async accept-and-create work pinned to the original character", async () => {
+    let resolveAccept: ((value: {
+      version: number;
+      acceptedAt: number;
+      state: {
+        relationship: { trustLevel: string; dynamic: string };
+        activeThreads: string[];
+        runningJokes: string[];
+        characterLikes: never[];
+        characterDislikes: never[];
+        characterHabits: never[];
+        characterBoundariesPreferences: never[];
+        userFacts: never[];
+        userRead: string[];
+        userLikes: never[];
+        userDislikes: never[];
+        lastChatEnded: { state: string; residue: string };
+        keyMoments: string[];
+        characterIntimatePreferences: never[];
+        userIntimatePreferences: never[];
+      };
+    }) => void) | null = null;
+
+    mocks.acceptEvolutionProposalAction.mockImplementationOnce(async () => {
+      return await new Promise((resolve) => {
+        resolveAccept = resolve;
+      });
+    });
+
+    DBState.db.characters[0].characterEvolution.pendingProposal = {
+      proposalId: "proposal-char-1",
+      sourceChatId: "chat-1",
+      proposedState: {
+        relationship: { trustLevel: "char-1", dynamic: "Character One dynamic" },
+        activeThreads: ["Character One thread"],
+        runningJokes: [],
+        characterLikes: [],
+        characterDislikes: [],
+        characterHabits: [],
+        characterBoundariesPreferences: [],
+        userFacts: [],
+        userRead: [],
+        userLikes: [],
+        userDislikes: [],
+        lastChatEnded: { state: "Character One close", residue: "Character One residue" },
+        keyMoments: ["Character One moment"],
+        characterIntimatePreferences: [],
+        userIntimatePreferences: [],
+      },
+      changes: [],
+      createdAt: 1,
+    };
+
+    const target = document.createElement("div");
+    document.body.appendChild(target);
+    app = mount(DefaultChatScreen, { target });
+    await flushUi();
+
+    const reviewPrompt = target.querySelector(".ds-chat-evolution-review-prompt") as HTMLButtonElement | null;
+    expect(reviewPrompt).not.toBeNull();
+    reviewPrompt!.click();
+    await flushUi();
+
+    const acceptCreateButton = target.querySelector('[data-testid="review-accept-create"]') as HTMLButtonElement | null;
+    expect(acceptCreateButton).not.toBeNull();
+    acceptCreateButton!.click();
+    await flushUi();
+
+    selectedCharID.set(1);
+    await flushUi();
+
+    resolveAccept?.({
+      version: 2,
+      acceptedAt: 999,
+      state: {
+        relationship: { trustLevel: "char-1", dynamic: "Character One dynamic" },
+        activeThreads: ["Character One thread"],
+        runningJokes: [],
+        characterLikes: [],
+        characterDislikes: [],
+        characterHabits: [],
+        characterBoundariesPreferences: [],
+        userFacts: [],
+        userRead: [],
+        userLikes: [],
+        userDislikes: [],
+        lastChatEnded: { state: "Character One close", residue: "Character One residue" },
+        keyMoments: ["Character One moment"],
+        characterIntimatePreferences: [],
+        userIntimatePreferences: [],
+      },
+    });
+    await flushUi();
+    await flushUi();
+
+    expect(DBState.db.characters[0].characterEvolution.currentStateVersion).toBe(2);
+    expect(DBState.db.characters[0].characterEvolution.lastProcessedChatId).toBe("chat-1");
+    expect(DBState.db.characters[0].chats).toHaveLength(2);
+    expect(DBState.db.characters[0].chats[0]?.id).toBe("chat-2");
+    expect(DBState.db.characters[1].characterEvolution.currentStateVersion).toBe(0);
+    expect(DBState.db.characters[1].chats).toHaveLength(1);
   });
 });

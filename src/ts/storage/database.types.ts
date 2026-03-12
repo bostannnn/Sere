@@ -4,12 +4,11 @@ import type { NAISettings } from '../process/models/nai';
 import type { ColorScheme } from '../gui/colorscheme';
 import type { PromptItem, PromptSettings } from '../process/prompt';
 import type { OobaChatCompletionRequestParams } from '../model/ooba';
-import type { HypaV3Settings, HypaV3Preset, SerializableHypaV3Data } from '../process/memory/hypav3';
+import type { MemorySettings, MemoryPreset, SerializableMemoryData } from '../process/memory/memory';
 import type { OnnxModelFiles } from '../process/transformers';
 import type { RisuModule } from '../process/modules';
-import type { SerializableHypaV2Data } from '../process/memory/hypav2';
 import type { LLMFlags, LLMFormat, LLMTokenizer } from '../model/modellist';
-import type { HypaModel } from '../process/memory/hypamemory';
+import type { EmbeddingModel } from '../process/memory/embeddings';
 import type { Hotkey } from '../defaulthotkeys';
 import type { OpenAIChat } from '../process/index.svelte';
 
@@ -25,19 +24,16 @@ export interface DynamicOutput {
 
 export interface Database{
     characters: (character|groupChat)[],
+    characterEvolutionDefaults?: CharacterEvolutionDefaults
     apiType: string
     openAIKey: string
     proxyKey:string
-    mainPrompt: string
-    jailbreak: string
-    globalNote:string
     temperature: number
     askRemoval:boolean
     maxContext: number
     maxResponse: number
     frequencyPenalty: number
     PresensePenalty: number
-    formatingOrder: FormatingOrderItem[]
     aiModel: string
     loreBookDepth: number
     loreBookToken: number,
@@ -47,19 +43,14 @@ export interface Database{
         data:loreBook[]
     }[]
     loreBookPage: number
-    supaMemoryPrompt: string
     username: string
     userIcon: string
     userNote: string
-    additionalPrompt: string
-    descriptionPrefix: string
     forceReplaceUrl: string
     language: string
     translator: string
     zoomsize:number
     customBackground:string
-    textgenWebUIStreamURL:string
-    textgenWebUIBlockingURL:string
     autoTranslate: boolean
     fullScreen:boolean
     playMessage:boolean
@@ -73,7 +64,6 @@ export interface Database{
     botPresets:botPreset[]
     botPresetsId:number
     ttsAutoSpeech?:boolean
-    promptPreprocess:boolean
     bias: [string, number][]
     swipe:boolean
     instantRemove:boolean
@@ -97,15 +87,12 @@ export interface Database{
     showMemoryLimit:boolean
     roundIcons:boolean
     useStreaming:boolean
-    supaMemoryKey:string
-    hypaMemoryKey:string
-    supaModelType:string
+    memoryApiKey:string
     textScreenColor?:string
     textBorder?:boolean
     textScreenRounded?:boolean
     textScreenBorder?:string
     characterOrder:(string|folder)[]
-    hordeConfig:hordeConfig,
     novelai:{
         token:string,
         model:string
@@ -122,19 +109,13 @@ export interface Database{
     autoSuggestClean:boolean
     claudeAPIKey:string,
     useChatCopy:boolean,
-    novellistAPI:string,
     useAutoTranslateInput:boolean
     imageCompression:boolean
     classicMaxWidth: boolean,
     useChatSticker:boolean,
     useAdditionalAssetsPreview:boolean,
     usePlainFetch:boolean
-    hypaMemory:boolean
-    hypav2:boolean
-    memoryAlgorithmType:string // To enable new memory module/algorithms 
     proxyRequestModel:string
-    ooba:OobaSettings
-    ainconfig: AINsettings
     personaPrompt:string
     openrouterRequestModel:string
     openrouterSubRequestModel:string
@@ -156,11 +137,10 @@ export interface Database{
     NAIsettings:NAISettings
     colorScheme:ColorScheme
     colorSchemeName:string
-    promptTemplate?:PromptItem[]
-    hypaModel:HypaModel
+    promptTemplate:PromptItem[]
+    embeddingModel:EmbeddingModel
     saveTime?:number
-    mancerHeader:string
-    emotionProcesser:'submodel'|HypaModel,
+    emotionProcesser:'submodel'|EmbeddingModel,
     showMenuChatList?:boolean,
     translatorType:'google'|'deepl'|'none'|'llm'|'deeplX'|'bergamot',
     translatorInputLanguage?:string
@@ -193,7 +173,6 @@ export interface Database{
         accessToken: string
         projectId: string
     }
-    mistralKey?:string
     chainOfThought?:boolean
     genTime:number
     promptSettings: PromptSettings
@@ -202,9 +181,7 @@ export interface Database{
     repetition_penalty:number
     min_p:number
     top_a:number
-    claudeAws:boolean
     lastPatchNoteCheckVersion?:string,
-    removePunctuationHypa?:boolean
     memoryLimitThickness?:number
     modules: RisuModule[]
     enabledModules: string[]
@@ -214,7 +191,6 @@ export interface Database{
     heightMode:string
     noWaitForTranslate:boolean
     antiClaudeOverload:boolean
-    maxSupaChunkSize:number
     ollamaURL:string
     ollamaModel:string
     autoContinueChat:boolean
@@ -229,9 +205,6 @@ export interface Database{
         ignore: string[]
     }
     useInstructPrompt:boolean
-    hanuraiTokens:number
-    hanuraiSplit:boolean
-    hanuraiEnable:boolean
     textAreaSize:number
     sideBarSize:number
     textAreaTextSize:number
@@ -241,9 +214,6 @@ export interface Database{
     customPromptTemplateToggle:string
     globalChatVariables:{[key:string]:string}
     templateDefaultVariables:string
-    hypaAllocatedTokens:number
-    hypaChunkSize:number
-    cohereAPIKey:string
     dallEQuality:string
     font: string
     customFont: string
@@ -284,11 +254,6 @@ export interface Database{
     customAPIFormat:LLMFormat
     systemContentReplacement:string
     systemRoleReplacement:'user'|'assistant'
-    vertexPrivateKey: string
-    vertexClientEmail: string
-    vertexAccessToken: string
-    vertexAccessTokenExpires: number
-    vertexRegion: string
     seperateParametersEnabled:boolean
     seperateParameters:{
         memory: SeparateParameters,
@@ -310,14 +275,13 @@ export interface Database{
     presetRegex: customscript[]
     banCharacterset:string[]
     showPromptComparison:boolean
-    hypaV3:boolean
-    hypaV3Settings: HypaV3Settings // legacy
-    hypaV3Presets: HypaV3Preset[]
-    hypaV3PresetId: number
+    memoryEnabled?:boolean
+    memorySettings?: MemorySettings
+    memoryPresets?: MemoryPreset[]
+    memoryPresetId?: number
     OaiCompAPIKeys: {[key:string]:string}
     inlayErrorResponse:boolean
     globalRagSettings: RagSettings
-    removedModelMigrationNotice: string[]
     reasoningEffort:number
     bulkEnabling:boolean
     showTranslationLoading: boolean
@@ -327,7 +291,7 @@ export interface Database{
     useExperimentalGoogleTranslator:boolean
     thinkingTokens: number
     antiServerOverloads: boolean
-    hypaCustomSettings: {
+    customEmbeddingSettings: {
         url: string,
         key: string,
         model: string,       
@@ -407,13 +371,10 @@ export interface Database{
     autoScrollToNewMessage?: boolean
     alwaysScrollToNewMessage?: boolean
     newMessageButtonStyle?: string
-    echoMessage?:string
-    echoDelay?:number
     createFolderOnBranch?:boolean
-    hypaV3Debug?:{
+    memoryDebug?:{
         timestamp:number
         model:string
-        isResummarize:boolean
         prompt:string
         input:string
         formatted:{role:string, content:string}[]
@@ -486,9 +447,134 @@ export interface loreBook{
     folder?:string
 }
 
-export interface HypaV3PromptOverride {
+export interface MemoryPromptOverride {
     summarizationPrompt?: string
-    reSummarizationPrompt?: string
+}
+
+export type CharacterEvolutionConfidence = 'suspected' | 'likely' | 'confirmed'
+export type CharacterEvolutionStatus = 'active' | 'archived' | 'corrected'
+export type CharacterEvolutionSectionKind = 'list' | 'string' | 'object'
+export type CharacterEvolutionSectionKey =
+    | 'relationship'
+    | 'activeThreads'
+    | 'runningJokes'
+    | 'characterLikes'
+    | 'characterDislikes'
+    | 'characterHabits'
+    | 'characterBoundariesPreferences'
+    | 'userFacts'
+    | 'userRead'
+    | 'userLikes'
+    | 'userDislikes'
+    | 'lastChatEnded'
+    | 'keyMoments'
+    | 'characterIntimatePreferences'
+    | 'userIntimatePreferences'
+
+export interface CharacterEvolutionItem {
+    value: string
+    confidence?: CharacterEvolutionConfidence
+    note?: string
+    status?: CharacterEvolutionStatus
+    sourceChatId?: string
+    updatedAt?: number
+}
+
+export interface CharacterEvolutionRelationshipState {
+    trustLevel: string
+    dynamic: string
+}
+
+export interface CharacterEvolutionLastChatEndedState {
+    state: string
+    residue: string
+}
+
+export interface CharacterEvolutionState {
+    relationship: CharacterEvolutionRelationshipState
+    activeThreads: string[]
+    runningJokes: string[]
+    characterLikes: CharacterEvolutionItem[]
+    characterDislikes: CharacterEvolutionItem[]
+    characterHabits: CharacterEvolutionItem[]
+    characterBoundariesPreferences: CharacterEvolutionItem[]
+    userFacts: CharacterEvolutionItem[]
+    userRead: string[]
+    userLikes: CharacterEvolutionItem[]
+    userDislikes: CharacterEvolutionItem[]
+    lastChatEnded: CharacterEvolutionLastChatEndedState
+    keyMoments: string[]
+    characterIntimatePreferences: CharacterEvolutionItem[]
+    userIntimatePreferences: CharacterEvolutionItem[]
+}
+
+export interface CharacterEvolutionSectionConfig {
+    key: CharacterEvolutionSectionKey
+    label: string
+    enabled: boolean
+    includeInPrompt: boolean
+    instruction: string
+    kind: CharacterEvolutionSectionKind
+    sensitive?: boolean
+}
+
+export interface CharacterEvolutionPrivacySettings {
+    allowCharacterIntimatePreferences: boolean
+    allowUserIntimatePreferences: boolean
+}
+
+export interface CharacterEvolutionChange {
+    sectionKey: CharacterEvolutionSectionKey
+    summary: string
+    evidence: string[]
+}
+
+export interface CharacterEvolutionVersionMeta {
+    version: number
+    chatId: string | null
+    acceptedAt: number
+}
+
+export interface CharacterEvolutionPendingProposal {
+    proposalId: string
+    sourceChatId: string
+    proposedState: CharacterEvolutionState
+    changes: CharacterEvolutionChange[]
+    createdAt: number
+}
+
+export interface CharacterEvolutionVersionFile {
+    version: number
+    chatId: string | null
+    acceptedAt: number
+    state: CharacterEvolutionState
+    sectionConfigs?: CharacterEvolutionSectionConfig[]
+    privacy?: CharacterEvolutionPrivacySettings
+}
+
+export interface CharacterEvolutionSettings {
+    enabled: boolean
+    useGlobalDefaults: boolean
+    extractionProvider: string
+    extractionModel: string
+    extractionMaxTokens: number
+    extractionPrompt: string
+    sectionConfigs: CharacterEvolutionSectionConfig[]
+    privacy: CharacterEvolutionPrivacySettings
+    currentStateVersion: number
+    currentState: CharacterEvolutionState
+    pendingProposal?: CharacterEvolutionPendingProposal | null
+    lastProcessedChatId?: string | null
+    stateVersions: CharacterEvolutionVersionMeta[]
+}
+
+export interface CharacterEvolutionDefaults {
+    extractionProvider: string
+    extractionModel: string
+    extractionMaxTokens: number
+    extractionPrompt: string
+    sectionConfigs: CharacterEvolutionSectionConfig[]
+    privacy: CharacterEvolutionPrivacySettings
 }
 
 export interface character{
@@ -581,7 +667,7 @@ export interface character{
         normalize:boolean,
 
     }
-    supaMemory?:boolean
+    memoryEnabled?:boolean
     additionalAssets?:[string, string, string][]
     ttsReadOnlyQuoted?:boolean
     replaceGlobalNote:string
@@ -628,9 +714,10 @@ export interface character{
     prebuiltAssetCommand?:boolean
     prebuiltAssetStyle?:string
     prebuiltAssetExclude?:string[]
-    hypaV3PromptOverride?: HypaV3PromptOverride
+    memoryPromptOverride?: MemoryPromptOverride
     modules?:string[]
     gameState?: Record<string, any>
+    characterEvolution?: CharacterEvolutionSettings
 }
 
 
@@ -674,7 +761,7 @@ export interface groupChat{
     firstMsgIndex?:number,
     loreSettings?:loreSettings
     ragSettings?: RagSettings
-    supaMemory?:boolean
+    memoryEnabled?:boolean
     ttsMode?:string
     suggestMessages?:string[]
     orderByOrder?:boolean
@@ -717,39 +804,30 @@ export interface groupChat{
     prebuiltAssetCommand?:boolean
     prebuiltAssetStyle?:string
     prebuiltAssetExclude?:string[]
-    hypaV3PromptOverride?: HypaV3PromptOverride
+    memoryPromptOverride?: MemoryPromptOverride
     modules?:string[]
     gameState?: Record<string, any>
+    characterEvolution?: CharacterEvolutionSettings
 }
 
 export interface botPreset{
     name?:string
     apiType?: string
     openAIKey?: string
-    mainPrompt: string
-    jailbreak: string
-    globalNote:string
     temperature: number
     maxContext: number
     maxResponse: number
     frequencyPenalty: number
     PresensePenalty: number
-    formatingOrder: FormatingOrderItem[]
     aiModel?: string
     subModel?:string
-    removedModelMigrationNotice?: string[]
-    textgenWebUIStreamURL?:string
-    textgenWebUIBlockingURL?:string
     forceReplaceUrl?:string
     forceReplaceUrl2?:string
-    promptPreprocess: boolean,
     bias: [string, number][]
     proxyRequestModel?:string
     openrouterRequestModel?:string
     openrouterSubRequestModel?:string
     proxyKey?:string
-    ooba: OobaSettings
-    ainconfig: AINsettings
     koboldURL?: string
     NAISettings?: NAISettings
     autoSuggestPrompt?: string
@@ -823,12 +901,6 @@ export interface botPreset{
 }
 
 
-interface hordeConfig{
-    apiKey:string
-    model:string
-    softPrompt:string
-}
-
 export interface folder{
     name:string
     data:string[]
@@ -878,8 +950,6 @@ export interface ComfyCommanderState {
     templates: ComfyCommanderTemplate[]
 }
 
-export type FormatingOrderItem = 'main'|'jailbreak'|'chats'|'lorebook'|'globalNote'|'authorNote'|'lastChat'|'description'|'postEverything'|'personaPrompt'|'rulebookRag'
-
 export interface Chat{
     message: Message[]
     note:string
@@ -887,9 +957,6 @@ export interface Chat{
     localLore: loreBook[]
     backgroundMode?: 'inherit' | 'default' | 'custom'
     backgroundImage?: string
-    supaMemoryData?:string
-    hypaV2Data?:SerializableHypaV2Data
-    lastMemory?:string
     suggestMessages?:string[]
     isStreaming?:boolean
     scriptstate?:{[key:string]:string|number|boolean}
@@ -897,7 +964,7 @@ export interface Chat{
     id?:string
     bindedPersona?:string
     fmIndex?:number
-    hypaV3Data?:SerializableHypaV3Data
+    memoryData?:SerializableMemoryData
     folderId?:string
     lastDate?:number
     bookmarks?: string[];
@@ -964,50 +1031,4 @@ export interface PromptDiffPrefs {
     isGrouped: boolean
     showOnlyChanges: boolean
     contextRadius: number
-}
-
-export interface AINsettings{
-    top_p: number,
-    rep_pen: number,
-    top_a: number,
-    rep_pen_slope:number,
-    rep_pen_range: number,
-    typical_p:number
-    badwords:string
-    stoptokens:string
-    top_k:number
-}
-
-export interface OobaSettings{
-    max_new_tokens: number,
-    do_sample: boolean,
-    temperature: number,
-    top_p: number,
-    typical_p: number,
-    repetition_penalty: number,
-    encoder_repetition_penalty: number,
-    top_k: number,
-    min_length: number,
-    no_repeat_ngram_size: number,
-    num_beams: number,
-    penalty_alpha: number,
-    length_penalty: number,
-    early_stopping: boolean,
-    seed: number,
-    add_bos_token: boolean,
-    truncation_length: number,
-    ban_eos_token: boolean,
-    skip_special_tokens: boolean,
-    top_a: number,
-    tfs: number,
-    epsilon_cutoff: number,
-    eta_cutoff: number,
-    formating:{
-        header:string,
-        systemPrefix:string,
-        userPrefix:string,
-        assistantPrefix:string
-        seperator:string
-        useName:boolean
-    }
 }

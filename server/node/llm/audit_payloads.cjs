@@ -15,7 +15,7 @@ function createAuditPayloadBuilders(arg = {}) {
             return value === '1' || value === 'true' || value === 'yes' || value === 'on';
         });
 
-    const HYPAV3_AUDIT_SUMMARY_PREVIEW_CHARS = 1200;
+    const MEMORY_AUDIT_SUMMARY_PREVIEW_CHARS = 1200;
     const includeFullGenerateRequestInAudit = parseBooleanEnv('RISU_AUDIT_INCLUDE_FULL_GENERATE_REQUEST');
 
     function buildMemoryPromptTrace(promptMessages, traceTitle = 'Memory Prompt') {
@@ -97,30 +97,28 @@ function createAuditPayloadBuilders(arg = {}) {
         return requestBody;
     }
 
-    function truncateAuditText(text, maxChars = HYPAV3_AUDIT_SUMMARY_PREVIEW_CHARS) {
+    function truncateAuditText(text, maxChars = MEMORY_AUDIT_SUMMARY_PREVIEW_CHARS) {
         const normalized = toStringOrEmpty(text);
         if (!normalized) return '';
         if (normalized.length <= maxChars) return normalized;
         return `${normalized.slice(0, maxChars)}\n...[truncated ${normalized.length - maxChars} chars]`;
     }
 
-    function buildHypaV3AuditRequestPayload(endpoint, body) {
+    function buildMemoryAuditRequestPayload(endpoint, body) {
         const payload = (body && typeof body === 'object' && !Array.isArray(body)) ? body : {};
         const promptOverride = (payload.promptOverride && typeof payload.promptOverride === 'object' && !Array.isArray(payload.promptOverride))
             ? payload.promptOverride
             : null;
         const summarizationPrompt = toStringOrEmpty(promptOverride?.summarizationPrompt);
-        const reSummarizationPrompt = toStringOrEmpty(promptOverride?.reSummarizationPrompt);
         const promptOverrideMeta = {
             hasPromptOverride: !!promptOverride,
             summarizationPromptChars: summarizationPrompt.length,
-            reSummarizationPromptChars: reSummarizationPrompt.length,
         };
         const base = {
             characterId: toStringOrEmpty(payload.characterId) || null,
             chatId: toStringOrEmpty(payload.chatId) || null,
         };
-        if (endpoint === 'hypav3_manual_summarize' || endpoint === 'hypav3_manual_summarize_trace') {
+        if (endpoint === 'memory_manual_summarize' || endpoint === 'memory_manual_summarize_trace') {
             return {
                 ...base,
                 start: Number.isFinite(Number(payload.start)) ? Number(payload.start) : null,
@@ -128,33 +126,10 @@ function createAuditPayloadBuilders(arg = {}) {
                 ...promptOverrideMeta,
             };
         }
-        if (endpoint === 'hypav3_resummarize_preview') {
-            const summaryIndices = Array.isArray(payload.summaryIndices)
-                ? payload.summaryIndices.map((v) => Number(v)).filter((v) => Number.isInteger(v) && v >= 0)
-                : [];
-            return {
-                ...base,
-                summaryIndices,
-                summaryIndicesCount: summaryIndices.length,
-            };
-        }
-        if (endpoint === 'hypav3_resummarize_apply') {
-            const summaryIndices = Array.isArray(payload.summaryIndices)
-                ? payload.summaryIndices.map((v) => Number(v)).filter((v) => Number.isInteger(v) && v >= 0)
-                : [];
-            const summary = toStringOrEmpty(payload.summary);
-            return {
-                ...base,
-                summaryIndices,
-                summaryIndicesCount: summaryIndices.length,
-                summaryChars: summary.length,
-                mergedChatMemosCount: Array.isArray(payload.mergedChatMemos) ? payload.mergedChatMemos.length : 0,
-            };
-        }
         return base;
     }
 
-    function buildHypaV3AuditResponsePayload(endpoint, payload) {
+    function buildMemoryAuditResponsePayload(endpoint, payload) {
         const body = (payload && typeof payload === 'object' && !Array.isArray(payload)) ? payload : {};
         const summary = toStringOrEmpty(body.summary);
         const base = {
@@ -163,28 +138,19 @@ function createAuditPayloadBuilders(arg = {}) {
             summaryChars: summary.length,
             summaryPreview: truncateAuditText(summary),
         };
-        if (endpoint === 'hypav3_manual_summarize' || endpoint === 'hypav3_resummarize_apply') {
-            const summariesCount = Array.isArray(body?.hypaV3Data?.summaries) ? body.hypaV3Data.summaries.length : 0;
+        if (endpoint === 'memory_manual_summarize') {
+            const memoryData = body?.memoryData;
+            const summariesCount = Array.isArray(memoryData?.summaries) ? memoryData.summaries.length : 0;
             return {
                 ...base,
                 summariesCount,
-            };
-        }
-        if (endpoint === 'hypav3_resummarize_preview') {
-            const selectedIndices = Array.isArray(body.selectedIndices) ? body.selectedIndices : [];
-            const mergedChatMemos = Array.isArray(body.mergedChatMemos) ? body.mergedChatMemos : [];
-            return {
-                ...base,
-                selectedIndices,
-                selectedIndicesCount: selectedIndices.length,
-                mergedChatMemosCount: mergedChatMemos.length,
             };
         }
         return base;
     }
 
     function buildMemoryTraceResponsePayload(payload = {}) {
-        const endpoint = toStringOrEmpty(payload.endpoint) || 'hypav3_memory_trace';
+        const endpoint = toStringOrEmpty(payload.endpoint) || 'memory_trace';
         const requestId = toStringOrEmpty(payload.requestId) || null;
         const promptMessages = Array.isArray(payload.promptMessages) ? payload.promptMessages : [];
         const traceTitle = toStringOrEmpty(payload.traceTitle) || 'Memory Prompt';
@@ -207,8 +173,8 @@ function createAuditPayloadBuilders(arg = {}) {
         buildGenerateAuditRequestPayload,
         buildExecutionAuditRequest,
         truncateAuditText,
-        buildHypaV3AuditRequestPayload,
-        buildHypaV3AuditResponsePayload,
+        buildMemoryAuditRequestPayload,
+        buildMemoryAuditResponsePayload,
         buildMemoryTraceResponsePayload,
     };
 }

@@ -4,86 +4,30 @@ import { LLMFormat } from '../model/modellist';
 import { decodeRPack, encodeRPack } from '../rpack/rpack_js';
 import { encode as encodeMsgpack, decode as decodeMsgpack } from 'msgpackr/index-no-eval';
 import * as fflate from 'fflate';
-import { defaultJailbreak, defaultMainPrompt } from './defaultPrompts';
-import { migrateRemovedProviderSelections } from './database.normalizers';
+import { cloneDefaultPromptTemplate, normalizePromptTemplate } from './defaultPrompts';
+import { stripRemovedProviderFields } from './database.normalizers';
 import type { PromptItem, PromptItemPlain } from '../process/prompt';
-import type { AINsettings, Database, botPreset, OobaSettings } from './database.types';
-
-export const REMOVED_PROVIDER_MIGRATION_NOTICE = 'Legacy removed providers were migrated to OpenRouter. Review Bot Settings and re-save any affected presets.';
-
-export const defaultAIN:AINsettings = {
-  top_p: 0.7,
-  rep_pen: 1.0625,
-  top_a: 0.08,
-  rep_pen_slope: 1.7,
-  rep_pen_range: 1024,
-  typical_p: 1.0,
-  badwords: '',
-  stoptokens: '',
-  top_k: 140,
-};
-
-export const defaultOoba:OobaSettings = {
-  max_new_tokens: 180,
-  do_sample: true,
-  temperature: 0.7,
-  top_p: 0.9,
-  typical_p: 1,
-  repetition_penalty: 1.15,
-  encoder_repetition_penalty: 1,
-  top_k: 20,
-  min_length: 0,
-  no_repeat_ngram_size: 0,
-  num_beams: 1,
-  penalty_alpha: 0,
-  length_penalty: 1,
-  early_stopping: false,
-  seed: -1,
-  add_bos_token: true,
-  truncation_length: 4096,
-  ban_eos_token: false,
-  skip_special_tokens: true,
-  top_a: 0,
-  tfs: 1,
-  epsilon_cutoff: 0,
-  eta_cutoff: 0,
-  formating: {
-    header: 'Below is an instruction that describes a task. Write a response that appropriately completes the request.',
-    systemPrefix: '### Instruction:',
-    userPrefix: '### Input:',
-    assistantPrefix: '### Response:',
-    seperator: '',
-    useName: false,
-  },
-};
+import type { Database, botPreset } from './database.types';
 
 export const presetTemplate:botPreset = {
   name: 'New Preset',
   apiType: 'gemini-3-flash-preview',
   openAIKey: '',
-  mainPrompt: defaultMainPrompt,
-  jailbreak: defaultJailbreak,
-  globalNote: '',
   temperature: 80,
   maxContext: 4000,
   maxResponse: 300,
   frequencyPenalty: 70,
   PresensePenalty: 70,
-  formatingOrder: ['main', 'description', 'personaPrompt', 'chats', 'lastChat', 'jailbreak', 'lorebook', 'globalNote', 'authorNote'],
   aiModel: 'gemini-3-flash-preview',
   subModel: 'gemini-3-flash-preview',
-  textgenWebUIStreamURL: '',
-  textgenWebUIBlockingURL: '',
   forceReplaceUrl: '',
   forceReplaceUrl2: '',
-  promptPreprocess: false,
   proxyKey: '',
   bias: [],
-  ooba: safeStructuredClone(defaultOoba),
-  ainconfig: safeStructuredClone(defaultAIN),
   reverseProxyOobaArgs: {
     mode: 'instruct',
   },
+  promptTemplate: cloneDefaultPromptTemplate(),
   top_p: 1,
   useInstructPrompt: false,
   verbosity: 1,
@@ -161,31 +105,22 @@ function buildSavedPreset(db: Database): botPreset {
     name: presets[db.botPresetsId]?.name ?? 'Preset',
     apiType: db.apiType,
     openAIKey: db.openAIKey,
-    mainPrompt: db.mainPrompt,
-    jailbreak: db.jailbreak,
-    globalNote: db.globalNote,
     temperature: db.temperature,
     maxContext: db.maxContext,
     maxResponse: db.maxResponse,
     frequencyPenalty: db.frequencyPenalty,
     PresensePenalty: db.PresensePenalty,
-    formatingOrder: db.formatingOrder,
     aiModel: db.aiModel,
     subModel: db.subModel,
-    textgenWebUIStreamURL: db.textgenWebUIStreamURL,
-    textgenWebUIBlockingURL: db.textgenWebUIBlockingURL,
     forceReplaceUrl: db.forceReplaceUrl,
-    promptPreprocess: db.promptPreprocess,
     bias: db.bias,
     koboldURL: db.koboldURL,
     proxyKey: db.proxyKey,
-    ooba: safeStructuredClone(db.ooba),
-    ainconfig: safeStructuredClone(db.ainconfig),
     proxyRequestModel: db.proxyRequestModel,
     openrouterRequestModel: db.openrouterRequestModel,
     openrouterSubRequestModel: db.openrouterSubRequestModel,
     NAISettings: safeStructuredClone(db.NAIsettings),
-    promptTemplate: db.promptTemplate ?? null,
+    promptTemplate: safeStructuredClone(db.promptTemplate),
     NAIadventure: db.NAIadventure ?? false,
     NAIappendName: db.NAIappendName ?? false,
     localStopStrings: db.localStopStrings,
@@ -249,12 +184,11 @@ function appendPreset(db: Database, preset: botPreset) {
 
 function sanitizePresetForExport(preset: botPreset): botPreset {
   const sanitized = safeStructuredClone(preset);
+  stripRemovedProviderFields(sanitized as unknown as Record<string, unknown>);
   sanitized.openAIKey = '';
   sanitized.forceReplaceUrl = '';
   sanitized.forceReplaceUrl2 = '';
   sanitized.proxyKey = '';
-  sanitized.textgenWebUIStreamURL = '';
-  sanitized.textgenWebUIBlockingURL = '';
   return sanitized;
 }
 
@@ -345,27 +279,19 @@ export function copyPresetInDatabase(db: Database, id: number) {
 }
 
 export function setPresetOnDatabase(db: Database, newPres: botPreset) {
+  stripRemovedProviderFields(newPres as unknown as Record<string, unknown>);
   db.apiType = newPres.apiType ?? db.apiType;
-  db.mainPrompt = newPres.mainPrompt ?? db.mainPrompt;
-  db.jailbreak = newPres.jailbreak ?? db.jailbreak;
-  db.globalNote = newPres.globalNote ?? db.globalNote;
   db.temperature = newPres.temperature ?? db.temperature;
   db.maxContext = newPres.maxContext ?? db.maxContext;
   db.maxResponse = newPres.maxResponse ?? db.maxResponse;
   db.frequencyPenalty = newPres.frequencyPenalty ?? db.frequencyPenalty;
   db.PresensePenalty = newPres.PresensePenalty ?? db.PresensePenalty;
-  db.formatingOrder = newPres.formatingOrder ?? db.formatingOrder;
   db.aiModel = newPres.aiModel ?? db.aiModel;
   db.subModel = newPres.subModel ?? db.subModel;
-  db.textgenWebUIStreamURL = newPres.textgenWebUIStreamURL ?? db.textgenWebUIStreamURL;
-  db.textgenWebUIBlockingURL = newPres.textgenWebUIBlockingURL ?? db.textgenWebUIBlockingURL;
   db.forceReplaceUrl = newPres.forceReplaceUrl ?? db.forceReplaceUrl;
-  db.promptPreprocess = newPres.promptPreprocess ?? db.promptPreprocess;
   db.bias = newPres.bias ?? db.bias;
   db.koboldURL = newPres.koboldURL ?? db.koboldURL;
   db.proxyKey = newPres.proxyKey ?? db.proxyKey;
-  db.ooba = safeStructuredClone(newPres.ooba ?? db.ooba);
-  db.ainconfig = safeStructuredClone(newPres.ainconfig ?? db.ainconfig);
   db.openrouterRequestModel = newPres.openrouterRequestModel ?? db.openrouterRequestModel;
   db.openrouterSubRequestModel = newPres.openrouterSubRequestModel ?? db.openrouterSubRequestModel;
   db.proxyRequestModel = newPres.proxyRequestModel ?? db.proxyRequestModel;
@@ -373,7 +299,7 @@ export function setPresetOnDatabase(db: Database, newPres: botPreset) {
   db.autoSuggestPrompt = newPres.autoSuggestPrompt ?? db.autoSuggestPrompt;
   db.autoSuggestPrefix = newPres.autoSuggestPrefix ?? db.autoSuggestPrefix;
   db.autoSuggestClean = newPres.autoSuggestClean ?? db.autoSuggestClean;
-  db.promptTemplate = newPres.promptTemplate;
+  db.promptTemplate = normalizePromptTemplate(newPres.promptTemplate);
   db.NAIadventure = newPres.NAIadventure;
   db.NAIappendName = newPres.NAIappendName;
   db.NAIsettings.cfg_scale ??= 1;
@@ -424,21 +350,19 @@ export function setPresetOnDatabase(db: Database, newPres: botPreset) {
   db.outputImageModal = newPres.outputImageModal ?? false;
   if (!db.doNotChangeSeperateModels) {
     db.seperateModelsForAxModels = newPres.seperateModelsForAxModels ?? false;
-    db.seperateModels = safeStructuredClone(newPres.seperateModels) ?? { memory: '', emotion: '', translate: '', otherAx: '' };
+    db.seperateModels = newPres.seperateModels
+      ? safeStructuredClone(newPres.seperateModels)
+      : { memory: '', emotion: '', translate: '', otherAx: '' };
   }
   if (!db.doNotChangeFallbackModels) {
-    db.fallbackModels = safeStructuredClone(newPres.fallbackModels) ?? { memory: [], emotion: [], translate: [], otherAx: [], model: [] };
+    db.fallbackModels = newPres.fallbackModels
+      ? safeStructuredClone(newPres.fallbackModels)
+      : { memory: [], emotion: [], translate: [], otherAx: [], model: [] };
     db.fallbackWhenBlankResponse = newPres.fallbackWhenBlankResponse ?? false;
   }
   db.modelTools = safeStructuredClone(newPres.modelTools ?? []);
   db.verbosity = newPres.verbosity ?? 1;
   db.dynamicOutput = newPres.dynamicOutput;
-
-  const removedModelMigrationNotices = new Set(db.removedModelMigrationNotice ?? []);
-  if (migrateRemovedProviderSelections(db)) {
-    removedModelMigrationNotices.add(REMOVED_PROVIDER_MIGRATION_NOTICE);
-  }
-  db.removedModelMigrationNotice = [...removedModelMigrationNotices];
 
   return db;
 }
@@ -550,6 +474,7 @@ export function applyImportedPresetToDatabase(db: Database, importedPreset: unkn
 
   const generic = preset as unknown as botPreset;
   generic.name ??= 'Imported';
+  stripRemovedProviderFields(generic as unknown as Record<string, unknown>);
   if (!Array.isArray(db.botPresets)) {
     db.botPresets = [];
   }

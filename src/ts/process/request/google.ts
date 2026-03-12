@@ -2,7 +2,7 @@
 
 import { addFetchLog, fetchNative, globalFetch, textifyReadableStream } from "src/ts/globalApi.svelte"
 import { LLMFlags, LLMFormat } from "src/ts/model/modellist"
-import { getDatabase, setDatabase } from "src/ts/storage/database.svelte"
+import { getDatabase } from "src/ts/storage/database.svelte"
 import { simplifySchema } from "src/ts/util"
 import { v4 } from "uuid"
 import { setInlayAsset, writeInlayImage } from "../files/inlays"
@@ -200,6 +200,8 @@ async function requestGoogleServerExecution(arg: RequestDataArgumentExtended, bo
                 const decoder = new TextDecoder();
                 let parserData = '';
                 let acc = '';
+                let sawDoneEvent = false;
+                let sawErrorEvent = false;
                 while (true) {
                     const { done, value } = await reader.read();
                     if (done) break;
@@ -217,18 +219,27 @@ async function requestGoogleServerExecution(arg: RequestDataArgumentExtended, bo
                                 acc += (parsed.text || '');
                                 controller.enqueue({ "0": acc });
                             } else if (parsed.type === 'done') {
+                                sawDoneEvent = true;
                                 if (parsed.newCharEtag) {
                                     controller.enqueue({ "__newCharEtag": parsed.newCharEtag });
                                 }
                                 controller.close();
                                 return;
                             } else if (parsed.type === 'error' || parsed.type === 'fail') {
+                                sawErrorEvent = true;
                                 controller.enqueue({ "0": `Error: ${parsed.message || parsed.error || 'Server stream failed'}` });
                                 controller.close();
                                 return;
                             }
                         } catch {}
                     }
+                }
+                if (!sawDoneEvent && !sawErrorEvent) {
+                    controller.enqueue({
+                        "__error": "Server stream ended before done event.",
+                        "__errorCode": "UPSTREAM_STREAM_INCOMPLETE",
+                        "__status": "502",
+                    });
                 }
                 controller.close();
             },
@@ -649,127 +660,7 @@ export async function requestGoogleCloudVertex(arg:RequestDataArgumentExtended):
         body.generation_config.mediaResolution = "MEDIA_RESOLUTION_MEDIUM"
     }
 
-    const PROJECT_ID = db.google.projectId
-    const REGION = db.vertexRegion
     googleRequestLog(arg.modelInfo);
-
-    const isVertexGlobalOnlyModel = (modelId: string) => {
-        // As of 2025-12, Gemini 3 preview models are only available on the global endpoint.
-        return /^gemini-3-.*-preview$/.test(modelId)
-    }
-
-    async function generateToken(email:string,key:string){
-        if (!window.crypto || !window.crypto.subtle) {
-            throw new Error("Web Crypto API is not available in this environment. Please ensure you are using HTTPS.");
-        }
-        // Input validation
-        if (!email.includes("gserviceaccount.com")) {
-            throw new Error("Invalid Vertex client email. Must include gserviceaccount.com");
-        }
-        if (!key.includes("-----BEGIN PRIVATE KEY-----") ||
-            !key.includes("-----END PRIVATE KEY-----")) {
-            throw new Error("Invalid Vertex private key. Must include proper key markers.");
-        }
-
-        function str2ab(privateKey:string):ArrayBuffer {
-            const binaryString = atob(privateKey.replace(/-----BEGIN PRIVATE KEY-----|-----END PRIVATE KEY-----|\\n/g, ""));
-            const bytes = new Uint8Array(binaryString.length);
-            for (let i = 0; i < binaryString.length; i++) {
-                bytes[i] = binaryString.charCodeAt(i);
-            }
-            return bytes.buffer;
-        }
-
-        function base64url(source: Uint8Array | ArrayBuffer): string {
-            const bytes = source instanceof ArrayBuffer ? new Uint8Array(source) : source;
-            const encodedSource = btoa(String.fromCharCode.apply(null, [...bytes]))
-                .replace(/=+$/, "")
-                .replace(/\+/g, "-")
-                .replace(/\//g, "_");
-            return encodedSource;
-        }
-
-        const time = Math.floor(Date.now() / 1000);
-    
-        const header = {
-            alg: "RS256",
-            typ: "JWT",
-        };
-
-        const claimSet = {
-            iss: email,
-            iat: time,
-            exp: time + 3600,
-            scope: "https://www.googleapis.com/auth/cloud-platform",
-            aud: "https://oauth2.googleapis.com/token",
-        };
-
-        const encodedHeader = base64url(new TextEncoder().encode(JSON.stringify(header)));
-        const encodedClaimSet = base64url(new TextEncoder().encode(JSON.stringify(claimSet)));
-    
-        const cryptokey = await crypto.subtle.importKey(
-            "pkcs8",
-            str2ab(key),
-            {
-                name: "RSASSA-PKCS1-v1_5",
-                hash: { name: "SHA-256" },
-            },
-            false,
-            ["sign"]
-        );
-    
-        const signature = await crypto.subtle.sign(
-            "RSASSA-PKCS1-v1_5",
-            cryptokey,
-            new TextEncoder().encode(`${encodedHeader}.${encodedClaimSet}`)
-        );
-
-        const jwt = `${encodedHeader}.${encodedClaimSet}.${base64url(new Uint8Array(signature))}`;
-
-        const response = await fetch("https://oauth2.googleapis.com/token", {
-            method: "POST",
-            body: `grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Ajwt-bearer&assertion=${jwt}`,
-            headers: {
-                "Content-Type": "application/x-www-form-urlencoded",
-            },
-        });
-
-        if (!response.ok) {
-            let errorText;
-            try {
-                errorText = JSON.stringify(await response.json());
-            } catch {
-                errorText = response.status.toString();
-            }
-            throw new Error(`Failed to refresh google access token: ${errorText}`);
-        }
-
-        const data = await response.json();
-        const token = data.access_token;
-
-        if (!token) {
-            throw new Error("No google access token in the response");
-        }
-
-        const db2 = getDatabase()
-        db2.vertexAccessToken = token
-        db2.vertexAccessTokenExpires = Date.now() + 3500 * 1000
-        setDatabase(db2)
-        return token;
-    }    
-    
-    if(arg.modelInfo.format === LLMFormat.VertexAIGemini){
-        if(db.vertexAccessTokenExpires < Date.now()){
-            if (!db.vertexClientEmail || !db.vertexPrivateKey) {
-                alertError("Vertex AI authentication information is missing or incomplete. Please check your settings.");
-                return { type: 'fail', result: "Vertex AI authentication information is missing or incomplete. Please check your settings." };
-            }
-            headers['Authorization'] = "Bearer " + await generateToken(db.vertexClientEmail, db.vertexPrivateKey)
-        }
-        else{
-            headers['Authorization'] = "Bearer " + db.vertexAccessToken
-        }
-    }
 
     
     if(db.jsonSchemaEnabled || arg.schema){
@@ -794,17 +685,6 @@ export async function requestGoogleCloudVertex(arg:RequestDataArgumentExtended):
         }
         url = u.toString()
     }
-    else if(arg.modelInfo.format === LLMFormat.VertexAIGemini){
-        const endpoint = arg.useStreaming ? 'streamGenerateContent?alt=sse' : 'generateContent'
-
-        // Some models (e.g. Gemini 3 preview) are only available via the global endpoint.
-        const effectiveRegion = isVertexGlobalOnlyModel(arg.modelInfo.internalID) ? 'global' : REGION
-
-        url = effectiveRegion === 'global' ?
-            `https://aiplatform.googleapis.com/v1/projects/${PROJECT_ID}/locations/${effectiveRegion}/publishers/google/models/${arg.modelInfo.internalID}:${endpoint}` :
-            `https://${effectiveRegion}-aiplatform.googleapis.com/v1/projects/${PROJECT_ID}/locations/${effectiveRegion}/publishers/google/models/${arg.modelInfo.internalID}:${endpoint}`
-        
-        }
     else if(arg.modelInfo.format === LLMFormat.GoogleCloud && arg.useStreaming){
         url = `https://generativelanguage.googleapis.com/v1beta/models/${arg.modelInfo.internalID}:streamGenerateContent?key=${apiKey}&alt=sse`
     }
@@ -850,14 +730,6 @@ async function requestGoogle(url:string, body:any, headers:{[key:string]:string}
                 failByServerError: true
             }
         }
-        if(arg.modelInfo.format === LLMFormat.VertexAIGemini){
-            return {
-                type: 'fail',
-                result: originalError,
-                failByServerError: true
-            }
-        }
-
         return requestGoogle(url, body, headers, arg)
     }
 
@@ -874,7 +746,7 @@ async function requestGoogle(url:string, body:any, headers:{[key:string]:string}
         return (thoughts ? `<Thoughts>\n\n${thoughts}\n\n</Thoughts>\n\n` : '') + content
     }
 
-    if((arg.modelInfo.format === LLMFormat.GoogleCloud || arg.modelInfo.format === LLMFormat.VertexAIGemini) && arg.useStreaming){
+    if(arg.modelInfo.format === LLMFormat.GoogleCloud && arg.useStreaming){
         headers['Content-Type'] = 'application/json'
 
         if(arg.previewBody){

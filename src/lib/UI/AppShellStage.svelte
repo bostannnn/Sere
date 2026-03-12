@@ -27,14 +27,13 @@
         shellSearchQuery?: string;
         characterDirectoryShowTrash?: boolean;
         rightSidebarOpen?: boolean;
-        rightSidebarTab?: "chat" | "character" | "memory";
+        rightSidebarTab?: "chat" | "character" | "memory" | "evolution";
         rightSidebarVisible?: boolean;
         librarySidebarOpen?: boolean;
         librarySidebarTab?: "library" | "settings";
         libraryViewMode?: "grid" | "list";
         onLibrarySidebarTabChange?: (tab: "library" | "settings") => void;
         onRegisterLibraryShellActions?: (actions: LibraryShellActions | null) => void;
-        onOpenHome?: () => void;
         isMobileShell?: boolean;
         isMobileChatWorkspace?: boolean;
         mobileChatPanelOpen?: boolean;
@@ -52,7 +51,6 @@
         libraryViewMode = $bindable("grid"),
         onLibrarySidebarTabChange = () => {},
         onRegisterLibraryShellActions = () => {},
-        onOpenHome = () => {},
         isMobileShell = false,
         isMobileChatWorkspace = false,
         mobileChatPanelOpen = $bindable(false),
@@ -112,11 +110,9 @@
                 bind:rightSidebarOpen={librarySidebarOpen}
                 bind:rightSidebarTab={librarySidebarTab}
                 bind:viewMode={libraryViewMode}
-                useShellChrome={true}
                 isMobileShell={isMobileShell}
                 registerShellActions={onRegisterLibraryShellActions}
                 onRightSidebarTabChange={onLibrarySidebarTabChange}
-                onClose={onOpenHome}
             />
         </div>
     {/if}

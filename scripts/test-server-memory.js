@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Integration smoke tests for the HypaV3 memory pipeline.
+ * Integration smoke tests for the memory pipeline.
  * Requires a running server. Creates and cleans up its own test data.
  *
  * Usage:
@@ -9,12 +9,15 @@
  * Environment variables:
  *   RISU_DATA_TEST_URL            — server base URL (default: http://localhost:6001)
  *   RISU_STORAGE_TEST_ALLOW_WRITE — must be "1" to allow write operations
+ *   RISU_SMOKE_ALLOW_LIVE_SETTINGS_REPLACE — set to "1" to allow settings.replace
+ *                                            against the default local server URL
  *   RISU_REQUIRE_LIVE_MODEL       — set to "1" to require manual summarize (live model) assertions
  */
 'use strict';
 
 const baseUrl = process.env.RISU_DATA_TEST_URL || 'http://localhost:6001';
 const ALLOW_WRITE = process.env.RISU_STORAGE_TEST_ALLOW_WRITE === '1';
+const ALLOW_LIVE_SETTINGS_REPLACE = process.env.RISU_SMOKE_ALLOW_LIVE_SETTINGS_REPLACE === '1';
 const REQUIRE_LIVE_MODEL = process.env.RISU_REQUIRE_LIVE_MODEL === '1';
 // Optional auth token (the hashed password, as returned by POST /data/auth/crypto).
 // Required when the server has password auth enabled.
@@ -27,6 +30,18 @@ const characterPromptOverrideA = 'Character-level summarization prompt A';
 const requestPromptOverrideB = 'Request-level summarization prompt B';
 let eventCursor = 0;
 let mutationCounter = 0;
+
+function isDefaultLocalServer(urlString) {
+  try {
+    const parsed = new URL(urlString);
+    const host = parsed.hostname.toLowerCase();
+    const port = parsed.port || (parsed.protocol === 'https:' ? '443' : '80');
+    const isLocalHost = host === 'localhost' || host === '127.0.0.1' || host === '::1';
+    return isLocalHost && port === '6001';
+  } catch {
+    return false;
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -100,9 +115,8 @@ const testCharBody = {
     chaId: testCharId,
     name: 'Test Memory Character',
     supaMemory: true,
-    hypaV3PromptOverride: {
+    memoryPromptOverride: {
       summarizationPrompt: characterPromptOverrideA,
-      reSummarizationPrompt: '',
     },
   },
 };
@@ -120,8 +134,7 @@ const testChatBody = {
       { role: 'user', data: 'It involves building a new feature.', chatId: 'tmsg-4' },
       { role: 'char', data: 'Great, what kind of feature?',        chatId: 'tmsg-5' },
     ],
-    // Two summaries pre-seeded so resummarize-preview can select indices [0,1]
-    hypaV3Data: {
+    memoryData: {
       summaries: [
         { text: 'The user asked for help with their project.', isImportant: false },
         { text: 'The character offered to assist with feature development.', isImportant: true },
@@ -133,14 +146,14 @@ const testChatBody = {
 };
 
 /**
- * Build a settings object that enables HypaV3 with a test preset.
+ * Build a settings object that enables memory with a test preset.
  * Spreads over the original settings so unrelated keys are preserved.
  */
 function makeTestSettings(base, extraPreset = {}) {
   const nextSettings = {
-    hypaV3: true,
-    hypaV3PresetId: 0,
-    hypaV3Presets: [{
+    memoryEnabled: true,
+    memoryPresetId: 0,
+    memoryPresets: [{
       name: 'SmokeTestPreset',
       settings: {
         periodicSummarizationEnabled: true,
@@ -176,6 +189,14 @@ async function main() {
   if (!ALLOW_WRITE) {
     console.error(
       'FAIL test-server-memory: set RISU_STORAGE_TEST_ALLOW_WRITE=1 to allow write operations.'
+    );
+    process.exit(1);
+  }
+
+  if (isDefaultLocalServer(baseUrl) && !ALLOW_LIVE_SETTINGS_REPLACE) {
+    console.error(
+      'FAIL test-server-memory: refusing to run against the default local server because this smoke performs settings.replace and can roll back live settings. ' +
+      'Re-run with RISU_SMOKE_ALLOW_LIVE_SETTINGS_REPLACE=1 only if that is intentional.'
     );
     process.exit(1);
   }
@@ -242,7 +263,7 @@ async function main() {
 
     // ── T1: manual-summarize/trace — non-{{slot}} template → messageCount=2 ──
     {
-      const r = await req('/data/memory/hypav3/manual-summarize/trace', {
+      const r = await req('/data/memory/manual-summarize/trace', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ characterId: testCharId, chatId: testChatId, start: 1, end: 5 }),
@@ -262,7 +283,7 @@ async function main() {
 
     // ── T1A: manual-summarize/trace — request promptOverride wins ────────────
     {
-      const r = await req('/data/memory/hypav3/manual-summarize/trace', {
+      const r = await req('/data/memory/manual-summarize/trace', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
@@ -272,7 +293,6 @@ async function main() {
           end: 5,
           promptOverride: {
             summarizationPrompt: requestPromptOverrideB,
-            reSummarizationPrompt: '',
           },
         }),
       });
@@ -285,7 +305,7 @@ async function main() {
 
     // ── T1B: manual-summarize/trace — blank request override falls back ──────
     {
-      const r = await req('/data/memory/hypav3/manual-summarize/trace', {
+      const r = await req('/data/memory/manual-summarize/trace', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
@@ -295,7 +315,6 @@ async function main() {
           end: 5,
           promptOverride: {
             summarizationPrompt: '',
-            reSummarizationPrompt: '',
           },
         }),
       });
@@ -312,7 +331,7 @@ async function main() {
     {
       const start = 1;
       const end = 3;
-      const r = await req('/data/memory/hypav3/manual-summarize', {
+      const r = await req('/data/memory/manual-summarize', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
@@ -322,7 +341,6 @@ async function main() {
           end,
           promptOverride: {
             summarizationPrompt: requestPromptOverrideB,
-            reSummarizationPrompt: '',
           },
         }),
       });
@@ -338,7 +356,7 @@ async function main() {
         assert(Array.isArray(r.json?.debug?.formatted) && r.json.debug.formatted.length > 0, 'T1C: debug.formatted should be non-empty array');
         console.log('  T1C PASS: manual-summarize returns scoped debug payload with resolved prompt');
       } else {
-        const isModelUnavailable = r.res.status === 400 && r.json?.error === 'HYPAV3_MODEL_UNAVAILABLE';
+        const isModelUnavailable = r.res.status === 400 && r.json?.error === 'MEMORY_MODEL_UNAVAILABLE';
         if (isModelUnavailable && !REQUIRE_LIVE_MODEL) {
           console.log('  T1C SKIP: manual-summarize requires live model/provider (set RISU_REQUIRE_LIVE_MODEL=1 to enforce)');
         } else {
@@ -348,10 +366,10 @@ async function main() {
     }
 
     // ── T2: periodic-summarize/trace — shouldRun=true ─────────────────────────
-    // Conditions: supaMemory=true, hypaV3=true, periodicSummarizationEnabled=true,
+    // Conditions: supaMemory=true, memoryEnabled=true, periodicSummarizationEnabled=true,
     //             interval=2, 5 unsummarized messages → batchSize=2 → shouldRun
     {
-      const r = await req('/data/memory/hypav3/periodic-summarize/trace', {
+      const r = await req('/data/memory/periodic-summarize/trace', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ characterId: testCharId, chatId: testChatId }),
@@ -367,22 +385,7 @@ async function main() {
       console.log('  T2 PASS: periodic-summarize/trace — shouldRun=true, reason=ready');
     }
 
-    // ── T3: resummarize-preview/trace ─────────────────────────────────────────
-    // Uses the 2 pre-seeded summaries at indices [0,1]
-    {
-      const r = await req('/data/memory/hypav3/resummarize-preview/trace', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ characterId: testCharId, chatId: testChatId, summaryIndices: [0, 1] }),
-      });
-      assert(r.res.status === 200, `T3: expected 200, got ${r.res.status}: ${r.text}`);
-      assert(r.json?.type === 'success', `T3: expected type='success', got '${r.json?.type}'`);
-      assert(r.json?.shouldRun === true, `T3: expected shouldRun=true`);
-      assert(r.json?.messageCount >= 1,  `T3: expected at least 1 prompt message`);
-      console.log('  T3 PASS: resummarize-preview/trace — shouldRun=true');
-    }
-
-    // ── T4: manual-summarize/trace — {{slot}} template → messageCount=1 ───────
+    // ── T3: manual-summarize/trace — {{slot}} template → messageCount=1 ───────
     // Regression guard for Bug 2: {{slot}} in template must embed chat content
     // into a single merged user message instead of two separate messages.
     {
@@ -393,7 +396,7 @@ async function main() {
       await putSettings(overlay, null);
       console.log('  Patched settings → Config B ({{slot}} template)');
 
-      const r = await req('/data/memory/hypav3/manual-summarize/trace', {
+      const r = await req('/data/memory/manual-summarize/trace', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
@@ -403,39 +406,38 @@ async function main() {
           end: 5,
           promptOverride: {
             summarizationPrompt: 'Summarize this roleplay scene: {{slot}}',
-            reSummarizationPrompt: '',
           },
         }),
       });
-      assert(r.res.status === 200, `T4: expected 200, got ${r.res.status}: ${r.text}`);
-      assert(r.json?.type === 'success', `T4: expected type='success', got '${r.json?.type}'`);
+      assert(r.res.status === 200, `T3: expected 200, got ${r.res.status}: ${r.text}`);
+      assert(r.json?.type === 'success', `T3: expected type='success', got '${r.json?.type}'`);
       // {{slot}} template → single merged user message (Bug 2 fix verification)
       assert(
         r.json?.messageCount === 1,
-        `T4: expected messageCount=1 ({{slot}} template), got ${r.json?.messageCount}`
+        `T3: expected messageCount=1 ({{slot}} template), got ${r.json?.messageCount}`
       );
       assert(
         Array.isArray(r.json?.promptMessages) && r.json.promptMessages.length === 1,
-        `T4: expected 1 entry in promptMessages, got ${r.json?.promptMessages?.length}`
+        `T3: expected 1 entry in promptMessages, got ${r.json?.promptMessages?.length}`
       );
       assert(
         r.json.promptMessages[0]?.role === 'user',
-        `T4: merged message should have role='user', got '${r.json.promptMessages[0]?.role}'`
+        `T3: merged message should have role='user', got '${r.json.promptMessages[0]?.role}'`
       );
       // The merged content should include both the template prefix and chat content
       const mergedContent = r.json.promptMessages[0]?.content || '';
       assert(
         mergedContent.includes('Summarize this roleplay scene:'),
-        `T4: merged message should contain template prefix`
+        `T3: merged message should contain template prefix`
       );
       assert(
         !mergedContent.includes('{{slot}}'),
-        `T4: no literal {{slot}} should remain in merged message`
+        `T3: no literal {{slot}} should remain in merged message`
       );
-      console.log('  T4 PASS: manual-summarize/trace — {{slot}} template, messageCount=1 (Bug 2 regression guard)');
+      console.log('  T3 PASS: manual-summarize/trace — {{slot}} template, messageCount=1 (Bug 2 regression guard)');
     }
 
-    // ── T5: periodicSummarizationEnabled=false is ignored for legacy presets ─
+    // ── T4: periodicSummarizationEnabled=false is ignored for legacy presets ─
     // Current runtime forces periodic summarization on and uses interval as the
     // effective gate. Keep this smoke aligned with the runtime/unit contract.
     {
@@ -445,27 +447,27 @@ async function main() {
       await putSettings(overlay, null);
       console.log('  Patched settings → Config C (periodicSummarizationEnabled=false)');
 
-      const r = await req('/data/memory/hypav3/periodic-summarize/trace', {
+      const r = await req('/data/memory/periodic-summarize/trace', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ characterId: testCharId, chatId: testChatId }),
       });
-      assert(r.res.status === 200, `T5: expected 200, got ${r.res.status}: ${r.text}`);
+      assert(r.res.status === 200, `T4: expected 200, got ${r.res.status}: ${r.text}`);
       assert(
         r.json?.shouldRun === true,
-        `T5: expected shouldRun=true when interval is reached, got ${r.json?.shouldRun}`
+        `T4: expected shouldRun=true when interval is reached, got ${r.json?.shouldRun}`
       );
       assert(
         r.json?.reason === 'ready',
-        `T5: expected reason='ready', got '${r.json?.reason}'`
+        `T4: expected reason='ready', got '${r.json?.reason}'`
       );
-      console.log('  T5 PASS: periodic-summarize/trace — periodicSummarizationEnabled=false does not override interval-based runtime gating');
+      console.log('  T4 PASS: periodic-summarize/trace — periodicSummarizationEnabled=false does not override interval-based runtime gating');
     }
 
-    // ── T6: Input validation — 400 errors ────────────────────────────────────
+    // ── T5: Input validation — 400 errors ────────────────────────────────────
     {
       // manual-summarize: missing characterId
-      const r6a = await req('/data/memory/hypav3/manual-summarize/trace', {
+      const r6a = await req('/data/memory/manual-summarize/trace', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ chatId: testChatId, start: 1, end: 3 }),
@@ -473,38 +475,30 @@ async function main() {
       assert(r6a.res.status === 400, `T6a: missing characterId expected 400, got ${r6a.res.status}`);
 
       // manual-summarize: start > end
-      const r6b = await req('/data/memory/hypav3/manual-summarize/trace', {
+      const r6b = await req('/data/memory/manual-summarize/trace', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ characterId: testCharId, chatId: testChatId, start: 5, end: 1 }),
       });
       assert(r6b.res.status === 400, `T6b: start>end expected 400, got ${r6b.res.status}`);
 
-      // resummarize-preview: only 1 summary index
-      const r6c = await req('/data/memory/hypav3/resummarize-preview/trace', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ characterId: testCharId, chatId: testChatId, summaryIndices: [0] }),
-      });
-      assert(r6c.res.status === 400, `T6c: summaryIndices.length<2 expected 400, got ${r6c.res.status}`);
-
       // periodic: missing characterId
-      const r6d = await req('/data/memory/hypav3/periodic-summarize/trace', {
+      const r6c = await req('/data/memory/periodic-summarize/trace', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ chatId: testChatId }),
       });
-      assert(r6d.res.status === 400, `T6d: periodic missing characterId expected 400, got ${r6d.res.status}`);
+      assert(r6c.res.status === 400, `T5c: periodic missing characterId expected 400, got ${r6c.res.status}`);
 
       // manual-summarize: nonexistent character
-      const r6e = await req('/data/memory/hypav3/manual-summarize/trace', {
+      const r6d = await req('/data/memory/manual-summarize/trace', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ characterId: 'no-such-char-xyz', chatId: testChatId, start: 1, end: 2 }),
       });
-      assert(r6e.res.status === 404, `T6e: nonexistent character expected 404, got ${r6e.res.status}`);
+      assert(r6d.res.status === 404, `T5d: nonexistent character expected 404, got ${r6d.res.status}`);
 
-      console.log('  T6 PASS: input validation (400/404 for all invalid inputs)');
+      console.log('  T5 PASS: input validation (400/404 for all invalid inputs)');
     }
 
   } finally {

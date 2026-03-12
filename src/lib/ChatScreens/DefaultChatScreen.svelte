@@ -2,11 +2,19 @@
      
 
     import Suggestion from './Suggestion.svelte';
-    import { CameraIcon, DatabaseIcon, DicesIcon, GlobeIcon, ImagePlusIcon, LanguagesIcon, Laugh, MenuIcon, MicOffIcon, PackageIcon, RefreshCcwIcon, ReplyIcon, Send, StepForwardIcon, XIcon, ArrowDown } from "@lucide/svelte";
+    import { CameraIcon, DatabaseIcon, DicesIcon, GlobeIcon, ImagePlusIcon, LanguagesIcon, Laugh, MenuIcon, MicOffIcon, PackageIcon, RefreshCcwIcon, ReplyIcon, Send, StepForwardIcon, XIcon, ArrowDown, GitBranch } from "@lucide/svelte";
     import { selectedCharID, createSimpleCharacter, ScrollToMessageStore, comfyProgressStore } from "../../ts/stores.svelte";
     import { tick } from 'svelte';
     import Chat from "./Chat.svelte";
-    import { getDatabase, type Message } from "../../ts/storage/database.svelte";
+    import {
+        getDatabase,
+        mutateChatByTarget,
+        repairCharacterChatPage,
+        resolveChatStateByCharacterAndChatId,
+        resolveSelectedChat,
+        resolveSelectedChatState,
+        type Message,
+    } from "../../ts/storage/database.svelte";
     import { DBState } from 'src/ts/stores.svelte';
     import { getCharImage } from "../../ts/characters";
     import { chatProcessStage, isDoingChat, sendChat } from "../../ts/process/index.svelte";
@@ -28,18 +36,47 @@
     import { postChatFile } from 'src/ts/process/files/multisend';
     import { getInlayAsset } from 'src/ts/process/files/inlays';
     import { isMobile, isNodeServer } from "src/ts/platform";
-    import { saveServerDatabase } from "src/ts/storage/serverDb";
-    import { resolveServerAuthToken } from "src/ts/storage/serverAuth";
     import Chats from './Chats.svelte';
     import Button from '../UI/GUI/Button.svelte';
     import GameStateHud from '../SideBars/GameStateHUD.svelte';
     import { runComfyTemplateById } from 'src/ts/integrations/comfy/execute';
+    import ReviewWorkspace from '../Evolution/ReviewWorkspace.svelte';
+    import {
+        appendRerollSnapshot,
+        createInitialRerollHistory,
+        getStableChatTargetKey,
+        readNextRerollSnapshot,
+        readPreviousRerollSnapshot,
+        replaceMessageTailWithSnapshot,
+        trimMessagesForRerollRequest,
+    } from './defaultChatScreen.reroll';
+    import {
+        getCharacterEvolutionErrorMessage,
+    } from 'src/ts/evolution';
+    import {
+        acceptEvolutionReviewFlow,
+        getEvolutionBusyLabel,
+        rejectEvolutionReviewFlow,
+        runEvolutionHandoffFlow,
+        syncEvolutionProposalDraft,
+        type EvolutionBusyAction,
+    } from 'src/ts/character-evolution/reviewFlow';
+    import {
+        ensureCharacterEvolution,
+        getEffectiveCharacterEvolutionSettings,
+    } from 'src/ts/characterEvolution';
+    import { findSingleCharacterById, replaceCharacterById } from 'src/ts/storage/characterList';
+    import {
+        flushUserMessageBeforeGeneration,
+        getUserMessagePersistFailureMessage,
+    } from './defaultChatScreen.serverSync';
     const defaultChatScreenLog = (..._args: unknown[]) => {};
     
     interface Props {
         onOpenModuleList?: () => void;
         onOpenChatList?: () => void;
         customStyle?: string;
+        onEvolutionReviewChange?: (active: boolean) => void;
     }
 
     let messageInput:string = $state('')
@@ -49,22 +86,30 @@
     let autoMode = $state(false)
     let rerolls:Message[][] = []
     let rerollid = -1
-    let lastCharId = -1
+    let lastRerollTargetKey: string | null = null
     const isDoingChatInputTranslate = false
     let toggleStickers:boolean = $state(false)
     let fileInput:string[] = $state([])
     let showNewMessageButton = $state(false)
     let chatsInstance: unknown = $state()
     let isScrollingToMessage = $state(false)
+    let showEvolutionProposal = $state(false)
+    let evolutionBusy = $state(false)
+    let evolutionAction: EvolutionBusyAction = $state(null)
+    let evolutionProposalDraft = $state(null)
+    let evolutionProposalDraftKey = $state<string | null>(null)
     let {
         onOpenModuleList = () => {},
         onOpenChatList = () => {},
-        customStyle = ''
+        customStyle = '',
+        onEvolutionReviewChange = () => {},
     }: Props = $props();
-    const currentCharacter = $derived(DBState.db.characters[$selectedCharID])
-    const currentChat = $derived(currentCharacter?.chats[currentCharacter.chatPage]?.message ?? [])
+    const selectedChatState = $derived(resolveSelectedChatState(DBState.db.characters, $selectedCharID))
+    const currentCharacter = $derived(selectedChatState.character)
+    const currentChatEntry = $derived(selectedChatState.chat)
+    const currentChat = $derived(selectedChatState.messages)
     const canContinueResponse = $derived.by(() => {
-        const messages = currentCharacter?.chats?.[currentCharacter.chatPage]?.message ?? [];
+        const messages = currentChat;
         if (messages.length < 2) return false;
         return messages[messages.length - 1]?.role === 'char';
     })
@@ -72,51 +117,110 @@
         const templates = DBState.db.comfyCommander?.templates ?? []
         return templates.filter((template) => template.showInChatMenu)
     })
-
-    function extractHttpStatusFromError(error: unknown): number | null {
-        const message = `${(error as Error | undefined)?.message ?? error ?? ''}`
-        const match = message.match(/\((\d{3})\)/)
-        if(!match){
+    const currentEvolutionSettings = $derived.by(() => {
+        const character = currentCharacter
+        if (!character || character.type === 'group') {
             return null
         }
-        return parseInt(match[1])
+        return getEffectiveCharacterEvolutionSettings(DBState.db, character)
+    })
+
+    function resolveStableTargetFromSelection(options: { ensureChatId?: boolean } = {}) {
+        const selectedState = resolveSelectedChatState(DBState.db.characters, $selectedCharID)
+        const selectedCharacter = selectedState.character
+        const selectedChat = selectedState.chat
+        if (!selectedCharacter?.chaId || !selectedChat) {
+            return null
+        }
+        if (options.ensureChatId && !selectedChat.id) {
+            selectedChat.id = v4()
+        }
+        if (!selectedChat.id) {
+            return null
+        }
+        return {
+            characterId: selectedCharacter.chaId,
+            chatId: selectedChat.id,
+        }
     }
 
-    function getUserMessagePersistFailureMessage(error: unknown) {
-        const status = extractHttpStatusFromError(error)
-        if(status === 429){
-            return 'Message was not sent: authentication is rate-limited. Wait and retry.'
-        }
-        if(status === 401 || status === 403){
-            return 'Message was not sent: authentication failed. Re-enter password and retry.'
-        }
-        return 'Message was not sent because it could not be saved to server. Retry after server restart.'
+    function isSameStableTarget(
+        left: { characterId: string; chatId: string } | null,
+        right: { characterId: string; chatId: string } | null,
+    ) {
+        return !!left && !!right
+            && left.characterId === right.characterId
+            && left.chatId === right.chatId
     }
 
-    async function flushUserMessageBeforeGeneration(selectedChar: number) {
-        const activeChar = DBState.db.characters[selectedChar]
-        const activeChat = activeChar?.chats?.[activeChar.chatPage]
-        if (!activeChar?.chaId || !activeChat?.id) {
-            return
-        }
-        try {
-            await saveServerDatabase(getDatabase(), {
-                character: [activeChar.chaId],
-                chat: [[activeChar.chaId, activeChat.id]],
-            })
-            return
-        } catch (error) {
-            const status = extractHttpStatusFromError(error)
-            if(status !== 401 && status !== 403){
-                throw error
+    function resolveStableTargetChatState(target: { characterId: string; chatId: string } | null) {
+        if (!target) {
+            return {
+                character: null,
+                characterIndex: -1,
+                chat: null,
+                chatIndex: -1,
+                messages: [],
             }
-            await resolveServerAuthToken({ interactive: true })
-            await saveServerDatabase(getDatabase(), {
-                character: [activeChar.chaId],
-                chat: [[activeChar.chaId, activeChat.id]],
-            })
         }
+        return resolveChatStateByCharacterAndChatId(
+            DBState.db.characters,
+            target.characterId,
+            target.chatId,
+        )
     }
+
+    function mutateStableTargetChat(
+        target: { characterId: string; chatId: string } | null,
+        mutate: Parameters<typeof mutateChatByTarget>[2],
+    ) {
+        if (!target) {
+            return false
+        }
+        return mutateChatByTarget(DBState.db.characters, target, mutate)
+    }
+
+    function resetRerollsForTarget(target: { characterId: string; chatId: string } | null) {
+        const targetKey = getStableChatTargetKey(target)
+        if (targetKey && lastRerollTargetKey === targetKey) {
+            return
+        }
+        rerolls = []
+        rerollid = -1
+        lastRerollTargetKey = targetKey
+    }
+
+    $effect(() => {
+        repairCharacterChatPage(currentCharacter)
+    })
+    function findCharacterById(characterId: string) {
+        return findSingleCharacterById(DBState.db.characters, characterId)
+    }
+
+    function commitCharacter(characterId: string, nextCharacter: NonNullable<ReturnType<typeof findCharacterById>>) {
+        if (!characterId) {
+            return
+        }
+        replaceCharacterById(DBState.db.characters, nextCharacter)
+    }
+
+    const evolutionHandoffBlockedForCurrentChat = $derived.by(() => {
+        const character = currentCharacter
+        if (!character || character.type === 'group') {
+            return false
+        }
+        const activeChat = resolveSelectedChat(character)
+        return !!activeChat?.id && character.characterEvolution.lastProcessedChatId === activeChat.id
+    })
+    const isEvolutionReviewVisible = $derived(Boolean(showEvolutionProposal && currentEvolutionSettings?.pendingProposal))
+
+    $effect(() => {
+        const character = currentCharacter
+        if (!character || character.type === 'group') {
+            return
+        }
+        ensureCharacterEvolution(character)
+    })
 
     function scrollToBottom() {
         (chatsInstance as { scrollToLatestMessage?: () => void } | null)?.scrollToLatestMessage?.();
@@ -201,6 +305,154 @@
         return sendMain(true)
     }
 
+    async function runEvolutionHandoff(forceReplay = false) {
+        if (!currentCharacter || currentCharacter.type === 'group') {
+            return
+        }
+        const characterId = currentCharacter.chaId
+        evolutionBusy = true
+        evolutionAction = 'handoff'
+        openMenu = false
+        try {
+            const result = await runEvolutionHandoffFlow({
+                characterEntry: currentCharacter,
+                chatId: currentChatEntry?.id ?? null,
+                forceReplay,
+                resolveCharacterById: findCharacterById,
+                confirmReplay: () => {
+                    return typeof window === 'undefined'
+                        || window.confirm("This chat was already accepted for evolution. Replay handoff for recovery?")
+                },
+            })
+            if (result.cancelled || !result.nextCharacter) {
+                return
+            }
+            commitCharacter(characterId, result.nextCharacter)
+            if (currentCharacter?.chaId === characterId) {
+                evolutionProposalDraft = result.proposalDraft
+                evolutionProposalDraftKey = result.proposalDraftKey
+                showEvolutionProposal = true
+            }
+            alertNormal(result.replayedAcceptedChat ? "Evolution proposal was regenerated for the accepted chat." : "Evolution proposal is ready for review.")
+        } catch (error) {
+            alertError(getCharacterEvolutionErrorMessage(error))
+        } finally {
+            evolutionBusy = false
+            evolutionAction = null
+        }
+    }
+
+    async function rejectEvolutionProposal() {
+        if (!currentCharacter || currentCharacter.type === 'group' || !currentCharacter.chaId) {
+            return
+        }
+        const characterId = currentCharacter.chaId
+        evolutionBusy = true
+        evolutionAction = 'reject'
+        try {
+            const nextCharacter = await rejectEvolutionReviewFlow(currentCharacter)
+            commitCharacter(characterId, nextCharacter)
+            if (currentCharacter?.chaId === characterId) {
+                evolutionProposalDraft = null
+                evolutionProposalDraftKey = null
+                showEvolutionProposal = false
+            }
+            alertNormal("Evolution proposal rejected.")
+        } catch (error) {
+            alertError(getCharacterEvolutionErrorMessage(error))
+        } finally {
+            evolutionBusy = false
+            evolutionAction = null
+        }
+    }
+
+    async function acceptEvolutionProposal(createNextChat = false) {
+        if (!currentCharacter || currentCharacter.type === 'group' || !currentCharacter.chaId || !evolutionProposalDraft) {
+            return
+        }
+        const characterId = currentCharacter.chaId
+        const proposedState = JSON.parse(JSON.stringify(evolutionProposalDraft))
+        evolutionBusy = true
+        evolutionAction = 'accept'
+        try {
+            const acceptedSourceChatId = currentCharacter.characterEvolution.pendingProposal?.sourceChatId
+                ?? currentChatEntry?.id
+                ?? null
+            const { nextCharacter, chatCreationError } = await acceptEvolutionReviewFlow({
+                characterEntry: currentCharacter,
+                proposedState,
+                createNextChat,
+                sourceChatId: acceptedSourceChatId,
+                resolveCharacterById: findCharacterById,
+            })
+            commitCharacter(characterId, nextCharacter)
+            if (currentCharacter?.chaId === characterId) {
+                evolutionProposalDraft = null
+                evolutionProposalDraftKey = null
+                showEvolutionProposal = false
+            }
+            alertNormal(
+                createNextChat
+                    ? (chatCreationError
+                        ? "Evolution accepted, but the new chat could not be created."
+                        : "Evolution accepted and a new chat was created.")
+                    : "Evolution accepted."
+            )
+            if (chatCreationError) {
+                alertError(chatCreationError)
+            }
+        } catch (error) {
+            alertError(getCharacterEvolutionErrorMessage(error))
+        } finally {
+            evolutionBusy = false
+            evolutionAction = null
+        }
+    }
+
+    $effect(() => {
+        const nextDraftState = syncEvolutionProposalDraft({
+            characterId: currentCharacter?.chaId,
+            proposal: currentCharacter?.characterEvolution.pendingProposal,
+        })
+        if (!nextDraftState.proposalDraftKey) {
+            evolutionProposalDraft = null
+            evolutionProposalDraftKey = null
+            return
+        }
+        if (!evolutionProposalDraft || evolutionProposalDraftKey !== nextDraftState.proposalDraftKey) {
+            evolutionProposalDraft = nextDraftState.proposalDraft
+            evolutionProposalDraftKey = nextDraftState.proposalDraftKey
+        }
+    })
+
+    $effect(() => {
+        if (evolutionAction === 'handoff' && currentEvolutionSettings?.pendingProposal) {
+            evolutionBusy = false
+            evolutionAction = null
+        }
+    })
+
+    $effect(() => {
+        if (showEvolutionProposal && !currentEvolutionSettings?.pendingProposal) {
+            showEvolutionProposal = false
+        }
+    })
+
+    $effect(() => {
+        onEvolutionReviewChange(isEvolutionReviewVisible)
+    })
+
+    $effect(() => {
+        if (isEvolutionReviewVisible) {
+            openMenu = false
+            toggleStickers = false
+        }
+    })
+
+    const evolutionBusyLabel = $derived.by(() => {
+        return getEvolutionBusyLabel(evolutionAction)
+    })
+
     function shouldSendOnEnter(e: KeyboardEvent){
         if(e.key.toLocaleLowerCase() !== "enter" || e.isComposing){
             return false
@@ -237,31 +489,28 @@
     }
 
     async function sendMain(continueResponse:boolean) {
-        const selectedChar = $selectedCharID
-        if(selectedChar < 0){
+        const stableTarget = resolveStableTargetFromSelection({ ensureChatId: true })
+        if(!stableTarget){
             return
         }
-        const selectedCharacter = DBState.db.characters?.[selectedChar]
-        if(!selectedCharacter || !Array.isArray(selectedCharacter.chats) || selectedCharacter.chats.length === 0){
+        const selectedState = resolveChatStateByCharacterAndChatId(
+            DBState.db.characters,
+            stableTarget.characterId,
+            stableTarget.chatId,
+        )
+        const selectedCharacter = selectedState.character
+        const activeChat = selectedState.chat
+        if(!selectedCharacter){
             return
         }
-        if(typeof selectedCharacter.chatPage !== 'number' || selectedCharacter.chatPage < 0){
-            selectedCharacter.chatPage = 0
-        }
-        if(selectedCharacter.chatPage >= selectedCharacter.chats.length){
-            selectedCharacter.chatPage = Math.max(0, selectedCharacter.chats.length - 1)
-        }
-        const activeChat = selectedCharacter.chats[selectedCharacter.chatPage]
+        repairCharacterChatPage(selectedCharacter)
         if(!activeChat || !Array.isArray(activeChat.message)){
             return
         }
         if($isDoingChat){
             return
         }
-        if(lastCharId !== $selectedCharID){
-            rerolls = []
-            rerollid = -1
-        }
+        resetRerollsForTarget(stableTarget)
 
         let cha = activeChat.message
 
@@ -284,7 +533,7 @@
         let appendedUserMessage = false
 
         if(messageInput === ''){
-            if(DBState.db.characters[selectedChar].type !== 'group'){
+            if(selectedCharacter.type !== 'group'){
                 if(cha.length === 0 || cha[cha.length - 1].role !== 'user'){
                     if(DBState.db.useSayNothing){
                         cha.push({
@@ -298,9 +547,9 @@
             }
         }
         else{
-            const char = DBState.db.characters[selectedChar]
+            const char = selectedCharacter
             if(char.type === 'character'){
-                const triggerResult = await runTrigger(char,'input', {chat: char.chats[char.chatPage]})
+                const triggerResult = await runTrigger(char,'input', {chat: activeChat})
                 if(triggerResult){
                     cha = triggerResult.chat.message
                 }
@@ -325,12 +574,16 @@
         }
         messageInput = ''
         messageInputTranslate = ''
-        DBState.db.characters[selectedChar].chats[DBState.db.characters[selectedChar].chatPage].message = cha
+        activeChat.message = cha
         if (isNodeServer && appendedUserMessage) {
             try {
-                await flushUserMessageBeforeGeneration(selectedChar)
+                await flushUserMessageBeforeGeneration({
+                    database: getDatabase(),
+                    character: selectedCharacter,
+                    chat: activeChat,
+                })
             } catch (error) {
-                DBState.db.characters[selectedChar].chats[DBState.db.characters[selectedChar].chatPage].message = beforeSendMessages
+                activeChat.message = beforeSendMessages
                 messageInput = pendingInput
                 messageInputTranslate = ''
                 updateInputSizeAll()
@@ -343,7 +596,7 @@
         rerolls = []
         await sleep(10)
         updateInputSizeAll()
-        await sendChatMain(continueResponse)
+        await sendChatMain(continueResponse, stableTarget)
 
     }
 
@@ -351,111 +604,131 @@
         if($isDoingChat){
             return
         }
-        if(lastCharId !== $selectedCharID){
-            rerolls = []
-            rerollid = -1
+        const stableTarget = resolveStableTargetFromSelection({ ensureChatId: true })
+        const activeState = resolveStableTargetChatState(stableTarget)
+        const activeChat = activeState.chat
+        if(!stableTarget || !activeChat){
+            return
         }
-        const genId = DBState.db.characters[$selectedCharID].chats[DBState.db.characters[$selectedCharID].chatPage].message.at(-1)?.generationInfo?.generationId
+        resetRerollsForTarget(stableTarget)
+        const genId = activeChat.message.at(-1)?.generationInfo?.generationId
         if(genId){
             const r = Prereroll(genId)
-            if(r){
-                DBState.db.characters[$selectedCharID].chats[DBState.db.characters[$selectedCharID].chatPage].message[DBState.db.characters[$selectedCharID].chats[DBState.db.characters[$selectedCharID].chatPage].message.length - 1].data = r
+            const lastMessage = activeChat.message.at(-1)
+            if(r && lastMessage){
+                lastMessage.data = r
                 return
             }
         }
         if(rerollid < rerolls.length - 1){
-            if(Array.isArray(rerolls[rerollid + 1])){
-                rerollid += 1
-                const rerollData = safeStructuredClone(rerolls[rerollid])
-                const msgs = DBState.db.characters[$selectedCharID].chats[DBState.db.characters[$selectedCharID].chatPage].message
-                for(let i = 0; i < rerollData.length; i++){
-                    msgs[msgs.length - rerollData.length + i] = rerollData[i]
+            const nextReroll = readNextRerollSnapshot(rerolls, rerollid)
+            rerollid = nextReroll.index
+            if(nextReroll.snapshot){
+                if(!mutateStableTargetChat(stableTarget, (chat) => {
+                    chat.message = replaceMessageTailWithSnapshot(chat.message, safeStructuredClone(nextReroll.snapshot))
+                })){
+                    return
                 }
-                DBState.db.characters[$selectedCharID].chats[DBState.db.characters[$selectedCharID].chatPage].message = msgs
             }
             return
         }
         if(rerolls.length === 0){
-            rerolls.push(safeStructuredClone([DBState.db.characters[$selectedCharID].chats[DBState.db.characters[$selectedCharID].chatPage].message.at(-1)]))
-            rerollid = rerolls.length - 1
+            const initialHistory = createInitialRerollHistory(rerolls, safeStructuredClone(activeChat.message.at(-1)))
+            rerolls = initialHistory.snapshots
+            rerollid = initialHistory.index
         }
-        const cha = safeStructuredClone(DBState.db.characters[$selectedCharID].chats[DBState.db.characters[$selectedCharID].chatPage].message)
+        const cha = trimMessagesForRerollRequest(safeStructuredClone(activeChat.message))
         if(cha.length === 0 ){
             return
         }
         openMenu = false
-        const saying = cha[cha.length - 1].saying
-        let sayingQu = 2
-        while(cha[cha.length - 1].role !== 'user'){
-            if(cha[cha.length - 1].saying === saying){
-                sayingQu -= 1
-                if(sayingQu === 0){
-                    break
-                }
-            }
-            const msg = cha.pop()
-            if(!msg){
-                return
-            }
+        if (!mutateStableTargetChat(stableTarget, (chat) => {
+            chat.message = cha
+        })) {
+            return
         }
-        DBState.db.characters[$selectedCharID].chats[DBState.db.characters[$selectedCharID].chatPage].message = cha
-        await sendChatMain()
+        await sendChatMain(false, stableTarget)
     }
 
     async function unReroll() {
         if($isDoingChat){
             return
         }
-        if(lastCharId !== $selectedCharID){
-            rerolls = []
-            rerollid = -1
+        const stableTarget = resolveStableTargetFromSelection({ ensureChatId: true })
+        const activeState = resolveStableTargetChatState(stableTarget)
+        const activeChat = activeState.chat
+        if(!stableTarget || !activeChat){
+            return
         }
-        const genId = DBState.db.characters[$selectedCharID].chats[DBState.db.characters[$selectedCharID].chatPage].message.at(-1)?.generationInfo?.generationId
+        resetRerollsForTarget(stableTarget)
+        const genId = activeChat.message.at(-1)?.generationInfo?.generationId
         if(genId){
             const r = PreUnreroll(genId)
-            if(r){
-                DBState.db.characters[$selectedCharID].chats[DBState.db.characters[$selectedCharID].chatPage].message[DBState.db.characters[$selectedCharID].chats[DBState.db.characters[$selectedCharID].chatPage].message.length - 1].data = r
+            const lastMessage = activeChat.message.at(-1)
+            if(r && lastMessage){
+                lastMessage.data = r
                 return
             }
         }
         if(rerollid <= 0){
             return
         }
-        if(Array.isArray(rerolls[rerollid - 1])){
-            rerollid -= 1
-            const rerollData = safeStructuredClone(rerolls[rerollid])
-            const msgs = DBState.db.characters[$selectedCharID].chats[DBState.db.characters[$selectedCharID].chatPage].message
-            for(let i = 0; i < rerollData.length; i++){
-                msgs[msgs.length - rerollData.length + i] = rerollData[i]
+        const previousReroll = readPreviousRerollSnapshot(rerolls, rerollid)
+        rerollid = previousReroll.index
+        if(previousReroll.snapshot){
+            if(!mutateStableTargetChat(stableTarget, (chat) => {
+                chat.message = replaceMessageTailWithSnapshot(chat.message, safeStructuredClone(previousReroll.snapshot))
+            })){
+                return
             }
-            DBState.db.characters[$selectedCharID].chats[DBState.db.characters[$selectedCharID].chatPage].message = msgs
         }
     }
 
     let abortController:null|AbortController = null
 
-    async function sendChatMain(continued:boolean = false) {
-
-        const previousLength = DBState.db.characters[$selectedCharID].chats[DBState.db.characters[$selectedCharID].chatPage].message.length
+    async function sendChatMain(continued:boolean = false, target?: { characterId: string; chatId: string }) {
+        const stableTarget = target ?? resolveStableTargetFromSelection({ ensureChatId: true })
+        if(!stableTarget){
+            return
+        }
+        const activeChatAtStart = resolveStableTargetChatState(stableTarget).chat
+        if(!activeChatAtStart){
+            return
+        }
+        const previousLength = activeChatAtStart.message.length
         messageInput = ''
         abortController = new AbortController()
         try {
             await sendChat(-1, {
                 signal:abortController.signal,
-                continue:continued
+                continue:continued,
+                target: stableTarget,
             })
-            if(previousLength < DBState.db.characters[$selectedCharID].chats[DBState.db.characters[$selectedCharID].chatPage].message.length){
-                rerolls.push(safeStructuredClone(DBState.db.characters[$selectedCharID].chats[DBState.db.characters[$selectedCharID].chatPage].message).slice(previousLength))
-                rerollid = rerolls.length - 1
+            const activeState = resolveChatStateByCharacterAndChatId(
+                DBState.db.characters,
+                stableTarget.characterId,
+                stableTarget.chatId,
+            )
+            const isCurrentSelection = currentCharacter?.chaId === stableTarget.characterId
+                && currentChatEntry?.id === stableTarget.chatId
+            if(isCurrentSelection && activeState.chat && previousLength < activeState.chat.message.length){
+                const nextRerollState = appendRerollSnapshot(
+                    rerolls,
+                    safeStructuredClone(activeState.chat.message).slice(previousLength),
+                )
+                rerolls = nextRerollState.snapshots
+                rerollid = nextRerollState.index
             }
             // Guard against occasional scroll drift after long-running generation/RAG.
-            await tick()
-            scrollToBottom()
+            if (isCurrentSelection) {
+                await tick()
+                scrollToBottom()
+            }
         } catch (error) {
             defaultChatScreenLog(error)
             alertError(error)
         }
-        lastCharId = $selectedCharID
+        lastRerollTargetKey = getStableChatTargetKey(stableTarget)
         $isDoingChat = false
         if(DBState.db.playMessage){
             const audio = new Audio(sendSound);
@@ -474,18 +747,21 @@
             autoMode = false
             return
         }
-        const selectedChar = $selectedCharID
+        const stableTarget = resolveStableTargetFromSelection({ ensureChatId: true })
+        if(!stableTarget){
+            return
+        }
         autoMode = true
         while(autoMode){
-            await sendChatMain()
-            if(selectedChar !== $selectedCharID){
+            await sendChatMain(false, stableTarget)
+            if(!isSameStableTarget(stableTarget, resolveStableTargetFromSelection())){
                 autoMode = false
             }
         }
     }
 
     const { userIconPortrait, currentUsername, userIcon } = $derived.by(() => {
-        const bindedPersona = DBState?.db?.characters?.[$selectedCharID]?.chats?.[DBState?.db?.characters?.[$selectedCharID]?.chatPage]?.bindedPersona
+        const bindedPersona = currentChatEntry?.bindedPersona
 
         if(bindedPersona){
             const persona = DBState.db.personas.find((p) => p.id === bindedPersona)
@@ -651,7 +927,7 @@
     openMenu = false
 }}>
     
-    {#if showNewMessageButton}
+    {#if showNewMessageButton && !isEvolutionReviewVisible}
         {#if (DBState.db.newMessageButtonStyle === 'bottom-center' || !DBState.db.newMessageButtonStyle)}
             <button
                 type="button"
@@ -736,30 +1012,36 @@
     {/if}
     {#if $selectedCharID < 0}
         <MainMenu />
-    {:else}
-        <div class="ds-chat-floating-actions action-rail">
-            <button
-                type="button"
-                class="ds-chat-floating-action-btn icon-btn icon-btn--sm"
-                title="Open chat actions"
-                aria-label="Open chat actions"
-                aria-haspopup="menu"
-                aria-expanded={openMenu}
-                aria-controls="ds-chat-side-menu"
-                onclick={(e) => {
-                    openMenu = !openMenu
-                    e.stopPropagation()
-                }}
-            >
-                <MenuIcon size={16} />
-            </button>
-        </div>
+    {:else if !currentCharacter}
         <div class="ds-chat-main-shell">
+            <div class="ds-chat-loading-overlay">
+                Loading...
+            </div>
+        </div>
+    {:else}
+        <div class="ds-chat-main-shell">
+            {#if isEvolutionReviewVisible && currentEvolutionSettings?.pendingProposal}
+                <div class="ds-chat-review-mode">
+                    <ReviewWorkspace
+                        proposal={currentEvolutionSettings.pendingProposal}
+                        currentState={currentEvolutionSettings.currentState}
+                        sectionConfigs={currentEvolutionSettings.sectionConfigs}
+                        privacy={currentEvolutionSettings.privacy}
+                        bind:bindState={evolutionProposalDraft}
+                        onAccept={() => acceptEvolutionProposal(false)}
+                        onAcceptAndCreate={() => acceptEvolutionProposal(true)}
+                        onReject={rejectEvolutionProposal}
+                        onClose={() => { showEvolutionProposal = false }}
+                        loading={evolutionBusy}
+                        sourceLabel="Review the exact edits before accepting them. Each row shows what exists now, what will be saved, and whether that row is being added, changed, or removed."
+                    />
+                </div>
+            {:else}
             <div class="ds-chat-scroll-shell default-chat-screen"
                 onscroll={(e) => {
             //@ts-expect-error scrollHeight/clientHeight/scrollTop don't exist on EventTarget, but target is HTMLElement here
             const scrolled = (e.target.scrollHeight - e.target.clientHeight + e.target.scrollTop)
-            if(scrolled < 100 && DBState.db.characters[$selectedCharID].chats[DBState.db.characters[$selectedCharID].chatPage].message.length > loadPages){
+            if(scrolled < 100 && currentChat.length > loadPages){
                 loadPages += 15
             }
             const chatTarget = e.target as HTMLElement;
@@ -888,260 +1170,86 @@
                 bind:hasNewUnreadMessage={showNewMessageButton}
             />
 
-            {#if DBState.db.characters[$selectedCharID].chats[DBState.db.characters[$selectedCharID].chatPage].message.length <= loadPages}
-                {#if DBState.db.characters[$selectedCharID].type !== 'group' }
+            {#if currentChat.length <= loadPages}
+                {#if currentCharacter.type !== 'group' }
                     <Chat
-                        character={createSimpleCharacter(DBState.db.characters[$selectedCharID])}
-                        name={DBState.db.characters[$selectedCharID].name}
-                        message={DBState.db.characters[$selectedCharID].chats[DBState.db.characters[$selectedCharID].chatPage].fmIndex === -1 ? DBState.db.characters[$selectedCharID].firstMessage :
-                            DBState.db.characters[$selectedCharID].alternateGreetings[DBState.db.characters[$selectedCharID].chats[DBState.db.characters[$selectedCharID].chatPage].fmIndex]}
+                        character={createSimpleCharacter(currentCharacter)}
+                        name={currentCharacter.name}
+                        message={(currentChatEntry?.fmIndex ?? -1) === -1
+                            ? currentCharacter.firstMessage
+                            : (currentCharacter.alternateGreetings[currentChatEntry?.fmIndex ?? -1] ?? currentCharacter.firstMessage)}
                         role='char'
-                        img={getCharImage(DBState.db.characters[$selectedCharID].image, 'css')}
+                        img={getCharImage(currentCharacter.image, 'css')}
                         idx={-1}
-                        altGreeting={DBState.db.characters[$selectedCharID].alternateGreetings.length > 0}
-                        largePortrait={DBState.db.characters[$selectedCharID].largePortrait}
+                        altGreeting={currentCharacter.alternateGreetings.length > 0}
+                        largePortrait={currentCharacter.largePortrait}
                         firstMessage={true}
                         onReroll={() => {
-                            const cha = DBState.db.characters[$selectedCharID]
-                            const chat = DBState.db.characters[$selectedCharID].chats[DBState.db.characters[$selectedCharID].chatPage]
-                            if(cha.type !== 'group'){
-                                if (chat.fmIndex >= (cha.alternateGreetings.length - 1)){
-                                    chat.fmIndex = -1
+                            if(currentChatEntry){
+                                if ((currentChatEntry.fmIndex ?? -1) >= (currentCharacter.alternateGreetings.length - 1)){
+                                    currentChatEntry.fmIndex = -1
                                 }
                                 else{
-                                    chat.fmIndex += 1
+                                    currentChatEntry.fmIndex = (currentChatEntry.fmIndex ?? -1) + 1
                                 }
                             }
-                            DBState.db.characters[$selectedCharID].chats[DBState.db.characters[$selectedCharID].chatPage] = chat
                         }}
                         unReroll={() => {
-                            const cha = DBState.db.characters[$selectedCharID]
-                            const chat = DBState.db.characters[$selectedCharID].chats[DBState.db.characters[$selectedCharID].chatPage]
-                            if(cha.type !== 'group'){
-                                if (chat.fmIndex === -1){
-                                    chat.fmIndex = (cha.alternateGreetings.length - 1)
+                            if(currentChatEntry){
+                                if ((currentChatEntry.fmIndex ?? -1) === -1){
+                                    currentChatEntry.fmIndex = currentCharacter.alternateGreetings.length - 1
                                 }
                                 else{
-                                    chat.fmIndex -= 1
+                                    currentChatEntry.fmIndex = (currentChatEntry.fmIndex ?? -1) - 1
                                 }
                             }
-                            DBState.db.characters[$selectedCharID].chats[DBState.db.characters[$selectedCharID].chatPage] = chat
                         }}
                         isLastMemory={false}
-                        currentPage={(DBState.db.characters[$selectedCharID].chats[DBState.db.characters[$selectedCharID].chatPage].fmIndex ?? -1) + 2}
-                        totalPages={DBState.db.characters[$selectedCharID].alternateGreetings.length + 1}
+                        currentPage={(currentChatEntry?.fmIndex ?? -1) + 2}
+                        totalPages={currentCharacter.alternateGreetings.length + 1}
 
                     />
-                    {#if (aiLawApplies() && DBState.db.characters[$selectedCharID].chats[DBState.db.characters[$selectedCharID].chatPage].message.length === 0)}
+                    {#if (aiLawApplies() && currentChat.length === 0)}
                         <div class="ds-chat-ai-warning">
                             {language.aiGenerationWarning}
                         </div>
                     {/if}
-                    {#if !DBState.db.characters[$selectedCharID].removedQuotes && DBState.db.characters[$selectedCharID].creatorNotes.length >= 2}
-                        <CreatorQuote quote={DBState.db.characters[$selectedCharID].creatorNotes} onRemove={() => {
-                            const cha = DBState.db.characters[$selectedCharID]
-                            if(cha.type !== 'group'){
-                                cha.removedQuotes = true
-                            }
-                            DBState.db.characters[$selectedCharID] = cha
+                    {#if !currentCharacter.removedQuotes && currentCharacter.creatorNotes.length >= 2}
+                        <CreatorQuote quote={currentCharacter.creatorNotes} onRemove={() => {
+                            currentCharacter.removedQuotes = true
                         }} />
                     {/if}
                 {/if}
             {/if}
 
-            {#if openMenu}
-                <div class="ds-chat-side-menu panel-shell ds-ui-menu"
-                    id="ds-chat-side-menu"
-                    role="menu"
-                    aria-label="Chat actions"
-                    tabindex="-1"
-                    class:ds-chat-side-menu-fixed={DBState.db.fixedChatTextarea}
-                    class:ds-chat-side-menu-absolute={!DBState.db.fixedChatTextarea}
-                    onclick={(e) => {
-                    e.stopPropagation()
-                }}>
-                    {#if DBState.db.characters[$selectedCharID].type === 'group'}
-                        <button
-                            type="button"
-                            class="ds-chat-side-menu-item ds-ui-menu-item"
-                            title={language.autoMode}
-                            aria-label={language.autoMode}
-                            onclick={runAutoMode}
-                        >
-                            <DicesIcon />
-                            <span class="ds-chat-side-menu-label">{language.autoMode}</span>
-                        </button>
-                    {/if}
-
-                    
-                    {#if DBState.db.characters[$selectedCharID].ttsMode === 'webspeech' || DBState.db.characters[$selectedCharID].ttsMode === 'elevenlab'}
-                        <button
-                            type="button"
-                            class="ds-chat-side-menu-item ds-ui-menu-item"
-                            title={language.ttsStop}
-                            aria-label={language.ttsStop}
-                            onclick={() => {
-                            stopTTS()
-                        }}>
-                            <MicOffIcon />
-                            <span class="ds-chat-side-menu-label">{language.ttsStop}</span>
-                        </button>
-                    {/if}
-
-                    <button
-                        type="button"
-                        class="ds-chat-side-menu-item ds-ui-menu-item"
-                        class:ds-chat-side-menu-item-disabled={!canContinueResponse}
-                        title={language.continueResponse}
-                        aria-label={language.continueResponse}
-                        aria-disabled={!canContinueResponse}
-                        onclick={() => {
-                            if(!canContinueResponse){
-                                return
-                            }
-                            sendContinue();
-                        }}
-                    >
-                        <StepForwardIcon />
-                        <span class="ds-chat-side-menu-label">{language.continueResponse}</span>
-                    </button>
-
-
-                    {#if DBState.db.showMenuChatList}
-                        <button
-                            type="button"
-                            class="ds-chat-side-menu-item ds-ui-menu-item"
-                            title={language.chatList}
-                            aria-label={language.chatList}
-                            onclick={() => {
-                            onOpenChatList()
-                            openMenu = false
-                        }}>
-                            <DatabaseIcon />
-                            <span class="ds-chat-side-menu-label">{language.chatList}</span>
-                        </button>
-                    {/if}
-
-                    {#each comfyMenuTemplates as template (`comfy-template-${template.id}`)}
-                        <div class="ds-chat-side-menu-divider"></div>
-                        <button
-                            type="button"
-                            class="ds-chat-side-menu-item ds-ui-menu-item"
-                            title={template.buttonName || template.trigger}
-                            aria-label={template.buttonName || template.trigger}
-                            onclick={() => {
-                                void runComfyTemplateById(template.id)
-                                openMenu = false
-                            }}
-                        >
-                            <ImagePlusIcon />
-                            <span class="ds-chat-side-menu-label">{template.buttonName || template.trigger}</span>
-                        </button>
-                    {/each}
-
-                    {#if DBState.db.translator !== ''}
-                        <button
-                            type="button"
-                            class="ds-chat-side-menu-item ds-ui-menu-item"
-                            class:ds-chat-side-menu-item-active={DBState.db.useAutoTranslateInput}
-                            title={language.autoTranslateInput}
-                            aria-label={language.autoTranslateInput}
-                            aria-pressed={DBState.db.useAutoTranslateInput}
-                            onclick={() => {
-                            DBState.db.useAutoTranslateInput = !DBState.db.useAutoTranslateInput
-                        }}>
-                            <GlobeIcon />
-                            <span class="ds-chat-side-menu-label">{language.autoTranslateInput}</span>
-                        </button>
-                        
-                    {/if}
-            
-                    <button
-                        type="button"
-                        class="ds-chat-side-menu-item ds-ui-menu-item"
-                        title={language.screenshot}
-                        aria-label={language.screenshot}
-                        onclick={() => {
-                        screenShot()
-                    }}>
-                        <CameraIcon />
-                        <span class="ds-chat-side-menu-label">{language.screenshot}</span>
-                    </button>
-
-                    <button
-                        type="button"
-                        class="ds-chat-side-menu-item ds-ui-menu-item"
-                        title={language.postFile}
-                        aria-label={language.postFile}
-                        onclick={async () => {
-                        const results = await postChatFile(messageInput)
-                        if(!results) return
-                        for(const res of results){
-                            if(res?.type === 'asset'){
-                                fileInput.push(res.data)
-                            }
-                            if(res?.type === 'text'){
-                                messageInput += `{{file::${res.name}::${res.data}}}`
-                            }
-                        }
-                        updateInputSizeAll()
-                    }}>
-
-                        <ImagePlusIcon />
-                        <span class="ds-chat-side-menu-label">{language.postFile}</span>
-                    </button>
-
-
-                    <button
-                        type="button"
-                        class="ds-chat-side-menu-item ds-ui-menu-item"
-                        class:ds-chat-side-menu-item-active={DBState.db.useAutoSuggestions}
-                        title={language.autoSuggest}
-                        aria-label={language.autoSuggest}
-                        aria-pressed={DBState.db.useAutoSuggestions}
-                        onclick={async () => {
-                        DBState.db.useAutoSuggestions = !DBState.db.useAutoSuggestions
-                    }}>
-                        <ReplyIcon />
-                        <span class="ds-chat-side-menu-label">{language.autoSuggest}</span>
-                    </button>
-
-
-                    <button
-                        type="button"
-                        class="ds-chat-side-menu-item ds-ui-menu-item"
-                        title={language.modules}
-                        aria-label={language.modules}
-                        onclick={() => {
-                        DBState.db.characters[$selectedCharID].chats[DBState.db.characters[$selectedCharID].chatPage].modules ??= []
-                        onOpenModuleList()
-                        openMenu = false
-                    }}>
-                        <PackageIcon />
-                        <span class="ds-chat-side-menu-label">{language.modules}</span>
-                    </button>
-
-                    {#if DBState.db.sideMenuRerollButton}
-                        <button
-                            type="button"
-                            class="ds-chat-side-menu-item ds-ui-menu-item"
-                            title={language.reroll}
-                            aria-label={language.reroll}
-                            onclick={reroll}
-                        >
-                            <RefreshCcwIcon />
-                            <span class="ds-chat-side-menu-label">{language.reroll}</span>
-                        </button>
-                    {/if}
-                </div>
-
-            {/if}
             </div>
 
-            <div class="ds-chat-composer-shell"
-                class:ds-chat-composer-shell-fixed={DBState.db.fixedChatTextarea}
-                class:ds-chat-composer-shell-flow={!DBState.db.fixedChatTextarea}
-            >
+            <div class="ds-chat-composer-stack">
+                {#if currentEvolutionSettings?.pendingProposal}
+                    <button
+                        type="button"
+                        class="ds-chat-evolution-review-prompt"
+                        onclick={() => { showEvolutionProposal = true }}
+                    >
+                        <span class="ds-settings-label-muted-sm">Pending evolution proposal</span>
+                        <span class="ds-chat-evolution-review-prompt-action">Review</span>
+                    </button>
+                {/if}
+
+                {#if evolutionBusy}
+                    <div class="ds-chat-evolution-status-inline" role="status" aria-live="polite">
+                        <div class="ds-chat-inline-status">
+                            <div class="ds-chat-spinner ds-chat-spinner-aux"></div>
+                            <span>{evolutionBusyLabel}</span>
+                        </div>
+                        <div class="ds-chat-evolution-status-bar" aria-hidden="true"></div>
+                    </div>
+                {/if}
+
+                <div class="ds-chat-composer-shell"
+                    class:ds-chat-composer-shell-fixed={DBState.db.fixedChatTextarea}
+                    class:ds-chat-composer-shell-flow={!DBState.db.fixedChatTextarea}
+                >
                 {#if DBState.db.useChatSticker && currentCharacter.type !== 'group'}
                     <button
                         type="button"
@@ -1240,24 +1348,330 @@
                         ></div>
                     </div>
                 {/if}
-                <button
-                        type="button"
-                        title="Open chat actions"
-                        aria-label="Open chat actions"
-                        aria-haspopup="menu"
-                        aria-expanded={openMenu}
-                        aria-controls="ds-chat-side-menu"
-                        onclick={(e) => {
-                        openMenu = !openMenu
-                        e.stopPropagation()
-                    }}
-                        class="ds-chat-composer-action ds-chat-composer-action-end icon-btn icon-btn--sm"
-                        class:is-active={openMenu}
-                        style:height={inputHeight}
+                <div
+                    class="ds-chat-floating-actions action-rail"
+                    class:ds-chat-composer-menu-anchor={true}
                 >
-                    <MenuIcon />
-                </button>
+                    <button
+                            type="button"
+                            title="Open chat actions"
+                            aria-label="Open chat actions"
+                            aria-haspopup="menu"
+                            aria-expanded={openMenu}
+                            aria-controls="ds-chat-side-menu"
+                            onclick={(e) => {
+                            openMenu = !openMenu
+                            e.stopPropagation()
+                        }}
+                            class="ds-chat-floating-action-btn icon-btn icon-btn--sm"
+                            class:ds-chat-composer-action={true}
+                            class:ds-chat-composer-action-end={true}
+                            class:is-active={openMenu}
+                            style:height={inputHeight}
+                    >
+                        <MenuIcon />
+                    </button>
+
+                    {#if !isEvolutionReviewVisible && openMenu}
+                        <div
+                            class="ds-chat-side-menu panel-shell ds-ui-menu"
+                            class:ds-chat-side-menu-composer={true}
+                            id="ds-chat-side-menu"
+                            role="menu"
+                            aria-label="Chat actions"
+                            tabindex="-1"
+                            onclick={(e) => {
+                                e.stopPropagation()
+                            }}
+                        >
+                            {#if currentCharacter.type === 'group'}
+                                <button
+                                    type="button"
+                                    class="ds-chat-side-menu-item ds-ui-menu-item"
+                                    title={language.autoMode}
+                                    aria-label={language.autoMode}
+                                    onclick={runAutoMode}
+                                >
+                                    <DicesIcon />
+                                    <span class="ds-chat-side-menu-label">{language.autoMode}</span>
+                                </button>
+                            {/if}
+
+                            {#if currentCharacter.ttsMode === 'webspeech' || currentCharacter.ttsMode === 'elevenlab'}
+                                <button
+                                    type="button"
+                                    class="ds-chat-side-menu-item ds-ui-menu-item"
+                                    title={language.ttsStop}
+                                    aria-label={language.ttsStop}
+                                    onclick={() => {
+                                        stopTTS()
+                                    }}
+                                >
+                                    <MicOffIcon />
+                                    <span class="ds-chat-side-menu-label">{language.ttsStop}</span>
+                                </button>
+                            {/if}
+
+                            <button
+                                type="button"
+                                class="ds-chat-side-menu-item ds-ui-menu-item"
+                                class:ds-chat-side-menu-item-disabled={!canContinueResponse}
+                                title={language.continueResponse}
+                                aria-label={language.continueResponse}
+                                aria-disabled={!canContinueResponse}
+                                onclick={() => {
+                                    if(!canContinueResponse){
+                                        return
+                                    }
+                                    sendContinue();
+                                }}
+                            >
+                                <StepForwardIcon />
+                                <span class="ds-chat-side-menu-label">{language.continueResponse}</span>
+                            </button>
+
+                            {#if DBState.db.showMenuChatList}
+                                <button
+                                    type="button"
+                                    class="ds-chat-side-menu-item ds-ui-menu-item"
+                                    title={language.chatList}
+                                    aria-label={language.chatList}
+                                    onclick={() => {
+                                        onOpenChatList()
+                                        openMenu = false
+                                    }}
+                                >
+                                    <DatabaseIcon />
+                                    <span class="ds-chat-side-menu-label">{language.chatList}</span>
+                                </button>
+                            {/if}
+
+                            {#each comfyMenuTemplates as template (`comfy-template-${template.id}`)}
+                                <div class="ds-chat-side-menu-divider"></div>
+                                <button
+                                    type="button"
+                                    class="ds-chat-side-menu-item ds-ui-menu-item"
+                                    title={template.buttonName || template.trigger}
+                                    aria-label={template.buttonName || template.trigger}
+                                    onclick={() => {
+                                        void runComfyTemplateById(template.id)
+                                        openMenu = false
+                                    }}
+                                >
+                                    <ImagePlusIcon />
+                                    <span class="ds-chat-side-menu-label">{template.buttonName || template.trigger}</span>
+                                </button>
+                            {/each}
+
+                            {#if DBState.db.translator !== ''}
+                                <button
+                                    type="button"
+                                    class="ds-chat-side-menu-item ds-ui-menu-item"
+                                    class:ds-chat-side-menu-item-active={DBState.db.useAutoTranslateInput}
+                                    title={language.autoTranslateInput}
+                                    aria-label={language.autoTranslateInput}
+                                    aria-pressed={DBState.db.useAutoTranslateInput}
+                                    onclick={() => {
+                                        DBState.db.useAutoTranslateInput = !DBState.db.useAutoTranslateInput
+                                    }}
+                                >
+                                    <GlobeIcon />
+                                    <span class="ds-chat-side-menu-label">{language.autoTranslateInput}</span>
+                                </button>
+                            {/if}
+
+                            <button
+                                type="button"
+                                class="ds-chat-side-menu-item ds-ui-menu-item"
+                                title={language.screenshot}
+                                aria-label={language.screenshot}
+                                onclick={() => {
+                                    screenShot()
+                                }}
+                            >
+                                <CameraIcon />
+                                <span class="ds-chat-side-menu-label">{language.screenshot}</span>
+                            </button>
+
+                            <button
+                                type="button"
+                                class="ds-chat-side-menu-item ds-ui-menu-item"
+                                title="Character evolution handoff"
+                                aria-label="Character evolution handoff"
+                                onclick={() => {
+                                    void runEvolutionHandoff()
+                                }}
+                                disabled={evolutionBusy || currentCharacter?.type === 'group' || !!currentEvolutionSettings?.pendingProposal}
+                            >
+                                <GitBranch />
+                                <span class="ds-chat-side-menu-label">
+                                    {#if evolutionAction === 'handoff'}
+                                        {#if evolutionHandoffBlockedForCurrentChat}
+                                            Replaying Accepted Chat
+                                        {:else}
+                                            Running Handoff
+                                        {/if}
+                                    {:else if currentEvolutionSettings?.pendingProposal}
+                                        Review Pending Proposal
+                                    {:else if evolutionHandoffBlockedForCurrentChat}
+                                        Replay Accepted Chat
+                                    {:else}
+                                        Handoff
+                                    {/if}
+                                </span>
+                            </button>
+
+                            <button
+                                type="button"
+                                class="ds-chat-side-menu-item ds-ui-menu-item"
+                                title={language.postFile}
+                                aria-label={language.postFile}
+                                onclick={async () => {
+                                    const results = await postChatFile(messageInput)
+                                    if(!results) return
+                                    for(const res of results){
+                                        if(res?.type === 'asset'){
+                                            fileInput.push(res.data)
+                                        }
+                                        if(res?.type === 'text'){
+                                            messageInput += `{{file::${res.name}::${res.data}}}`
+                                        }
+                                    }
+                                    updateInputSizeAll()
+                                }}
+                            >
+                                <ImagePlusIcon />
+                                <span class="ds-chat-side-menu-label">{language.postFile}</span>
+                            </button>
+
+                            <button
+                                type="button"
+                                class="ds-chat-side-menu-item ds-ui-menu-item"
+                                class:ds-chat-side-menu-item-active={DBState.db.useAutoSuggestions}
+                                title={language.autoSuggest}
+                                aria-label={language.autoSuggest}
+                                aria-pressed={DBState.db.useAutoSuggestions}
+                                onclick={async () => {
+                                    DBState.db.useAutoSuggestions = !DBState.db.useAutoSuggestions
+                                }}
+                            >
+                                <ReplyIcon />
+                                <span class="ds-chat-side-menu-label">{language.autoSuggest}</span>
+                            </button>
+
+                            <button
+                                type="button"
+                                class="ds-chat-side-menu-item ds-ui-menu-item"
+                                title={language.modules}
+                                aria-label={language.modules}
+                                onclick={() => {
+                                    if (currentChatEntry) {
+                                        currentChatEntry.modules ??= []
+                                    }
+                                    onOpenModuleList()
+                                    openMenu = false
+                                }}
+                            >
+                                <PackageIcon />
+                                <span class="ds-chat-side-menu-label">{language.modules}</span>
+                            </button>
+
+                            {#if DBState.db.sideMenuRerollButton}
+                                <button
+                                    type="button"
+                                    class="ds-chat-side-menu-item ds-ui-menu-item"
+                                    title={language.reroll}
+                                    aria-label={language.reroll}
+                                    onclick={reroll}
+                                >
+                                    <RefreshCcwIcon />
+                                    <span class="ds-chat-side-menu-label">{language.reroll}</span>
+                                </button>
+                            {/if}
+                        </div>
+                    {/if}
+                </div>
+                </div>
             </div>
+            {/if}
         </div>
     {/if}
 </div>
+
+<style>
+    .ds-chat-review-mode {
+        display: flex;
+        flex: 1 1 auto;
+        min-height: 0;
+        width: 100%;
+        background: var(--ds-surface-1);
+    }
+
+    .ds-chat-composer-stack {
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+        gap: var(--ds-space-2);
+        width: min(calc(100% - var(--ds-space-5)), 68rem);
+        margin-inline: auto;
+    }
+
+    .ds-chat-evolution-review-prompt {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--ds-space-3);
+        width: 100%;
+        padding: var(--ds-space-2) var(--ds-space-3);
+        border: 1px solid var(--ds-border-subtle);
+        border-radius: var(--ds-radius-md);
+        background: color-mix(in srgb, var(--ds-surface-2) 92%, transparent);
+        color: inherit;
+        cursor: pointer;
+    }
+
+    .ds-chat-evolution-review-prompt-action {
+        color: var(--ds-text-primary);
+        font-weight: var(--ds-font-weight-medium);
+    }
+
+    .ds-chat-evolution-status-inline {
+        width: 100%;
+        display: flex;
+        flex-direction: column;
+        gap: var(--ds-space-2);
+        padding: var(--ds-space-2) var(--ds-space-3);
+        border: 1px solid var(--ds-border-subtle);
+        border-radius: var(--ds-radius-md);
+        background: var(--ds-surface-2);
+    }
+
+    .ds-chat-composer-menu-anchor {
+        position: relative;
+        display: inline-flex;
+        align-items: stretch;
+    }
+
+    .ds-chat-side-menu-composer {
+        position: absolute;
+        right: 0;
+        bottom: calc(100% + var(--ds-space-2));
+        min-width: min(20rem, calc(100vw - (var(--ds-space-4) * 2)));
+        z-index: 35;
+    }
+
+    @media (max-width: 720px) {
+        .ds-chat-composer-stack,
+        .ds-chat-evolution-status-inline,
+        .ds-chat-side-menu-composer,
+        .ds-chat-evolution-review-prompt {
+            width: 100%;
+            min-width: 0;
+        }
+
+        .ds-chat-evolution-review-prompt {
+            align-items: flex-start;
+            flex-direction: column;
+        }
+    }
+</style>

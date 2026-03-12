@@ -18,7 +18,6 @@ vi.mock(import("src/ts/stores.svelte"), async () => {
       db: {
         customPromptTemplateToggle: "",
         globalChatVariables: {},
-        hypaV3: false,
       },
     },
     MobileGUI: writable(false),
@@ -36,7 +35,7 @@ vi.mock(import("src/ts/util"), () => ({
 
 vi.mock(import("src/lang"), () => ({
   language: {
-    ToggleHypaMemory: "Hypa memory",
+    ToggleMemory: "Memory",
   },
 }));
 
@@ -73,7 +72,7 @@ describe("toggles runtime smoke", () => {
       target,
       props: {
         chara: {
-          supaMemory: false,
+          memoryEnabled: false,
         },
       },
     });

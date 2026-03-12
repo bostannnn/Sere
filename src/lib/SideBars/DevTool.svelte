@@ -1,5 +1,6 @@
 <script lang="ts">
     import { selectedCharID } from "src/ts/stores.svelte";
+    import { resolveSelectedChatState } from "src/ts/storage/database.svelte";
     import TextInput from "../UI/GUI/TextInput.svelte";
     import NumberInput from "../UI/GUI/NumberInput.svelte";
     import Button from "../UI/GUI/Button.svelte";
@@ -19,6 +20,7 @@
     import OptionInput from "../UI/GUI/OptionInput.svelte";
   import { loadLoreBookV3Prompt } from "src/ts/process/lorebook.svelte";
   import { getModules } from "src/ts/process/modules";
+  import { v4 } from "uuid";
 
     let previewMode = $state('chat')
     let previewJoin = $state('yes')
@@ -29,10 +31,21 @@
         if($isDoingChat){
             return false
         }
+        const targetState = resolveSelectedChatState(DBState.db.characters, $selectedCharID)
+        const targetCharacter = targetState.character
+        const targetChat = targetState.chat
+        if (!targetCharacter?.chaId || !targetChat) {
+            return false
+        }
+        targetChat.id ??= v4()
         alertWait("Loading...")
         await sendChat(-1, {
             preview: previewJoin !== 'prompt',
-            previewPrompt: previewJoin === 'prompt'
+            previewPrompt: previewJoin === 'prompt',
+            target: {
+                characterId: targetCharacter.chaId,
+                chatId: targetChat.id,
+            },
         })
 
         let md = ''

@@ -195,6 +195,95 @@ describe("server db runtime smoke", () => {
     }
   });
 
+  it("does not persist memory debug-only changes as settings.replace", async () => {
+    let postedCommandsCount = 0;
+    let postedCommandsRequest: {
+      commands?: Array<{ type?: string }>;
+    } | null = null;
+
+    const localDb: any = {
+      memoryPresetId: 0,
+      memoryPresets: [
+        {
+          name: "Default",
+          settings: {
+            summarizationModel: "subModel",
+            summarizationPrompt: "",
+            memoryTokensRatio: 0.12,
+            maxChatsPerSummary: 24,
+            maxSelectedSummaries: 4,
+            periodicSummarizationEnabled: true,
+            periodicSummarizationInterval: 24,
+            recentSummarySlots: 3,
+            similarSummarySlots: 1,
+            recentMemoryRatio: 0.75,
+            similarMemoryRatio: 0.25,
+            processRegexScript: false,
+            doNotSummarizeUserMessage: false,
+          },
+        },
+      ],
+      characters: [],
+    };
+    getDatabaseMock.mockImplementation(() => localDb);
+
+    fetchWithServerAuthMock.mockImplementation(async (input: RequestInfo | URL, init: RequestInit = {}) => {
+      const url = typeof input === "string" ? input : input.toString();
+      const method = (init.method ?? "GET").toUpperCase();
+
+      if (url === "/data/state/snapshot" && method === "GET") {
+        return jsonResponse({
+          serverTime: Date.now(),
+          lastEventId: 30,
+          settings: {
+            memoryPresetId: 0,
+            memoryPresets: localDb.memoryPresets,
+          },
+          characters: [],
+          chatsByCharacter: {},
+          revisions: {
+            settings: 1,
+            characters: {},
+            chats: {},
+          },
+        });
+      }
+
+      if (url === "/data/state/commands" && method === "POST") {
+        postedCommandsCount += 1;
+        postedCommandsRequest = JSON.parse(String(init.body ?? "{}"));
+        return jsonResponse({
+          ok: true,
+          lastEventId: 31,
+          applied: [],
+          conflicts: [],
+        });
+      }
+
+      throw new Error(`Unexpected request: ${method} ${url}`);
+    });
+
+    const { loadServerDatabase, saveServerDatabase } = await import("src/ts/storage/serverDb");
+    await loadServerDatabase();
+
+    localDb.memoryDebug = {
+      timestamp: Date.now(),
+      model: "openrouter/deepseek",
+      prompt: "debug only",
+      input: "",
+      formatted: [],
+    };
+
+    await saveServerDatabase(localDb, {
+      character: [],
+      chat: [],
+    });
+
+    expect(postedCommandsCount).toBe(0);
+    const postedCommands = Array.isArray(postedCommandsRequest?.commands) ? postedCommandsRequest.commands : [];
+    expect(postedCommands.some((entry) => entry?.type === "settings.replace")).toBe(false);
+  });
+
   it("does not lose queued chat creates when local db mutates during an in-flight save", async () => {
     const localDb: any = {
       characters: [

@@ -4,22 +4,24 @@ Last reviewed: 2026-02-14
 
 ## 1. API Smoke Pack (Automated)
 
-Start node server (separate terminal):
+Start an isolated node server (separate terminal). Do not run the smoke pack against `pnpm run runserver`, because that uses the live `data/` root:
 
 ```bash
-pnpm run runserver
+pnpm run runserver:test
+# or: pnpm run runserver:tmp
 ```
 
 Run migration smoke pack:
 
 ```bash
-RISU_DATA_TEST_URL=http://localhost:6001 node dev/run-migration-smoke-pack.js
+pnpm run smoke:migration:api
+# or: RISU_STORAGE_TEST_ALLOW_WRITE=1 RISU_DATA_TEST_URL=http://localhost:6001 node dev/run-migration-smoke-pack.js
 ```
 
 This pack currently validates:
 - server-first storage contract (`scripts/test-server-storage.js`)
 - migrated LLM providers preview/execute contracts (`scripts/test-server-llm-phaseA.js`)
-- HypaV3 memory endpoint contracts (`scripts/test-server-memory.js`)
+- Memory endpoint contracts (`scripts/test-server-memory.js`)
 - fixture character/chat/assets lifecycle (`dev/test-server-fixture-flow.js`)
 
 One-command full automated smoke (settings runtime + API pack, auto server start/stop):
@@ -69,6 +71,7 @@ output/playwright/
 - No blocking runtime modal during export/import flow.
 - Re-imported character has valid image and chat opens.
 - `/data/llm/logs` contains expected migrated provider entries from smoke runs.
+- No smoke command writes to the live `data/` root.
 
 ## 4. Known Gaps (Track)
 

@@ -34,7 +34,7 @@ The Node.js server owns all LLM execution, prompt assembly, RAG, and memory. The
 │       │   ├── index.svelte.ts # Chat orchestration (large — active split target)
 │       │   ├── request/        # LLM request handlers (openAI.ts, request.ts, etc.)
 │       │   ├── rag/            # Client RAG delegates (server ingest/search, progress handling)
-│       │   ├── memory/         # HypaV3 memory client
+│       │   ├── memory/         # Memory client
 │       │   ├── mcp/            # MCP integration
 │       │   └── prompt.ts       # Prompt assembly types
 │       ├── storage/            # Storage layer (database.svelte.ts, serverDb.ts, etc.)
@@ -47,20 +47,21 @@ The Node.js server owns all LLM execution, prompt assembly, RAG, and memory. The
 │   ├── storage_utils.cjs       # ETag + safe path primitives
 │   ├── routes/                 # HTTP route registration (one file per domain)
 │   │   ├── llm_routes.cjs      # /data/llm/*
-│   │   ├── storage_routes.cjs  # /data/settings, /data/characters, /data/chats
+│   │   ├── auth_routes.cjs     # /data/auth/*
+│   │   ├── state_routes.cjs    # /data/state/*
+│   │   ├── sync_routes.cjs     # /data/sync/*
 │   │   ├── rag_routes.cjs      # /data/rag/* + /data/embeddings + /data/transformers/*
 │   │   ├── content_routes.cjs  # /data/assets, /data/prompts, /data/themes, etc.
-│   │   ├── memory_routes.cjs   # /data/memory/hypav3/*
+│   │   ├── memory_routes.cjs   # /data/memory/*
 │   │   ├── proxy_routes.cjs    # /data/proxy
-│   │   ├── legacy_routes.cjs   # /data/auth/*, /data/storage/* (backward compat)
-│   │   ├── system_routes.cjs   # /, retired /api/* (410)
+│   │   ├── system_routes.cjs   # /
 │   │   └── integration_routes.cjs  # /data/integrations/comfy/*
 │   └── llm/                    # LLM domain logic
 │       ├── engine.cjs          # Provider dispatch
 │       ├── prompt.cjs          # Prompt assembly
 │       ├── lorebook.cjs        # Lorebook injection
-│       ├── memory.cjs          # HypaV3 memory
-│       ├── audit.cjs           # Durable JSONL execution log
+│       ├── memory.cjs          # Memory runtime
+│       ├── audit.cjs           # Durable JSON execution log
 │       ├── [provider].cjs      # One file per LLM provider (openai, anthropic, etc.)
 │       └── ...
 │   └── rag/                    # RAG domain logic
@@ -83,7 +84,7 @@ The Node.js server owns all LLM execution, prompt assembly, RAG, and memory. The
 
 `AlertComp` is now a thin modal router in [`src/lib/Others/AlertComp.svelte`](/Users/andrewbostan/Documents/RisuAII/src/lib/Others/AlertComp.svelte). Its alert-mode implementations live under [`src/lib/Others/AlertComp/`](/Users/andrewbostan/Documents/RisuAII/src/lib/Others/AlertComp) as focused subcomponents and helpers.
 
-`HypaV3Modal.svelte` is now a thin shell around [`src/lib/Others/HypaV3Modal/useHypaV3Modal.svelte.ts`](/Users/andrewbostan/Documents/RisuAII/src/lib/Others/HypaV3Modal/useHypaV3Modal.svelte.ts) and focused helper modules in [`src/lib/Others/HypaV3Modal/`](/Users/andrewbostan/Documents/RisuAII/src/lib/Others/HypaV3Modal). Keep new memory-modal behavior in those split files so staged changes continue to satisfy the 500 LOC gate.
+[`MemoryPanel.svelte`](/Users/andrewbostan/Documents/RisuAII/src/lib/Others/MemoryPanel.svelte) is backed by [`src/lib/Others/MemoryModal/useMemoryModal.svelte.ts`](/Users/andrewbostan/Documents/RisuAII/src/lib/Others/MemoryModal/useMemoryModal.svelte.ts) and focused helper modules in [`src/lib/Others/MemoryModal/`](/Users/andrewbostan/Documents/RisuAII/src/lib/Others/MemoryModal). Keep new memory-modal behavior in those split files so staged changes continue to satisfy the 500 LOC gate.
 
 ---
 
@@ -173,7 +174,7 @@ pnpm build
 
 For server-first mode locally: run both `pnpm dev` and `pnpm run runserver`. The client at `localhost:5173` proxies API calls to the server at `localhost:6001`.
 
-Memory sidebar note: in embedded right-sidebar Memory mode, manual HypaV3 summarize (`Start/End + Summarize`) always targets the currently active chat (`chatPage`).
+Memory sidebar note: in embedded right-sidebar Memory mode, manual summarize (`Start/End + Summarize`) always targets the currently active chat (`chatPage`).
 
 ### Git Hook Setup (one-time per clone)
 
@@ -189,7 +190,7 @@ git config core.hooksPath .githooks
 
 | Command | Data root | Safe for testing? |
 |---------|-----------|-------------------|
-| `pnpm run runserver` | `data/users/default/` | **No — production data** |
+| `pnpm run runserver` | `data/` | **No — production data** |
 | `pnpm run runserver:tmp` | `/tmp/risu-smoke-data` | Yes, but may persist across reboots |
 | `pnpm run runserver:test` | `.dev-test-data/` | **Yes — isolated, gitignored** |
 
@@ -222,7 +223,7 @@ git config core.hooksPath .githooks
 ### Node Server Password (First Run)
 - On first protected `/data/*` request, if no password is configured, the UI prompts to set one.
 - Password auth token is stored per-tab in `sessionStorage.risuauth` (legacy `localStorage.risuauth` is auto-migrated and cleared).
-- Server stores password record in `<dataRoot>/save/__password` as `scrypt$...` (`data/users/default` by default).
+- Server stores password record in `<dataRoot>/save/__password` as `scrypt$...` (`data` by default).
 - Change password from UI in:
   - `Settings -> Advanced -> Server password status -> Change Server Password`
   - Change flow asks for current password, then new password + confirmation.
@@ -279,18 +280,15 @@ Covers the mandatory server-feature test requirement (Section 4 — unit tests +
 | `docs/ONBOARDING.md` | This file |
 | `docs/SERVER_ARCHITECTURE.md` | Full server endpoint catalog, module descriptions, request flows |
 | `docs/SERVER_RULES.md` | Server coding rules and contracts |
+| `docs/CODE_REVIEW_PLAYBOOK.md` | Default branch review workflow, required coverage categories, stop rule |
 | `docs/SERVER_CODE_REVIEW.md` | Current server audit (known issues, fix priorities) |
 | `docs/DESIGN_RULES.md` | UI design contracts (shell, navigation, tokens, state) |
 | `docs/TESTING_RULES.md` | Server-feature test mandate (unit + smoke required) and prototype smoke pass checklist |
-| `docs/UI_CHANGE_CHECKLIST.md` | Per-change UI verification checklist |
-| `docs/CONCEPT_COMPLETION_CHECKLIST.md` | Gate checklist before UI migration from prototype to production |
-| `docs/MIGRATION_PLAN.md` | UI Shell V2 migration phases and rollout strategy |
-| `docs/MIGRATION_MAP.md` | Prototype component → real Svelte component mapping |
-| `docs/CORE_PRODUCT_SPEC.md` | Product pillars, domain model, workspace contracts |
-| `docs/UI_SYSTEM_REDESIGN_RFC.md` | Unified app shell design spec |
-| `docs/MOBILE_NAV_PLAN.md` | Mobile navigation redesign spec |
 | `docs/MIGRATION_SMOKE_CHECKLIST.md` | API smoke pack and export/import regression gates |
-| `docs/EMOTION_GENERATION_SYSTEM_FLOW.md` | Emotion detection pipeline |
+| `docs/qa/*.md` | Manual QA suites for core, memory, RAG, and server-authoritative flows |
+| `docs/archive/*.md` | Archived product/prototype planning docs kept for historical context |
+
+Prototype-only migration artifacts that were removed from `/docs` still exist under `prototypes/structure-lab/moescape-concept/docs/` for reference during prototype work. Older product/spec docs that no longer drive active implementation live under `docs/archive/`.
 
 ---
 
@@ -315,11 +313,13 @@ Covers the mandatory server-feature test requirement (Section 4 — unit tests +
 |------|-----------|
 | `server/node/server.cjs` | Entry point — bootstrap and wiring only (283 lines) |
 | `server/node/routes/llm_routes.cjs` | `/data/llm/*` endpoints |
-| `server/node/routes/storage_routes.cjs` | `/data/settings`, `/data/characters`, `/data/chats` |
+| `server/node/routes/auth_routes.cjs` | `/data/auth/*` endpoints |
+| `server/node/routes/state_routes.cjs` | `/data/state/*` snapshot + command gateway |
+| `server/node/routes/sync_routes.cjs` | `/data/sync/events` SSE stream |
 | `server/node/routes/rag_routes.cjs` | `/data/rag/*`, `/data/embeddings`, `/data/transformers/*` endpoints |
 | `server/node/llm/engine.cjs` | LLM provider dispatch |
 | `server/node/llm/prompt.cjs` | Server-side prompt assembly |
-| `server/node/llm/audit.cjs` | Durable LLM execution log (JSONL) |
+| `server/node/llm/audit.cjs` | Durable LLM execution log (`logs/llm-execution/YYYY-MM-DD/*.json`) |
 | `server/node/rag/engine.cjs` | RAG search and chunk management |
 | `server/node/rag/embedding.cjs` | HuggingFace embedding pipeline |
 | `server/node/server_helpers.cjs` | `sendJson`, `sendSSE`, `requireSafeSegment` |
@@ -330,30 +330,20 @@ Covers the mandatory server-feature test requirement (Section 4 — unit tests +
 ## 8. Current State and Active Work
 
 ### What is complete
-- **Server-first architecture**: Node.js server handles all LLM execution (15+ providers), prompt assembly, RAG ingestion and search, HypaV3 memory summarization
+- **Server-first architecture**: Node.js server handles all active LLM execution, prompt assembly, RAG ingestion/search, memory summarization, and authoritative state APIs
 - **Template-controlled server RAG**: server builds `<Rules Context>` and injects it only into `rulebookRag` prompt-template slots; if no slot exists, prompt trace records `no_template_slot` instead of hard-prepending
+- **Character evolution server routes**: handoff, proposal accept/reject, and version history endpoints are registered on the Node server
 - **Server decomposition**: `server.cjs` decomposed from 5k+ LOC into 40+ focused modules using DI pattern
 - **Client gating**: `isNodeServer` is forced `true` for server-only runtime
-- **Type/test gates green**: `pnpm check` = 0 errors, `pnpm test` = all passing
 - **Lint gate**: `pnpm lint --max-warnings 0` is enforced in CI. There is an existing backlog of warnings being resolved in dedicated fix branches — do not add new ones
 
 ### What is in progress / next
-See `plan.md` for the full priority list. Short version:
+See `plan.md` for the current priority list. This section changes quickly; treat `plan.md` and the implementation as the source of truth for active work.
 
-**P0 — fix before shipping:**
-- `RulebookRagSetting` not yet wired into `CharConfig.svelte`
-- Validate first-run/password UX across LAN multi-device usage (server auth hardening landed on 2026-02-19)
-
-**P1 — fix before next feature:**
-- Missing try/catch on ~16 async server handlers
-- Inconsistent response shapes in older route files
-
-**P2 — UI migration (blocked on concept checklist):**
-- UI Shell V2 migration from prototype to production (see `docs/MIGRATION_PLAN.md`)
-- Gate: `docs/CONCEPT_COMPLETION_CHECKLIST.md` must be fully signed off first
-
-**Security debt (address before any public deployment):**
-- Direct `innerHTML` assignments without `DOMPurify.sanitize()` — now flagged automatically by `no-restricted-syntax` lint rule; fix violations as you touch affected files
+Current themes that still matter:
+- authoritative state/sync hardening
+- shell and settings convergence work
+- security cleanup around legacy HTML injection surfaces
 
 ---
 
@@ -369,7 +359,7 @@ See `plan.md` for the full priority list. Short version:
 8. If you touched `prototypes/structure-lab/moescape-concept/`: `pnpm run check:prototype`
 9. If you changed UI shell/navigation/routing: run `pnpm run check:ui-shell-smoke`
 10. If you changed server endpoints: update `docs/SERVER_ARCHITECTURE.md`
-11. If you changed UI shell/navigation/routing: update `docs/DESIGN_RULES.md` and `docs/UI_CHANGE_CHECKLIST.md`
+11. If you changed UI shell/navigation/routing: update `docs/DESIGN_RULES.md` and any affected QA/checklist doc under `docs/`
 12. No new `any`, `console.log`, unsanitized `innerHTML`, or files over 500 LOC
 
 Full rules: `CONVENTIONS.md`. Server-feature test spec: `docs/TESTING_RULES.md` Section 4.
@@ -412,10 +402,10 @@ pnpm run smoke:server:auth
 
 | Script / command | What it tests | Writes data? | Needs clean root? |
 |-----------------|--------------|-------------|-------------------|
-| `node scripts/test-memory-unit.cjs` | HypaV3 memory pipeline — pure functions, no server | No | No |
+| `node scripts/test-memory-unit.cjs` | Memory pipeline — pure functions, no server | No | No |
 | `smoke:server:safe` | Storage CRUD, LLM phase A dispatch, memory API | Yes (`RISU_STORAGE_TEST_ALLOW_WRITE=1`) | No |
 | `smoke:server:auth` | Password set / change / lockout flow | Yes (sets a server password) | **Yes** |
-| `smoke:memory:api` | HypaV3 memory trace endpoints | Yes | No |
+| `smoke:memory:api` | Memory trace endpoints | Yes | No |
 | `smoke:migration:api` | Migration smoke pack | Yes | No |
 | `smoke:app:auto` | Full app smoke (automated) | Read-heavy | No |
 

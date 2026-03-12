@@ -10,6 +10,16 @@ const {
 } = require('./scripts.cjs');
 const { buildServerLorebookMessages } = require('./lorebook.cjs');
 const { extractTextFromMessageContent, estimateMessagesTokens } = require('./tokenizer.cjs');
+const {
+    getEffectiveCharacterEvolutionSettings,
+    renderCharacterEvolutionStateForPrompt,
+} = require('./character_evolution.cjs');
+const {
+    getPromptTemplateFallbackTitle,
+    normalizeTemplateRange,
+    resolvePromptTemplateBlockTitle,
+    resolveMemoryTemplateMessages,
+} = require('../../../src/ts/process/promptTemplateShared.cjs');
 
 const TRACE_AUDIT_MAX_MESSAGE_COUNT = 64;
 const TRACE_AUDIT_MAX_CONTENT_CHARS = 1200;
@@ -60,27 +70,6 @@ function extractLatestUserMessage(rawBody) {
     return '';
 }
 
-function resolveServerMainPrompt(character, settings) {
-    const baseMainPrompt = toStringOrEmpty(settings?.mainPrompt);
-    const override = toStringOrEmpty(character?.systemPrompt);
-    let mainPrompt = override ? override.replaceAll('{{original}}', baseMainPrompt) : baseMainPrompt;
-
-    const additionalPrompt = toStringOrEmpty(settings?.additionalPrompt);
-    if (additionalPrompt && settings?.promptPreprocess === true) {
-        mainPrompt = mainPrompt ? `${mainPrompt}\n${additionalPrompt}` : additionalPrompt;
-    }
-    return mainPrompt;
-}
-
-function resolveServerGlobalNote(character, settings) {
-    const baseGlobalNote = toStringOrEmpty(settings?.globalNote);
-    const override = toStringOrEmpty(character?.replaceGlobalNote);
-    if (override) {
-        return override.replaceAll('{{original}}', baseGlobalNote);
-    }
-    return baseGlobalNote;
-}
-
 function getDefaultAuthorNoteText(settings) {
     const template = Array.isArray(settings?.promptTemplate) ? settings.promptTemplate : [];
     for (const card of template) {
@@ -112,16 +101,11 @@ function applyGlobalNoteOverride(baseGlobalNote, character) {
     return override.replaceAll('{{original}}', original);
 }
 
-function buildServerDescriptionPrompt(character, settings) {
+function buildServerDescriptionPrompt(character) {
     const chunks = [];
     const desc = toStringOrEmpty(character?.desc);
     if (desc) {
-        if (settings?.promptPreprocess === true) {
-            const prefix = toStringOrEmpty(settings?.descriptionPrefix);
-            chunks.push(`${prefix}${desc}`);
-        } else {
-            chunks.push(desc);
-        }
+        chunks.push(desc);
     }
 
     const additionalText = toStringOrEmpty(character?.additionalText);
@@ -140,32 +124,6 @@ function buildServerDescriptionPrompt(character, settings) {
     }
 
     return chunks.join('\n\n').trim();
-}
-
-function resolveTemplateBlockTitle(card, fallback = 'Prompt Block') {
-    const customName = toStringOrEmpty(card?.name);
-    if (customName) return customName;
-    return fallback;
-}
-
-function getTemplateCardFallbackTitle(cardType, cardType2 = '') {
-    if (cardType === 'plain') {
-        if (cardType2 === 'main') return 'Main Prompt';
-        if (cardType2 === 'globalNote') return 'Global Note';
-        return 'Plain Prompt';
-    }
-    if (cardType === 'jailbreak') return 'Jailbreak';
-    if (cardType === 'cot') return 'Chain Of Thought';
-    if (cardType === 'description') return 'Description';
-    if (cardType === 'persona') return 'Persona';
-    if (cardType === 'authornote') return 'Author Note';
-    if (cardType === 'lorebook') return 'Lorebook';
-    if (cardType === 'postEverything') return 'Post Everything';
-    if (cardType === 'chat' || cardType === 'chatML' || cardType === 'chatml') return 'Chat History';
-    if (cardType === 'memory') return 'HypaMemory';
-    if (cardType === 'rulebookRag') return 'Rulebook RAG';
-    if (cardType === 'gameState') return 'Game State';
-    return 'Prompt Block';
 }
 
 function pushPromptMessagesWithTitle(targetMessages, promptBlocks, newMessages, title, source = 'template') {
@@ -199,29 +157,6 @@ function shiftPromptBlockIndices(promptBlocks, startIndex, delta) {
         if (!Number.isInteger(idx) || idx < normalizedStart) continue;
         block.index = idx + normalizedDelta;
     }
-}
-
-function normalizeTemplateChatRange(chats, rangeStart, rangeEnd) {
-    const source = Array.isArray(chats) ? chats : [];
-    let start = Number.isFinite(Number(rangeStart)) ? Number(rangeStart) : 0;
-    let end = rangeEnd === 'end'
-        ? source.length
-        : (Number.isFinite(Number(rangeEnd)) ? Number(rangeEnd) : source.length);
-
-    if (start === -1000) {
-        start = 0;
-        end = source.length;
-    }
-    if (start < 0) {
-        start = source.length + start;
-        if (start < 0) start = 0;
-    }
-    if (end < 0) {
-        end = source.length + end;
-        if (end < 0) end = 0;
-    }
-    if (start >= end) return [];
-    return source.slice(start, end);
 }
 
 function convertStoredChatToOpenAIMessages(storedMessages, arg = {}) {
@@ -292,6 +227,14 @@ async function buildMessagesFromPromptTemplate(character, chat, settings, arg = 
     const personaPrompt = toStringOrEmpty(settings?.personaPrompt);
     const authorNote = resolveServerAuthorNote(chat, settings);
     const lorebook = buildServerLorebookMessages(character, chat, chats);
+    const evolutionSettings = getEffectiveCharacterEvolutionSettings(settings, character);
+    const characterState = evolutionSettings.enabled
+        ? renderCharacterEvolutionStateForPrompt(
+            evolutionSettings.currentState,
+            evolutionSettings.sectionConfigs,
+            evolutionSettings.privacy
+        )
+        : '';
     const memoryBuilder = typeof arg.buildServerMemoryMessages === 'function'
         ? arg.buildServerMemoryMessages
         : async () => [];
@@ -307,6 +250,7 @@ async function buildMessagesFromPromptTemplate(character, chat, settings, arg = 
         personaPrompt: personaPrompt ? [{ role: 'system', content: personaPrompt }] : [],
         lorebook,
         memory,
+        characterState: characterState ? [{ role: 'system', content: characterState }] : [],
         postEverything: [],
         authorNote: authorNote ? [{ role: 'system', content: authorNote }] : [],
     };
@@ -317,7 +261,11 @@ async function buildMessagesFromPromptTemplate(character, chat, settings, arg = 
         if (!card || typeof card !== 'object') continue;
         const cardType = toStringOrEmpty(card.type);
         const cardType2 = toStringOrEmpty(card.type2) || 'normal';
-        const blockTitle = resolveTemplateBlockTitle(card, getTemplateCardFallbackTitle(cardType, cardType2));
+        const blockTitle = resolvePromptTemplateBlockTitle({
+            ...card,
+            type: cardType,
+            type2: cardType2,
+        }) || getPromptTemplateFallbackTitle(cardType, cardType2);
 
         switch (cardType) {
             case 'plain':
@@ -402,7 +350,7 @@ async function buildMessagesFromPromptTemplate(character, chat, settings, arg = 
                 break;
             }
             case 'chat': {
-                let slice = normalizeTemplateChatRange(unformatted.chats, card.rangeStart, card.rangeEnd);
+                let slice = normalizeTemplateRange(unformatted.chats, card.rangeStart, card.rangeEnd);
                 if (settings?.promptSettings?.sendChatAsSystem === true && card.chatAsOriginalOnSystem !== true) {
                     slice = systemizeChatMessages(slice);
                 }
@@ -420,13 +368,41 @@ async function buildMessagesFromPromptTemplate(character, chat, settings, arg = 
                 const source = unformatted.memory.length > 0
                     ? unformatted.memory
                     : [];
+                const resolvedMemory = resolveMemoryTemplateMessages(
+                    source,
+                    Array.isArray(source[0]?.summaryItems) ? source[0].summaryItems : [],
+                    card.rangeStart,
+                    card.rangeEnd,
+                );
+                if (resolvedMemory.messages.length === 0) {
+                    promptBlocks.push({
+                        role: 'system',
+                        title: blockTitle,
+                        source: 'template',
+                        skipped: true,
+                        reason: resolvedMemory.skippedReason || 'no_memory_data',
+                    });
+                    break;
+                }
+                for (const item of resolvedMemory.messages) {
+                    if (!item || typeof item !== 'object') continue;
+                    const rendered = renderTemplateSlot(card.innerFormat, toStringOrEmpty(item.content), character, settings);
+                    const parsed = parsePromptAsMessages(rendered, character, settings, normalizeTemplateRole(item.role));
+                    pushPromptMessagesWithTitle(messages, promptBlocks, parsed, blockTitle, 'template');
+                }
+                break;
+            }
+            case 'characterState': {
+                const source = unformatted.characterState.length > 0
+                    ? unformatted.characterState
+                    : [];
                 if (source.length === 0) {
                     promptBlocks.push({
                         role: 'system',
                         title: blockTitle,
                         source: 'template',
                         skipped: true,
-                        reason: 'no_memory_data',
+                        reason: 'no_character_evolution_state',
                     });
                     break;
                 }
@@ -440,6 +416,8 @@ async function buildMessagesFromPromptTemplate(character, chat, settings, arg = 
             }
             case 'rulebookRag':
             case 'gameState': {
+                // Template slots are placeholders anchored to the next message index.
+                // A real block may later share this index after server-side context injection.
                 promptBlocks.push({
                     index: messages.length,
                     role: 'system',
@@ -501,69 +479,8 @@ async function buildGeneratePromptMessages(arg = {}) {
         userMessage: arg.userMessage,
         buildServerMemoryMessages: arg.buildServerMemoryMessages,
     });
-    let messages = Array.isArray(assembledFromTemplate?.messages) ? assembledFromTemplate.messages : null;
+    const messages = Array.isArray(assembledFromTemplate?.messages) ? assembledFromTemplate.messages : [];
     const promptBlocks = Array.isArray(assembledFromTemplate?.promptBlocks) ? assembledFromTemplate.promptBlocks : [];
-
-    if (!Array.isArray(messages) || messages.length === 0) {
-        messages = [];
-        const mainPrompt = resolveServerMainPrompt(character, settings);
-        pushPromptMessagesWithTitle(
-            messages,
-            promptBlocks,
-            parsePromptAsMessages(mainPrompt, character, settings, 'system'),
-            'Main Prompt',
-            'legacy'
-        );
-
-        pushPromptMessagesWithTitle(
-            messages,
-            promptBlocks,
-            convertStoredChatToOpenAIMessages(chat.message, {
-                limit: arg.historyLimit,
-                stripThoughts: true,
-            }),
-            'Chat History',
-            'legacy'
-        );
-
-        const globalNote = resolveServerGlobalNote(character, settings);
-        pushPromptMessagesWithTitle(
-            messages,
-            promptBlocks,
-            parsePromptAsMessages(globalNote, character, settings, 'system'),
-            'Global Note',
-            'legacy'
-        );
-
-        const authorNote = resolveServerAuthorNote(chat, settings);
-        pushPromptMessagesWithTitle(
-            messages,
-            promptBlocks,
-            parsePromptAsMessages(authorNote, character, settings, 'system'),
-            'Author Note',
-            'legacy'
-        );
-
-        const userMessage = toStringOrEmpty(arg.userMessage);
-        if (userMessage) {
-            const normalizedUserMessage = userMessage.trim();
-            const tail = messages[messages.length - 1];
-            const isDuplicateTail =
-                tail &&
-                tail.role === 'user' &&
-                typeof tail.content === 'string' &&
-                tail.content.trim() === normalizedUserMessage;
-            if (!isDuplicateTail) {
-                pushPromptMessagesWithTitle(
-                    messages,
-                    promptBlocks,
-                    [{ role: 'user', content: normalizedUserMessage }],
-                    'User Message',
-                    'legacy'
-                );
-            }
-        }
-    }
 
     injectDepthPrompt(messages, promptBlocks, character, settings);
 
@@ -691,7 +608,9 @@ function buildGenerateProviderRequest(provider, model, messages, maxTokens, stre
     requestBody.messages = messages;
     if (Number.isFinite(Number(maxTokens))) {
         const normalizedMaxTokens = Number(maxTokens);
-        if (!Number.isFinite(Number(requestBody.max_tokens)) && !Number.isFinite(Number(requestBody.max_completion_tokens))) {
+        if (Number.isFinite(Number(requestBody.max_completion_tokens))) {
+            requestBody.max_completion_tokens = normalizedMaxTokens;
+        } else {
             requestBody.max_tokens = normalizedMaxTokens;
         }
     }
@@ -701,6 +620,9 @@ function buildGenerateProviderRequest(provider, model, messages, maxTokens, stre
         requestBody.max_tokens = maxTokens || 1024;
     }
 
+    // Intentionally return both normalized fields and the raw provider request body.
+    // Execution adapters consume requestBody first, while audit/trace helpers rely on the
+    // provider-agnostic top-level fields for display and fallback extraction.
     return {
         model,
         messages,
@@ -859,8 +781,6 @@ function estimatePromptTokens(messages) {
 
 module.exports = {
     extractLatestUserMessage,
-    resolveServerMainPrompt,
-    resolveServerGlobalNote,
     resolveServerAuthorNote,
     convertStoredChatToOpenAIMessages,
     buildMessagesFromPromptTemplate,

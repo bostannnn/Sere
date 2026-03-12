@@ -1,4 +1,4 @@
-import type { EmbeddingVector } from "../memory/hypamemoryv2";
+import type { EmbeddingVector } from "../memory/embedding";
 
 export interface RagChunk<TMetadata = unknown> {
   id: string;

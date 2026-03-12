@@ -23,8 +23,8 @@
     import CustomGUISettingMenu from './lib/Setting/Pages/CustomGUISettingMenu.svelte';
     import { checkCharOrder } from './ts/globalApi.svelte';
     import { ArrowUpIcon, GlobeIcon, PlusIcon } from '@lucide/svelte';
-    import { hypaV3ProgressStore } from "./ts/stores.svelte";
-    import HypaV3Progress from './lib/Others/HypaV3Progress.svelte';
+    import { memoryProgressStore } from "./ts/stores.svelte";
+    import MemoryProgress from './lib/Others/MemoryProgress.svelte';
     import PopupList from './lib/UI/PopupList.svelte';
     import AppShellV2 from './lib/UI/AppShellV2.svelte';
 
@@ -177,8 +177,8 @@
         <BookmarkList />
     {/if}
     <SavePopupIconComp />
-    {#if $hypaV3ProgressStore.open}
-        <HypaV3Progress />
+    {#if $memoryProgressStore.open}
+        <MemoryProgress />
     {/if}
     {#if popupStore.children}
         <PopupList />

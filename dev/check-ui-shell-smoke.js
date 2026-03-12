@@ -107,24 +107,24 @@ const checks = [
     cmd: ["pnpm", "exec", "vitest", "run", "dev/prompt-diff-runtime-smoke.test.ts"],
   },
   {
-    name: "hypa-modal-runtime",
-    cmd: ["pnpm", "exec", "vitest", "run", "dev/hypa-modal-runtime-smoke.test.ts"],
+    name: "memory-modal-runtime",
+    cmd: ["pnpm", "exec", "vitest", "run", "dev/memory-modal-runtime-smoke.test.ts"],
   },
   {
-    name: "hypa-modal-embedded-manual-runtime",
-    cmd: ["pnpm", "exec", "vitest", "run", "dev/hypa-modal-embedded-manual-runtime-smoke.test.ts"],
+    name: "memory-modal-embedded-manual-runtime",
+    cmd: ["pnpm", "exec", "vitest", "run", "dev/memory-modal-embedded-manual-runtime-smoke.test.ts"],
   },
   {
-    name: "hypa-modal-log-scope-runtime",
-    cmd: ["pnpm", "exec", "vitest", "run", "dev/hypa-modal-log-scope-runtime-smoke.test.ts"],
+    name: "memory-modal-log-scope-runtime",
+    cmd: ["pnpm", "exec", "vitest", "run", "dev/memory-modal-log-scope-runtime-smoke.test.ts"],
   },
   {
-    name: "hypa-category-bulk-runtime",
-    cmd: ["pnpm", "exec", "vitest", "run", "dev/hypa-category-bulk-runtime-smoke.test.ts"],
+    name: "memory-category-bulk-runtime",
+    cmd: ["pnpm", "exec", "vitest", "run", "dev/memory-category-bulk-runtime-smoke.test.ts"],
   },
   {
-    name: "hypa-tag-summary-runtime",
-    cmd: ["pnpm", "exec", "vitest", "run", "dev/hypa-tag-summary-runtime-smoke.test.ts"],
+    name: "memory-tag-summary-runtime",
+    cmd: ["pnpm", "exec", "vitest", "run", "dev/memory-tag-summary-runtime-smoke.test.ts"],
   },
   {
     name: "alert-requestlogs-runtime",

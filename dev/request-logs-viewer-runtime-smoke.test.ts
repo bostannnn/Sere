@@ -24,6 +24,7 @@ const hoisted = vi.hoisted(() => ({
     },
   ]),
   getServerLLMLogs: vi.fn(async () => []),
+  isNodeServer: false,
 }));
 
 vi.mock(import("src/ts/stores.svelte"), async () => {
@@ -39,10 +40,12 @@ vi.mock(import("src/ts/stores.svelte"), async () => {
 vi.mock(import("src/lang"), () => {
   const language = new Proxy(
     {
-      ShowLog: "Request Logs",
+      sessionLogs: "Session Logs",
+      serverLLMLogs: "Server LLM Logs",
       collapseAll: "Collapse all",
       expandAll: "Expand all",
-      noRequestLogs: "No request logs",
+      noSessionLogs: "No session logs yet.",
+      noServerLLMLogs: "No server LLM logs yet.",
     } as Record<string, string>,
     {
       get(target, property) {
@@ -62,7 +65,9 @@ vi.mock(import("src/ts/globalApi.svelte"), () => ({
 }));
 
 vi.mock(import("src/ts/platform"), () => ({
-  isNodeServer: false,
+  get isNodeServer() {
+    return hoisted.isNodeServer;
+  },
 }));
 
 import RequestLogsViewer from "src/lib/Others/RequestLogsViewer.svelte";
@@ -80,9 +85,10 @@ describe("request logs viewer runtime smoke", () => {
   beforeEach(() => {
     hoisted.getFetchLogs.mockClear();
     hoisted.getServerLLMLogs.mockClear();
+    hoisted.isNodeServer = false;
     alertStore.set({
       type: "requestlogs",
-      msg: "",
+      msg: "client",
     });
     document.body.innerHTML = "";
   });
@@ -168,6 +174,35 @@ describe("request logs viewer runtime smoke", () => {
 
     const emptyState = document.querySelector(".alert-requestlog-empty.empty-state") as HTMLElement | null;
     expect(emptyState).not.toBeNull();
-    expect((emptyState?.textContent ?? "").includes("No request logs")).toBe(true);
+    expect((emptyState?.textContent ?? "").includes("No session logs yet.")).toBe(true);
+  });
+
+  it("renders only server logs when opened in server mode", async () => {
+    hoisted.isNodeServer = true;
+    hoisted.getServerLLMLogs.mockImplementation(async () => [
+      {
+        timestamp: "2026-02-27T13:01:00.000Z",
+        requestId: "req-server-1",
+        path: "/data/llm/execute",
+        endpoint: "execute",
+        provider: "openrouter",
+        status: 200,
+        ok: true,
+        durationMs: 321,
+        request: {
+          model: "openrouter/test-model",
+          chatId: "chat-server-1",
+        },
+      },
+    ]);
+    const target = document.createElement("div");
+    document.body.appendChild(target);
+    app = mount(RequestLogsViewer, { target, props: { mode: "modal", source: "server" } });
+    await flushUi();
+
+    expect(hoisted.getServerLLMLogs).toHaveBeenCalledTimes(1);
+    expect((document.querySelector(".alert-requestlog-title")?.textContent ?? "").includes("Server LLM Logs")).toBe(true);
+    expect((document.body.textContent ?? "").includes("Session Logs")).toBe(false);
+    expect((document.body.textContent ?? "").includes("/data/llm/execute")).toBe(true);
   });
 });

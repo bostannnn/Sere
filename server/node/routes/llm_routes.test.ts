@@ -35,7 +35,7 @@ describe("llm routes", () => {
     const buildGenerateExecutionPayload = vi.fn(async (_body: unknown, options: Record<string, unknown>) => {
       if (options.readOnlyTrace !== true && typeof options.onPeriodicSummaryTrace === "function") {
         await options.onPeriodicSummaryTrace({
-          endpoint: "hypav3_periodic_summarize",
+          endpoint: "memory_periodic_summarize",
           status: 200,
           ok: true,
           promptMessages: [],

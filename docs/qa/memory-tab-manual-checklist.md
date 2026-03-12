@@ -7,8 +7,8 @@ Commit: __________
 Build/Env: __________
 
 ## Scope
-This checklist is for the right-sidebar Memory redesign and HypaV3 manual summarize correctness:
-- Memory as third sidebar tab (`Chat`, `Character`, `Memory`)
+This checklist is for the right-sidebar Memory redesign and manual summarize correctness:
+- Memory as one of four right-sidebar tabs (`Chat`, `Character`, `Memory`, `Evolution`)
 - Memory internal subtabs (`Summary`, `Settings`, `Log`)
 - Per-character prompt override
 - Manual summarize targeting correctness (character/chat/range)
@@ -30,11 +30,11 @@ This checklist is for the right-sidebar Memory redesign and HypaV3 manual summar
 - Keep `pnpm run test:server:unit` green while validating server-side Hypa route contract changes.
 
 ## Batch 1: Navigation and Layout
-- [ ] `TC-01` Desktop right sidebar shows exactly 3 top tabs: `Chat`, `Character`, `Memory`.
-- [ ] `TC-02` Mobile top tabs show exactly 3 tabs and all 3 have equal width.
+- [ ] `TC-01` Desktop right sidebar shows exactly 4 top tabs: `Chat`, `Character`, `Memory`, `Evolution`.
+- [ ] `TC-02` Mobile top tabs show exactly 4 tabs and all 4 have equal width.
 - [ ] `TC-03` No horizontal scroll appears in Memory panel on desktop or mobile.
 - [ ] `TC-04` Memory panel opens without clipping/overlap artifacts.
-- [ ] `TC-05` Memory panel does not show legacy `HypaV3` title header text.
+- [ ] `TC-05` Memory panel does not show legacy `Hypa` title/header text.
 
 ## Batch 2: Memory UI Structure (Current Design)
 - [ ] `TC-06` Inside Memory, second-level tabs are `Summary`, `Settings`, `Log`.
@@ -42,7 +42,7 @@ This checklist is for the right-sidebar Memory redesign and HypaV3 manual summar
 - [ ] `TC-08` `Start`, `End`, and `Summarize` controls use consistent row height and alignment.
 - [ ] `TC-09` `Settings` tab contains prompt override inputs (not in Summary tab).
 - [ ] `TC-10` `Log` tab contains last summarize log area.
-- [ ] `TC-11` Removed controls are absent: star/favorite, tags manager, translation actions.
+- [ ] `TC-11` Embedded Memory header actions render and open without overlap or clipped dropdowns.
 
 ## Batch 3: Prompt Override Correctness
 - [ ] `TC-12` Editing `Character A` prompt override and immediately clicking `Summarize` (without leaving field) uses latest text.

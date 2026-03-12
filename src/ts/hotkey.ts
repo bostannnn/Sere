@@ -1,12 +1,13 @@
 import { get } from "svelte/store"
 import { alertMd, alertSelect, alertToast, alertWait, doingAlert, alertRequestLogs, alertError } from "./alert"
-import { changeToPreset as changeToPreset2, getDatabase  } from "./storage/database.svelte"
+import { changeToPreset as changeToPreset2, getDatabase, resolveSelectedChatState } from "./storage/database.svelte"
 import { alertStore, openPersonaList, openPresetList, QuickSettings, SafeModeStore, selectedCharID, settingsOpen } from "./stores.svelte"
 import { language } from "src/lang"
 import { updateTextThemeAndCSS } from "./gui/colorscheme"
 import { defaultHotkeys } from "./defaulthotkeys"
 import { isDoingChat, previewBody, sendChat } from "./process/index.svelte"
 import { isEditableTouchTarget, shouldPreventHorizontalSwipe } from "./mobileGestureGuard"
+import { v4 } from "uuid"
 
 const HOTKEY_INIT_FLAG = "__risu_hotkey_init__"
 
@@ -154,15 +155,23 @@ export function initHotkey(){
                     if(get(isDoingChat)){
                         return false
                     }
-                    if(get(selectedCharID) === -1){
+                    const selectedChatState = resolveSelectedChatState(database?.characters, get(selectedCharID))
+                    const targetCharacter = selectedChatState.character
+                    const targetChat = selectedChatState.chat
+                    if(!targetCharacter?.chaId || !targetChat){
                         return false
                     }
+                    targetChat.id ??= v4()
                     alertWait("Loading...")
                     ev.preventDefault()
                     ev.stopPropagation()
                     try{
                         await sendChat(-1, {
-                            previewPrompt: true
+                            previewPrompt: true,
+                            target: {
+                                characterId: targetCharacter.chaId,
+                                chatId: targetChat.id,
+                            },
                         })
                         if(!previewBody || previewBody.trim() === ''){
                             throw new Error('Preview returned empty response.')
@@ -179,7 +188,7 @@ export function initHotkey(){
                     return
                 }
                 case 'toggleLog':{
-                    alertRequestLogs()
+                    alertRequestLogs('client')
                     break
                 }
                 case 'quickSettings':{

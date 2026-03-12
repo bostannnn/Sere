@@ -1,7 +1,14 @@
 <script lang="ts">
     import { language } from "../../lang";
     import { tokenizeAccurate } from "../../ts/tokenizer";
-    import { saveImage as saveAsset, type character, type groupChat } from "../../ts/storage/database.svelte";
+    import {
+        repairCharacterChatPage,
+        resolveSelectedChat,
+        resolveSelectedChatState,
+        saveImage as saveAsset,
+        type character,
+        type groupChat,
+    } from "../../ts/storage/database.svelte";
     import { DBState } from 'src/ts/stores.svelte';
     import { tick, untrack } from 'svelte';
     import { SvelteMap } from "svelte/reactivity";
@@ -18,6 +25,7 @@
     import { getElevenTTSVoices, getWebSpeechTTSVoices, getVOICEVOXVoices, oaiVoices, getNovelAIVoices } from "src/ts/process/tts";
     import { getFileSrc } from "src/ts/globalApi.svelte";
     import { addGroupChar, rmCharFromGroup } from "src/ts/process/group";
+    import { getCharacterMemoryPromptOverride, setCharacterMemoryPromptOverride } from "src/ts/process/memory/storage";
     import TextInput from "../UI/GUI/TextInput.svelte";
     import NumberInput from "../UI/GUI/NumberInput.svelte";
     import TextAreaInput from "../UI/GUI/TextAreaInput.svelte";
@@ -57,9 +65,8 @@
             depth: number
             prompt: string
         }
-        hypaV3PromptOverride: {
+        memoryPromptOverride: {
             summarizationPrompt: string
-            reSummarizationPrompt: string
         }
         newGenData: {
             emotionInstructions: string
@@ -114,7 +121,10 @@
 
     let iconRemoveMode = $state(false)
     let viewSubMenu = $state(0)
-    const emos: [string, string][] = $derived(DBState.db.characters[$selectedCharID]!.emotionImages)
+    const selectedChatState = $derived(resolveSelectedChatState(DBState.db.characters, $selectedCharID))
+    const currentCharacter = $derived(selectedChatState.character)
+    const selectedChat = $derived(selectedChatState.chat)
+    const emos: [string, string][] = $derived(currentCharacter?.emotionImages ?? [])
     const iconButtonSize = window.innerWidth > 360 ? 24 as const : 20 as const
     type CharConfigTabId = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8
     const charConfigTabsForCharacter: CharConfigTabId[] = [0, 1, 3, 8, 5, 4, 2, 7, 6]
@@ -132,7 +142,7 @@
     }
 
     const getVisibleCharConfigTabs = (): CharConfigTabId[] => {
-        const selected = DBState.db.characters[$selectedCharID]
+        const selected = currentCharacter
         if (!selected) {
             return []
         }
@@ -404,7 +414,7 @@
             }
         }
 
-        const localNote = chara.chats?.[chara.chatPage]?.note ?? ''
+        const localNote = resolveSelectedChat(chara)?.note ?? ''
         jobs.push(tokenizeScalarField('localNote', localNote, runId))
 
         await Promise.all(jobs)
@@ -413,14 +423,10 @@
 
     const assetFileExtensions:string[] = $state([])
     const assetFilePath:string[] = $state([])
-    const licensed = $derived(
-        DBState.db.characters[$selectedCharID]?.type === 'character'
-            ? (DBState.db.characters[$selectedCharID] as character).license
-            : ''
-    )
+    const licensed = $derived(currentCharacter?.type === 'character' ? currentCharacter.license : '')
 
     function ensureEditorCharacter(): CharacterEditorState | null {
-        const selected = DBState.db.characters[$selectedCharID]
+        const selected = currentCharacter
         if (!selected || selected.type !== 'character') {
             return null
         }
@@ -449,16 +455,11 @@
         }
         char.depth_prompt.depth = typeof char.depth_prompt.depth === 'number' ? char.depth_prompt.depth : 0
         char.depth_prompt.prompt = typeof char.depth_prompt.prompt === 'string' ? char.depth_prompt.prompt : ''
-        char.hypaV3PromptOverride ??= {
-            summarizationPrompt: '',
-            reSummarizationPrompt: '',
-        }
-        char.hypaV3PromptOverride.summarizationPrompt = typeof char.hypaV3PromptOverride.summarizationPrompt === 'string'
-            ? char.hypaV3PromptOverride.summarizationPrompt
-            : ''
-        char.hypaV3PromptOverride.reSummarizationPrompt = typeof char.hypaV3PromptOverride.reSummarizationPrompt === 'string'
-            ? char.hypaV3PromptOverride.reSummarizationPrompt
-            : ''
+        setCharacterMemoryPromptOverride(char, {
+            summarizationPrompt: typeof getCharacterMemoryPromptOverride(char)?.summarizationPrompt === 'string'
+                ? getCharacterMemoryPromptOverride(char)?.summarizationPrompt
+                : ''
+        })
         char.newGenData ??= {
             prompt: '',
             negative: '',
@@ -556,15 +557,30 @@
         return char as CharacterEditorState
     }
 
-    // eslint-disable-next-line svelte/prefer-writable-derived -- editorCharacter is mutated in-place throughout this component
-    let editorCharacter = $state<CharacterEditorState | null>(ensureEditorCharacter())
+    let editorCharacter = $state<CharacterEditorState | null>(null)
+    let editorCharacterKey = $state<string | null>(null)
 
     $effect(() => {
-        editorCharacter = ensureEditorCharacter()
+        repairCharacterChatPage(currentCharacter)
     })
 
     $effect(() => {
-        const chara = DBState.db.characters[$selectedCharID]
+        const selectedIndex = $selectedCharID
+        const selected = currentCharacter
+        const nextEditorCharacterKey = selected && selected.type === 'character'
+            ? (selected.chaId ?? `character-${selectedIndex}`)
+            : null
+
+        if (editorCharacterKey === nextEditorCharacterKey) {
+            return
+        }
+
+        editorCharacterKey = nextEditorCharacterKey
+        editorCharacter = untrack(() => ensureEditorCharacter())
+    })
+
+    $effect(() => {
+        const chara = currentCharacter
         const runId = ++tokenizeRunId
         untrack(() => {
             void loadTokenize(chara, runId)
@@ -572,7 +588,7 @@
     });
 
     $effect(() => {
-        const selected = DBState.db.characters[$selectedCharID]
+        const selected = currentCharacter
         if(!selected || selected.type !== 'character' || !DBState.db.useAdditionalAssetsPreview || !editorCharacter){
             return
         }
@@ -658,7 +674,7 @@
     });
 
     $effect(() => {
-        const selected = DBState.db.characters[$selectedCharID]
+        const selected = currentCharacter
         if(!selected){
             return
         }
@@ -677,7 +693,7 @@
             });
             const data = await res.json();
             charConfigLog(data.items);
-            charConfigLog(DBState.db.characters[$selectedCharID]!)
+            charConfigLog(currentCharacter)
             
             if (Array.isArray(data.items)) {
                 fishSpeechModels = data.items.map((item: { _id?: string; title?: string; description?: string }) => ({
@@ -696,18 +712,19 @@
     }
 
     function moveAlternateGreetingUp(index: number) {
+        const selected = currentCharacter
         if(index === 0) return
-        if(DBState.db.characters[$selectedCharID]!.type === 'character'){
-            const alternateGreetings = DBState.db.characters[$selectedCharID]!.alternateGreetings
+        if(selected?.type === 'character'){
+            const alternateGreetings = selected.alternateGreetings
             const temp = alternateGreetings[index]
             alternateGreetings[index] = alternateGreetings[index - 1]
             alternateGreetings[index - 1] = temp
-            DBState.db.characters[$selectedCharID]!.alternateGreetings = alternateGreetings
+            selected.alternateGreetings = alternateGreetings
         }
     }
 
     function moveAlternateGreetingDown(index: number) {
-        const selected = DBState.db.characters[$selectedCharID]
+        const selected = currentCharacter
         if(!selected || selected.type !== 'character'){
             return
         }
@@ -727,8 +744,8 @@
 </script>
 
 <div class="char-config-root">
-{#if DBState.db.characters[$selectedCharID]}
-{@const selectedCharacter = DBState.db.characters[$selectedCharID]!}
+{#if currentCharacter}
+{@const selectedCharacter = currentCharacter}
 {#if selectedCharacter.type === 'character' && !editorCharacter}
     <div class="char-config-empty empty-state">Loading character...</div>
 {:else}
@@ -793,7 +810,7 @@
         >
             <BookIcon size={iconButtonSize} />
         </button>
-        {#if DBState.db.characters[$selectedCharID]!.type === 'character'}
+        {#if selectedCharacter.type === 'character'}
             <button
                 type="button"
                 class="char-config-tab seg-tab"
@@ -875,7 +892,7 @@
         >
             <DatabaseIcon size={iconButtonSize} />
         </button>
-        {#if DBState.db.characters[$selectedCharID]!.type === 'character'}
+        {#if selectedCharacter.type === 'character'}
             <button
                 type="button"
                 class="char-config-tab seg-tab"
@@ -899,23 +916,23 @@
 
 {#if $CharConfigSubMenu === 0}
     <div class="char-config-section" role="tabpanel" id="char-config-panel-0" aria-labelledby="char-config-tab-0" tabindex="0">
-    {#if DBState.db.characters[$selectedCharID]!.type !== 'group' && licensed !== 'private'}
-        <TextInput size="xl" placeholder="Character Name" bind:value={DBState.db.characters[$selectedCharID]!.name} />
+    {#if selectedCharacter.type !== 'group' && licensed !== 'private'}
+        <TextInput size="xl" placeholder="Character Name" bind:value={selectedCharacter.name} />
         <span class="char-config-token-note">{tokens.name} {language.tokens}</span>
         <span class="char-config-label">{language.systemPrompt} <Help key="systemPrompt"/></span>
-        <TextAreaInput highlight margin="both" autocomplete="off" bind:value={DBState.db.characters[$selectedCharID]!.systemPrompt}></TextAreaInput>
+        <TextAreaInput highlight margin="both" autocomplete="off" bind:value={selectedCharacter.systemPrompt}></TextAreaInput>
         <span class="char-config-token-note">{tokens.systemPrompt} {language.tokens}</span>
         <span class="char-config-label">{language.description} <Help key="charDesc"/></span>
         <TextAreaInput highlight margin="both" autocomplete="off" bind:value={editorCharacter!.desc}></TextAreaInput>
         <span class="char-config-token-note">{tokens.desc} {language.tokens}</span>
         <span class="char-config-label">{language.personality} <Help key="personality" unrecommended/></span>
-        <TextAreaInput highlight margin="both" autocomplete="off" bind:value={DBState.db.characters[$selectedCharID]!.personality}></TextAreaInput>
+        <TextAreaInput highlight margin="both" autocomplete="off" bind:value={selectedCharacter.personality}></TextAreaInput>
         <span class="char-config-token-note">{tokens.personality} {language.tokens}</span>
         <span class="char-config-label">{language.replaceGlobalNote} <Help key="replaceGlobalNote"/></span>
-        <TextAreaInput highlight margin="both" autocomplete="off" bind:value={DBState.db.characters[$selectedCharID]!.replaceGlobalNote}></TextAreaInput>
+        <TextAreaInput highlight margin="both" autocomplete="off" bind:value={selectedCharacter.replaceGlobalNote}></TextAreaInput>
         <span class="char-config-token-note">{tokens.replaceGlobalNote} {language.tokens}</span>
         <span class="char-config-label">{language.firstMessage} <Help key="charFirstMessage"/></span>
-        <TextAreaInput highlight margin="both" autocomplete="off" bind:value={DBState.db.characters[$selectedCharID]!.firstMessage}></TextAreaInput>
+        <TextAreaInput highlight margin="both" autocomplete="off" bind:value={selectedCharacter.firstMessage}></TextAreaInput>
         <span class="char-config-token-note">{tokens.firstMsg} {language.tokens}</span>
 
         <span class="char-config-label">{language.altGreet}</span>
@@ -926,25 +943,25 @@
                     <th class="char-config-table-head">{language.value}</th>
                     <th class="char-config-table-head char-config-table-action-head">
                         <button class="char-config-icon-action icon-btn icon-btn--sm char-config-icon-action--success" onclick={() => {
-                            if(DBState.db.characters[$selectedCharID]!.type === 'character'){
-                                const alternateGreetings = DBState.db.characters[$selectedCharID]!.alternateGreetings
+                            if(selectedCharacter.type === 'character'){
+                                const alternateGreetings = selectedCharacter.alternateGreetings
                                 alternateGreetings.push('')
-                                DBState.db.characters[$selectedCharID]!.alternateGreetings = alternateGreetings
+                                selectedCharacter.alternateGreetings = alternateGreetings
                             }
                         }} type="button" title="Add alternate greeting" aria-label="Add alternate greeting">
                             <PlusIcon />
                         </button>
                     </th>
                 </tr>
-                {#if DBState.db.characters[$selectedCharID]!.alternateGreetings.length === 0}
+                {#if selectedCharacter.alternateGreetings.length === 0}
                     <tr>
                         <td class="char-config-empty-cell" colspan="3">{language.noData}</td>
                     </tr>
                 {/if}
-                {#each DBState.db.characters[$selectedCharID]!.alternateGreetings as _bias, i (i)}
+                {#each selectedCharacter.alternateGreetings as _bias, i (i)}
                     <tr>
                         <td class="char-config-table-value-cell">
-                            <TextAreaInput highlight bind:value={DBState.db.characters[$selectedCharID]!.alternateGreetings[i]} placeholder="..." fullwidth />
+                            <TextAreaInput highlight bind:value={selectedCharacter.alternateGreetings[i]} placeholder="..." fullwidth />
                             <span class="char-config-token-note">{tokens.altGreetings[i] ?? 0} {language.tokens}</span>
                         </td>
                         <th class="char-config-table-action-cell">
@@ -952,15 +969,17 @@
                                 <button class="char-config-icon-action icon-btn icon-btn--sm char-config-icon-action--accent char-config-icon-action--compact" onclick={() => moveAlternateGreetingUp(i)} disabled={i === 0} type="button" title="Move greeting up" aria-label={`Move alternate greeting ${i + 1} up`}>
                                     <ArrowUp size={16} />
                                 </button>
-                                <button class="char-config-icon-action icon-btn icon-btn--sm char-config-icon-action--accent char-config-icon-action--compact" onclick={() => moveAlternateGreetingDown(i)} disabled={i === DBState.db.characters[$selectedCharID]!.alternateGreetings.length - 1} type="button" title="Move greeting down" aria-label={`Move alternate greeting ${i + 1} down`}>
+                                <button class="char-config-icon-action icon-btn icon-btn--sm char-config-icon-action--accent char-config-icon-action--compact" onclick={() => moveAlternateGreetingDown(i)} disabled={i === selectedCharacter.alternateGreetings.length - 1} type="button" title="Move greeting down" aria-label={`Move alternate greeting ${i + 1} down`}>
                                     <ArrowDown size={16} />
                                 </button>
                                 <button class="char-config-icon-action icon-btn icon-btn--sm char-config-icon-action--danger char-config-icon-action--compact" onclick={() => {
-                                    if(DBState.db.characters[$selectedCharID]!.type === 'character'){
-                                        DBState.db.characters[$selectedCharID]!.chats[DBState.db.characters[$selectedCharID]!.chatPage].fmIndex = -1
-                                        const alternateGreetings = DBState.db.characters[$selectedCharID]!.alternateGreetings
+                                    if(selectedCharacter.type === 'character'){
+                                        if (selectedChat) {
+                                            selectedChat.fmIndex = -1
+                                        }
+                                        const alternateGreetings = selectedCharacter.alternateGreetings
                                         alternateGreetings.splice(i, 1)
-                                        DBState.db.characters[$selectedCharID]!.alternateGreetings = alternateGreetings
+                                        selectedCharacter.alternateGreetings = alternateGreetings
                                     }
                                 }} type="button" title="Remove greeting" aria-label={`Remove alternate greeting ${i + 1}`}>
                                     <TrashIcon size={16} />
@@ -974,25 +993,25 @@
         </div>
 
         <div class="char-config-check-row">
-            <Check bind:check={DBState.db.characters[$selectedCharID]!.randomAltFirstMessageOnNewChat} name={language.randomAltFirstMessageOnNewChat}/>
+            <Check bind:check={selectedCharacter.randomAltFirstMessageOnNewChat} name={language.randomAltFirstMessageOnNewChat}/>
         </div>
 
         <span class="char-config-label">{language.scenario} <Help key="scenario" unrecommended/></span>
-        <TextAreaInput highlight margin="both" autocomplete="off" bind:value={DBState.db.characters[$selectedCharID]!.scenario}></TextAreaInput>
+        <TextAreaInput highlight margin="both" autocomplete="off" bind:value={selectedCharacter.scenario}></TextAreaInput>
         <span class="char-config-token-note">{tokens.scenario} {language.tokens}</span>
 
-    {:else if licensed !== 'private' && DBState.db.characters[$selectedCharID]!.type === 'group'}
-        <TextInput size="xl" placeholder="Group Name" bind:value={DBState.db.characters[$selectedCharID]!.name} />
+    {:else if licensed !== 'private' && selectedCharacter.type === 'group'}
+        <TextInput size="xl" placeholder="Group Name" bind:value={selectedCharacter.name} />
         <span class="char-config-token-note">{tokens.name} {language.tokens}</span>
         <span class="char-config-label">{language.character}</span>
         <div class="char-config-group-grid char-config-group-layout panel-shell">
-            {#if (DBState.db.characters[$selectedCharID]! as groupChat).characters.length === 0}
+            {#if (selectedCharacter as groupChat).characters.length === 0}
                 <span class="char-config-label-muted">No Character</span>
             {:else}
                 <div></div>
                 <div class="char-config-group-header">{language.talkness}</div>
                 <div class="char-config-group-header">{language.active}</div>
-                {#each (DBState.db.characters[$selectedCharID]! as groupChat).characters as char, i (char ?? i)}
+                {#each (selectedCharacter as groupChat).characters as char, i (char ?? i)}
                     {@const matchedChar = findCharacterbyId(char)}
                     {#await getCharImage(matchedChar?.image ?? '', 'css')}
                         <BarIcon onClick={() => {
@@ -1011,19 +1030,19 @@
                                 type="button"
                                 title={`Set talk weight to ${barIndex} of 6`}
                                 aria-label={`Set talk weight to ${barIndex} of 6`}
-                                class:is-active={(DBState.db.characters[$selectedCharID]! as groupChat).characterTalks[i] >= (1 / 6 * barIndex)}
+                                class:is-active={(selectedCharacter as groupChat).characterTalks[i] >= (1 / 6 * barIndex)}
                                 class:is-first={barIndex === 1}
                                 class:is-last={barIndex === 6}
                                 onclick={() => {
-                                    if(DBState.db.characters[$selectedCharID]!.type === 'group'){
-                                        (DBState.db.characters[$selectedCharID]! as groupChat).characterTalks[i] = (1 / 6 * barIndex)
+                                    if(selectedCharacter.type === 'group'){
+                                        (selectedCharacter as groupChat).characterTalks[i] = (1 / 6 * barIndex)
                                     }
                                 }}
                             ></button>
                         {/each}
                     </div>
                     <div class="char-config-group-check-wrap">
-                        <Check margin={false} bind:check={(DBState.db.characters[$selectedCharID]! as groupChat).characterActive[i]} />
+                        <Check margin={false} bind:check={(selectedCharacter as groupChat).characterActive[i]} />
                     </div>
                 {/each}
             {/if}
@@ -1036,21 +1055,25 @@
 
     {/if}
     <span class="char-config-label">{language.chatNotes} <Help key="chatNote"/></span>
-    <TextAreaInput
-        margin="both"
-        autocomplete="off"
-        bind:value={DBState.db.characters[$selectedCharID]!.chats[DBState.db.characters[$selectedCharID]!.chatPage].note}
-        highlight
-        placeholder={getAuthorNoteDefaultText()}
-    />
+    {#if selectedChat}
+        <TextAreaInput
+            margin="both"
+            autocomplete="off"
+            bind:value={selectedChat.note}
+            highlight
+            placeholder={getAuthorNoteDefaultText()}
+        />
+    {:else}
+        <div class="char-config-empty empty-state">No chat selected.</div>
+    {/if}
     <span class="char-config-token-note">{tokens.localNote} {language.tokens}</span>
 
     {#if !$MobileGUI}
-        <Toggles chara={DBState.db.characters[$selectedCharID]!} noContainer />
+        <Toggles chara={selectedCharacter} noContainer />
 
-        {#if DBState.db.characters[$selectedCharID]!.type === 'group'}
+        {#if selectedCharacter.type === 'group'}
             <div class="char-config-check-row">
-                <Check bind:check={(DBState.db.characters[$selectedCharID]! as groupChat).orderByOrder} name={language.orderByOrder}/>
+                <Check bind:check={(selectedCharacter as groupChat).orderByOrder} name={language.orderByOrder}/>
             </div>
         {/if}
     {/if}
@@ -1069,13 +1092,13 @@
         <div class="char-config-subtabs seg-tabs">
             <button
                 type="button"
-                title={DBState.db.characters[$selectedCharID]!.type !== 'group' ? language.charIcon : language.groupIcon}
-                aria-label={DBState.db.characters[$selectedCharID]!.type !== 'group' ? language.charIcon : language.groupIcon}
+                title={selectedCharacter.type !== 'group' ? language.charIcon : language.groupIcon}
+                aria-label={selectedCharacter.type !== 'group' ? language.charIcon : language.groupIcon}
                 aria-pressed={viewSubMenu === 0}
                 onclick={() => {
                 viewSubMenu = 0
             }} class="char-config-subtab seg-tab" class:active={viewSubMenu === 0}>
-                <span>{DBState.db.characters[$selectedCharID]!.type !== 'group' ? language.charIcon : language.groupIcon}</span>
+                <span>{selectedCharacter.type !== 'group' ? language.charIcon : language.groupIcon}</span>
             </button>
             <button
                 type="button"
@@ -1100,9 +1123,9 @@
         </div>
 
         {#if viewSubMenu === 0}
-        {#if DBState.db.characters[$selectedCharID]!.type === 'group'}
+        {#if selectedCharacter.type === 'group'}
             <button onclick={async () => {await selectCharImg($selectedCharID)}} type="button" title="Select group icon" aria-label="Select group icon">
-                {#await getCharImage(DBState.db.characters[$selectedCharID]!.image ?? '', 'css')}
+                {#await getCharImage(selectedCharacter.image ?? '', 'css')}
                     <div class="char-config-icon-tile char-config-icon-tile-selected"></div>
                 {:then im}
                     <div class="char-config-icon-tile char-config-icon-tile-selected" style={im}></div>
@@ -1110,23 +1133,23 @@
             </button>
         {:else}
             <div class="char-config-icon-gallery panel-shell">
-                {#if DBState.db.characters[$selectedCharID]!.image !== '' && DBState.db.characters[$selectedCharID]!.image}
+                {#if selectedCharacter.image !== '' && selectedCharacter.image}
                     <button
                         onclick={() => {
                         if(
-                            DBState.db.characters[$selectedCharID]!.type === 'character' &&
-                            DBState.db.characters[$selectedCharID]!.image !== '' &&
-                            DBState.db.characters[$selectedCharID]!.image &&
+                            selectedCharacter.type === 'character' &&
+                            selectedCharacter.image !== '' &&
+                            selectedCharacter.image &&
                             iconRemoveMode
                         ){
-                            DBState.db.characters[$selectedCharID]!.image = ''
+                            selectedCharacter.image = ''
                             if(editorCharacter!.ccAssets && editorCharacter!.ccAssets.length > 0){
                                 changeCharImage($selectedCharID, 0)
                             }
                             iconRemoveMode = false
                         }
                     }} type="button" title={iconRemoveMode ? "Remove selected icon" : "Current icon"} aria-label={iconRemoveMode ? "Remove selected icon" : "Current icon"}>
-                        {#await getCharImage(DBState.db.characters[$selectedCharID]!.image, editorCharacter!.largePortrait ? 'lgcss' : 'css')}
+                        {#await getCharImage(selectedCharacter.image, editorCharacter!.largePortrait ? 'lgcss' : 'css')}
                             <div
                                 class="char-config-icon-tile char-config-icon-tile-selected"
                                 class:is-remove-mode={iconRemoveMode}
@@ -1146,7 +1169,7 @@
                             if(!iconRemoveMode){
                                 changeCharImage($selectedCharID, i)
                             }
-                            else if(DBState.db.characters[$selectedCharID]!.type === 'character'){
+                            else if(selectedCharacter.type === 'character'){
                                 if(editorCharacter!.ccAssets){
                                     editorCharacter!.ccAssets.splice(i, 1)
                                 }
@@ -1192,13 +1215,13 @@
             </div>
         {/if}
 
-        {#if DBState.db.characters[$selectedCharID]!.type === 'character' && DBState.db.characters[$selectedCharID]!.image !== ''}
+        {#if selectedCharacter.type === 'character' && selectedCharacter.image !== ''}
             <div class="char-config-check-row">
                 <Check bind:check={editorCharacter!.largePortrait} name={language.largePortrait}/>
             </div>
         {/if}
 
-        {#if DBState.db.characters[$selectedCharID]!.type === 'group'}
+        {#if selectedCharacter.type === 'group'}
             <Button onclick={makeGroupImage}>
                 {language.createGroupImg}
             </Button>
@@ -1206,17 +1229,17 @@
 
 
         {:else if viewSubMenu === 1}
-        {#if DBState.db.characters[$selectedCharID]!.type !== 'group'}
-            <SelectInput className="char-config-control" bind:value={DBState.db.characters[$selectedCharID]!.viewScreen} onchange={() => {
-                if(DBState.db.characters[$selectedCharID]!.type === 'character'){
-                    DBState.db.characters[$selectedCharID]! = updateInlayScreen(editorCharacter!)
+        {#if selectedCharacter.type !== 'group'}
+            <SelectInput className="char-config-control" bind:value={selectedCharacter.viewScreen} onchange={() => {
+                if(selectedCharacter.type === 'character'){
+                    Object.assign(selectedCharacter, updateInlayScreen(editorCharacter!))
                 }
             }}>
                 <OptionInput value="none">{language.none}</OptionInput>
                 <OptionInput value="emotion">{language.emotionImage}</OptionInput>
             </SelectInput>
         {:else}
-            <SelectInput className="char-config-control" bind:value={DBState.db.characters[$selectedCharID]!.viewScreen}>
+            <SelectInput className="char-config-control" bind:value={selectedCharacter.viewScreen}>
                 <OptionInput value="none">{language.none}</OptionInput>
                 <OptionInput value="single">{language.singleView}</OptionInput>
                 <OptionInput value="multiple">{language.SpacedView}</OptionInput>
@@ -1225,7 +1248,7 @@
             </SelectInput>
         {/if}
 
-        {#if DBState.db.characters[$selectedCharID]!.viewScreen === 'emotion'}
+        {#if selectedCharacter.viewScreen === 'emotion'}
             <span class="char-config-label">{language.emotionImage} <Help key="emotion"/></span>
             <span class="char-config-note-xs">{language.emotionWarn}</span>
 
@@ -1238,7 +1261,7 @@
                         <th class="char-config-table-head char-config-table-col-emotion">{language.emotion}</th>
                         <th class="char-config-table-head"></th>
                     </tr>
-                    {#if DBState.db.characters[$selectedCharID]!.emotionImages.length === 0}
+                    {#if selectedCharacter.emotionImages.length === 0}
                         <tr>
                             <td class="char-config-empty-cell" colspan="3">{language.noImages}</td>
                         </tr>
@@ -1251,7 +1274,7 @@
                                     <td class="char-config-table-image-cell"><img src={im} alt="img" class="char-config-table-image" /></td>
                                 {/await}
                                 <td class="char-config-table-value-cell">
-                                    <TextInput className="char-config-control" size='lg' bind:value={DBState.db.characters[$selectedCharID]!.emotionImages[i][0]} />
+                                    <TextInput className="char-config-control" size='lg' bind:value={selectedCharacter.emotionImages[i][0]} />
                                 </td>
                                 <td class="char-config-table-action-cell">
                                     <button class="char-config-icon-action icon-btn icon-btn--sm char-config-icon-action--danger" onclick={() => {
@@ -1289,23 +1312,23 @@
             {/if}
 
             <CheckInput bind:check={editorCharacter!.inlayViewScreen} name={language.inlayViewScreen} onChange={() => {
-                if(DBState.db.characters[$selectedCharID]!.type === 'character'){
+                if(selectedCharacter.type === 'character'){
                     if(editorCharacter!.inlayViewScreen && editorCharacter!.additionalAssets === undefined){
                         editorCharacter!.additionalAssets = []
                     }else if(!editorCharacter!.inlayViewScreen && editorCharacter!.additionalAssets.length === 0){
                         editorCharacter!.additionalAssets = []
                     }
                     
-                    DBState.db.characters[$selectedCharID]! = updateInlayScreen(editorCharacter!)
+                    Object.assign(selectedCharacter, updateInlayScreen(editorCharacter!))
                 }
             }}/>
         {/if}
         {:else if viewSubMenu === 2}
 
             {#if DBState.db.newImageHandlingBeta}
-            <CheckInput bind:check={DBState.db.characters[$selectedCharID]!.prebuiltAssetCommand} name={language.insertAssetPrompt}/>
+            <CheckInput bind:check={selectedCharacter.prebuiltAssetCommand} name={language.insertAssetPrompt}/>
 
-            {#if DBState.db.characters[$selectedCharID]!.prebuiltAssetCommand}
+            {#if selectedCharacter.prebuiltAssetCommand}
 
             <span class="char-config-label">{language.assetStyle}</span>
             <SelectInput className="char-config-control" bind:value={editorCharacter!.prebuiltAssetStyle}>
@@ -1321,7 +1344,7 @@
                         <th class="char-config-table-head">{language.value}</th>
                         <th class="char-config-table-head char-config-table-action-head">
                             <button class="char-config-icon-action icon-btn icon-btn--sm char-config-icon-action--success" onclick={async () => {
-                                if(DBState.db.characters[$selectedCharID]!.type === 'character'){
+                                if(selectedCharacter.type === 'character'){
                                     const da = await selectMultipleFile(['png', 'webp', 'mp4', 'mp3', 'gif', 'jpeg', 'jpg', 'ttf', 'otf', 'css', 'webm', 'woff', 'woff2', 'svg', 'avif'])
                                     editorCharacter!.additionalAssets = editorCharacter!.additionalAssets ?? []
                                     if(!da){
@@ -1363,8 +1386,10 @@
                                 
                                 <th class="char-config-table-action-cell">
                                     <button class="char-config-icon-action icon-btn icon-btn--sm char-config-icon-action--accent" onclick={() => {
-                                        if(DBState.db.characters[$selectedCharID]!.type === 'character'){
-                                            DBState.db.characters[$selectedCharID]!.chats[DBState.db.characters[$selectedCharID]!.chatPage].fmIndex = -1
+                                        if(selectedCharacter.type === 'character'){
+                                            if (selectedChat) {
+                                                selectedChat.fmIndex = -1
+                                            }
                                             const additionalAssets = editorCharacter!.additionalAssets ?? []
                                             additionalAssets.splice(i, 1)
                                             editorCharacter!.additionalAssets = additionalAssets
@@ -1373,13 +1398,13 @@
                                         <TrashIcon />
                                     </button>
                                     {#if DBState.db.useAdditionalAssetsPreview}
-                                        <button class="char-config-icon-action icon-btn icon-btn--sm char-config-icon-action--accent" class:is-muted={DBState.db.characters[$selectedCharID]!.prebuiltAssetExclude?.includes?.(assets[1])} onclick={() => {
-                                            DBState.db.characters[$selectedCharID]!.prebuiltAssetExclude ??= []
-                                            if(DBState.db.characters[$selectedCharID]!.prebuiltAssetExclude.includes(assets[1])){
-                                                DBState.db.characters[$selectedCharID]!.prebuiltAssetExclude = DBState.db.characters[$selectedCharID]!.prebuiltAssetExclude.filter((e) => e !== assets[1])
+                                        <button class="char-config-icon-action icon-btn icon-btn--sm char-config-icon-action--accent" class:is-muted={selectedCharacter.prebuiltAssetExclude?.includes?.(assets[1])} onclick={() => {
+                                            selectedCharacter.prebuiltAssetExclude ??= []
+                                            if(selectedCharacter.prebuiltAssetExclude.includes(assets[1])){
+                                                selectedCharacter.prebuiltAssetExclude = selectedCharacter.prebuiltAssetExclude.filter((e) => e !== assets[1])
                                             }
                                             else {
-                                                DBState.db.characters[$selectedCharID]!.prebuiltAssetExclude.push(assets[1])
+                                                selectedCharacter.prebuiltAssetExclude.push(assets[1])
                                             }
                                         }} type="button" title="Toggle additional asset visibility" aria-label={`Toggle additional asset visibility for ${assets[0]}`}>
                                             {#if DBState.db.characters[$selectedCharID]?.prebuiltAssetExclude?.includes?.(assets[1])}
@@ -1410,13 +1435,13 @@
         {#if !$MobileGUI}
             <h2 class="char-config-title">Rulebooks</h2>
         {/if}
-        {#if DBState.db.characters[$selectedCharID]!.type === 'character'}
+        {#if selectedCharacter.type === 'character'}
             <RulebookRagSetting />
         {/if}
     </div>
 {:else if $CharConfigSubMenu === 4}
     <div class="char-config-section" role="tabpanel" id="char-config-panel-4" aria-labelledby="char-config-tab-4" tabindex="0">
-        {#if DBState.db.characters[$selectedCharID]!.type === 'character'}
+        {#if selectedCharacter.type === 'character'}
             {#if !$MobileGUI}
                 <h2 class="char-config-title">{language.scripts}</h2>
             {/if}
@@ -1425,30 +1450,30 @@
             <TextAreaInput highlight margin="both" autocomplete="off" bind:value={editorCharacter!.backgroundHTML}></TextAreaInput>
 
             <span class="char-config-label">{language.regexScript} <Help key="regexScript"/></span>
-            <RegexList bind:value={DBState.db.characters[$selectedCharID]!.customscript} />
+            <RegexList bind:value={selectedCharacter.customscript} />
             <div class="char-config-script-actions action-rail">
                 <button class="char-config-icon-action icon-btn icon-btn--sm char-config-icon-action--success" onclick={() => {
-                    if(DBState.db.characters[$selectedCharID]!.type === 'character'){
-                        const script = DBState.db.characters[$selectedCharID]!.customscript
+                    if(selectedCharacter.type === 'character'){
+                        const script = selectedCharacter.customscript
                         script.push({
                         comment: "",
                         in: "",
                         out: "",
                         type: "editinput"
                         })
-                        DBState.db.characters[$selectedCharID]!.customscript = script
+                        selectedCharacter.customscript = script
                     }
                 }} type="button" title="Add regex script row" aria-label="Add regex script row"><PlusIcon /></button>
                 <button class="char-config-icon-action icon-btn icon-btn--sm char-config-icon-action--success" onclick={() => {
-                    exportRegex(DBState.db.characters[$selectedCharID]!.customscript)
+                    exportRegex(selectedCharacter.customscript)
                 }} type="button" title="Export regex scripts" aria-label="Export regex scripts"><DownloadIcon /></button>
                 <button class="char-config-icon-action icon-btn icon-btn--sm char-config-icon-action--success" onclick={async () => {
-                    DBState.db.characters[$selectedCharID]!.customscript = await importRegex(DBState.db.characters[$selectedCharID]!.customscript)
+                    selectedCharacter.customscript = await importRegex(selectedCharacter.customscript)
                 }} type="button" title="Import regex scripts" aria-label="Import regex scripts"><HardDriveUploadIcon /></button>
             </div>
 
             <span class="char-config-label">{language.triggerScript} <Help key="triggerScript"/></span>
-            <TriggerList bind:value={editorCharacter!.triggerscript} lowLevelAble={DBState.db.characters[$selectedCharID]!.lowLevelAccess} />
+            <TriggerList bind:value={editorCharacter!.triggerscript} lowLevelAble={selectedCharacter.lowLevelAccess} />
 
 
             {#if editorCharacter!.virtualscript || DBState.db.showUnrecommended}
@@ -1459,10 +1484,10 @@
     </div>
 {:else if $CharConfigSubMenu === 6}
     <div class="char-config-section" role="tabpanel" id="char-config-panel-6" aria-labelledby="char-config-tab-6" tabindex="0">
-        {#if DBState.db.characters[$selectedCharID]!.license !== 'CC BY-NC-SA 4.0'
-            && DBState.db.characters[$selectedCharID]!.license !== 'CC BY-SA 4.0'
-            && DBState.db.characters[$selectedCharID]!.license !== 'CC BY-ND 4.0'
-            && DBState.db.characters[$selectedCharID]!.license !== 'CC BY-NC-ND 4.0'
+        {#if selectedCharacter.license !== 'CC BY-NC-SA 4.0'
+            && selectedCharacter.license !== 'CC BY-SA 4.0'
+            && selectedCharacter.license !== 'CC BY-ND 4.0'
+            && selectedCharacter.license !== 'CC BY-NC-ND 4.0'
             }
             <Button size="sm" onclick={async () => {
                 await exportChar($selectedCharID)
@@ -1470,19 +1495,19 @@
         {/if}
 
         <Button onclick={async () => {
-            removeChar($selectedCharID, DBState.db.characters[$selectedCharID]!.name)
-        }} className="char-config-control" size="sm">{ DBState.db.characters[$selectedCharID]!.type === 'group' ? language.removeGroup : language.removeCharacter}</Button>
+            removeChar($selectedCharID, selectedCharacter.name)
+        }} className="char-config-control" size="sm">{ selectedCharacter.type === 'group' ? language.removeGroup : language.removeCharacter}</Button>
     </div>
     
 {:else if $CharConfigSubMenu === 5}
     <div class="char-config-section" role="tabpanel" id="char-config-panel-5" aria-labelledby="char-config-tab-5" tabindex="0">
-    {#if DBState.db.characters[$selectedCharID]!.type === 'character'}
+    {#if selectedCharacter.type === 'character'}
         {#if !$MobileGUI}
             <h2 class="char-config-title">TTS</h2>
         {/if}
         <span class="char-config-label">{language.provider}</span>
         <SelectInput className="char-config-control" bind:value={editorCharacter!.ttsMode} onchange={(_e) => {
-            if(DBState.db.characters[$selectedCharID]!.type === 'character'){
+            if(selectedCharacter.type === 'character'){
                 editorCharacter!.ttsSpeech = ''
             }
         }}>
@@ -1593,15 +1618,15 @@
             <span class="char-config-label">Language</span>
             <TextInput className="char-config-control" bind:value={editorCharacter!.hfTTS.language} placeholder="en" />
         {:else if editorCharacter!.ttsMode === 'vits'}
-            {#if DBState.db.characters[$selectedCharID]!.vits}
-                <span class="char-config-label">{DBState.db.characters[$selectedCharID]!.vits.name ?? 'Unnamed VitsModel'}</span>
+            {#if selectedCharacter.vits}
+                <span class="char-config-label">{selectedCharacter.vits.name ?? 'Unnamed VitsModel'}</span>
             {:else}
                 <span class="char-config-label">No Model</span>
             {/if}
             <Button onclick={async () => {
                 const model = await registerOnnxModel()
-                if(model && DBState.db.characters[$selectedCharID]!.type === 'character'){
-                    DBState.db.characters[$selectedCharID]!.vits = model
+                if(model && selectedCharacter.type === 'character'){
+                    selectedCharacter.vits = model
                 }
             }}>{language.selectModel}</Button>
         {:else if editorCharacter!.ttsMode === 'gptsovits'}
@@ -1735,7 +1760,7 @@
         {/if}
         {#if editorCharacter!.ttsMode}
             <div class="char-config-check-row">
-                <Check bind:check={DBState.db.characters[$selectedCharID]!.ttsReadOnlyQuoted} name={language.ttsReadOnlyQuoted}/>
+                <Check bind:check={selectedCharacter.ttsReadOnlyQuoted} name={language.ttsReadOnlyQuoted}/>
             </div>
         {/if}
     {/if}
@@ -1745,7 +1770,7 @@
         {#if !$MobileGUI}
             <h2 class="char-config-title">{language.advancedSettings}</h2>
         {/if}
-        {#if DBState.db.characters[$selectedCharID]!.type !== 'group'}
+        {#if selectedCharacter.type !== 'group'}
         <span class="char-config-label">Bias <Help key="bias"/></span>
         <div class="char-config-card panel-shell">
 
@@ -1756,7 +1781,7 @@
                 <th class="char-config-table-head char-config-table-col-image">{language.value}</th>
                 <th class="char-config-table-head char-config-table-action-head">
                     <button class="char-config-icon-action icon-btn icon-btn--sm char-config-icon-action--success" onclick={() => {
-                        if(DBState.db.characters[$selectedCharID]!.type === 'character'){
+                        if(selectedCharacter.type === 'character'){
                             editorCharacter!.bias.push(['', 0])
                         }
                     }} type="button" title="Add bias row" aria-label="Add bias row"><PlusIcon /></button>
@@ -1779,7 +1804,7 @@
                     </td>
                     <td class="char-config-table-action-cell">
                         <button class="char-config-icon-action icon-btn icon-btn--sm char-config-icon-action--success" onclick={() => {
-                            if(DBState.db.characters[$selectedCharID]!.type === 'character'){
+                            if(selectedCharacter.type === 'character'){
                                 editorCharacter!.bias.splice(i, 1)
                             }
                         }} type="button" title="Remove bias row" aria-label={`Remove bias row ${i + 1}`}><TrashIcon /></button>
@@ -1792,17 +1817,17 @@
         </div>
 
         <span class="char-config-label">{language.exampleMessage} <Help key="exampleMessage"/></span>
-        <TextAreaInput highlight margin="both" autocomplete="off" bind:value={DBState.db.characters[$selectedCharID]!.exampleMessage}></TextAreaInput>
+        <TextAreaInput highlight margin="both" autocomplete="off" bind:value={selectedCharacter.exampleMessage}></TextAreaInput>
         <span class="char-config-token-note">{tokens.exampleMessage} {language.tokens}</span>
 
         <span class="char-config-label">{language.creatorNotes} <Help key="creatorQuotes"/></span>
-        <MultiLangInput bind:value={DBState.db.characters[$selectedCharID]!.creatorNotes} className="char-config-control" onInput={() => {
-            DBState.db.characters[$selectedCharID]!.removedQuotes = false
+        <MultiLangInput bind:value={selectedCharacter.creatorNotes} className="char-config-control" onInput={() => {
+            selectedCharacter.removedQuotes = false
         }}></MultiLangInput>
         <span class="char-config-token-note">{tokens.creatorNotes} {language.tokens}</span>
 
         <span class="char-config-label">{language.additionalText} <Help key="additionalText" /></span>
-        <TextAreaInput highlight margin="both" autocomplete="off" bind:value={DBState.db.characters[$selectedCharID]!.additionalText}></TextAreaInput>
+        <TextAreaInput highlight margin="both" autocomplete="off" bind:value={selectedCharacter.additionalText}></TextAreaInput>
         <span class="char-config-token-note">{tokens.additionalText} {language.tokens}</span>
 
         <span class="char-config-label">{language.defaultVariables} <Help key="defaultVariables" /></span>
@@ -1833,21 +1858,21 @@
         <span class="char-config-token-note">{tokens.depthPrompt} {language.tokens}</span>
 
         <div class="char-config-check-row">
-            <Check bind:check={DBState.db.characters[$selectedCharID]!.lowLevelAccess} name={language.lowLevelAccess}/>
+            <Check bind:check={selectedCharacter.lowLevelAccess} name={language.lowLevelAccess}/>
             <span> <Help key="lowLevelAccess" name={language.lowLevelAccess}/></span>
         </div>
 
         <div class="char-config-check-row">
-            <Check bind:check={DBState.db.characters[$selectedCharID]!.hideChatIcon} name={language.hideChatIcon}/>
+            <Check bind:check={selectedCharacter.hideChatIcon} name={language.hideChatIcon}/>
         </div>
 
         <div class="char-config-check-row">
-            <Check bind:check={DBState.db.characters[$selectedCharID]!.utilityBot} name={language.utilityBot}/>
+            <Check bind:check={selectedCharacter.utilityBot} name={language.utilityBot}/>
             <span> <Help key="utilityBot" name={language.utilityBot}/></span>
         </div>
 
         <div class="char-config-check-row">
-            <Check bind:check={DBState.db.characters[$selectedCharID]!.escapeOutput} name={language.escapeOutput}/>
+            <Check bind:check={selectedCharacter.escapeOutput} name={language.escapeOutput}/>
         </div>
 
         <Button
@@ -1859,7 +1884,7 @@
 
     {:else}
         <div class="char-config-check-row">
-            <Check bind:check={DBState.db.characters[$selectedCharID]!.lowLevelAccess} name={language.lowLevelAccess}/>
+            <Check bind:check={selectedCharacter.lowLevelAccess} name={language.lowLevelAccess}/>
             <span> <Help key="lowLevelAccess" name={language.lowLevelAccess}/></span>
         </div>
     {/if}
@@ -1919,7 +1944,7 @@
         min-width: 0;
         min-height: 24px;
         padding: 0;
-        border: 1px solid transparent;
+        border: 0;
         border-radius: var(--ds-radius-sm);
         color: var(--ds-text-secondary);
         background: transparent;
@@ -1938,7 +1963,6 @@
 
     .char-config-tab.active {
         color: var(--ds-text-primary);
-        border-color: var(--ds-border-subtle);
         background: var(--ds-surface-active);
     }
 
@@ -2084,6 +2108,7 @@
         width: 100%;
         margin-top: 0;
         margin-bottom: 0;
+        gap: 0;
         border: 1px solid var(--ds-border-subtle);
         border-radius: var(--ds-radius-md);
         background: var(--ds-surface-2);
@@ -2096,6 +2121,7 @@
         padding: var(--ds-space-2);
         border: 0;
         border-right: 1px solid var(--ds-border-subtle);
+        border-radius: 0;
         color: var(--ds-text-secondary);
         background: transparent;
         display: inline-flex;

@@ -7,7 +7,7 @@ import { getCurrentCharacter, getCurrentChat, getDatabase, setDatabase, type Cha
 import { get } from "svelte/store";
 import { ReloadChatPointer, ReloadGUIPointer, selectedCharID } from "../stores.svelte";
 import { alertSelect, alertError, alertInput, alertNormal, alertConfirm } from "../alert";
-import { HypaProcesser } from "./memory/hypamemory";
+import { EmbeddingProcessor } from "./memory/embeddings";
 import { writeInlayImage, getInlayAsset } from "./files/inlays";
 import type { OpenAIChat, MultiModal } from "./index.svelte";
 import { requestChatData } from "./request/request";
@@ -269,7 +269,7 @@ export async function runScripted(code:string, arg:{
             //Low Level Access
             declareAPI('similarity', async (id:string, source:string, value:string[]) => {
                 assertScriptPermission(ScriptingLowLevelIds.has(id), 'lowLevel')
-                const processer = new HypaProcesser()
+                const processer = new EmbeddingProcessor()
                 await processer.addText(value)
                 return await processer.similaritySearch(source)
             })

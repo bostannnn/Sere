@@ -272,4 +272,97 @@ describe("command service", () => {
     expect(persistedCharacterEnvelope?.character?.chatOrder).toEqual(["chat-a"]);
     expect(fsRm).toHaveBeenCalledWith("/tmp/risu-test/characters/char-a/chats/chat-b.json", { force: true });
   });
+
+  it("keeps canonical memory settings intact on settings.replace", async () => {
+    const files = new Map<string, unknown>([
+      [
+        "/tmp/risu-test/settings.json",
+        {
+          revision: 2,
+          data: {
+            theme: "dark",
+            memoryPresets: [
+              {
+                name: "Default",
+                settings: {
+                  summarizationPrompt: "old",
+                },
+              },
+            ],
+            memoryPresetId: 0,
+            memoryEnabled: true,
+          },
+        },
+      ],
+    ]);
+
+    const writeJsonWithEtag = vi.fn(async (filePath: string, payload: unknown) => {
+      files.set(filePath, payload);
+      return {};
+    });
+
+    const service = createCommandService({
+      fs: {
+        rm: vi.fn(async () => {}),
+      },
+      existsSync: (filePath: string) => files.has(filePath),
+      dataDirs: {
+        root: "/tmp/risu-test",
+        characters: "/tmp/risu-test/characters",
+      },
+      readJsonWithEtag: vi.fn(async (filePath: string) => ({
+        json: files.get(filePath) || {},
+      })),
+      writeJsonWithEtag,
+      ensureDir: vi.fn(async () => {}),
+      isSafePathSegment: (value: string) => /^[a-zA-Z0-9._-]+$/.test(value),
+      resourceLocks: {
+        withKey: async (_key: string, task: () => Promise<unknown>) => await task(),
+      },
+      eventJournal: {
+        readLastEventId: async () => 0,
+        appendEvent: vi.fn(async (event: Record<string, unknown>) => ({
+          id: 1,
+          ...event,
+        })),
+      },
+    });
+
+    const result = await service.applyCommands({
+      clientMutationId: "settings-memory-canonical",
+      commands: [
+        {
+          type: "settings.replace",
+          settings: {
+            theme: "light",
+            memoryPresets: [
+              {
+                name: "Default",
+                settings: {
+                  summarizationPrompt: "new prompt",
+                },
+              },
+            ],
+            memoryPresetId: 0,
+            memoryEnabled: true,
+          },
+        },
+      ],
+    });
+
+    expect(result.ok).toBe(true);
+    const persistedEnvelope = files.get("/tmp/risu-test/settings.json") as {
+      data?: Record<string, unknown>;
+    };
+    expect(persistedEnvelope?.data?.memoryPresets).toEqual([
+      {
+        name: "Default",
+        settings: {
+          summarizationPrompt: "new prompt",
+        },
+      },
+    ]);
+    expect(persistedEnvelope?.data?.memoryPresetId).toBe(0);
+    expect(persistedEnvelope?.data?.memoryEnabled).toBe(true);
+  });
 });

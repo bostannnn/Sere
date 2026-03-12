@@ -1,10 +1,10 @@
-# Server-Authoritative Cutover Retest Suite
+# Server-Authoritative Route-Surface Retest Suite
 
 ## Goal
-Validate that the app works only through the new authoritative API model after legacy storage routes were removed.
+Validate that the app works only through the authoritative API model after legacy storage routes were removed.
 
 ## Preconditions
-1. Deploy latest image from `codex/server-authoritative-complete`.
+1. Deploy the latest candidate build/image you intend to validate.
 2. Use one desktop browser and one mobile browser.
 3. On desktop DevTools Network:
    1. Enable `Preserve log`.

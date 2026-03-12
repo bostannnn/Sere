@@ -9,7 +9,7 @@ const alertLog = (..._args: unknown[]) => {};
 export interface alertData{
     type: 'error'|'normal'|'none'|'ask'|'wait'|'selectChar'
             |'input'|'toast'|'wait2'|'markdown'|'select'|'login'
-            |'tos'|'cardexport'|'requestdata'|'addchar'|'hypaV2'|'selectModule'
+            |'tos'|'cardexport'|'requestdata'|'addchar'|'selectModule'
             |'chatOptions'|'pukmakkurit'|'branches'|'progress'|'requestlogs',
     msg: string,
     submsg?: string
@@ -277,16 +277,9 @@ export function alertRequestData(info:AlertGenerationInfoStoreData){
     })
 }
 
-export function showHypaV2Alert(){
-    alertStoreImported.set({
-        'type': 'hypaV2',
-        'msg': ""
-    })
-}
-
-export function alertRequestLogs(){
+export function alertRequestLogs(source: 'client' | 'server' = 'client'){
     alertStoreImported.set({
         'type': 'requestlogs',
-        'msg': ''
+        'msg': source
     })
 }

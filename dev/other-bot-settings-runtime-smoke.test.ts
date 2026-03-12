@@ -7,7 +7,7 @@ const shared = vi.hoisted(() => ({
   },
 }));
 
-function createHypaPresetSettings() {
+function createMemoryPresetSettings() {
   return {
     summarizationPrompt: "summary prompt",
     reSummarizationPrompt: "resummary prompt",
@@ -61,7 +61,7 @@ function createDbState() {
     ],
     emotionProcesser: "submodel",
     emotionPrompt2: "",
-    hypaModel: "MiniLM",
+    embeddingModel: "MiniLM",
     hideApiKey: true,
     ttsAutoSpeech: false,
     elevenLabKey: "",
@@ -70,17 +70,17 @@ function createDbState() {
     novelai: { token: "" },
     huggingfaceKey: "",
     fishSpeechKey: "",
-    supaMemoryKey: "",
-    hypaCustomSettings: {
+    memoryApiKey: "",
+    customEmbeddingSettings: {
       url: "",
       key: "",
       model: "",
     },
-    hypaV3PresetId: 0,
-    hypaV3Presets: [
+    memoryPresetId: 0,
+    memoryPresets: [
       {
         name: "Default Preset",
-        settings: createHypaPresetSettings(),
+        settings: createMemoryPresetSettings(),
       },
     ],
     promptTemplate: [],
@@ -91,6 +91,7 @@ function createDbState() {
 }
 
 vi.mock(import("src/lang"), () => ({
+  changeLanguage: vi.fn(),
   language: {
     otherBots: "Other Bots",
     longTermMemory: "Long Term Memory",
@@ -103,9 +104,9 @@ vi.mock(import("src/lang"), () => ({
     removeConfirm: "Remove ",
     successExport: "Exported",
     successImport: "Imported",
-    hypaV3Settings: {
+    memorySettings: {
       descriptionLabel: "Description",
-      supaMemoryPromptPlaceHolder: "Prompt placeholder",
+      memoryPromptPlaceholder: "Prompt placeholder",
       maxMemoryTokensRatioLabel: "Max ratio",
       maxMemoryTokensRatioError: "Max ratio error",
       memoryTokensRatioLabel: "Memory ratio",
@@ -125,6 +126,7 @@ vi.mock(import("src/ts/stores.svelte"), async () => {
   const { writable } = await import("svelte/store");
   return {
     DBState: shared.dbState,
+    OtherBotSettingsSubMenuIndex: writable<number | null>(null),
     selectedCharID: writable(0),
   };
 });
@@ -144,19 +146,24 @@ vi.mock(import("src/ts/alert"), () => ({
   alertNormal: vi.fn(),
 }));
 
-vi.mock(import("src/ts/process/memory/hypav3"), () => ({
-  createHypaV3Preset: () => ({
-    name: "Generated",
-    settings: createHypaPresetSettings(),
+vi.mock(import("src/ts/process/memory/memory"), () => ({
+  createMemoryPreset: (name = "Generated", settings: Record<string, unknown> = {}) => ({
+    name,
+    settings: {
+      ...createMemoryPresetSettings(),
+      ...settings,
+    },
   }),
 }));
 
 vi.mock(import("src/ts/globalApi.svelte"), () => ({
   downloadFile: async () => {},
+  saveAsset: async () => "assets/mock-asset.png",
 }));
 
 vi.mock(import("src/ts/util"), () => ({
   selectSingleFile: async () => null,
+  checkNullish: (value: unknown) => value === null || value === undefined,
 }));
 
 vi.mock(import("src/ts/process/emotion/defaultPrompt"), () => ({
@@ -171,23 +178,11 @@ vi.mock(import("src/lib/UI/Accordion.svelte"), async () => ({
   default: (await import("./test-stubs/AccordionOpenStub.svelte")).default,
 }));
 
-vi.mock(import("src/lib/UI/GUI/NumberInput.svelte"), async () => ({
-  default: (await import("./test-stubs/BindableFieldStub.svelte")).default,
-}));
-
 vi.mock(import("src/lib/UI/GUI/TextInput.svelte"), async () => ({
   default: (await import("./test-stubs/BindableFieldStub.svelte")).default,
 }));
 
 vi.mock(import("src/lib/UI/GUI/EmbeddingModelSelect.svelte"), async () => ({
-  default: (await import("./test-stubs/BindableFieldStub.svelte")).default,
-}));
-
-vi.mock(import("src/lib/UI/GUI/SliderInput.svelte"), async () => ({
-  default: (await import("./test-stubs/BindableFieldStub.svelte")).default,
-}));
-
-vi.mock(import("src/lib/UI/GUI/CheckInput.svelte"), async () => ({
   default: (await import("./test-stubs/BindableFieldStub.svelte")).default,
 }));
 
@@ -211,6 +206,33 @@ async function flushUi() {
 }
 
 describe("other bots settings runtime smoke", () => {
+  function getInputFollowingLabel(
+    labelText: string,
+    selector = 'input[type="text"], input[type="number"], input[type="range"]',
+  ): HTMLInputElement | null {
+    const labels = Array.from(document.querySelectorAll(".ds-settings-label"));
+    const label = labels.find((node) => {
+      const text = (node.textContent ?? "").trim();
+      return text === labelText || text.includes(labelText);
+    });
+    if (!label) return null;
+
+    let next: Element | null = label.nextElementSibling;
+    while (next) {
+      if (next instanceof HTMLInputElement && next.matches(selector)) {
+        return next;
+      }
+
+      const nested = next.querySelector?.(selector);
+      if (nested instanceof HTMLInputElement) {
+        return nested;
+      }
+      next = next.nextElementSibling;
+    }
+
+    return null;
+  }
+
   beforeEach(() => {
     shared.dbState.db = createDbState();
     selectedCharID.set(0);
@@ -254,5 +276,82 @@ describe("other bots settings runtime smoke", () => {
       { value: "char-visible-2", label: "Unnamed" },
     ]);
     expect(charSelect?.value).toBe("char-visible-1");
+  });
+
+  it("keeps runtime memory settings aligned to the selected preset", async () => {
+    const target = document.createElement("div");
+    document.body.appendChild(target);
+    app = mount(OtherBotSettings, { target });
+    await flushUi();
+
+    const messagesPerSummaryInput = getInputFollowingLabel("Messages Per Summary");
+    expect(messagesPerSummaryInput).not.toBeNull();
+
+    messagesPerSummaryInput!.value = "24";
+    messagesPerSummaryInput!.dispatchEvent(new Event("input", { bubbles: true }));
+    await flushUi();
+
+    const presetSettings = shared.dbState.db.memoryPresets?.[0]?.settings as Record<string, unknown> | undefined;
+    expect(presetSettings?.periodicSummarizationInterval).toBe(24);
+    expect(presetSettings?.maxChatsPerSummary).toBe(24);
+  });
+
+  it("writes the summarization prompt into the selected memory preset", async () => {
+    const target = document.createElement("div");
+    document.body.appendChild(target);
+    app = mount(OtherBotSettings, { target });
+    await flushUi();
+
+    const promptInput = getInputFollowingLabel("Summarization Prompt");
+    expect(promptInput).not.toBeNull();
+
+    promptInput!.value = "Prompt from settings UI";
+    promptInput!.dispatchEvent(new Event("input", { bubbles: true }));
+    await flushUi();
+
+    const presetSettings = shared.dbState.db.memoryPresets?.[0]?.settings as Record<string, unknown> | undefined;
+    expect(presetSettings?.summarizationPrompt).toBe("Prompt from settings UI");
+  });
+
+  it("keeps temporary empty number edits stable while slider updates commit through the selected preset", async () => {
+    const target = document.createElement("div");
+    document.body.appendChild(target);
+    app = mount(OtherBotSettings, { target });
+    await flushUi();
+
+    const messagesPerSummaryInput = getInputFollowingLabel(
+      "Messages Per Summary",
+      'input[type="number"]',
+    );
+    const memoryRatioInput = getInputFollowingLabel("Memory ratio", 'input[type="range"]');
+
+    expect(messagesPerSummaryInput).not.toBeNull();
+    expect(memoryRatioInput).not.toBeNull();
+
+    messagesPerSummaryInput!.value = "";
+    messagesPerSummaryInput!.dispatchEvent(new Event("input", { bubbles: true }));
+    await flushUi();
+
+    expect(messagesPerSummaryInput!.value).toBe("");
+
+    memoryRatioInput!.value = "0.72";
+    memoryRatioInput!.dispatchEvent(new Event("input", { bubbles: true }));
+    await flushUi();
+
+    const presetSettingsAfterSlider = shared.dbState.db.memoryPresets?.[0]?.settings as Record<
+      string,
+      unknown
+    > | undefined;
+
+    expect(messagesPerSummaryInput!.value).toBe("");
+    expect(presetSettingsAfterSlider?.memoryTokensRatio).toBe(0.72);
+
+    messagesPerSummaryInput!.value = "24";
+    messagesPerSummaryInput!.dispatchEvent(new Event("input", { bubbles: true }));
+    await flushUi();
+
+    const presetSettings = shared.dbState.db.memoryPresets?.[0]?.settings as Record<string, unknown> | undefined;
+    expect(presetSettings?.periodicSummarizationInterval).toBe(24);
+    expect(presetSettings?.maxChatsPerSummary).toBe(24);
   });
 });

@@ -37,11 +37,22 @@
         <Button
             size="sm"
             onclick={async () => {
-                alertRequestLogs()
+                alertRequestLogs("client")
             }}
         >
-            {language.ShowLog}
+            {language.showSessionLogs}
         </Button>
+
+        {#if isNodeServer}
+            <Button
+                size="sm"
+                onclick={async () => {
+                    alertRequestLogs("server")
+                }}
+            >
+                {language.showServerLLMLogs}
+            </Button>
+        {/if}
 
         <Button
             size="sm"
@@ -84,7 +95,7 @@
                 const keyToRemove = [
                     'characters', 'loreBook', 'personas', 'username', 'userIcon', 'userNote',
                     'modules', 'enabledModules', 'botPresets', 'characterOrder', 'webUiUrl', 'characterOrder',
-                    'hordeConfig', 'novelai', 'koboldURL', 'ooba', 'ainconfig', 'personaPrompt', 'promptTemplate',
+                    'novelai', 'koboldURL', 'personaPrompt', 'promptTemplate',
                     'deeplOptions', 'google', 'customPromptTemplateToggle', 'globalChatVariables', 'comfyConfig',
                     'comfyUiUrl', 'translatorPrompt', 'customModels', 'mcpURLs', 'authRefreshes'
                 ]
@@ -92,7 +103,7 @@
                     if(
                         keyToRemove.includes(key) ||
                         key.toLowerCase().includes('key') || key.toLowerCase().includes('proxy')
-                        || key.toLowerCase().includes('hypa')
+                        || key.toLowerCase().includes('embedding')
                     ) {
                         delete db[key]
                     }

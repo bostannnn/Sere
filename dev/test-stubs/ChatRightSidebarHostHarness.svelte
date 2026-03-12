@@ -1,7 +1,7 @@
 <script lang="ts">
   import ChatRightSidebarHost from "src/lib/ChatScreens/ChatRightSidebarHost.svelte";
 
-  type RightPanelTab = "chat" | "character" | "memory";
+  type RightPanelTab = "chat" | "character" | "memory" | "evolution";
   let rightSidebarTab = $state<RightPanelTab>("chat");
 </script>
 
@@ -12,6 +12,7 @@
   chatTabLabel="Chat"
   configTabLabel="Character"
   memoryTabLabel="Memory"
+  evolutionTabLabel="Evolution"
   onSelectTab={(tab) => {
     rightSidebarTab = tab;
   }}

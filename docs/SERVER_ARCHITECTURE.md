@@ -8,7 +8,7 @@ RisuAI uses a server-first architecture where a Node.js/Express server handles:
 - All LLM execution (prompt assembly, provider routing, streaming)
 - All storage (characters, chats, settings, assets)
 - RAG (document ingestion, embedding, semantic search)
-- HypaV3 memory (periodic summarization, re-summarization, trace)
+- Memory (periodic summarization and trace)
 - Durable audit logging
 
 The client (Svelte SPA) is a thin UI that sends high-level intents and renders responses. The runtime is server-only: `isNodeServer` is forced true in `src/ts/platform.ts`, and local-only/Tauri execution paths are not supported.
@@ -42,22 +42,37 @@ The client (Svelte SPA) is a thin UI that sends high-level intents and renders r
 
 **Key distinction:** `/data/llm/generate` is the main endpoint — server does everything. `/data/llm/execute` is the fallback for when the client has already assembled the prompt (legacy path or special modes).
 
-### Storage (`server/node/routes/storage_routes.cjs`)
+### Auth (`server/node/routes/auth_routes.cjs`)
 
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/data/settings` | Read app settings |
-| PUT | `/data/settings` | Write app settings (ETag conflict handling) |
-| GET | `/data/characters` | List all characters |
-| POST | `/data/characters` | Create character |
-| GET | `/data/characters/:id` | Read character |
-| PUT | `/data/characters/:id` | Update character (ETag) |
-| DELETE | `/data/characters/:id` | Delete character |
-| GET | `/data/characters/:id/chats` | List chats for character |
-| POST | `/data/characters/:id/chats` | Create chat |
-| GET | `/data/characters/:id/chats/:chatId` | Read chat |
-| PUT | `/data/characters/:id/chats/:chatId` | Update chat (ETag) |
-| DELETE | `/data/characters/:id/chats/:chatId` | Delete chat |
+| GET | `/data/auth/password/status` | Check whether password auth is unset, correct, or incorrect |
+| POST | `/data/auth/crypto` | Server-side SHA-256 helper for password fallback hashing |
+| POST | `/data/auth/password` | Set initial server password |
+| POST | `/data/auth/password/change` | Rotate existing server password |
+
+### State (`server/node/routes/state_routes.cjs`)
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/data/state/snapshot` | Return the authoritative app snapshot |
+| POST | `/data/state/commands` | Apply event-journaled state commands |
+
+### Sync (`server/node/routes/sync_routes.cjs`)
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/data/sync/events` | SSE stream of state journal events since `?since=` |
+
+### Character Evolution (`server/node/routes/evolution_routes.cjs`)
+
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | `/data/character-evolution/handoff` | Run extraction handoff for a character/chat and stage a pending proposal |
+| POST | `/data/character-evolution/:charId/proposal/accept` | Accept a pending proposal and persist the next versioned state |
+| POST | `/data/character-evolution/:charId/proposal/reject` | Reject the pending proposal for a character |
+| GET | `/data/character-evolution/:charId/versions` | List saved character-evolution versions |
+| GET | `/data/character-evolution/:charId/versions/:version` | Load one saved character-evolution version payload |
 
 ### Content (`server/node/routes/content_routes.cjs`)
 
@@ -84,32 +99,33 @@ Scope contract:
 | PATCH | `/data/rag/rulebooks/:id` | Update rulebook metadata |
 | DELETE | `/data/rag/rulebooks/:id` | Delete rulebook |
 
-### Memory — HypaV3 (`server/node/routes/`)
+### Memory (`server/node/memory/`)
 
 | Method | Path | File | Description |
 |--------|------|------|-------------|
-| POST | `/data/memory/hypav3/manual-summarize` | `hypav3_manual_routes.cjs` | Manual summarization of selected messages. Supports optional request `promptOverride` and returns scoped `debug` payload: `timestamp`, `model`, `isResummarize`, `prompt`, `input`, `formatted`, `rawResponse`, `characterId`, `chatId`, `start`, `end`, `source`, `promptSource` |
-| POST | `/data/memory/hypav3/manual-summarize/trace` | `hypav3_trace_routes.cjs` | Trace/preview manual summarization. Supports optional request `promptOverride` |
-| POST | `/data/memory/hypav3/resummarize-preview` | `hypav3_resummary_routes.cjs` | Preview re-summarization of existing summaries |
-| POST | `/data/memory/hypav3/resummarize-apply` | `hypav3_resummary_routes.cjs` | Apply re-summarization |
-| POST | `/data/memory/hypav3/resummarize-preview/trace` | `hypav3_trace_routes.cjs` | Trace re-summarization |
-| POST | `/data/memory/hypav3/periodic-summarize/trace` | `hypav3_trace_routes.cjs` | Trace periodic summarization |
+| POST | `/data/memory/manual-summarize` | `manual_routes.cjs` | Manual summarization of selected messages. Supports optional request `promptOverride` and returns scoped `debug` payload: `timestamp`, `model`, `prompt`, `input`, `formatted`, `rawResponse`, `characterId`, `chatId`, `start`, `end`, `source`, `promptSource` |
+| POST | `/data/memory/manual-summarize/trace` | `trace_routes.cjs` | Trace/preview manual summarization. Supports optional request `promptOverride` |
+| POST | `/data/memory/periodic-summarize/trace` | `trace_routes.cjs` | Trace periodic summarization |
 
 ### Other Routes
 
 | File | Endpoints | Description |
 |------|-----------|-------------|
+| `auth_routes.cjs` | `/data/auth/*` | Password auth and auth hashing helpers |
+| `state_routes.cjs` | `/data/state/*` | Authoritative snapshot + command gateway |
+| `sync_routes.cjs` | `/data/sync/events` | Event journal streaming |
 | `memory_routes.cjs` | Memory-related endpoints | Memory system management |
+| `evolution_routes.cjs` | `/data/character-evolution/*` | Character evolution handoff, proposal review, and version history |
 | `proxy_routes.cjs` | `/data/proxy` | Reverse proxy passthrough |
 | `integration_routes.cjs` | `/data/integrations/comfy/*` | Core Comfy Commander proxy (`/cw`, `/comfy`) |
-| `legacy_routes.cjs` | `/data/auth/*`, `/data/storage/*`, `/data/oauth/*` | Legacy auth and raw storage |
-| `system_routes.cjs` | `/` | Root handler, retired endpoint stubs |
+| `system_routes.cjs` | `/` | Root handler |
 
 Core ownership note for Comfy Commander:
 
 - Client runtime lives in `src/ts/integrations/comfy/*`.
 - Core commands (`/cw`, `/comfy`) dispatch through this server route.
 - No legacy `/proxy`/`/proxy2` path is used for Comfy Commander.
+- Legacy `/data/settings`, `/data/characters*`, and `/data/storage/*` routes are removed; state writes go through `/data/state/commands`.
 
 ## LLM Pipeline (`server/node/llm/`)
 
@@ -122,37 +138,34 @@ Core ownership note for Comfy Commander:
 | `lorebook.cjs` | 95 | Keyword/regex lorebook matching against chat history |
 | `scripts.cjs` | 171 | Regex script processing, `risuChatParser` variable substitution, thought block stripping |
 | `tokenizer.cjs` | 51 | Token counting for prompt budget management |
-| `memory.cjs` | 590 | HypaV3 memory: summary selection (important + recent + similar + random), embedding |
-| `generate_helpers.cjs` | 391 | Generate-mode orchestration: periodic HypaV3 triggers, payload building |
+| `memory.cjs` | 590 | Memory summary selection (important + recent + similar + random), embedding |
+| `generate_helpers.cjs` | 391 | Generate-mode orchestration: periodic memory triggers, payload building |
 | `execute_route_handler.cjs` | 465 | `/data/llm/execute` handler: raw execution + `[SYSTEM]` game-state extraction |
 | `execution_helpers.cjs` | — | Mode normalization, provider/model selection, internal execution detection |
 
 ### Provider Handlers
 
-| File | LOC | Provider |
-|------|-----|----------|
-| `openrouter.cjs` | 468 | OpenRouter (streaming + non-streaming) |
-| `openai.cjs` | 193 | OpenAI-compatible APIs |
-| `anthropic.cjs` | 203 | Anthropic Claude (message format conversion) |
-| `google.cjs` | 168 | Google Gemini |
-| `deepseek.cjs` | 196 | DeepSeek |
-| `mistral.cjs` | 182 | Mistral AI |
-| `ollama.cjs` | 211 | Ollama (local) |
-| `ooba.cjs` | 156 | Text Generation WebUI |
-| `kobold.cjs` | 153 | KoboldAI |
-| `novelai.cjs` | 148 | NovelAI |
-| `horde.cjs` | 174 | AI Horde |
-| `reverse_proxy.cjs` | 315 | User-configured reverse proxy |
-| `custom.cjs` | 307 | Custom `xcustom:::` endpoints |
+| File | Provider |
+|------|----------|
+| `openrouter.cjs` | OpenRouter |
+| `openai.cjs` | OpenAI-compatible APIs |
+| `anthropic.cjs` | Anthropic Claude |
+| `google.cjs` | Google Gemini |
+| `deepseek.cjs` | DeepSeek |
+| `ollama.cjs` | Ollama (local) |
+| `kobold.cjs` | KoboldAI |
+| `novelai.cjs` | NovelAI |
+
+Current server execution support is defined by `server/node/llm/engine.cjs` and `server/node/llm/constants.cjs`. If that provider set changes, update this section from those files rather than from older migration notes.
 
 ### Supporting
 
 | File | LOC | Purpose |
 |------|-----|---------|
-| `audit.cjs` | 304 | Durable JSONL audit log append/read |
+| `audit.cjs` | 304 | Durable JSON audit log append/read |
 | `audit_payloads.cjs` | 207 | Audit request/response payload builders |
 | `trace_audit.cjs` | 145 | Generate/memory trace audit appenders |
-| `hypa_helpers.cjs` | 195 | HypaV3 summarization helpers (prompt building, embedding, persistence) |
+| `server/node/memory/helpers.cjs` | 195 | Memory summarization helpers (prompt building, embedding, persistence) |
 | `constants.cjs` | — | Provider constants, migrated provider set |
 | `errors.cjs` | — | `LLMHttpError` class |
 | `index.cjs` | — | Module re-exports |
@@ -184,7 +197,7 @@ Client                          Server
   │                               │  ├─ System prompt + personality
   │                               │  ├─ Chat history (token-budgeted)
   │                               │  ├─ Lorebook matching
-  │                               │  ├─ HypaV3 memory injection
+  │                               │  ├─ Memory injection
   │                               │  ├─ RAG search + context injection into `rulebookRag` template slot
   │                               │  ├─ Depth prompts
   │                               │  └─ Format order enforcement
@@ -218,23 +231,24 @@ Client                          Server
 
 ```
 data/
-├── users/default/
-│   ├── settings.json
-│   ├── characters/
-│   │   └── {characterId}/
-│   │       ├── character.json
-│   │       └── chats/
-│   │           └── {chatId}.json
-│   ├── assets/other/          # Uploaded images/files
-│   ├── prompts/               # Prompt presets
-│   ├── themes/                # UI themes
-│   ├── color_schemes/         # Color schemes
-│   └── rag/
-│       └── rulebooks/
+├── settings.json
+├── characters/
+│   └── {characterId}/
+│       ├── character.json
+│       └── chats/
+│           └── {chatId}.json
+├── assets/other/          # Uploaded images/files
+├── prompts/               # Prompt presets
+├── themes/                # UI themes
+├── color_schemes/         # Color schemes
+└── rag/
+    └── rulebooks/
 │           └── {rulebookId}.json  # Chunks + embeddings
 ├── models/                    # Cached embedding models
 └── logs/
-    └── llm-audit.jsonl        # Durable LLM execution logs
+    └── llm-execution/
+        └── YYYY-MM-DD/
+            └── *.json         # Durable LLM execution logs
 ```
 
 ## Client-Server Gating

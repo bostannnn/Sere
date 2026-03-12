@@ -31,12 +31,25 @@ export const DEFAULT_GLOBAL_RAG_SETTINGS: Readonly<GlobalRagSettingsDefaults> = 
   model: 'bgeLargeEnGPU',
 });
 
-type LegacyProviderTarget = {
-  aiModel?: string;
-  subModel?: string;
-  openrouterRequestModel?: string;
-  openrouterSubRequestModel?: string;
-};
+const REMOVED_PROVIDER_FIELD_KEYS = [
+  'textgenWebUIStreamURL',
+  'textgenWebUIBlockingURL',
+  'hordeConfig',
+  'novellistAPI',
+  'ooba',
+  'ainconfig',
+  'mancerHeader',
+  'mistralKey',
+  'claudeAws',
+  'cohereAPIKey',
+  'vertexPrivateKey',
+  'vertexClientEmail',
+  'vertexAccessToken',
+  'vertexAccessTokenExpires',
+  'vertexRegion',
+  'echoMessage',
+  'echoDelay',
+] as const;
 
 function cloneDefaultGlobalRagSettings() {
   return {
@@ -45,50 +58,22 @@ function cloneDefaultGlobalRagSettings() {
   };
 }
 
-function isRemovedLegacyModelId(value: unknown): value is string {
-  return typeof value === 'string' && (value === 'reverse_proxy' || value.startsWith('xcustom:::'));
-}
-
-function ensureOpenRouterRequestModel(value: unknown) {
-  if (typeof value !== 'string') {
-    return DEFAULT_OPENROUTER_REQUEST_MODEL;
+export function stripRemovedProviderFields(target: Record<string, unknown> | null | undefined): boolean {
+  if (!target) {
+    return false;
   }
-  const trimmed = value.trim();
-  if (!trimmed || isRemovedLegacyModelId(trimmed)) {
-    return DEFAULT_OPENROUTER_REQUEST_MODEL;
-  }
-  return trimmed;
-}
 
-export function migrateRemovedProviderSelections(target: LegacyProviderTarget): boolean {
   let changed = false;
-
-  if (isRemovedLegacyModelId(target.aiModel)) {
-    target.aiModel = 'openrouter';
-    target.openrouterRequestModel = ensureOpenRouterRequestModel(target.openrouterRequestModel);
-    changed = true;
-  } else if (target.aiModel === 'openrouter') {
-    const nextRequestModel = ensureOpenRouterRequestModel(target.openrouterRequestModel);
-    if (nextRequestModel !== target.openrouterRequestModel) {
-      target.openrouterRequestModel = nextRequestModel;
-      changed = true;
-    }
-  }
-
-  if (isRemovedLegacyModelId(target.subModel)) {
-    target.subModel = 'openrouter';
-    target.openrouterSubRequestModel = ensureOpenRouterRequestModel(target.openrouterSubRequestModel);
-    changed = true;
-  } else if (target.subModel === 'openrouter') {
-    const nextSubRequestModel = ensureOpenRouterRequestModel(target.openrouterSubRequestModel);
-    if (nextSubRequestModel !== target.openrouterSubRequestModel) {
-      target.openrouterSubRequestModel = nextSubRequestModel;
+  for (const key of REMOVED_PROVIDER_FIELD_KEYS) {
+    if (key in target) {
+      delete target[key];
       changed = true;
     }
   }
 
   return changed;
 }
+
 
 export function resolveChatBackgroundMode(mode: unknown, backgroundImage: unknown): ChatBackgroundMode {
   const normalizedImage = typeof backgroundImage === 'string' ? backgroundImage.trim() : '';

@@ -14,8 +14,11 @@
     import { language } from "../../lang"
     import { alertClear, alertConfirm, alertInput, alertNormal, alertRequestData, alertWait } from "../../ts/alert"
     import { ParseMarkdown, type CbsConditions, type simpleCharacterArgument } from "../../ts/parser.svelte"
-    import { getCurrentCharacter, getCurrentChat, setCurrentChat, type MessageGenerationInfo } from "../../ts/storage/database.svelte"
-    import { selectedCharID } from "../../ts/stores.svelte"
+    import {
+        resolveSelectedChatState,
+        setChatByCharacterAndChatId,
+        type MessageGenerationInfo,
+    } from "../../ts/storage/database.svelte"
     import { HideIconStore, ReloadGUIPointer, selIdState } from "../../ts/stores.svelte"
     import AutoresizeArea from "../UI/GUI/TextAreaResizable.svelte"
     import ChatBody from './ChatBody.svelte'
@@ -76,11 +79,43 @@
     let msgDisplay = $state('')
     let translated = $state(false)
 
+    const selectedChatState = $derived(resolveSelectedChatState(DBState.db.characters, selIdState.selId))
+    const currentCharacter = $derived(selectedChatState.character)
+    const currentChat = $derived(selectedChatState.chat)
+    const currentMessages = $derived(selectedChatState.messages)
+    const currentMessage = $derived(idx >= 0 ? currentMessages[idx] ?? null : null)
+    const currentMessageChatId = $derived(currentMessage?.chatId ?? '')
+    const currentMessageTime = $derived(currentMessage?.time ?? null)
+    const currentTtsEnabled = $derived(
+        currentCharacter?.type !== 'group' &&
+        currentCharacter?.ttsMode !== 'none' &&
+        Boolean(currentCharacter?.ttsMode)
+    )
+
+    function getSelectedChatContext() {
+        const state = resolveSelectedChatState(DBState.db.characters, selIdState.selId)
+        const selectedCharacter = state.character
+        const selectedChat = state.chat
+        if (!selectedCharacter || !selectedChat) {
+            return null
+        }
+        return {
+            character: selectedCharacter,
+            chat: selectedChat,
+            chatIndex: state.chatIndex,
+            messages: state.messages,
+            message: idx >= 0 ? state.messages[idx] ?? null : null,
+            selectedCharacterIndex: selIdState.selId,
+        }
+    }
+
     async function rm(e:MouseEvent, rec?:boolean){
+        const context = getSelectedChatContext()
+        if (!context) {
+            return
+        }
         if(e.shiftKey){
-            let msg = DBState.db.characters[selIdState.selId].chats[DBState.db.characters[selIdState.selId].chatPage].message
-            msg = msg.slice(0, idx)
-            DBState.db.characters[selIdState.selId].chats[DBState.db.characters[selIdState.selId].chatPage].message = msg
+            context.chat.message = context.messages.slice(0, idx)
             return
         }
 
@@ -88,41 +123,37 @@
         if(rm){
             if(DBState.db.instantRemove || rec){
                 const r = await alertConfirm(language.instantRemoveConfirm)
-                let msg = DBState.db.characters[selIdState.selId].chats[DBState.db.characters[selIdState.selId].chatPage].message
+                let msg = [...context.chat.message]
                 if(!r){
                     msg = msg.slice(0, idx)
                 }
                 else{
                     msg.splice(idx, 1)
                 }
-                DBState.db.characters[selIdState.selId].chats[DBState.db.characters[selIdState.selId].chatPage].message = msg
+                context.chat.message = msg
             }
             else{
-                const msg = DBState.db.characters[selIdState.selId].chats[DBState.db.characters[selIdState.selId].chatPage].message
+                const msg = [...context.chat.message]
                 msg.splice(idx, 1)
-                DBState.db.characters[selIdState.selId].chats[DBState.db.characters[selIdState.selId].chatPage].message = msg
+                context.chat.message = msg
             }
         }
     }
 
     async function edit(){
-        DBState.db.characters[selIdState.selId].chats[DBState.db.characters[selIdState.selId].chatPage].message[idx].data = message
+        const context = getSelectedChatContext()
+        if (!context?.message) {
+            return
+        }
+        context.message.data = message
     }
 
     function getCbsCondition(){
-        try{
-            const cbsConditions:CbsConditions = {
-                firstmsg: firstMessage ?? false,
-                chatRole: DBState.db.characters[selIdState.selId].chats[DBState.db.characters[selIdState.selId].chatPage]?.message?.[idx]?.role ?? null,
-            }
-            return cbsConditions
+        const cbsConditions:CbsConditions = {
+            firstmsg: firstMessage ?? false,
+            chatRole: currentMessage?.role ?? null,
         }
-        catch{
-            return {
-                firstmsg: firstMessage ?? false,
-                chatRole: null,
-            }
-        }
+        return cbsConditions
     }
 
     function displaya(message:string){
@@ -157,8 +188,8 @@
     }
 
     async function handleButtonTriggerWithin(event: UIEvent) {
-        const currentChar = getCurrentCharacter()
-        if(!currentChar || currentChar.type === 'group'){
+        const context = getSelectedChatContext()
+        if(!context || context.character.type === 'group'){
             return
         }
 
@@ -171,20 +202,36 @@
         const triggerName = origin.getAttribute('risu-trigger')
         const triggerId = origin.getAttribute('risu-id')
         const btnEvent = origin.getAttribute('risu-btn')
+        if (!context.chat.id) {
+            context.chat.id = v4()
+        }
+        const stableTarget = context.character.chaId ? {
+            characterId: context.character.chaId,
+            chatId: context.chat.id,
+        } : null
 
         const triggerResult =
             triggerName ?
-                await runTrigger(currentChar, 'manual', {
-                    chat: getCurrentChat(),
+                await runTrigger(context.character, 'manual', {
+                    chat: context.chat,
                     manualName: triggerName,
                     triggerId: triggerId || undefined,
                 }) :
             btnEvent ?
-                await runLuaButtonTrigger(currentChar, btnEvent) :
+                await runLuaButtonTrigger(context.character, btnEvent) :
             null
 
         if(triggerResult) {
-            setCurrentChat(triggerResult.chat)
+            if (stableTarget) {
+                setChatByCharacterAndChatId(
+                    DBState.db.characters,
+                    stableTarget.characterId,
+                    stableTarget.chatId,
+                    triggerResult.chat,
+                )
+            } else if (context.chatIndex >= 0) {
+                context.character.chats[context.chatIndex] = triggerResult.chat
+            }
             ReloadChatPointer.update((v) => {
                 v[idx] = (v[idx] ?? 0) + 1
                 return v
@@ -199,22 +246,21 @@
     }
 
     const isBookmarked = $derived(
-        DBState.db.characters[selIdState.selId]
-            ?.chats[DBState.db.characters[selIdState.selId].chatPage]
-            ?.bookmarks?.includes(DBState.db.characters[selIdState.selId].chats[DBState.db.characters[selIdState.selId].chatPage].message[idx]?.chatId) ?? false
+        currentChat?.bookmarks?.includes(currentMessageChatId) ?? false
     );
 
-    async function toggleBookmark() {
-        const chat = DBState.db.characters[selIdState.selId].chats[DBState.db.characters[selIdState.selId].chatPage];
-        
-        if(!chat.message[idx]) return;
+    async function toggleBookmark(context = getSelectedChatContext()) {
+        if(!context?.message) return;
 
-        let messageId = chat.message[idx]?.chatId;
-        const messageContent = chat.message[idx]?.data;
+        const chat = context.chat
+        const messageEntry = context.message
+
+        let messageId = messageEntry.chatId;
+        const messageContent = messageEntry.data;
 
         if (!messageId) {
             messageId = uuidv4();
-            chat.message[idx].chatId = messageId;
+            messageEntry.chatId = messageId;
         }
 
         chat.bookmarks ??= [];
@@ -228,7 +274,7 @@
         } else {
             chat.bookmarks.push(messageId);
 
-            const msgSender = chat.message[idx]?.role === 'user' ? getUserName() : name;
+            const msgSender = messageEntry.role === 'user' ? getUserName() : name;
             const newName= await alertInput(language.bookmarkAskNameOrDefault, [], chat.bookmarkNames[messageId] || '');
 
             if (newName && newName.trim() !== '') {
@@ -267,8 +313,8 @@
                 title="View generation info"
                 aria-label="View generation info"
                     onclick={() => {
-                        const currentGenerationInfo = idx >= 0 ? 
-                            DBState.db.characters[$selectedCharID].chats[DBState.db.characters[$selectedCharID].chatPage].message[idx].generationInfo :
+                        const currentGenerationInfo = idx >= 0 ?
+                            currentMessage?.generationInfo ?? messageGenerationInfo :
                             messageGenerationInfo
 
                         alertRequestData({
@@ -395,13 +441,13 @@
                 {@render translationButton()}
                 {#if viewportWidth >= 640}
                     {@render majorIconButtonsBody(false)}
-                    {#if DBState.db.characters[selIdState.selId]}
+                    {#if currentCharacter}
                         <PopupButton>
                             {@render minorIconButtonsBody(true)}
                         </PopupButton>
                     {/if}
                 {:else}
-                    {#if DBState.db.characters[selIdState.selId]}
+                    {#if currentCharacter}
                         <PopupButton>
                             {@render majorIconButtonsBody(true)}
                             {@render minorIconButtonsBody(true)}
@@ -436,7 +482,7 @@
 
                 const parser = new DOMParser()
                 const doc = parser.parseFromString(
-                    await ParseMarkdown(msgDisplay, getCurrentCharacter(), 'normal', idx, getCbsCondition())
+                    await ParseMarkdown(msgDisplay, currentCharacter ?? null, 'normal', idx, getCbsCondition())
                 , 'text/html')
                 
                 doc.querySelectorAll('mark').forEach((el) => {
@@ -520,7 +566,7 @@
                 let hasValidImage = false
                 
                 try {
-                    const iconImage = (await getFileSrc(DBState.db.characters[selIdState.selId].image ?? '')) ?? ''
+                    const iconImage = (await getFileSrc(currentCharacter?.image ?? '')) ?? ''
                     
                     if(iconImage && (iconImage.startsWith('http://asset.localhost') || iconImage.startsWith('https://asset.localhost') || iconImage.startsWith('https://sv.risuai') || iconImage.startsWith('data:') || iconImage.startsWith('http') || iconImage.startsWith('/'))){
                         if(iconImage.startsWith('data:')){
@@ -658,7 +704,7 @@
     </button>    
 {/if}
 {#if idx > -1}
-    {#if DBState.db.characters[selIdState.selId].type !== 'group' && DBState.db.characters[selIdState.selId].ttsMode !== 'none' && (DBState.db.characters[selIdState.selId].ttsMode)}
+    {#if currentTtsEnabled}
         <button
             type="button"
             class="ds-chat-icon-action"
@@ -803,8 +849,9 @@
             aria-label={language.bookmark}
             aria-pressed={isBookmarked}
             onclick={async () => {
+            const context = getSelectedChatContext()
             await sleep(1)
-            toggleBookmark()
+            await toggleBookmark(context)
         }}>
             <BookmarkIcon size={20}/>
             {#if showNames}
@@ -822,34 +869,49 @@
         title={language.branch}
         aria-label={language.branch}
         onclick={async () => {
+        const context = getSelectedChatContext()
         await sleep(1)
-        const currentChat = DBState.db.characters[selIdState.selId].chats[DBState.db.characters[selIdState.selId].chatPage]
+        if (!context?.message) {
+            return
+        }
+        const sourceCharacterId = context.character.chaId
+        const sourceChatId = context.chat.id
+        const sourceChat = context.chat
         
-        if(DBState.db.createFolderOnBranch && !currentChat.folderId){
+        if(DBState.db.createFolderOnBranch && !sourceChat.folderId){
             const folderId = v4()
-            DBState.db.characters[selIdState.selId].chatFolders.unshift({
+            context.character.chatFolders.unshift({
                 id: folderId,
-                name: `Branches of ${currentChat.name}`,
+                name: `Branches of ${sourceChat.name}`,
                 folded: false,
             })
-            currentChat.folderId = folderId
+            sourceChat.folderId = folderId
         }
         
-        const currentMessage = currentChat.message[idx]
-        const newChat = $state.snapshot(currentChat)
+        const currentMessage = context.message
+        currentMessage.chatId ??= v4()
+        const newChat = $state.snapshot(sourceChat)
         newChat.name = createChatCopyName(newChat.name, 'Branch')
         newChat.id = v4()
         newChat.message = newChat.message.slice(0, idx + 1)
         newChat.message.push({
             role: 'char',
-            data: '{{specialcomment::branchedfrom::' + currentChat.id + '::' + currentChat.name + '::' + currentMessage.chatId + '::}}',
+            data: '{{specialcomment::branchedfrom::' + sourceChat.id + '::' + sourceChat.name + '::' + currentMessage.chatId + '::}}',
             isComment: true,
             disabled: true,
             chatId: v4(),
         })
 
-        DBState.db.characters[selIdState.selId].chats.unshift(newChat)
-        changeChatTo(0)
+        context.character.chats.unshift(newChat)
+        if (
+            sourceCharacterId &&
+            sourceChatId &&
+            selIdState.selId === context.selectedCharacterIndex &&
+            currentCharacter?.chaId === sourceCharacterId &&
+            currentChat?.id === sourceChatId
+        ) {
+            changeChatTo(0)
+        }
     }}>
         <SplitIcon size={20}/>
         {#if showNames}
@@ -865,11 +927,14 @@
         class:ds-ui-menu-item={showNames}
         title={language.disableMessage}
         aria-label={language.disableMessage}
-        aria-pressed={DBState.db.characters[selIdState.selId]?.chats?.[DBState.db.characters[selIdState.selId]?.chatPage]?.message?.[idx]?.disabled === true}
+        aria-pressed={currentMessage?.disabled === true}
         onclick={async () => {
+        const context = getSelectedChatContext()
         await sleep(1)
-        const currentMessage = DBState.db.characters[selIdState.selId].chats[DBState.db.characters[selIdState.selId].chatPage].message[idx]
-        DBState.db.characters[selIdState.selId].chats[DBState.db.characters[selIdState.selId].chatPage].message[idx].disabled = !currentMessage.disabled
+        if (!context?.message) {
+            return
+        }
+        context.message.disabled = !context.message.disabled
     }}>
         <PowerOff size={20}/>
         {#if showNames}
@@ -885,11 +950,14 @@
         class:ds-ui-menu-item={showNames}
         title={language.disableAbove}
         aria-label={language.disableAbove}
-        aria-pressed={DBState.db.characters[selIdState.selId]?.chats?.[DBState.db.characters[selIdState.selId]?.chatPage]?.message?.[idx]?.disabled === 'allBefore'}
+        aria-pressed={currentMessage?.disabled === 'allBefore'}
         onclick={async () => {
+        const context = getSelectedChatContext()
         await sleep(1)
-        const currentMessage = DBState.db.characters[selIdState.selId].chats[DBState.db.characters[selIdState.selId].chatPage].message[idx]
-        DBState.db.characters[selIdState.selId].chats[DBState.db.characters[selIdState.selId].chatPage].message[idx].disabled = currentMessage.disabled === 'allBefore' ? false : 'allBefore'
+        if (!context?.message) {
+            return
+        }
+        context.message.disabled = context.message.disabled === 'allBefore' ? false : 'allBefore'
     }}>
         <Scissors size={20}/>
         {#if showNames}
@@ -1059,7 +1127,7 @@
 {/if}
 <div class="ds-chat-row risu-chat"
      data-chat-index={idx}
-     data-chat-id={DBState.db.characters?.[selIdState.selId]?.chats?.[DBState.db.characters?.[selIdState.selId]?.chatPage]?.message?.[idx]?.chatId ?? ''}
+     data-chat-id={currentMessageChatId}
      class:ds-chat-row-memory-limit={isLastMemory}
      style:--ds-chat-memory-divider-thickness={`${DBState.db.memoryLimitThickness}px`}
      onclickcapture={handleButtonTriggerWithin}>
@@ -1075,7 +1143,7 @@
                     class:ds-chat-mobile-bubble-user={role === 'user'}
                 >
                     <p>{@render textBox()}</p>
-                    {#if DBState.db.characters?.[selIdState.selId]?.chats?.[DBState.db.characters?.[selIdState.selId]?.chatPage]?.message?.[idx]?.time}
+                    {#if currentMessageTime}
                         <span class="ds-chat-mobile-time">
                             {new Intl.DateTimeFormat(undefined, {
                                 hour: '2-digit',
@@ -1084,7 +1152,7 @@
                                 month: '2-digit',
                                 day: '2-digit',
                                 hour12: false
-                            }).format(DBState.db.characters[selIdState.selId].chats[DBState.db.characters[selIdState.selId].chatPage].message[idx].time)}
+                            }).format(currentMessageTime)}
                         </span>
                     {/if}
                 </div>

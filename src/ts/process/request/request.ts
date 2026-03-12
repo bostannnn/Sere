@@ -10,9 +10,8 @@ import type { MultiModal, OpenAIChat } from "../index.svelte";
 import { getTools } from "../mcp/mcp";
 import type { MCPTool } from "../mcp/mcplib";
 import { NovelAIBadWordIds, stringlizeNAIChat } from "../models/nai";
-import { stringlizeAINChat, unstringlizeAIN, unstringlizeChat } from "../stringlize";
+import { unstringlizeChat } from "../stringlize";
 import { applyChatTemplate } from "../templates/chatTemplate";
-import { runTransformers } from "../transformers";
 import { runTrigger } from "../triggers";
 import { isNodeServer } from '../../platform';
 import { requestClaude } from './anthropic';
@@ -112,16 +111,25 @@ const getServerGenerateResponse = (raw: unknown): ServerGenerateResponse => {
 
 function isRemovedProviderModel(aiModel?: string): boolean {
     if (!aiModel) return false
+    const normalized = aiModel.trim().toLowerCase()
     return (
-        aiModel === 'ooba' ||
-        aiModel === 'mancer' ||
-        aiModel.startsWith('cohere-') ||
-        aiModel === 'horde' ||
-        aiModel.startsWith('horde:::') ||
-        aiModel === 'reverse_proxy' ||
-        aiModel.startsWith('xcustom:::') ||
-        aiModel.startsWith('mistral-') ||
-        aiModel === 'open-mistral-nemo'
+        normalized === 'ooba' ||
+        normalized === 'textgen_webui' ||
+        normalized === 'mancer' ||
+        normalized.startsWith('cohere-') ||
+        normalized === 'horde' ||
+        normalized.startsWith('horde:::') ||
+        normalized === 'reverse_proxy' ||
+        normalized.startsWith('xcustom:::') ||
+        normalized.startsWith('mistral-') ||
+        normalized === 'open-mistral-nemo' ||
+        normalized === 'novellist' ||
+        normalized === 'novellist_damsel' ||
+        normalized === 'echo_model' ||
+        normalized.startsWith('hf:::') ||
+        normalized.startsWith('deepinfra_') ||
+        normalized.startsWith('anthropic.claude-') ||
+        normalized.endsWith('-vertex')
     );
 }
 
@@ -132,18 +140,10 @@ function isCanonicalServerRuntimeModel(aiModel?: string, modelInfo?: LLMModel): 
 
     if (modelInfo) {
         if (
-            modelInfo.format === LLMFormat.OpenAIResponseAPI ||
             modelInfo.format === LLMFormat.OpenAILegacyInstruct ||
-            modelInfo.format === LLMFormat.AWSBedrockClaude ||
-            modelInfo.format === LLMFormat.VertexAIGemini ||
-            modelInfo.format === LLMFormat.NovelList ||
-            modelInfo.format === LLMFormat.WebLLM ||
-            modelInfo.format === LLMFormat.Echo ||
-            modelInfo.format === LLMFormat.Cohere ||
-            modelInfo.format === LLMFormat.Horde ||
+            modelInfo.format === LLMFormat.OpenAIResponseAPI ||
             modelInfo.format === LLMFormat.Ooba ||
-            modelInfo.format === LLMFormat.OobaLegacy ||
-            modelInfo.format === LLMFormat.Mistral
+            modelInfo.format === LLMFormat.OobaLegacy
         ) {
             return false
         }
@@ -709,25 +709,17 @@ export async function requestChatDataMain(arg:requestDataArgument, model:ModelMo
             return requestOpenAILegacyInstruct(targ)
         case LLMFormat.NovelAI:
             return requestNovelAI(targ)
-        case LLMFormat.VertexAIGemini:
         case LLMFormat.GoogleCloud:
             return requestGoogleCloudVertex(targ)
         case LLMFormat.Kobold:
             return requestKobold(targ)
-        case LLMFormat.NovelList:
-            return requestNovelList(targ)
         case LLMFormat.Ollama:
             return requestOllama(targ)
         case LLMFormat.Anthropic:
         case LLMFormat.AnthropicLegacy:
-        case LLMFormat.AWSBedrockClaude:
             return requestClaude(targ)
-        case LLMFormat.WebLLM:
-            return requestWebLLM(targ)
         case LLMFormat.OpenAIResponseAPI:
             return requestOpenAIResponseAPI(targ)
-        case LLMFormat.Echo:
-            return requestEcho(targ)
     }
 
     return {
@@ -921,21 +913,6 @@ async function requestNovelAI(arg:RequestDataArgumentExtended):Promise<requestDa
     }
 }
 
-async function requestEcho(_arg:RequestDataArgumentExtended):Promise<requestDataResponse> {
-    const db = getDatabase()
-    const delay = db.echoDelay ?? 0
-    const message = db.echoMessage ?? "Echo Message"
-
-    if(delay > 0){
-        await sleep(delay * 1000)
-    }
-
-    return {
-        type: 'success',
-        result: message
-    }
-}
-
 async function requestKobold(arg:RequestDataArgumentExtended):Promise<requestDataResponse> {
     const formated = arg.formated
     const db = getDatabase()
@@ -1068,88 +1045,6 @@ async function requestKobold(arg:RequestDataArgumentExtended):Promise<requestDat
     }
 }
 
-async function requestNovelList(arg:RequestDataArgumentExtended):Promise<requestDataResponse> {
-
-    const formated = arg.formated
-    const db = getDatabase()
-    const maxTokens = arg.maxTokens
-    const temperature = arg.temperature
-    const biasString = arg.biasString
-    const currentChar = getCurrentCharacter()
-    const aiModel = arg.aiModel
-    const auth_key = db.novellistAPI;
-    const api_server_url = 'https://api.tringpt.com/';
-    const logit_bias:string[] = []
-    const logit_bias_values:string[] = []
-    for(let i=0;i<biasString.length;i++){
-        const bia = biasString[i]
-        logit_bias.push(bia[0])
-        logit_bias_values.push(bia[1].toString())
-    }
-    const headers = {
-        'Authorization': `Bearer ${auth_key}`,
-        'Content-Type': 'application/json'
-    };
-    
-    const send_body = {
-        text: stringlizeAINChat(formated, currentChar?.name ?? '', arg.continue),
-        length: maxTokens,
-        temperature: temperature,
-        top_p: db.ainconfig.top_p,
-        top_k: db.ainconfig.top_k,
-        rep_pen: db.ainconfig.rep_pen,
-        top_a: db.ainconfig.top_a,
-        rep_pen_slope: db.ainconfig.rep_pen_slope,
-        rep_pen_range: db.ainconfig.rep_pen_range,
-        typical_p: db.ainconfig.typical_p,
-        badwords: db.ainconfig.badwords,
-        model: aiModel === 'novellist_damsel' ? 'damsel' : 'supertrin',
-        stoptokens: ["「"].join("<<|>>") + db.ainconfig.stoptokens,
-        logit_bias: (logit_bias.length > 0) ? logit_bias.join("<<|>>") : undefined,
-        logit_bias_values: (logit_bias_values.length > 0) ? logit_bias_values.join("|") : undefined,
-    };
-
-
-    if(arg.previewBody){
-        return {
-            type: 'success',
-            result: JSON.stringify({
-                url: api_server_url + '/api',
-                body: send_body,
-                headers: headers
-            })      
-        }
-    }
-    const response = await globalFetch(arg.customURL ?? api_server_url + '/api', {
-        method: 'POST',
-        headers: headers,
-        body: send_body,
-        chatId: arg.chatId,
-        abortSignal: arg.abortSignal
-    });
-
-    if(!response.ok){
-        return {
-            type: 'fail',
-            result: response.data
-        }
-    }
-
-    if(response.data.error){
-        return {
-            'type': 'fail',
-            'result': `${response.data.error.replace("token", "api key")}`
-        }
-    }
-
-    const result = response.data.data[0];
-    const unstr = unstringlizeAIN(result, formated, currentChar?.name ?? '')
-    return {
-        'type': 'multiline',
-        'result': unstr
-    }
-}
-
 async function requestOllama(arg:RequestDataArgumentExtended):Promise<requestDataResponse> {
     const formated = arg.formated
     const db = getDatabase()
@@ -1222,6 +1117,8 @@ async function requestOllama(arg:RequestDataArgumentExtended):Promise<requestDat
                     const decoder = new TextDecoder();
                     let parserData = '';
                     let acc = '';
+                    let sawDoneEvent = false;
+                    let sawErrorEvent = false;
                     while (true) {
                         const { done, value } = await reader.read();
                         if (done) break;
@@ -1239,18 +1136,27 @@ async function requestOllama(arg:RequestDataArgumentExtended):Promise<requestDat
                                     acc += (parsed.text || '');
                                     controller.enqueue({ "0": acc });
                                 } else if (parsed.type === 'done') {
+                                    sawDoneEvent = true;
                                     if (parsed.newCharEtag) {
                                         controller.enqueue({ "__newCharEtag": parsed.newCharEtag });
                                     }
                                     controller.close();
                                     return;
                                 } else if (parsed.type === 'error' || parsed.type === 'fail') {
+                                    sawErrorEvent = true;
                                     controller.enqueue({ "0": `Error: ${parsed.message || parsed.error || 'Server stream failed'}` });
                                     controller.close();
                                     return;
                                 }
                             } catch {}
                         }
+                    }
+                    if (!sawDoneEvent && !sawErrorEvent) {
+                        controller.enqueue({
+                            "__error": "Server stream ended before done event.",
+                            "__errorCode": "UPSTREAM_STREAM_INCOMPLETE",
+                            "__status": "502",
+                        });
                     }
                     controller.close();
                 },
@@ -1338,38 +1244,6 @@ async function requestOllama(arg:RequestDataArgumentExtended):Promise<requestDat
     }
 }
 
-
-async function requestWebLLM(arg:RequestDataArgumentExtended):Promise<requestDataResponse> {
-    const formated = arg.formated
-    const db = getDatabase()
-    const aiModel = arg.aiModel
-    const currentChar = getCurrentCharacter()
-    const maxTokens = arg.maxTokens
-    const temperature = arg.temperature
-    const realModel = aiModel.split(":::")[1]
-    const prompt = applyChatTemplate(formated)
-
-    if(arg.previewBody){
-        return {
-            type: 'success',
-            result: JSON.stringify({
-                error: "Preview body is not supported for WebLLM"
-            })
-        }
-    }
-    const v = await runTransformers(prompt, realModel, {
-        temperature: temperature,
-        max_new_tokens: maxTokens,
-        top_k: db.ooba.top_k,
-        top_p: db.ooba.top_p,
-        repetition_penalty: db.ooba.repetition_penalty,
-        typical_p: db.ooba.typical_p,
-    } as Parameters<typeof runTransformers>[2])
-    return {
-        type: 'success',
-        result: unstringlizeChat(v.generated_text as string, formated, currentChar?.name ?? '')
-    }
-}
 
 export interface KoboldSamplerSettingsSchema {
     rep_pen?: number;

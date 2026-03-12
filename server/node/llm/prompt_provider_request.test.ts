@@ -51,4 +51,23 @@ describe("prompt provider request shaping", () => {
         expect(request.requestBody.max_length).toBe(320);
         expect(request.requestBody.stream).toBe(false);
     });
+
+    it("overrides existing max_tokens with the final server budget", () => {
+        const request = buildGenerateProviderRequest(
+            "openrouter",
+            "deepseek/deepseek-v3.2",
+            [{ role: "user", content: "Hello" }],
+            65,
+            false,
+            {
+                model: "deepseek/deepseek-v3.2",
+                max_tokens: 2000,
+                temperature: 1,
+            },
+        );
+
+        expect(request.maxTokens).toBe(65);
+        expect(request.requestBody.max_tokens).toBe(65);
+        expect(request.requestBody.stream).toBe(false);
+    });
 });
