@@ -171,6 +171,7 @@ describe("script sidebars runtime smoke", () => {
       conditions: [] as Array<Record<string, unknown>>,
       effect: [] as Array<Record<string, unknown>>,
     };
+    let latestTriggerValue = triggerValue;
     const target = document.createElement("div");
     document.body.appendChild(target);
     app = mount(TriggerV1Data, {
@@ -179,6 +180,9 @@ describe("script sidebars runtime smoke", () => {
         idx: 0,
         value: triggerValue,
         lowLevelAble: false,
+        onValueChange: (nextValue) => {
+          latestTriggerValue = nextValue;
+        },
       },
     });
     await flushUi();
@@ -216,6 +220,6 @@ describe("script sidebars runtime smoke", () => {
 
     inlineActions[0]?.click();
     await flushUi();
-    expect(triggerValue.conditions.length).toBe(1);
+    expect(latestTriggerValue.conditions.length).toBe(1);
   });
 });

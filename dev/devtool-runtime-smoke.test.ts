@@ -10,6 +10,7 @@ vi.mock(import("src/ts/stores.svelte"), async () => {
   const { writable } = await import("svelte/store");
   return {
     selectedCharID: writable(0),
+    selIdState: { selId: 0 },
     DBState: {
       db: {
         promptTemplate: "",
@@ -35,6 +36,7 @@ vi.mock(import("src/ts/stores.svelte"), async () => {
 vi.mock(import("src/ts/globalApi.svelte"), () => ({
   getRequestLog: () => "request-log",
   getServerLLMLogs: async () => [],
+  saveAsset: async () => "assets/mock-asset.png",
 }));
 
 vi.mock(import("src/ts/alert"), () => ({
