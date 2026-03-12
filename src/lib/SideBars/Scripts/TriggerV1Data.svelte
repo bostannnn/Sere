@@ -18,6 +18,7 @@
         onRemove?: () => void;
         onClose?: () => void;
         onOpen?: () => void;
+        onValueChange?: (value: triggerscript) => void;
         idx: number;
     }
 
@@ -27,9 +28,14 @@
         onRemove = () => {},
         onClose = () => {},
         onOpen = () => {},
+        onValueChange = (_value: triggerscript) => {},
         idx
     }: Props = $props();
     let open = $state(false)
+
+    $effect(() => {
+        onValueChange(value)
+    })
 </script>
 
 <div class="script-item-root" data-risu-idx2={idx}>

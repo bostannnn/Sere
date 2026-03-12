@@ -5,7 +5,6 @@ import type {
   SummarizeDebugLog,
 } from "src/ts/process/memory/memory";
 import {
-  getChatMemoryData,
   getCharacterMemoryPromptOverride,
   setCharacterMemoryPromptOverride,
   setChatMemoryData,

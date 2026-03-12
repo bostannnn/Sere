@@ -9,6 +9,7 @@
     import {
         getDatabase,
         repairCharacterChatPage,
+        resolveChatStateByCharacterAndChatId,
         resolveSelectedChat,
         resolveSelectedChatState,
         type Message,
@@ -83,7 +84,7 @@
     let autoMode = $state(false)
     let rerolls:Message[][] = []
     let rerollid = -1
-    let lastCharId = -1
+    let lastCharId: string | null = null
     const isDoingChatInputTranslate = false
     let toggleStickers:boolean = $state(false)
     let fileInput:string[] = $state([])
@@ -358,6 +359,13 @@
     })
 
     $effect(() => {
+        if (evolutionAction === 'handoff' && currentEvolutionSettings?.pendingProposal) {
+            evolutionBusy = false
+            evolutionAction = null
+        }
+    })
+
+    $effect(() => {
         if (showEvolutionProposal && !currentEvolutionSettings?.pendingProposal) {
             showEvolutionProposal = false
         }
@@ -414,23 +422,24 @@
     }
 
     async function sendMain(continueResponse:boolean) {
-        const selectedChar = $selectedCharID
-        if(selectedChar < 0){
-            return
-        }
-        const selectedCharacter = DBState.db.characters?.[selectedChar]
+        const selectedState = resolveSelectedChatState(DBState.db.characters, $selectedCharID)
+        const selectedCharacter = selectedState.character
         if(!selectedCharacter){
             return
         }
         repairCharacterChatPage(selectedCharacter)
-        const activeChat = resolveSelectedChat(selectedCharacter)
+        const activeChat = selectedState.chat ?? resolveSelectedChat(selectedCharacter)
         if(!activeChat || !Array.isArray(activeChat.message)){
             return
         }
+        if(!selectedCharacter.chaId){
+            return
+        }
+        activeChat.id ??= v4()
         if($isDoingChat){
             return
         }
-        if(lastCharId !== $selectedCharID){
+        if(lastCharId !== selectedCharacter.chaId){
             rerolls = []
             rerollid = -1
         }
@@ -519,7 +528,10 @@
         rerolls = []
         await sleep(10)
         updateInputSizeAll()
-        await sendChatMain(continueResponse)
+        await sendChatMain(continueResponse, {
+            characterId: selectedCharacter.chaId,
+            chatId: activeChat.id,
+        })
 
     }
 
@@ -531,7 +543,8 @@
         if(!activeChat){
             return
         }
-        if(lastCharId !== $selectedCharID){
+        const activeCharacterId = currentCharacter?.chaId ?? null
+        if(lastCharId !== activeCharacterId){
             rerolls = []
             rerollid = -1
         }
@@ -563,7 +576,13 @@
         }
         openMenu = false
         activeChat.message = cha
-        await sendChatMain()
+        if (!currentCharacter?.chaId || !activeChat.id) {
+            return
+        }
+        await sendChatMain(false, {
+            characterId: currentCharacter.chaId,
+            chatId: activeChat.id,
+        })
     }
 
     async function unReroll() {
@@ -574,7 +593,8 @@
         if(!activeChat){
             return
         }
-        if(lastCharId !== $selectedCharID){
+        const activeCharacterId = currentCharacter?.chaId ?? null
+        if(lastCharId !== activeCharacterId){
             rerolls = []
             rerollid = -1
         }
@@ -599,9 +619,23 @@
 
     let abortController:null|AbortController = null
 
-    async function sendChatMain(continued:boolean = false) {
-        const selectedCharAtStart = $selectedCharID
-        const activeChatAtStart = currentChatEntry
+    async function sendChatMain(continued:boolean = false, target?: { characterId: string; chatId: string }) {
+        const stableTarget = target ?? (
+            currentCharacter?.chaId && currentChatEntry?.id
+                ? {
+                    characterId: currentCharacter.chaId,
+                    chatId: currentChatEntry.id,
+                }
+                : null
+        )
+        if(!stableTarget){
+            return
+        }
+        const activeChatAtStart = resolveChatStateByCharacterAndChatId(
+            DBState.db.characters,
+            stableTarget.characterId,
+            stableTarget.chatId,
+        ).chat
         if(!activeChatAtStart){
             return
         }
@@ -611,26 +645,34 @@
         try {
             await sendChat(-1, {
                 signal:abortController.signal,
-                continue:continued
+                continue:continued,
+                target: stableTarget,
             })
-            const activeCharacter = DBState.db.characters?.[selectedCharAtStart]
-            const activeChat = resolveSelectedChat(activeCharacter)
-            if(selectedCharAtStart === $selectedCharID && activeChat && previousLength < activeChat.message.length){
+            const activeState = resolveChatStateByCharacterAndChatId(
+                DBState.db.characters,
+                stableTarget.characterId,
+                stableTarget.chatId,
+            )
+            const isCurrentSelection = currentCharacter?.chaId === stableTarget.characterId
+                && currentChatEntry?.id === stableTarget.chatId
+            if(isCurrentSelection && activeState.chat && previousLength < activeState.chat.message.length){
                 const nextRerollState = appendRerollSnapshot(
                     rerolls,
-                    safeStructuredClone(activeChat.message).slice(previousLength),
+                    safeStructuredClone(activeState.chat.message).slice(previousLength),
                 )
                 rerolls = nextRerollState.snapshots
                 rerollid = nextRerollState.index
             }
             // Guard against occasional scroll drift after long-running generation/RAG.
-            await tick()
-            scrollToBottom()
+            if (isCurrentSelection) {
+                await tick()
+                scrollToBottom()
+            }
         } catch (error) {
             defaultChatScreenLog(error)
             alertError(error)
         }
-        lastCharId = selectedCharAtStart
+        lastCharId = stableTarget.characterId
         $isDoingChat = false
         if(DBState.db.playMessage){
             const audio = new Audio(sendSound);

@@ -2599,14 +2599,23 @@
                             <span class="block text-textcolor2">{language.triggerOn}</span>
                             {#if value && value[selectedIndex] && selectedIndex >= 0 && selectedIndex < value.length}
                                 <div class="trigger-v2-editor-input-wrap">
-                                    <SelectInput className="flex-1" bind:value={value[selectedIndex].type}>
-                                    <OptionInput value="start">{language.triggerStart}</OptionInput>
-                                    <OptionInput value="output">{language.triggerOutput}</OptionInput>
-                                    <OptionInput value="input">{language.triggerInput}</OptionInput>
-                                    <OptionInput value="manual">{language.triggerManual}</OptionInput>
-                                    <OptionInput value="display">{language.editDisplay}</OptionInput>
-                                    <OptionInput value="request">{language.editProcess}</OptionInput>
-                                </SelectInput>
+                                    <SelectInput
+                                        className="flex-1"
+                                        value={value[selectedIndex].type}
+                                        onchange={(e) => {
+                                            if (!value[selectedIndex]) {
+                                                return
+                                            }
+                                            value[selectedIndex].type = e.currentTarget.value as typeof value[number]["type"]
+                                        }}
+                                    >
+                                        <OptionInput value="start">{language.triggerStart}</OptionInput>
+                                        <OptionInput value="output">{language.triggerOutput}</OptionInput>
+                                        <OptionInput value="input">{language.triggerInput}</OptionInput>
+                                        <OptionInput value="manual">{language.triggerManual}</OptionInput>
+                                        <OptionInput value="display">{language.editDisplay}</OptionInput>
+                                        <OptionInput value="request">{language.editProcess}</OptionInput>
+                                    </SelectInput>
                                 </div>
                             {/if}
                         </div>
@@ -2882,7 +2891,14 @@
                         </div>
                         <div class="trigger-v2-type-sidebar-footer">
                             <div class="trigger-v2-muted-note">
-                                <CheckInput bind:check={DBState.db.showDeprecatedTriggerV2} name={language.showDeprecatedTriggerV2} grayText />
+                                <CheckInput
+                                    check={DBState.db.showDeprecatedTriggerV2}
+                                    onChange={(checked) => {
+                                        DBState.db.showDeprecatedTriggerV2 = checked
+                                    }}
+                                    name={language.showDeprecatedTriggerV2}
+                                    grayText
+                                />
                             </div>
                         </div>
                     </div>
@@ -2920,7 +2936,14 @@
                         </div>
                         <div class="trigger-v2-type-mobile-footer">
                             <div class="trigger-v2-muted-note">
-                                <CheckInput bind:check={DBState.db.showDeprecatedTriggerV2} name={language.showDeprecatedTriggerV2} grayText />
+                                <CheckInput
+                                    check={DBState.db.showDeprecatedTriggerV2}
+                                    onChange={(checked) => {
+                                        DBState.db.showDeprecatedTriggerV2 = checked
+                                    }}
+                                    name={language.showDeprecatedTriggerV2}
+                                    grayText
+                                />
                             </div>
                         </div>
                     </div>

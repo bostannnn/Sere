@@ -9,6 +9,7 @@ import { loadLoreBookV3Prompt } from "./lorebook.svelte";
 import { runTrigger } from "./triggers";
 import { language } from "src/lang";
 import { runComfyCommand } from "src/ts/integrations/comfy/execute";
+import { v4 } from "uuid";
 const commandLog = (..._args: unknown[]) => {};
 
 export type CommandHandlerArg = {
@@ -244,6 +245,13 @@ async function processCommand(command:string, pipe:string):Promise<false | strin
                 clearMode = true
                 splited.shift()
             }
+            currentChat.id ??= v4()
+            const stableTarget = currentChar?.chaId && currentChat?.id
+                ? {
+                    characterId: currentChar.chaId,
+                    chatId: currentChat.id,
+                }
+                : null
             for(const e of splited){
                 if(clearMode){
                     currentChat.message = []
@@ -252,7 +260,7 @@ async function processCommand(command:string, pipe:string):Promise<false | strin
                     role: 'user',
                     data: e
                 })
-                await sendChat(-1)
+                await sendChat(-1, stableTarget ? { target: stableTarget } : {})
             }
             return ''
         }

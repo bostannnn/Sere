@@ -688,6 +688,80 @@ export function resolveSelectedChatState(
     }
 }
 
+export function resolveCharacterEntryIndexById(
+    characters: Array<character | groupChat> | undefined | null,
+    characterId: string,
+): number {
+    if (!characterId || !Array.isArray(characters)) {
+        return -1
+    }
+    return characters.findIndex((candidate) => candidate?.chaId === characterId)
+}
+
+export function resolveCharacterEntryById(
+    characters: Array<character | groupChat> | undefined | null,
+    characterId: string,
+): character | groupChat | null {
+    const characterIndex = resolveCharacterEntryIndexById(characters, characterId)
+    if (characterIndex < 0) {
+        return null
+    }
+    return characters?.[characterIndex] ?? null
+}
+
+export function resolveChatIndexById(
+    chats: Chat[] | undefined | null,
+    chatId: string,
+): number {
+    if (!chatId || !Array.isArray(chats)) {
+        return -1
+    }
+    return chats.findIndex((chat) => chat?.id === chatId)
+}
+
+export function resolveChatById(
+    currentCharacter: character | groupChat | null | undefined,
+    chatId: string,
+): Chat | null {
+    const chatIndex = resolveChatIndexById(currentCharacter?.chats, chatId)
+    if (chatIndex < 0) {
+        return null
+    }
+    return currentCharacter?.chats?.[chatIndex] ?? null
+}
+
+export function resolveChatStateByCharacterAndChatId(
+    characters: Array<character | groupChat> | undefined | null,
+    characterId: string,
+    chatId: string,
+) {
+    const characterIndex = resolveCharacterEntryIndexById(characters, characterId)
+    const character = characterIndex >= 0 ? characters?.[characterIndex] ?? null : null
+    const chatIndex = resolveChatIndexById(character?.chats, chatId)
+    const chat = chatIndex >= 0 ? character?.chats?.[chatIndex] ?? null : null
+    return {
+        character,
+        characterIndex,
+        chat,
+        chatIndex,
+        messages: chat?.message ?? [],
+    }
+}
+
+export function setChatByCharacterAndChatId(
+    characters: Array<character | groupChat> | undefined | null,
+    characterId: string,
+    chatId: string,
+    chat: Chat,
+): boolean {
+    const { character, chatIndex } = resolveChatStateByCharacterAndChatId(characters, characterId, chatId)
+    if (!character || chatIndex < 0) {
+        return false
+    }
+    character.chats[chatIndex] = chat
+    return true
+}
+
 export function repairCharacterChatPage(currentCharacter: character | groupChat | null | undefined): number {
     if (!currentCharacter) {
         return -1

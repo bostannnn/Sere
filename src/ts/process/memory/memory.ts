@@ -11,7 +11,6 @@ import {
   type MemoryData,
   type MemoryResult,
   type MemorySettings,
-  type SerializableMemoryData,
   type Summary,
   type SummaryChunk,
 } from "./memory.types";

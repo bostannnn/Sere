@@ -175,6 +175,23 @@ vi.mock(import("src/ts/storage/database.svelte"), async () => {
     const chatIndex = resolveSafeChatIndex(character?.chats, character?.chatPage);
     return chatIndex >= 0 ? character?.chats?.[chatIndex] ?? null : null;
   };
+  const resolveChatStateByCharacterAndChatId = (
+    characters: Array<{ chaId?: string; chats?: Array<{ id?: string; message?: unknown[] }> }> | undefined,
+    characterId: string,
+    chatId: string,
+  ) => {
+    const characterIndex = characters?.findIndex((entry) => entry?.chaId === characterId) ?? -1;
+    const character = characterIndex >= 0 ? characters?.[characterIndex] ?? null : null;
+    const chatIndex = character?.chats?.findIndex((entry) => entry?.id === chatId) ?? -1;
+    const chat = chatIndex >= 0 ? character?.chats?.[chatIndex] ?? null : null;
+    return {
+      character,
+      characterIndex,
+      chat,
+      chatIndex,
+      messages: chat?.message ?? [],
+    };
+  };
   return {
     getDatabase: () => ({}),
     getCurrentCharacter: () => DBState.db.characters[0],
@@ -203,6 +220,7 @@ vi.mock(import("src/ts/storage/database.svelte"), async () => {
         messages: chat?.message ?? [],
       };
     },
+    resolveChatStateByCharacterAndChatId,
   };
 });
 

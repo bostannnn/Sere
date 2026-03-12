@@ -18,6 +18,7 @@ interface Props {
     onRemove?: () => void;
     onClose?: () => void;
     onOpen?: () => void;
+    onValueChange?: (value: customscript) => void;
     idx: number;
   }
 
@@ -26,9 +27,14 @@ interface Props {
     onRemove = () => {},
     onClose = () => {},
     onOpen = () => {},
+    onValueChange = (_value: customscript) => {},
     idx
   }: Props = $props();
   void ReloadGUIPointer;
+
+    $effect(() => {
+        onValueChange(value)
+    })
 
     const checkFlagContain = (flag:string, matchFlag:string) => {
         if(flag.length === 1){

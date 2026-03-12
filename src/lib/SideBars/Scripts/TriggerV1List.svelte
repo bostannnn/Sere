@@ -18,6 +18,16 @@
   let sorted = $state(0)
   let opened = 0
 
+  function replaceTriggerAt(index: number, nextTrigger: triggerscript) {
+    value = value.map((entry, entryIndex) => {
+      return entryIndex === index ? nextTrigger : entry
+    })
+  }
+
+  function removeTriggerAt(index: number) {
+    value = value.filter((_, entryIndex) => entryIndex !== index)
+  }
+
   const createStb = () => {
     if (!ele) {
       return
@@ -81,14 +91,15 @@
     {#each value as _triggerscript, i (i)}
       <TriggerData
         idx={i}
-        bind:value={value[i]}
+        value={value[i]}
         {lowLevelAble}
         {onOpen}
         {onClose}
+        onValueChange={(nextTrigger) => {
+          replaceTriggerAt(i, nextTrigger)
+        }}
         onRemove={() => {
-          const triggerscript = value
-          triggerscript.splice(i, 1)
-          value = triggerscript
+          removeTriggerAt(i)
         }}
       />
     {/each}
@@ -97,13 +108,12 @@
     <button
       class="trigger-v1-list-add-btn icon-btn icon-btn--sm"
       onclick={() => {
-        value.push({
+        value = [...value, {
           comment: '',
           type: 'start',
           conditions: [],
           effect: [],
-        })
-        value = value
+        }]
       }}
     >
       <PlusIcon />

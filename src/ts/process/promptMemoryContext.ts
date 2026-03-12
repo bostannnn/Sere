@@ -11,7 +11,6 @@ import {
   getCharacterMemoryEnabled,
   getDbMemoryEnabled,
 } from "./memory/storage";
-import { splitPromptMessagesForMemoryTemplate } from "./promptMemoryFormatting";
 
 export async function applyPromptMemoryContext(args: {
   isNodeServer: boolean;

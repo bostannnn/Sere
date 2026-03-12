@@ -28,12 +28,18 @@ import {
   DEFAULT_GLOBAL_RAG_SETTINGS,
   presetTemplate as presetTemplateFromDatabase,
   repairCharacterChatPage,
+  resolveCharacterEntryById,
+  resolveCharacterEntryIndexById,
+  resolveChatById,
   resolveChatBackgroundMode as resolveChatBackgroundModeFromDatabase,
+  resolveChatIndexById,
+  resolveChatStateByCharacterAndChatId,
   resolveGlobalRagSettings as resolveGlobalRagSettingsFromDatabase,
   resolveSafeChatIndex,
   resolveSelectedCharacter,
   resolveSelectedChat,
   resolveSelectedChatMessages,
+  setChatByCharacterAndChatId,
   setDatabase,
 } from "./database.svelte";
 import {
@@ -397,6 +403,67 @@ describe("selected chat helpers", () => {
 
     expect(resolveSafeChatIndex(chats as never, undefined)).toBe(0);
     expect(resolveSafeChatIndex(chats as never, -4)).toBe(0);
+  });
+
+  it("resolves stable character/chat state by ids", () => {
+    const firstChat = makeChat("chat-1");
+    const secondChat = makeChat("chat-2");
+    const characters = [
+      {
+        chaId: "alpha",
+        name: "Alpha",
+        type: "character" as const,
+        chats: [firstChat, secondChat],
+        chatPage: 1,
+      },
+      {
+        chaId: "group-1",
+        name: "Group",
+        type: "group" as const,
+        chats: [makeChat("group-chat")],
+        chatPage: 0,
+      },
+    ];
+
+    expect(resolveCharacterEntryIndexById(characters as never, "alpha")).toBe(0);
+    expect(resolveCharacterEntryById(characters as never, "group-1")).toBe(characters[1]);
+    expect(resolveChatIndexById(characters[0].chats as never, secondChat.id)).toBe(1);
+    expect(resolveChatById(characters[0] as never, secondChat.id)).toBe(secondChat);
+    expect(
+      resolveChatStateByCharacterAndChatId(characters as never, "alpha", secondChat.id),
+    ).toMatchObject({
+      character: characters[0],
+      characterIndex: 0,
+      chat: secondChat,
+      chatIndex: 1,
+      messages: secondChat.message,
+    });
+  });
+
+  it("updates chats by stable character/chat ids", () => {
+    const firstChat = makeChat("chat-1");
+    const characters = [
+      {
+        chaId: "alpha",
+        name: "Alpha",
+        type: "character" as const,
+        chats: [firstChat],
+        chatPage: 0,
+      },
+    ];
+    const replacementChat = {
+      ...firstChat,
+      note: "updated note",
+      message: [...firstChat.message, { role: "char" as const, data: "reply" }],
+    };
+
+    expect(
+      setChatByCharacterAndChatId(characters as never, "alpha", firstChat.id, replacementChat as never),
+    ).toBe(true);
+    expect(characters[0].chats[0]).toEqual(replacementChat);
+    expect(
+      setChatByCharacterAndChatId(characters as never, "missing", firstChat.id, replacementChat as never),
+    ).toBe(false);
   });
 });
 

@@ -88,13 +88,19 @@ vi.mock(import("src/ts/parser.svelte"), () => ({
 }));
 
 vi.mock(import("src/ts/storage/database.svelte"), () => ({
-  getCurrentCharacter: () => ({
-    type: "character",
-  }),
-  getCurrentChat: () => ({
-    message: [],
-  }),
-  setCurrentChat: () => {},
+  resolveSelectedChatState: (characters: Array<Record<string, unknown>>, selectedCharacterIndex: number) => {
+    const character = characters[selectedCharacterIndex] ?? null;
+    const chatIndex = typeof character?.chatPage === "number" ? character.chatPage : 0;
+    const chat = Array.isArray(character?.chats) ? character.chats[chatIndex] ?? null : null;
+    return {
+      character,
+      characterIndex: character ? selectedCharacterIndex : -1,
+      chat,
+      chatIndex: chat ? chatIndex : -1,
+      messages: Array.isArray(chat?.message) ? chat.message : [],
+    };
+  },
+  setChatByCharacterAndChatId: () => true,
 }));
 
 vi.mock(import("src/ts/globalApi.svelte"), () => ({

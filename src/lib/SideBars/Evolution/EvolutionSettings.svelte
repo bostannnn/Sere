@@ -23,7 +23,6 @@
         CharacterEvolutionState,
         CharacterEvolutionVersionFile,
         character,
-        groupChat,
     } from "src/ts/storage/database.types"
     import EvolutionSetupPanel from "./EvolutionSetupPanel.svelte"
     import EvolutionWorkspaceTabs from "./EvolutionWorkspaceTabs.svelte"
