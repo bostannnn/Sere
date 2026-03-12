@@ -61,9 +61,11 @@
         syncEvolutionProposalDraft,
         type EvolutionBusyAction,
     } from 'src/ts/character-evolution/reviewFlow';
+    import { getPendingProposalSourceRange } from 'src/ts/character-evolution/pendingProposal';
     import {
         ensureCharacterEvolution,
         getEffectiveCharacterEvolutionSettings,
+        hasAcceptedEvolutionForChat,
     } from 'src/ts/characterEvolution';
     import { findSingleCharacterById, replaceCharacterById } from 'src/ts/storage/characterList';
     import {
@@ -210,7 +212,11 @@
             return false
         }
         const activeChat = resolveSelectedChat(character)
-        return !!activeChat?.id && character.characterEvolution.lastProcessedChatId === activeChat.id
+        return !!activeChat?.id && hasAcceptedEvolutionForChat(
+            character,
+            activeChat.id,
+            Array.isArray(activeChat.message) ? activeChat.message.length : 0,
+        )
     })
     const isEvolutionReviewVisible = $derived(Boolean(showEvolutionProposal && currentEvolutionSettings?.pendingProposal))
 
@@ -317,6 +323,7 @@
             const result = await runEvolutionHandoffFlow({
                 characterEntry: currentCharacter,
                 chatId: currentChatEntry?.id ?? null,
+                chatMessageCount: currentChat.length,
                 forceReplay,
                 resolveCharacterById: findCharacterById,
                 confirmReplay: () => {
@@ -375,14 +382,11 @@
         evolutionBusy = true
         evolutionAction = 'accept'
         try {
-            const acceptedSourceChatId = currentCharacter.characterEvolution.pendingProposal?.sourceChatId
-                ?? currentChatEntry?.id
-                ?? null
             const { nextCharacter, chatCreationError } = await acceptEvolutionReviewFlow({
                 characterEntry: currentCharacter,
                 proposedState,
                 createNextChat,
-                sourceChatId: acceptedSourceChatId,
+                sourceRange: getPendingProposalSourceRange(currentCharacter.characterEvolution.pendingProposal),
                 resolveCharacterById: findCharacterById,
             })
             commitCharacter(characterId, nextCharacter)

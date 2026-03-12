@@ -29,7 +29,7 @@ export function createDefaultCharacterEvolutionState(): CharacterEvolutionState 
         userRead: [],
         userLikes: [],
         userDislikes: [],
-        lastChatEnded: {
+        lastInteractionEnded: {
             state: "",
             residue: "",
         },

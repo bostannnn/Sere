@@ -28,6 +28,11 @@ function createProposal(overrides: Partial<CharacterEvolutionPendingProposal> = 
   return {
     proposalId: "proposal-1",
     sourceChatId: "chat-2",
+    sourceRange: {
+      chatId: "chat-2",
+      startMessageIndex: 0,
+      endMessageIndex: 1,
+    },
     createdAt: 20,
     changes: [],
     proposedState: createCharacter().characterEvolution.currentState,
@@ -91,7 +96,7 @@ function createCharacter(): character {
         userRead: [],
         userLikes: [],
         userDislikes: [],
-        lastChatEnded: { state: "", residue: "" },
+        lastInteractionEnded: { state: "", residue: "" },
         keyMoments: [],
         characterIntimatePreferences: [],
         userIntimatePreferences: [],
@@ -99,15 +104,34 @@ function createCharacter(): character {
       currentStateVersion: 2,
       pendingProposal: null,
       lastProcessedChatId: "chat-1",
+      lastProcessedMessageIndexByChat: {
+        "chat-1": 3,
+      },
+      processedRanges: [
+        {
+          version: 2,
+          acceptedAt: 10,
+          range: {
+            chatId: "chat-1",
+            startMessageIndex: 0,
+            endMessageIndex: 3,
+          },
+        },
+      ],
       stateVersions: [
         {
           version: 2,
           chatId: "chat-1",
           acceptedAt: 10,
+          range: {
+            chatId: "chat-1",
+            startMessageIndex: 0,
+            endMessageIndex: 3,
+          },
         },
       ],
     },
-  } as character;
+  } as unknown as character;
 }
 
 describe("character evolution review actions", () => {
@@ -118,8 +142,9 @@ describe("character evolution review actions", () => {
   });
 
   it("detects when a chat already has an accepted evolution handoff", () => {
-    expect(hasAcceptedEvolutionForChat(createCharacter(), "chat-1")).toBe(true);
-    expect(hasAcceptedEvolutionForChat(createCharacter(), "chat-2")).toBe(false);
+    expect(hasAcceptedEvolutionForChat(createCharacter(), "chat-1", 4)).toBe(true);
+    expect(hasAcceptedEvolutionForChat(createCharacter(), "chat-1", 5)).toBe(false);
+    expect(hasAcceptedEvolutionForChat(createCharacter(), "chat-2", 1)).toBe(false);
   });
 
   it("creates pending proposal state from a handoff response", async () => {
@@ -175,7 +200,11 @@ describe("character evolution review actions", () => {
       characterEntry,
       proposedState: characterEntry.characterEvolution.currentState,
       createNextChat: true,
-      sourceChatId: "chat-2",
+      sourceRange: {
+        chatId: "chat-2",
+        startMessageIndex: 4,
+        endMessageIndex: 7,
+      },
       resolveCharacterById: () => freshCharacter,
     });
 
@@ -186,7 +215,39 @@ describe("character evolution review actions", () => {
     });
     expect(result.nextCharacter.characterEvolution.currentStateVersion).toBe(5);
     expect(result.nextCharacter.characterEvolution.lastProcessedChatId).toBe("chat-2");
+    expect(result.nextCharacter.characterEvolution.lastProcessedMessageIndexByChat?.["chat-2"]).toBe(7);
     expect(result.nextCharacter.characterEvolution.pendingProposal).toBeNull();
+  });
+
+  it("does not fabricate processed coverage when accepting a legacy proposal without a source range", async () => {
+    const characterEntry = {
+      ...createCharacter(),
+      characterEvolution: {
+        ...createCharacter().characterEvolution,
+        pendingProposal: createProposal({
+          sourceRange: undefined,
+        }),
+      },
+    };
+    mocks.acceptEvolutionProposalAction.mockResolvedValue({
+      version: 5,
+      acceptedAt: 30,
+      state: characterEntry.characterEvolution.currentState,
+    });
+
+    const result = await acceptEvolutionProposalReview({
+      characterEntry,
+      proposedState: characterEntry.characterEvolution.currentState,
+      sourceRange: null,
+    });
+
+    expect(result.nextCharacter.characterEvolution.lastProcessedMessageIndexByChat?.["chat-2"]).toBeUndefined();
+    expect(result.nextCharacter.characterEvolution.lastProcessedChatId).toBe("chat-2");
+    expect(result.nextCharacter.characterEvolution.processedRanges?.some((entry) => entry.range.chatId === "chat-2")).toBe(false);
+    expect(result.nextCharacter.characterEvolution.stateVersions[0]).toEqual(expect.objectContaining({
+      version: 5,
+      chatId: "chat-2",
+    }));
   });
 
   it("clears a pending proposal on reject", async () => {

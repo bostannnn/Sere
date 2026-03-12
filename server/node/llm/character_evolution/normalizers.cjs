@@ -4,6 +4,7 @@ const {
     createDefaultCharacterEvolutionState,
     normalizeCharacterEvolutionExtractionModel,
 } = require('./schema.cjs');
+const { normalizeCharacterEvolutionRangeRef } = require('./range.cjs');
 const { toTrimmedString } = require('./utils.cjs');
 
 function normalizeItem(raw) {
@@ -29,6 +30,11 @@ function normalizeItem(raw) {
     };
 }
 
+function normalizeSectionConfigKey(keyRaw) {
+    const key = toTrimmedString(keyRaw);
+    return key === 'lastChatEnded' ? 'lastInteractionEnded' : key;
+}
+
 function normalizeStringList(raw) {
     if (!Array.isArray(raw)) return [];
     return raw.map((item) => toTrimmedString(item)).filter(Boolean);
@@ -42,6 +48,9 @@ function normalizeItemList(raw) {
 function normalizeCharacterEvolutionState(raw) {
     const value = (raw && typeof raw === 'object') ? raw : {};
     const state = createDefaultCharacterEvolutionState();
+    const lastInteractionEndedRaw = value.lastInteractionEnded && typeof value.lastInteractionEnded === 'object'
+        ? value.lastInteractionEnded
+        : value.lastChatEnded;
     state.relationship = {
         trustLevel: toTrimmedString(value.relationship?.trustLevel),
         dynamic: toTrimmedString(value.relationship?.dynamic),
@@ -56,9 +65,9 @@ function normalizeCharacterEvolutionState(raw) {
     state.userRead = normalizeStringList(value.userRead);
     state.userLikes = normalizeItemList(value.userLikes);
     state.userDislikes = normalizeItemList(value.userDislikes);
-    state.lastChatEnded = {
-        state: toTrimmedString(value.lastChatEnded?.state),
-        residue: toTrimmedString(value.lastChatEnded?.residue),
+    state.lastInteractionEnded = {
+        state: toTrimmedString(lastInteractionEndedRaw?.state),
+        residue: toTrimmedString(lastInteractionEndedRaw?.residue),
     };
     state.keyMoments = normalizeStringList(value.keyMoments);
     state.characterIntimatePreferences = normalizeItemList(value.characterIntimatePreferences);
@@ -72,9 +81,12 @@ function normalizeCharacterEvolutionSectionConfigs(raw) {
     const rawMap = new Map();
     for (const section of rawSections) {
         if (!section || typeof section !== 'object') continue;
-        const key = toTrimmedString(section.key);
+        const key = normalizeSectionConfigKey(section.key);
         if (!key) continue;
-        rawMap.set(key, section);
+        rawMap.set(key, {
+            ...section,
+            key,
+        });
     }
     return defaults.map((section) => {
         const override = rawMap.get(section.key) || {};
@@ -119,6 +131,83 @@ function normalizeCharacterEvolutionSettings(raw) {
     const value = (raw && typeof raw === 'object') ? raw : {};
     const extractionMaxTokens = Number(value.extractionMaxTokens);
     const extractionProvider = toTrimmedString(value.extractionProvider) || defaults.extractionProvider;
+    const pendingProposal = value.pendingProposal && typeof value.pendingProposal === 'object'
+        ? {
+            proposalId: toTrimmedString(value.pendingProposal.proposalId),
+            sourceChatId: toTrimmedString(value.pendingProposal.sourceChatId),
+            ...(normalizeCharacterEvolutionRangeRef(value.pendingProposal.sourceRange)
+                ? { sourceRange: normalizeCharacterEvolutionRangeRef(value.pendingProposal.sourceRange) }
+                : {}),
+            proposedState: normalizeCharacterEvolutionState(value.pendingProposal.proposedState),
+            changes: Array.isArray(value.pendingProposal.changes)
+                ? value.pendingProposal.changes
+                    .map((change) => {
+                        if (!change || typeof change !== 'object') return null;
+                        const sectionKey = toTrimmedString(change.sectionKey);
+                        if (!sectionKey) return null;
+                        return {
+                            sectionKey,
+                            summary: toTrimmedString(change.summary),
+                            evidence: normalizeStringList(change.evidence),
+                        };
+                    })
+                    .filter(Boolean)
+                : [],
+            createdAt: Number.isFinite(Number(value.pendingProposal.createdAt)) ? Number(value.pendingProposal.createdAt) : 0,
+        }
+        : null;
+    const stateVersions = Array.isArray(value.stateVersions)
+        ? value.stateVersions
+            .map((entry) => {
+                if (!entry || typeof entry !== 'object') return null;
+                const version = Number(entry.version);
+                if (!Number.isFinite(version)) return null;
+                const range = normalizeCharacterEvolutionRangeRef(entry.range);
+                return {
+                    version: Math.max(0, Math.floor(version)),
+                    chatId: toTrimmedString(entry.chatId) || null,
+                    acceptedAt: Number.isFinite(Number(entry.acceptedAt)) ? Number(entry.acceptedAt) : 0,
+                    ...(range ? { range } : {}),
+                };
+            })
+            .filter(Boolean)
+        : [];
+    const processedRanges = Array.isArray(value.processedRanges)
+        ? value.processedRanges
+            .map((entry) => {
+                if (!entry || typeof entry !== 'object') return null;
+                const range = normalizeCharacterEvolutionRangeRef(entry.range);
+                const version = Number(entry.version);
+                if (!range || !Number.isFinite(version)) return null;
+                return {
+                    version: Math.max(0, Math.floor(version)),
+                    acceptedAt: Number.isFinite(Number(entry.acceptedAt)) ? Number(entry.acceptedAt) : 0,
+                    range,
+                };
+            })
+            .filter(Boolean)
+        : stateVersions
+            .filter((entry) => !!entry.range)
+            .map((entry) => ({
+                version: entry.version,
+                acceptedAt: entry.acceptedAt,
+                range: entry.range,
+            }));
+    const lastProcessedMessageIndexByChat = {};
+    if (value.lastProcessedMessageIndexByChat && typeof value.lastProcessedMessageIndexByChat === 'object') {
+        for (const [chatId, endIndex] of Object.entries(value.lastProcessedMessageIndexByChat)) {
+            const numericEndIndex = Number(endIndex);
+            if (!chatId || !Number.isFinite(numericEndIndex)) continue;
+            lastProcessedMessageIndexByChat[chatId] = Math.max(-1, Math.floor(numericEndIndex));
+        }
+    }
+    for (const entry of processedRanges) {
+        lastProcessedMessageIndexByChat[entry.range.chatId] = Math.max(
+            lastProcessedMessageIndexByChat[entry.range.chatId] ?? -1,
+            entry.range.endMessageIndex
+        );
+    }
+
     return {
         enabled: value.enabled === true,
         useGlobalDefaults: value.useGlobalDefaults !== false,
@@ -132,43 +221,11 @@ function normalizeCharacterEvolutionSettings(raw) {
         privacy: normalizeCharacterEvolutionPrivacy(value.privacy),
         currentStateVersion: Number.isFinite(Number(value.currentStateVersion)) ? Math.max(0, Math.floor(Number(value.currentStateVersion))) : 0,
         currentState: normalizeCharacterEvolutionState(value.currentState),
-        pendingProposal: value.pendingProposal && typeof value.pendingProposal === 'object'
-            ? {
-                proposalId: toTrimmedString(value.pendingProposal.proposalId),
-                sourceChatId: toTrimmedString(value.pendingProposal.sourceChatId),
-                proposedState: normalizeCharacterEvolutionState(value.pendingProposal.proposedState),
-                changes: Array.isArray(value.pendingProposal.changes)
-                    ? value.pendingProposal.changes
-                        .map((change) => {
-                            if (!change || typeof change !== 'object') return null;
-                            const sectionKey = toTrimmedString(change.sectionKey);
-                            if (!sectionKey) return null;
-                            return {
-                                sectionKey,
-                                summary: toTrimmedString(change.summary),
-                                evidence: normalizeStringList(change.evidence),
-                            };
-                        })
-                        .filter(Boolean)
-                    : [],
-                createdAt: Number.isFinite(Number(value.pendingProposal.createdAt)) ? Number(value.pendingProposal.createdAt) : 0,
-            }
-            : null,
-        lastProcessedChatId: toTrimmedString(value.lastProcessedChatId) || null,
-        stateVersions: Array.isArray(value.stateVersions)
-            ? value.stateVersions
-                .map((entry) => {
-                    if (!entry || typeof entry !== 'object') return null;
-                    const version = Number(entry.version);
-                    if (!Number.isFinite(version)) return null;
-                    return {
-                        version: Math.max(0, Math.floor(version)),
-                        chatId: toTrimmedString(entry.chatId) || null,
-                        acceptedAt: Number.isFinite(Number(entry.acceptedAt)) ? Number(entry.acceptedAt) : 0,
-                    };
-                })
-                .filter(Boolean)
-            : [],
+        pendingProposal,
+        lastProcessedChatId: toTrimmedString(value.lastProcessedChatId) || processedRanges[processedRanges.length - 1]?.range.chatId || null,
+        lastProcessedMessageIndexByChat,
+        processedRanges,
+        stateVersions,
     };
 }
 

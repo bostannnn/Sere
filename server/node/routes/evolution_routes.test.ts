@@ -37,6 +37,11 @@ describe("evolution routes handoff", () => {
       replayed: false,
       proposal: expect.objectContaining({
         sourceChatId: chatId,
+        sourceRange: {
+          chatId,
+          startMessageIndex: 0,
+          endMessageIndex: 1,
+        },
       }),
     }));
 
@@ -44,6 +49,11 @@ describe("evolution routes handoff", () => {
     const characterFile = JSON.parse(readFileSync(path.join(dataDirs.characters, characterId, "character.json"), "utf-8"));
     expect(characterFile.character.characterEvolution.pendingProposal).toEqual(expect.objectContaining({
       sourceChatId: chatId,
+      sourceRange: {
+        chatId,
+        startMessageIndex: 0,
+        endMessageIndex: 1,
+      },
     }));
   });
 
@@ -117,6 +127,11 @@ describe("evolution routes handoff", () => {
             pendingProposal: {
               proposalId: "proposal-existing",
               sourceChatId: "other-chat",
+              sourceRange: {
+                chatId: "other-chat",
+                startMessageIndex: 0,
+                endMessageIndex: 1,
+              },
               proposedState: {
                 relationship: {
                   trustLevel: "steady",
@@ -159,6 +174,11 @@ describe("evolution routes handoff", () => {
     expect(characterFile.character.characterEvolution.pendingProposal).toEqual(expect.objectContaining({
       proposalId: "proposal-existing",
       sourceChatId: "other-chat",
+      sourceRange: {
+        chatId: "other-chat",
+        startMessageIndex: 0,
+        endMessageIndex: 1,
+      },
     }));
   });
 
@@ -211,6 +231,20 @@ describe("evolution routes handoff", () => {
     const characterFile = JSON.parse(readFileSync(path.join(dataDirs.characters, characterId, "character.json"), "utf-8"));
     expect(characterFile.character.characterEvolution.currentStateVersion).toBe(1);
     expect(characterFile.character.characterEvolution.pendingProposal).toBeNull();
+    expect(characterFile.character.characterEvolution.lastProcessedMessageIndexByChat).toEqual({
+      [chatId]: 1,
+    });
+    expect(characterFile.character.characterEvolution.processedRanges).toEqual([
+      {
+        version: 1,
+        acceptedAt: expect.any(Number),
+        range: {
+          chatId,
+          startMessageIndex: 0,
+          endMessageIndex: 1,
+        },
+      },
+    ]);
 
     if (getVersion) {
       const getRes = createRes();
@@ -224,6 +258,11 @@ describe("evolution routes handoff", () => {
       expect(getRes.payload).toEqual(expect.objectContaining({
         version: expect.objectContaining({
           version: 1,
+          range: {
+            chatId,
+            startMessageIndex: 0,
+            endMessageIndex: 1,
+          },
           sectionConfigs: expect.any(Array),
           privacy: {
             allowCharacterIntimatePreferences: false,
@@ -248,8 +287,33 @@ describe("evolution routes handoff", () => {
           useGlobalDefaults: true,
           currentStateVersion: 3,
           currentState: {},
-          stateVersions: [],
+          stateVersions: [
+            {
+              version: 3,
+              chatId,
+              acceptedAt: 1000,
+              range: {
+                chatId,
+                startMessageIndex: 0,
+                endMessageIndex: 1,
+              },
+            },
+          ],
           lastProcessedChatId: chatId,
+          lastProcessedMessageIndexByChat: {
+            [chatId]: 1,
+          },
+          processedRanges: [
+            {
+              version: 3,
+              acceptedAt: 1000,
+              range: {
+                chatId,
+                startMessageIndex: 0,
+                endMessageIndex: 1,
+              },
+            },
+          ],
         },
       },
     });
@@ -268,6 +332,11 @@ describe("evolution routes handoff", () => {
       replayed: true,
       proposal: expect.objectContaining({
         sourceChatId: chatId,
+        sourceRange: {
+          chatId,
+          startMessageIndex: 0,
+          endMessageIndex: 1,
+        },
       }),
     }));
     expect(appendLLMAudit).toHaveBeenCalledWith(expect.objectContaining({
@@ -278,6 +347,264 @@ describe("evolution routes handoff", () => {
       }),
       response: expect.objectContaining({
         replayed: true,
+      }),
+    }));
+  });
+
+  it("rejects replay for a disjoint range that was never accepted", async () => {
+    const dataDirs = getDataDirs();
+    writeJson(path.join(dataDirs.characters, characterId, "character.json"), {
+      character: {
+        chaId: characterId,
+        type: "character",
+        name: "Eva",
+        desc: "desc",
+        personality: "personality",
+        characterEvolution: {
+          enabled: true,
+          useGlobalDefaults: true,
+          currentStateVersion: 1,
+          currentState: {},
+          stateVersions: [
+            {
+              version: 1,
+              chatId,
+              acceptedAt: 1000,
+              range: {
+                chatId,
+                startMessageIndex: 0,
+                endMessageIndex: 0,
+              },
+            },
+          ],
+          processedRanges: [
+            {
+              version: 1,
+              acceptedAt: 1000,
+              range: {
+                chatId,
+                startMessageIndex: 0,
+                endMessageIndex: 0,
+              },
+            },
+          ],
+          lastProcessedChatId: chatId,
+          lastProcessedMessageIndexByChat: {
+            [chatId]: 0,
+          },
+        },
+      },
+    });
+
+    const { postHandlers } = buildHandlers();
+    const handler = postHandlers.get("/data/character-evolution/handoff");
+    expect(handler).toBeTruthy();
+
+    const res = createRes();
+    await handler!(createReq({
+      characterId,
+      chatId,
+      forceReplay: true,
+      sourceRange: {
+        chatId,
+        startMessageIndex: 1,
+        endMessageIndex: 1,
+      },
+    }), res);
+
+    expect(res.statusCode).toBe(409);
+    expect(res.payload).toEqual(expect.objectContaining({
+      error: "RANGE_REPLAY_REQUIRES_ACCEPTED_RANGE",
+    }));
+  });
+
+  it("rejects replay ranges that extend beyond accepted coverage", async () => {
+    const dataDirs = getDataDirs();
+    writeJson(path.join(dataDirs.characters, characterId, "character.json"), {
+      character: {
+        chaId: characterId,
+        type: "character",
+        name: "Eva",
+        desc: "desc",
+        personality: "personality",
+        characterEvolution: {
+          enabled: true,
+          useGlobalDefaults: true,
+          currentStateVersion: 1,
+          currentState: {},
+          stateVersions: [
+            {
+              version: 1,
+              chatId,
+              acceptedAt: 1000,
+              range: {
+                chatId,
+                startMessageIndex: 0,
+                endMessageIndex: 0,
+              },
+            },
+          ],
+          processedRanges: [
+            {
+              version: 1,
+              acceptedAt: 1000,
+              range: {
+                chatId,
+                startMessageIndex: 0,
+                endMessageIndex: 0,
+              },
+            },
+          ],
+          lastProcessedChatId: chatId,
+          lastProcessedMessageIndexByChat: {
+            [chatId]: 0,
+          },
+        },
+      },
+    });
+
+    const { postHandlers } = buildHandlers();
+    const handler = postHandlers.get("/data/character-evolution/handoff");
+    expect(handler).toBeTruthy();
+
+    const res = createRes();
+    await handler!(createReq({
+      characterId,
+      chatId,
+      forceReplay: true,
+      sourceRange: {
+        chatId,
+        startMessageIndex: 0,
+        endMessageIndex: 1,
+      },
+    }), res);
+
+    expect(res.statusCode).toBe(409);
+    expect(res.payload).toEqual(expect.objectContaining({
+      error: "RANGE_REPLAY_REQUIRES_ACCEPTED_RANGE",
+    }));
+  });
+
+  it("does not treat legacy lastProcessedChatId alone as full current-chat coverage", async () => {
+    const dataDirs = getDataDirs();
+    writeJson(path.join(dataDirs.characters, characterId, "character.json"), {
+      character: {
+        chaId: characterId,
+        type: "character",
+        name: "Eva",
+        desc: "desc",
+        personality: "personality",
+        characterEvolution: {
+          enabled: true,
+          useGlobalDefaults: true,
+          currentStateVersion: 1,
+          currentState: {},
+          stateVersions: [],
+          lastProcessedChatId: chatId,
+        },
+      },
+    });
+
+    const { postHandlers } = buildHandlers();
+    const handler = postHandlers.get("/data/character-evolution/handoff");
+    expect(handler).toBeTruthy();
+
+    const res = createRes();
+    await handler!(createReq({ characterId, chatId }), res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.payload).toEqual(expect.objectContaining({
+      proposal: expect.objectContaining({
+        sourceRange: {
+          chatId,
+          startMessageIndex: 0,
+          endMessageIndex: 1,
+        },
+      }),
+    }));
+  });
+
+  it("supports explicit contiguous next-range handoff and advances the per-chat cursor on accept", async () => {
+    const { postHandlers } = buildHandlers();
+    const handoff = postHandlers.get("/data/character-evolution/handoff");
+    const accept = postHandlers.get("/data/character-evolution/:charId/proposal/accept");
+    expect(handoff).toBeTruthy();
+    expect(accept).toBeTruthy();
+
+    const firstHandoffRes = createRes();
+    await handoff!(createReq({
+      characterId,
+      chatId,
+      sourceRange: {
+        chatId,
+        startMessageIndex: 0,
+        endMessageIndex: 0,
+      },
+    }), firstHandoffRes);
+    expect(firstHandoffRes.statusCode).toBe(200);
+    expect(firstHandoffRes.payload).toEqual(expect.objectContaining({
+      proposal: expect.objectContaining({
+        sourceRange: {
+          chatId,
+          startMessageIndex: 0,
+          endMessageIndex: 0,
+        },
+      }),
+    }));
+
+    const firstAcceptRes = createRes();
+    await accept!(createReq({}, { charId: characterId }), firstAcceptRes);
+    expect(firstAcceptRes.statusCode).toBe(200);
+
+    const secondHandoffRes = createRes();
+    await handoff!(createReq({ characterId, chatId }), secondHandoffRes);
+    expect(secondHandoffRes.statusCode).toBe(200);
+    expect(secondHandoffRes.payload).toEqual(expect.objectContaining({
+      proposal: expect.objectContaining({
+        sourceRange: {
+          chatId,
+          startMessageIndex: 1,
+          endMessageIndex: 1,
+        },
+      }),
+    }));
+  });
+
+  it("does not advance the cursor when a proposal is rejected", async () => {
+    const { postHandlers } = buildHandlers();
+    const handoff = postHandlers.get("/data/character-evolution/handoff");
+    const reject = postHandlers.get("/data/character-evolution/:charId/proposal/reject");
+    expect(handoff).toBeTruthy();
+    expect(reject).toBeTruthy();
+
+    await handoff!(createReq({ characterId, chatId }), createRes());
+
+    const rejectRes = createRes();
+    await reject!(createReq({}, { charId: characterId }), rejectRes);
+    expect(rejectRes.statusCode).toBe(200);
+
+    const dataDirs = getDataDirs();
+    writeJson(path.join(dataDirs.characters, characterId, "chats", `${chatId}.json`), {
+      chat: {
+        id: chatId,
+        message: [
+          { role: "user", data: "I need a job soon." },
+          { role: "char", data: "That sounds miserable, dude." },
+          { role: "user", data: "And I still need help." },
+        ],
+      },
+    });
+
+    const secondHandoffRes = createRes();
+    await handoff!(createReq({ characterId, chatId }), secondHandoffRes);
+    expect(secondHandoffRes.statusCode).toBe(200);
+    expect(secondHandoffRes.payload).toEqual(expect.objectContaining({
+      proposal: expect.objectContaining({
+        sourceRange: {
+          chatId,
+          startMessageIndex: 0,
+          endMessageIndex: 2,
+        },
       }),
     }));
   });

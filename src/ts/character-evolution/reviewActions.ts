@@ -1,9 +1,13 @@
 import { createCharacterEvolutionProposal } from "../evolution";
 import type {
   CharacterEvolutionPendingProposal,
+  CharacterEvolutionRangeRef,
   CharacterEvolutionState,
   character,
 } from "../storage/database.types";
+import {
+  hasAcceptedEvolutionForChat as hasAcceptedEvolutionForChatByRange,
+} from "./ranges";
 import {
   acceptEvolutionProposalAction,
   rejectEvolutionProposalAction,
@@ -20,11 +24,9 @@ type ResolveCharacterById = (characterId: string) => character | null;
 export function hasAcceptedEvolutionForChat(
   characterEntry: character | null | undefined,
   chatId: string | null | undefined,
+  messageCount?: number | null,
 ): boolean {
-  if (!characterEntry?.chaId || !chatId) {
-    return false;
-  }
-  return characterEntry.characterEvolution.lastProcessedChatId === chatId;
+  return hasAcceptedEvolutionForChatByRange(characterEntry, chatId, messageCount);
 }
 
 export function createEvolutionProposalDraftState(
@@ -44,6 +46,7 @@ export async function requestEvolutionProposal(args: {
   characterEntry: character;
   chatId: string | null | undefined;
   forceReplay?: boolean;
+  sourceRange?: CharacterEvolutionRangeRef;
   resolveCharacterById?: ResolveCharacterById;
 }): Promise<{
   proposal: CharacterEvolutionPendingProposal | null;
@@ -51,7 +54,13 @@ export async function requestEvolutionProposal(args: {
   proposalDraft: CharacterEvolutionState | null;
   proposalDraftKey: string | null;
 }> {
-  const { characterEntry, chatId, forceReplay = false, resolveCharacterById } = args;
+  const {
+    characterEntry,
+    chatId,
+    forceReplay = false,
+    sourceRange,
+    resolveCharacterById,
+  } = args;
   if (characterEntry.characterEvolution.pendingProposal) {
     throw new Error("Resolve the current evolution proposal before running another handoff.");
   }
@@ -62,7 +71,10 @@ export async function requestEvolutionProposal(args: {
   const payload = await createCharacterEvolutionProposal(
     characterEntry.chaId,
     chatId,
-    forceReplay ? { forceReplay: true } : {},
+    {
+      ...(forceReplay ? { forceReplay: true } : {}),
+      ...(sourceRange ? { sourceRange } : {}),
+    },
   );
   const freshCharacterEntry = resolveCharacterById?.(characterEntry.chaId) ?? characterEntry;
   if (!freshCharacterEntry) {
@@ -88,7 +100,7 @@ export async function acceptEvolutionProposalReview(args: {
   characterEntry: character;
   proposedState: CharacterEvolutionState;
   createNextChat?: boolean;
-  sourceChatId: string | null;
+  sourceRange: CharacterEvolutionRangeRef | null;
   resolveCharacterById?: ResolveCharacterById;
 }): Promise<{
   payload: AcceptedEvolutionProposalPayload;
@@ -98,7 +110,7 @@ export async function acceptEvolutionProposalReview(args: {
     characterEntry,
     proposedState,
     createNextChat = false,
-    sourceChatId,
+    sourceRange,
     resolveCharacterById,
   } = args;
 
@@ -112,6 +124,13 @@ export async function acceptEvolutionProposalReview(args: {
     throw new Error("Character is no longer available.");
   }
 
+  const acceptedSourceChatId = typeof payload.chatId === "string" && payload.chatId.trim()
+    ? payload.chatId.trim()
+    : sourceRange?.chatId
+      ?? freshCharacterEntry.characterEvolution.pendingProposal?.sourceChatId
+      ?? characterEntry.characterEvolution.pendingProposal?.sourceChatId
+      ?? null;
+
   return {
     payload,
     nextCharacter: withAcceptedEvolutionState({
@@ -119,7 +138,8 @@ export async function acceptEvolutionProposalReview(args: {
       state: payload.state as CharacterEvolutionState,
       version: payload.version,
       acceptedAt: payload.acceptedAt,
-      sourceChatId,
+      sourceChatId: acceptedSourceChatId,
+      sourceRange: (payload.range as CharacterEvolutionRangeRef | null | undefined) ?? sourceRange,
     }),
   };
 }

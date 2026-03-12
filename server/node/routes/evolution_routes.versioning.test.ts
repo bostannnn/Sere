@@ -47,9 +47,28 @@ describe("evolution routes versioning", () => {
               version: 1,
               chatId,
               acceptedAt: 1000,
+              range: {
+                chatId,
+                startMessageIndex: 0,
+                endMessageIndex: 1,
+              },
             },
           ],
           lastProcessedChatId: chatId,
+          lastProcessedMessageIndexByChat: {
+            [chatId]: 1,
+          },
+          processedRanges: [
+            {
+              version: 1,
+              acceptedAt: 1000,
+              range: {
+                chatId,
+                startMessageIndex: 0,
+                endMessageIndex: 1,
+              },
+            },
+          ],
         },
       },
     });
@@ -75,6 +94,9 @@ describe("evolution routes versioning", () => {
     const characterFile = JSON.parse(readFileSync(path.join(dataDirs.characters, characterId, "character.json"), "utf-8"));
     expect(characterFile.character.characterEvolution.currentStateVersion).toBe(2);
     expect(characterFile.character.characterEvolution.lastProcessedChatId).toBe(chatId);
+    expect(characterFile.character.characterEvolution.lastProcessedMessageIndexByChat).toEqual({
+      [chatId]: 1,
+    });
     expect(characterFile.character.characterEvolution.pendingProposal).toBeNull();
   });
 
@@ -233,6 +255,11 @@ describe("evolution routes versioning", () => {
           pendingProposal: {
             proposalId: "proposal-1",
             sourceChatId: chatId,
+            sourceRange: {
+              chatId,
+              startMessageIndex: 0,
+              endMessageIndex: 1,
+            },
             proposedState: {
               relationship: {
                 trustLevel: "higher",
@@ -279,6 +306,69 @@ describe("evolution routes versioning", () => {
         ],
       }),
     }));
+  });
+
+  it("does not fabricate a cursor range when accepting a legacy pending proposal without sourceRange", async () => {
+    const dataDirs = getDataDirs();
+    writeJson(path.join(dataDirs.characters, characterId, "character.json"), {
+      character: {
+        chaId: characterId,
+        type: "character",
+        name: "Eva",
+        desc: "desc",
+        personality: "personality",
+        characterEvolution: {
+          enabled: true,
+          useGlobalDefaults: true,
+          currentStateVersion: 0,
+          currentState: {
+            relationship: {
+              trustLevel: "steady",
+              dynamic: "old dynamic",
+            },
+          },
+          pendingProposal: {
+            proposalId: "proposal-legacy",
+            sourceChatId: chatId,
+            proposedState: {
+              relationship: {
+                trustLevel: "higher",
+                dynamic: "warmer",
+              },
+            },
+            changes: [
+              {
+                sectionKey: "relationship",
+                summary: "Relationship became warmer.",
+                evidence: ["Character said they feel closer now."],
+              },
+            ],
+            createdAt: 1,
+          },
+          stateVersions: [],
+          lastProcessedChatId: null,
+        },
+      },
+    });
+
+    const { postHandlers } = buildHandlers();
+    const accept = postHandlers.get("/data/character-evolution/:charId/proposal/accept");
+    expect(accept).toBeTruthy();
+
+    const acceptRes = createRes();
+    await accept!(createReq({}, { charId: characterId }), acceptRes);
+
+    expect(acceptRes.statusCode).toBe(200);
+    expect(acceptRes.payload).toEqual(expect.not.objectContaining({
+      range: expect.anything(),
+    }));
+
+    const characterFile = JSON.parse(readFileSync(path.join(dataDirs.characters, characterId, "character.json"), "utf-8"));
+    expect(characterFile.character.characterEvolution.lastProcessedMessageIndexByChat ?? {}).toEqual({});
+    expect(characterFile.character.characterEvolution.processedRanges ?? []).toEqual([]);
+
+    const versionFile = JSON.parse(readFileSync(path.join(dataDirs.characters, characterId, "states", "v1.json"), "utf-8"));
+    expect(versionFile.range ?? null).toBeNull();
   });
 
   it("preserves intimate preferences on accept when global defaults allow them", async () => {
@@ -358,6 +448,11 @@ describe("evolution routes versioning", () => {
           pendingProposal: {
             proposalId: "proposal-1",
             sourceChatId: chatId,
+            sourceRange: {
+              chatId,
+              startMessageIndex: 0,
+              endMessageIndex: 1,
+            },
             proposedState: {
               relationship: {
                 trustLevel: "higher",

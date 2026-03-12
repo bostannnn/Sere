@@ -1,5 +1,6 @@
 import type {
     CharacterEvolutionPendingProposal,
+    CharacterEvolutionRangeRef,
     CharacterEvolutionState,
     CharacterEvolutionSettings,
     character,
@@ -34,21 +35,45 @@ export function withAcceptedEvolutionState(args: {
     state: CharacterEvolutionState
     version: number | string | undefined
     acceptedAt: number | string | undefined
-    sourceChatId: string | null
+    sourceRange: CharacterEvolutionRangeRef | null
+    sourceChatId?: string | null
 }): character {
-    const { characterEntry, state, version, acceptedAt, sourceChatId } = args
+    const { characterEntry, state, version, acceptedAt, sourceRange, sourceChatId = null } = args
     const acceptedVersion = Number(version) || characterEntry.characterEvolution.currentStateVersion
     const acceptedTimestamp = Number(acceptedAt) || 0
+    const acceptedChatId = sourceRange?.chatId ?? sourceChatId ?? null
     const nextVersions = [
         {
             version: acceptedVersion,
-            chatId: sourceChatId,
+            chatId: acceptedChatId,
             acceptedAt: acceptedTimestamp,
+            ...(sourceRange ? { range: sourceRange } : {}),
         },
         ...(Array.isArray(characterEntry.characterEvolution.stateVersions)
             ? characterEntry.characterEvolution.stateVersions.filter((entry) => Number(entry?.version) !== acceptedVersion)
             : []),
     ]
+    const nextProcessedRanges = [
+        ...(Array.isArray(characterEntry.characterEvolution.processedRanges)
+            ? characterEntry.characterEvolution.processedRanges.filter((entry) => Number(entry?.version) !== acceptedVersion)
+            : []),
+        ...(sourceRange ? [{
+            version: acceptedVersion,
+            acceptedAt: acceptedTimestamp,
+            range: sourceRange,
+        }] : []),
+    ]
+    const nextLastProcessedMessageIndexByChat = {
+        ...(characterEntry.characterEvolution.lastProcessedMessageIndexByChat ?? {}),
+        ...(sourceRange
+            ? {
+                [sourceRange.chatId]: Math.max(
+                    characterEntry.characterEvolution.lastProcessedMessageIndexByChat?.[sourceRange.chatId] ?? -1,
+                    sourceRange.endMessageIndex,
+                ),
+            }
+            : {}),
+    }
 
     return {
         ...characterEntry,
@@ -57,7 +82,9 @@ export function withAcceptedEvolutionState(args: {
             currentState: state,
             currentStateVersion: acceptedVersion,
             pendingProposal: null,
-            lastProcessedChatId: sourceChatId,
+            lastProcessedChatId: acceptedChatId ?? characterEntry.characterEvolution.lastProcessedChatId ?? null,
+            lastProcessedMessageIndexByChat: nextLastProcessedMessageIndexByChat,
+            processedRanges: nextProcessedRanges,
             stateVersions: nextVersions,
         },
     }

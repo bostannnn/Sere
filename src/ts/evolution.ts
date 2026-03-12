@@ -4,6 +4,7 @@ import { getDatabase, setDatabase, type Chat, type character, type groupChat } f
 import { saveServerDatabase } from "./storage/serverDb";
 import type {
     CharacterEvolutionPendingProposal,
+    CharacterEvolutionRangeRef,
     CharacterEvolutionState,
     CharacterEvolutionVersionFile,
     CharacterEvolutionVersionMeta,
@@ -47,12 +48,14 @@ export async function createCharacterEvolutionProposal(
     chatId: string,
     options: {
         forceReplay?: boolean
+        sourceRange?: CharacterEvolutionRangeRef
     } = {},
 ) {
     return await postJson("/data/character-evolution/handoff", {
         characterId,
         chatId,
         ...(options.forceReplay ? { forceReplay: true } : {}),
+        ...(options.sourceRange ? { sourceRange: options.sourceRange } : {}),
     });
 }
 

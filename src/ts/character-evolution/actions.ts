@@ -8,6 +8,7 @@ import {
 } from "src/ts/evolution"
 import { DBState } from "src/ts/stores.svelte"
 import type {
+    CharacterEvolutionRangeRef,
     CharacterEvolutionState,
     CharacterEvolutionVersionFile,
     CharacterEvolutionVersionMeta,
@@ -18,6 +19,8 @@ export interface AcceptedEvolutionProposalPayload extends Record<string, unknown
     state?: CharacterEvolutionState
     version?: number | string
     acceptedAt?: number | string
+    chatId?: string | null
+    range?: CharacterEvolutionRangeRef
     chatCreationError?: string
 }
 

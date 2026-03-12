@@ -262,6 +262,38 @@ describe("evolution handoff audit", () => {
     expect(userPrompt).not.toContain("Personality text");
   });
 
+  it("uses the range-based default extractor wording when no custom prompt overrides it", async () => {
+    const { DEFAULT_EXTRACTION_PROMPT } = require("../llm/character_evolution/schema.cjs");
+    writeJson(path.join(dataDirs.root, "settings.json"), {
+      data: {
+        username: "Andrew",
+        characterEvolutionDefaults: {
+          extractionProvider: "openrouter",
+          extractionModel: "anthropic/claude-3.5-haiku",
+          extractionMaxTokens: 2400,
+          extractionPrompt: DEFAULT_EXTRACTION_PROMPT,
+          sectionConfigs: [],
+          privacy: {
+            allowCharacterIntimatePreferences: false,
+            allowUserIntimatePreferences: false,
+          },
+        },
+      },
+    });
+
+    const appendLLMAudit = vi.fn(async () => {});
+    const handler = buildHandler(appendLLMAudit);
+    const res = createRes();
+
+    await handler(createReq({ characterId, chatId }), res);
+
+    expect(res.statusCode).toBe(200);
+    const audit = appendLLMAudit.mock.calls[0]?.[0] as { request?: { promptMessages?: Array<{ content?: string }> } };
+    const userPrompt = audit.request?.promptMessages?.[1]?.content ?? "";
+    expect(userPrompt).toContain("You update a character evolution state from the current processed roleplay transcript range.");
+    expect(userPrompt).not.toContain("after a completed roleplay chat");
+  });
+
   it("audits raw model output when handoff parse fails", async () => {
     const appendLLMAudit = vi.fn(async () => {});
     const logLLMExecutionEnd = vi.fn();

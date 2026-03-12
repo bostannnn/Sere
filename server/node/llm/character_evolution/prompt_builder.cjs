@@ -18,8 +18,26 @@ function buildCharacterEvolutionPromptMessages(arg = {}) {
     const character = arg.character || {};
     const chat = arg.chat || {};
     const evolution = getEffectiveCharacterEvolutionSettings(settings, character);
-    const transcriptLines = Array.isArray(chat.message)
-        ? chat.message.map((message) => chatMessageToTranscriptLine(message, toTrimmedString(character.name), toTrimmedString(settings.username))).filter(Boolean)
+    const sourceRange = arg.sourceRange && typeof arg.sourceRange === 'object'
+        ? arg.sourceRange
+        : null;
+    const transcriptStart = Number.isFinite(Number(sourceRange?.startMessageIndex))
+        ? Math.max(0, Math.floor(Number(sourceRange.startMessageIndex)))
+        : 0;
+    const transcriptEnd = Number.isFinite(Number(sourceRange?.endMessageIndex))
+        ? Math.max(transcriptStart, Math.floor(Number(sourceRange.endMessageIndex)))
+        : (Array.isArray(chat.message) ? chat.message.length - 1 : -1);
+    const transcriptMessages = Array.isArray(chat.message)
+        ? chat.message.slice(transcriptStart, transcriptEnd + 1)
+        : [];
+    const transcriptLines = Array.isArray(transcriptMessages)
+        ? transcriptMessages
+            .map((message, index) => {
+                const line = chatMessageToTranscriptLine(message, toTrimmedString(character.name), toTrimmedString(settings.username));
+                if (!line) return '';
+                return `[${transcriptStart + index}] ${line}`;
+            })
+            .filter(Boolean)
         : [];
     const sections = evolution.sectionConfigs
         .filter((section) => section.enabled)
@@ -43,6 +61,11 @@ function buildCharacterEvolutionPromptMessages(arg = {}) {
         '',
         'Current state JSON:',
         state,
+        '',
+        'Chat transcript range:',
+        sourceRange
+            ? `${sourceRange.chatId}:${transcriptStart}..${transcriptEnd}`
+            : `${toTrimmedString(chat.id) || '[unknown chat]'}:${transcriptStart}..${transcriptEnd}`,
         '',
         'Chat transcript:',
         transcriptLines.join('\n') || '[empty]',

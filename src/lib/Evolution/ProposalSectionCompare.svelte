@@ -66,7 +66,7 @@
     }
 
     function isObjectSection(key: string) {
-        return key === "relationship" || key === "lastChatEnded";
+        return key === "relationship" || key === "lastInteractionEnded";
     }
 
     function stringItemsForState(state: CharacterEvolutionState, key: keyof CharacterEvolutionState): string[] {
@@ -132,8 +132,8 @@
         if (key === "relationship") {
             return Boolean(state.relationship.trustLevel || state.relationship.dynamic);
         }
-        if (key === "lastChatEnded") {
-            return Boolean(state.lastChatEnded.state || state.lastChatEnded.residue);
+        if (key === "lastInteractionEnded") {
+            return Boolean(state.lastInteractionEnded.state || state.lastInteractionEnded.residue);
         }
         const sectionValue = state[key];
         return Array.isArray(sectionValue) ? sectionValue.length > 0 : false;
@@ -192,11 +192,11 @@
         };
     }
 
-    function updateLastChatEnded(field: "state" | "residue", next: string) {
+    function updateLastInteractionEnded(field: "state" | "residue", next: string) {
         proposedState = {
             ...proposedState,
-            lastChatEnded: {
-                ...proposedState.lastChatEnded,
+            lastInteractionEnded: {
+                ...proposedState.lastInteractionEnded,
                 [field]: next,
             },
         };
@@ -208,7 +208,7 @@
             return;
         }
 
-        updateLastChatEnded(row.key, row.currentValue);
+        updateLastInteractionEnded(row.key, row.currentValue);
     }
 
     function updateStringItem(key: keyof CharacterEvolutionState, index: number, next: string) {
@@ -414,29 +414,29 @@
                 key: "state",
                 label: "State",
                 multiline: true,
-                status: areStringItemsEqual(currentState.lastChatEnded.state, proposedState.lastChatEnded.state)
+                status: areStringItemsEqual(currentState.lastInteractionEnded.state, proposedState.lastInteractionEnded.state)
                     ? "unchanged"
-                    : currentState.lastChatEnded.state && proposedState.lastChatEnded.state
+                    : currentState.lastInteractionEnded.state && proposedState.lastInteractionEnded.state
                         ? "changed"
-                        : proposedState.lastChatEnded.state
+                        : proposedState.lastInteractionEnded.state
                             ? "added"
                             : "removed",
-                currentValue: currentState.lastChatEnded.state,
-                proposedValue: proposedState.lastChatEnded.state,
+                currentValue: currentState.lastInteractionEnded.state,
+                proposedValue: proposedState.lastInteractionEnded.state,
             },
             {
                 key: "residue",
                 label: "Residue",
                 multiline: true,
-                status: areStringItemsEqual(currentState.lastChatEnded.residue, proposedState.lastChatEnded.residue)
+                status: areStringItemsEqual(currentState.lastInteractionEnded.residue, proposedState.lastInteractionEnded.residue)
                     ? "unchanged"
-                    : currentState.lastChatEnded.residue && proposedState.lastChatEnded.residue
+                    : currentState.lastInteractionEnded.residue && proposedState.lastInteractionEnded.residue
                         ? "changed"
-                        : proposedState.lastChatEnded.residue
+                        : proposedState.lastInteractionEnded.residue
                             ? "added"
                             : "removed",
-                currentValue: currentState.lastChatEnded.residue,
-                proposedValue: proposedState.lastChatEnded.residue,
+                currentValue: currentState.lastInteractionEnded.residue,
+                proposedValue: proposedState.lastInteractionEnded.residue,
             },
         ] satisfies FieldDiffRow[];
     }
@@ -633,19 +633,19 @@
                                         />
                                     {:else if row.key === "state"}
                                         <TextAreaInput
-                                            value={proposedState.lastChatEnded.state}
+                                            value={proposedState.lastInteractionEnded.state}
                                             className="proposal-diff-textarea-shell"
                                             height="full"
                                             placeholder="State"
-                                            onValueChange={(next) => updateLastChatEnded("state", next)}
+                                            onValueChange={(next) => updateLastInteractionEnded("state", next)}
                                         />
                                     {:else}
                                         <TextAreaInput
-                                            value={proposedState.lastChatEnded.residue}
+                                            value={proposedState.lastInteractionEnded.residue}
                                             className="proposal-diff-textarea-shell"
                                             height="full"
                                             placeholder="Residue"
-                                            onValueChange={(next) => updateLastChatEnded("residue", next)}
+                                            onValueChange={(next) => updateLastInteractionEnded("residue", next)}
                                         />
                                     {/if}
                                 </div>

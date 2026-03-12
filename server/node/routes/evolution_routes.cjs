@@ -25,12 +25,18 @@ function registerEvolutionRoutes(arg = {}) {
         createCharacterEvolutionVersionStore = require('../services/character_evolution_version_store.cjs').createCharacterEvolutionVersionStore,
         buildCharacterEvolutionPromptMessages = require('../llm/character_evolution.cjs').buildCharacterEvolutionPromptMessages,
         clone = require('../llm/character_evolution.cjs').clone,
+        getCharacterEvolutionProcessedRanges = require('../llm/character_evolution.cjs').getCharacterEvolutionProcessedRanges,
+        getChatLastMessageIndex = require('../llm/character_evolution.cjs').getChatLastMessageIndex,
+        getLastProcessedMessageIndexForChat = require('../llm/character_evolution.cjs').getLastProcessedMessageIndexForChat,
+        isRangeFullyCoveredByProcessedRanges = require('../llm/character_evolution.cjs').isRangeFullyCoveredByProcessedRanges,
         getEffectiveCharacterEvolutionSettings = require('../llm/character_evolution.cjs').getEffectiveCharacterEvolutionSettings,
         normalizeCharacterEvolutionProposal = require('../llm/character_evolution.cjs').normalizeCharacterEvolutionProposal,
         normalizeCharacterEvolutionPrivacy = require('../llm/character_evolution.cjs').normalizeCharacterEvolutionPrivacy,
+        normalizeCharacterEvolutionRangeRef = require('../llm/character_evolution.cjs').normalizeCharacterEvolutionRangeRef,
         normalizeCharacterEvolutionSectionConfigs = require('../llm/character_evolution.cjs').normalizeCharacterEvolutionSectionConfigs,
         normalizeCharacterEvolutionSettings = require('../llm/character_evolution.cjs').normalizeCharacterEvolutionSettings,
         normalizeCharacterEvolutionState = require('../llm/character_evolution.cjs').normalizeCharacterEvolutionState,
+        rangesOverlap = require('../llm/character_evolution.cjs').rangesOverlap,
         safeParseEvolutionJson = require('../llm/character_evolution.cjs').safeParseEvolutionJson,
         sanitizeStateForEvolution = require('../llm/character_evolution.cjs').sanitizeStateForEvolution,
     } = arg;
@@ -105,6 +111,76 @@ function registerEvolutionRoutes(arg = {}) {
         auditRequest.omittedPromptMessageCount = omittedMessageCount;
 
         return auditRequest;
+    }
+
+    function normalizeRequestedSourceRange(chatId, sourceRangeRaw) {
+        if (sourceRangeRaw === undefined) {
+            return null;
+        }
+        const sourceRange = normalizeCharacterEvolutionRangeRef(sourceRangeRaw);
+        if (!sourceRange) {
+            throw new LLMHttpError(400, 'INVALID_SOURCE_RANGE', 'sourceRange must be a valid chat message range.');
+        }
+        if (sourceRange.chatId !== chatId) {
+            throw new LLMHttpError(400, 'INVALID_SOURCE_RANGE', 'sourceRange.chatId must match chatId.');
+        }
+        return sourceRange;
+    }
+
+    function assertHandoffRangeAllowed(evolution, sourceRange, latestMessageIndex, forceReplay) {
+        if (!sourceRange) {
+            throw new LLMHttpError(400, 'INVALID_SOURCE_RANGE', 'sourceRange is required.');
+        }
+        if (sourceRange.startMessageIndex < 0 || sourceRange.endMessageIndex < sourceRange.startMessageIndex) {
+            throw new LLMHttpError(400, 'INVALID_SOURCE_RANGE', 'sourceRange must have a valid contiguous start and end.');
+        }
+        if (sourceRange.endMessageIndex > latestMessageIndex) {
+            throw new LLMHttpError(400, 'INVALID_SOURCE_RANGE', 'sourceRange must stay within the current chat message bounds.');
+        }
+        const processedRanges = getCharacterEvolutionProcessedRanges(evolution);
+        const overlappingRange = processedRanges
+            .find((entry) => rangesOverlap(entry.range, sourceRange));
+        if (forceReplay) {
+            if (!isRangeFullyCoveredByProcessedRanges(processedRanges, sourceRange)) {
+                throw new LLMHttpError(409, 'RANGE_REPLAY_REQUIRES_ACCEPTED_RANGE', 'Replay is only allowed for a range already covered by accepted evolution coverage.');
+            }
+            return;
+        }
+
+        const nextStart = getLastProcessedMessageIndexForChat(evolution, sourceRange.chatId) + 1;
+        if (nextStart > latestMessageIndex) {
+            throw new LLMHttpError(409, 'RANGE_ALREADY_PROCESSED', 'This chat has no unprocessed messages left to hand off.');
+        }
+        if (sourceRange.startMessageIndex !== nextStart) {
+            throw new LLMHttpError(409, 'NON_CONTIGUOUS_RANGE', 'V1 handoff only supports the next contiguous unprocessed message range.');
+        }
+
+        if (overlappingRange) {
+            throw new LLMHttpError(409, 'RANGE_ALREADY_PROCESSED', 'This message range overlaps an accepted evolution range. Use replay to reprocess it.');
+        }
+    }
+
+    function resolveHandoffSourceRange(evolution, chatId, chat, sourceRangeRaw, forceReplay) {
+        const latestMessageIndex = getChatLastMessageIndex(chat);
+        if (latestMessageIndex < 0) {
+            throw new LLMHttpError(400, 'EMPTY_CHAT', 'Cannot run evolution handoff on an empty chat.');
+        }
+
+        const requestedSourceRange = normalizeRequestedSourceRange(chatId, sourceRangeRaw);
+        const sourceRange = requestedSourceRange || (forceReplay
+            ? {
+                chatId,
+                startMessageIndex: 0,
+                endMessageIndex: latestMessageIndex,
+            }
+            : {
+                chatId,
+                startMessageIndex: getLastProcessedMessageIndexForChat(evolution, chatId) + 1,
+                endMessageIndex: latestMessageIndex,
+            });
+
+        assertHandoffRangeAllowed(evolution, sourceRange, latestMessageIndex, forceReplay);
+        return sourceRange;
     }
 
     const withAsyncRoute = (endpoint, handler) => async (req, res) => {
@@ -228,10 +304,14 @@ function registerEvolutionRoutes(arg = {}) {
         if (currentEvolution.pendingProposal) {
             throw new LLMHttpError(409, 'PENDING_PROPOSAL_EXISTS', 'Resolve the current evolution proposal before running another handoff.');
         }
-        if (!forceReplay && evolution.lastProcessedChatId && evolution.lastProcessedChatId === chatId) {
-            throw new LLMHttpError(409, 'CHAT_ALREADY_PROCESSED', 'This chat has already been handed off and accepted.');
-        }
         const { chat } = await loadChat(characterId, chatId);
+        const sourceRange = resolveHandoffSourceRange(currentEvolution, chatId, chat, body.sourceRange, forceReplay);
+        req._characterEvolutionAudit.metadata = {
+            model: evolution.extractionModel,
+            maxTokens: evolution.extractionMaxTokens,
+            replayed: forceReplay,
+            sourceRange,
+        };
         const promptMessages = buildCharacterEvolutionPromptMessages({
             settings,
             character: {
@@ -239,6 +319,7 @@ function registerEvolutionRoutes(arg = {}) {
                 characterEvolution: evolution,
             },
             chat,
+            sourceRange,
         });
         req._characterEvolutionAudit.promptMessages = promptMessages;
         if (!evolution.extractionProvider || !evolution.extractionModel) {
@@ -270,13 +351,12 @@ function registerEvolutionRoutes(arg = {}) {
         if (latestEvolution.pendingProposal) {
             throw new LLMHttpError(409, 'PENDING_PROPOSAL_EXISTS', 'Another evolution handoff finished first. Review the current proposal before running another handoff.');
         }
-        if (!forceReplay && latestEvolution.lastProcessedChatId && latestEvolution.lastProcessedChatId === chatId) {
-            throw new LLMHttpError(409, 'CHAT_ALREADY_PROCESSED', 'This chat finished evolution handoff while the current request was running.');
-        }
+        assertHandoffRangeAllowed(latestEvolution, sourceRange, getChatLastMessageIndex(chat), forceReplay);
         const proposalPayload = normalizeCharacterEvolutionProposal(parsed, evolution);
         const pendingProposal = {
             proposalId: makeProposalId(),
             sourceChatId: chatId,
+            sourceRange,
             proposedState: proposalPayload.proposedState,
             changes: proposalPayload.changes,
             createdAt: Date.now(),
@@ -323,6 +403,7 @@ function registerEvolutionRoutes(arg = {}) {
                 model: evolution.extractionModel,
                 maxTokens: evolution.extractionMaxTokens,
                 replayed: forceReplay,
+                sourceRange,
             },
             request: buildEvolutionAuditRequest('character_evolution_handoff', body, promptMessages),
             response: payload,
@@ -365,28 +446,56 @@ function registerEvolutionRoutes(arg = {}) {
             ...recoveredVersions.map((entry) => Number(entry.version) || 0),
         ) + 1;
         const acceptedAt = Date.now();
+        const sourceRange = normalizeCharacterEvolutionRangeRef(pendingProposal.sourceRange);
         const versionFile = await stageVersionFile(charDir, nextVersion, {
             version: nextVersion,
             chatId: pendingProposal.sourceChatId || null,
             acceptedAt,
+            ...(sourceRange ? { range: sourceRange } : {}),
             state: proposedState,
             sectionConfigs: effectiveEvolution.sectionConfigs,
             privacy: effectiveEvolution.privacy,
         });
         try {
+            const nextLastProcessedMessageIndexByChat = {
+                ...(storedEvolution.lastProcessedMessageIndexByChat ?? {}),
+                ...(sourceRange
+                    ? {
+                        [sourceRange.chatId]: Math.max(
+                            storedEvolution.lastProcessedMessageIndexByChat?.[sourceRange.chatId] ?? -1,
+                            sourceRange.endMessageIndex,
+                        ),
+                    }
+                    : {}),
+            };
+            const nextProcessedRanges = [
+                ...(Array.isArray(storedEvolution.processedRanges)
+                    ? storedEvolution.processedRanges.filter((entry) => Number(entry?.version) !== nextVersion)
+                    : []),
+                ...(sourceRange
+                    ? [{
+                        version: nextVersion,
+                        acceptedAt,
+                        range: sourceRange,
+                    }]
+                    : []),
+            ];
             const nextCharacter = clone(character, character);
             nextCharacter.characterEvolution = {
                 ...storedEvolution,
                 currentStateVersion: nextVersion,
                 currentState: proposedState,
                 pendingProposal: null,
-                lastProcessedChatId: pendingProposal.sourceChatId,
+                lastProcessedChatId: sourceRange?.chatId || pendingProposal.sourceChatId,
+                lastProcessedMessageIndexByChat: nextLastProcessedMessageIndexByChat,
+                processedRanges: nextProcessedRanges,
                 stateVersions: [
                     ...recoveredVersions,
                     {
                         version: nextVersion,
                         chatId: pendingProposal.sourceChatId || null,
                         acceptedAt,
+                        ...(sourceRange ? { range: sourceRange } : {}),
                     },
                 ],
             };
@@ -405,6 +514,7 @@ function registerEvolutionRoutes(arg = {}) {
             ok: true,
             version: nextVersion,
             acceptedAt,
+            ...(sourceRange ? { range: sourceRange } : {}),
             state: proposedState,
         });
     }));
@@ -484,6 +594,9 @@ function registerEvolutionRoutes(arg = {}) {
             ok: true,
             version: {
                 ...payload,
+                ...(normalizeCharacterEvolutionRangeRef(payload?.range)
+                    ? { range: normalizeCharacterEvolutionRangeRef(payload.range) }
+                    : {}),
                 state: normalizeCharacterEvolutionState(payload?.state),
                 ...(Array.isArray(payload?.sectionConfigs)
                     ? { sectionConfigs: normalizeCharacterEvolutionSectionConfigs(payload.sectionConfigs) }
