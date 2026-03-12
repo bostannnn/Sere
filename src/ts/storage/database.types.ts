@@ -90,7 +90,6 @@ export interface Database{
     roundIcons:boolean
     useStreaming:boolean
     supaMemoryKey:string
-    hypaMemoryKey:string
     supaModelType:string
     textScreenColor?:string
     textBorder?:boolean
@@ -119,8 +118,6 @@ export interface Database{
     useChatSticker:boolean,
     useAdditionalAssetsPreview:boolean,
     usePlainFetch:boolean
-    hypaMemory:boolean
-    memoryAlgorithmType:string // To enable new memory module/algorithms 
     proxyRequestModel:string
     personaPrompt:string
     openrouterRequestModel:string
@@ -213,9 +210,6 @@ export interface Database{
         ignore: string[]
     }
     useInstructPrompt:boolean
-    hanuraiTokens:number
-    hanuraiSplit:boolean
-    hanuraiEnable:boolean
     textAreaSize:number
     sideBarSize:number
     textAreaTextSize:number
@@ -290,10 +284,10 @@ export interface Database{
     memorySettings?: MemorySettings
     memoryPresets?: MemoryPreset[]
     memoryPresetId?: number
-    hypaV3:boolean
-    hypaV3Settings: MemorySettings // legacy
-    hypaV3Presets: MemoryPreset[]
-    hypaV3PresetId: number
+    hypaV3:boolean // migration-only legacy read path
+    hypaV3Settings: MemorySettings // migration-only legacy read path
+    hypaV3Presets: MemoryPreset[] // migration-only legacy read path
+    hypaV3PresetId: number // migration-only legacy read path
     OaiCompAPIKeys: {[key:string]:string}
     inlayErrorResponse:boolean
     globalRagSettings: RagSettings
@@ -410,7 +404,7 @@ export interface Database{
             chatName?:string
         }
     }
-    hypaV3Debug?:{
+    hypaV3Debug?:{ // migration-only legacy read path
         timestamp:number
         model:string
         prompt:string
@@ -753,7 +747,7 @@ export interface character{
     prebuiltAssetStyle?:string
     prebuiltAssetExclude?:string[]
     memoryPromptOverride?: MemoryPromptOverride
-    hypaV3PromptOverride?: MemoryPromptOverride
+    hypaV3PromptOverride?: MemoryPromptOverride // migration-only legacy read path
     modules?:string[]
     gameState?: Record<string, any>
     characterEvolution?: CharacterEvolutionSettings
@@ -844,7 +838,7 @@ export interface groupChat{
     prebuiltAssetStyle?:string
     prebuiltAssetExclude?:string[]
     memoryPromptOverride?: MemoryPromptOverride
-    hypaV3PromptOverride?: MemoryPromptOverride
+    hypaV3PromptOverride?: MemoryPromptOverride // migration-only legacy read path
     modules?:string[]
     gameState?: Record<string, any>
     characterEvolution?: CharacterEvolutionSettings
@@ -998,7 +992,7 @@ export interface Chat{
     backgroundMode?: 'inherit' | 'default' | 'custom'
     backgroundImage?: string
     supaMemoryData?:string
-    hypaV2Data?:SerializableHypaV2Data
+    hypaV2Data?:SerializableHypaV2Data // migration-only legacy read path
     lastMemory?:string
     suggestMessages?:string[]
     isStreaming?:boolean
@@ -1008,7 +1002,7 @@ export interface Chat{
     bindedPersona?:string
     fmIndex?:number
     memoryData?:SerializableMemoryData
-    hypaV3Data?:SerializableMemoryData
+    hypaV3Data?:SerializableMemoryData // migration-only legacy read path
     folderId?:string
     lastDate?:number
     bookmarks?: string[];

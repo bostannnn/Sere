@@ -19,6 +19,7 @@ vi.mock(import("src/lang"), () => {
       triggerV1Warning: "Trigger V1 Warning",
       triggerSwitchWarn: "Switch trigger mode?",
       helpBlock: "Help",
+      showDeprecatedTriggerV1: "Show Deprecated Trigger V1",
       showDeprecatedTriggerV2: "Show deprecated",
     } as Record<string, unknown>,
     {
@@ -62,6 +63,7 @@ vi.mock(import("src/ts/stores.svelte"), async () => {
     },
     DBState: {
       db: {
+        showDeprecatedTriggerV1: false,
         showDeprecatedTriggerV2: false,
         characters: [],
       },
@@ -114,6 +116,7 @@ import RegexList from "src/lib/SideBars/Scripts/RegexList.svelte";
 import TriggerList from "src/lib/SideBars/Scripts/TriggerList.svelte";
 import TriggerV1List from "src/lib/SideBars/Scripts/TriggerV1List.svelte";
 import TriggerV2List from "src/lib/SideBars/Scripts/TriggerV2List.svelte";
+import { DBState } from "src/ts/stores.svelte";
 
 let app: Record<string, unknown> | undefined;
 
@@ -128,6 +131,8 @@ describe("script trigger lists runtime smoke", () => {
     mocks.alertConfirm.mockClear();
     mocks.openURL.mockClear();
     mocks.sortableCreate.mockClear();
+    DBState.db.showDeprecatedTriggerV1 = false;
+    DBState.db.showDeprecatedTriggerV2 = false;
     document.body.innerHTML = "";
   });
 
@@ -207,6 +212,55 @@ describe("script trigger lists runtime smoke", () => {
     expect(modeButtons[0]?.getAttribute("aria-label")).toBe("Trigger V1 mode");
     expect(modeButtons[0]?.getAttribute("aria-pressed")).toBe("false");
     expect(modeButtons[2]?.getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("keeps legacy trigger v1 editing behind an explicit opt-in path", async () => {
+    const target = document.createElement("div");
+    document.body.appendChild(target);
+    app = mount(TriggerList, {
+      target,
+      props: {
+        value: [
+          {
+            comment: "",
+            type: "start",
+            conditions: [],
+            effect: [],
+          },
+        ],
+      },
+    });
+    await flushUi();
+
+    expect(document.querySelector(".trigger-list-warning")?.textContent).toContain("Trigger V1 Warning");
+    expect(document.querySelector(".trigger-v1-list-container")).toBeNull();
+
+    const revealButton = Array.from(document.querySelectorAll("button")).find((button) =>
+      (button.textContent ?? "").includes("Show Deprecated Trigger V1"),
+    ) as HTMLButtonElement | undefined;
+    expect(revealButton).toBeDefined();
+    revealButton?.click();
+    await flushUi();
+
+    expect(document.querySelector(".trigger-v1-list-container.list-shell")).not.toBeNull();
+  });
+
+  it("disables creating fresh trigger v1 lists from an empty trigger set", async () => {
+    const target = document.createElement("div");
+    document.body.appendChild(target);
+    app = mount(TriggerList, {
+      target,
+      props: {
+        value: [],
+      },
+    });
+    await flushUi();
+
+    const modeButtons = Array.from(
+      document.querySelectorAll(".trigger-list-mode-btn.seg-tab"),
+    ) as HTMLButtonElement[];
+    expect(modeButtons[0]?.disabled).toBe(true);
+    expect(document.querySelector(".trigger-v1-list-container")).toBeNull();
   });
 
   it("keeps trigger v1 list surfaces on list/empty/action/icon primitives", async () => {

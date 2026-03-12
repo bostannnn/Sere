@@ -98,9 +98,7 @@ describe("memory modal summary toggle runtime smoke", () => {
         },
       ],
       memoryEnabled: true,
-      hanuraiEnable: false,
       supaModelType: "none",
-      memoryAlgorithmType: "hypaMemoryV3",
       memoryPresetId: 0,
       memoryPresets: [],
     } as never;

@@ -270,7 +270,7 @@ export function useMemoryModal() {
       promptOverrideCharacter.memoryPromptOverride = {
         summarizationPrompt: value,
       };
-      delete (promptOverrideCharacter as Record<string, unknown>).hypaV3PromptOverride;
+      delete (promptOverrideCharacter as unknown as Record<string, unknown>).hypaV3PromptOverride;
     },
     selectMemoryWorkspaceTabById(id: number) {
       selectMemoryWorkspaceTab(id === 1 ? "settings" : id === 2 ? "log" : "summary");

@@ -335,6 +335,12 @@ describe("command service", () => {
           type: "settings.replace",
           settings: {
             theme: "light",
+            memoryAlgorithmType: "hypaMemoryV3",
+            hypaMemory: true,
+            hypaMemoryKey: "legacy-key",
+            hanuraiEnable: true,
+            hanuraiSplit: true,
+            hanuraiTokens: 42,
             hypaV3Presets: [
               {
                 name: "Legacy",
@@ -367,5 +373,11 @@ describe("command service", () => {
     expect("hypaV3Presets" in (persistedEnvelope?.data || {})).toBe(false);
     expect("hypaV3PresetId" in (persistedEnvelope?.data || {})).toBe(false);
     expect("hypaV3" in (persistedEnvelope?.data || {})).toBe(false);
+    expect("memoryAlgorithmType" in (persistedEnvelope?.data || {})).toBe(false);
+    expect("hypaMemory" in (persistedEnvelope?.data || {})).toBe(false);
+    expect("hypaMemoryKey" in (persistedEnvelope?.data || {})).toBe(false);
+    expect("hanuraiEnable" in (persistedEnvelope?.data || {})).toBe(false);
+    expect("hanuraiSplit" in (persistedEnvelope?.data || {})).toBe(false);
+    expect("hanuraiTokens" in (persistedEnvelope?.data || {})).toBe(false);
   });
 });

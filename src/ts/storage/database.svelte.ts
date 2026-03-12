@@ -258,9 +258,6 @@ export function setDatabase(data:Database){
     if(checkNullish(data.supaMemoryKey)){
         data.supaMemoryKey = ""
     }
-    if(checkNullish(data.hypaMemoryKey)){
-        data.hypaMemoryKey = ""
-    }
     if(checkNullish(data.supaModelType)){
         data.supaModelType = "none"
     }
@@ -433,9 +430,6 @@ export function setDatabase(data:Database){
         ignore: []
     }
     data.useInstructPrompt ??= false
-    data.hanuraiEnable ??= false
-    data.hanuraiSplit ??= false
-    data.hanuraiTokens ??= 1000
     data.textAreaSize ??= 0
     data.sideBarSize ??= 0
     data.textAreaTextSize ??= 0
@@ -497,40 +491,47 @@ export function setDatabase(data:Database){
     data.OaiCompAPIKeys ??= {}
     data.globalRagSettings = resolveGlobalRagSettings(data.globalRagSettings)
     data.reasoningEffort ??= 0
-    const normalizedMemoryPresets = data.memoryPresets ?? data.hypaV3Presets ?? [
+    const normalizedMemoryPresets = (data.memoryPresets ?? data.hypaV3Presets)?.length ? (data.memoryPresets ?? data.hypaV3Presets) : [
         createMemoryPreset("Default", {
             summarizationPrompt: data.supaMemoryPrompt ? data.supaMemoryPrompt : "",
             ...(data.memorySettings ?? data.hypaV3Settings)
         })
     ]
-    if (normalizedMemoryPresets.length > 0) {
-        const mappedPresets = normalizedMemoryPresets.map((preset, i) =>
-            createMemoryPreset(
-                preset.name || `Preset ${i + 1}`,
-                preset.settings || {}
-            )
+    const mappedMemoryPresets = normalizedMemoryPresets.map((preset, i) =>
+        createMemoryPreset(
+            preset.name || `Preset ${i + 1}`,
+            preset.settings || {}
         )
-        for (const preset of mappedPresets) {
-            // Periodic summarization is interval-driven; keep it enabled for migrated presets.
-            preset.settings.periodicSummarizationEnabled = true
-        }
-        setDbMemoryPresets(data, mappedPresets)
-    } else {
-        setDbMemoryPresets(data, normalizedMemoryPresets)
+    )
+    for (const preset of mappedMemoryPresets) {
+        // Periodic summarization is interval-driven; keep it enabled for migrated presets.
+        preset.settings.periodicSummarizationEnabled = true
     }
+    setDbMemoryPresets(data, mappedMemoryPresets)
+    const normalizedMemoryPresetId = Math.min(
+        Math.max(Number(data.memoryPresetId ?? data.hypaV3PresetId ?? 0) || 0, 0),
+        Math.max(mappedMemoryPresets.length - 1, 0)
+    )
+    setDbMemoryPresetId(data, normalizedMemoryPresetId)
     setDbMemorySettings(
         data,
-        (data.memorySettings ?? data.hypaV3Settings ?? createMemoryPreset('Default').settings)
+        mappedMemoryPresets[normalizedMemoryPresetId]?.settings
+            ?? data.memorySettings
+            ?? data.hypaV3Settings
+            ?? createMemoryPreset('Default').settings
     )
-    setDbMemoryPresetId(data, data.memoryPresetId ?? data.hypaV3PresetId ?? 0)
     setDbMemoryDebug(data, data.memoryDebug ?? data.hypaV3Debug)
     // Keep runtime on the neutral memory contract while reading legacy fields during migration.
     setDbMemoryEnabled(data, data.memoryEnabled ?? data.hypaV3 ?? true)
-    data.hanuraiEnable = false
-    data.hanuraiSplit = false
     data.supaModelType = 'none'
-    data.hypaMemory = false
-    data.memoryAlgorithmType = 'buildMemoryContext'
+    const legacyMemoryConfig = data as unknown as Record<string, unknown>
+    delete legacyMemoryConfig.hypaMemoryKey
+    delete legacyMemoryConfig.hypaMemory
+    delete legacyMemoryConfig.memoryAlgorithmType
+    delete legacyMemoryConfig.hanuraiEnable
+    delete legacyMemoryConfig.hanuraiSplit
+    delete legacyMemoryConfig.hanuraiTokens
+    data.showDeprecatedTriggerV1 ??= false
     data.showDeprecatedTriggerV2 ??= false
     data.returnCSSError ??= true
     data.useExperimentalGoogleTranslator ??= false

@@ -3,6 +3,15 @@ function getMemoryData(chat) {
     return chat.memoryData || chat.hypaV3Data;
 }
 
+const LEGACY_MEMORY_CONFIG_KEYS = [
+    'memoryAlgorithmType',
+    'hypaMemory',
+    'hanuraiEnable',
+    'hanuraiSplit',
+    'hanuraiTokens',
+    'hypaMemoryKey',
+];
+
 function cloneMemorySettingsLike(value) {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return value;
     return { ...value };
@@ -14,6 +23,18 @@ function cloneMemoryPresetLike(preset) {
         ...preset,
         settings: cloneMemorySettingsLike(preset.settings),
     };
+}
+
+function getSelectedMemorySettingsLike(presets, presetId) {
+    if (!Array.isArray(presets) || presets.length === 0) return undefined;
+    const normalizedPresetId = Number.isFinite(Number(presetId))
+        ? Number(presetId)
+        : 0;
+    const selectedPreset = presets[normalizedPresetId] || presets[0];
+    if (!selectedPreset || typeof selectedPreset !== 'object') return undefined;
+    const settings = selectedPreset.settings;
+    if (!settings || typeof settings !== 'object' || Array.isArray(settings)) return undefined;
+    return settings;
 }
 
 function canonicalizeMemorySettingsShape(settings) {
@@ -31,11 +52,17 @@ function canonicalizeMemorySettingsShape(settings) {
     if (rawPresets !== undefined) {
         target.memoryPresets = rawPresets.map((preset) => cloneMemoryPresetLike(preset));
     }
-    if (rawSettings !== undefined) {
-        target.memorySettings = cloneMemorySettingsLike(rawSettings);
-    }
     if (rawPresetId !== undefined) {
         target.memoryPresetId = Number.isFinite(Number(rawPresetId)) ? Number(rawPresetId) : 0;
+    }
+    const selectedPresetSettings = getSelectedMemorySettingsLike(
+        target.memoryPresets,
+        target.memoryPresetId ?? rawPresetId,
+    );
+    if (selectedPresetSettings) {
+        target.memorySettings = cloneMemorySettingsLike(selectedPresetSettings);
+    } else if (rawSettings !== undefined) {
+        target.memorySettings = cloneMemorySettingsLike(rawSettings);
     }
     if (rawEnabled !== undefined) {
         target.memoryEnabled = Boolean(rawEnabled);
@@ -45,6 +72,9 @@ function canonicalizeMemorySettingsShape(settings) {
     delete target.hypaV3Settings;
     delete target.hypaV3PresetId;
     delete target.hypaV3;
+    for (const legacyKey of LEGACY_MEMORY_CONFIG_KEYS) {
+        delete target[legacyKey];
+    }
 
     return target;
 }
@@ -54,6 +84,7 @@ function setMemoryData(chat, data) {
     if (chat.memoryData === data && !('hypaV3Data' in chat)) return;
     chat.memoryData = data;
     delete chat.hypaV3Data;
+    delete chat.hypaV2Data;
 }
 
 function getMemoryPromptOverride(character) {

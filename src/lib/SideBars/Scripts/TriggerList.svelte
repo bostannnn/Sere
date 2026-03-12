@@ -7,6 +7,7 @@
     import Button from "src/lib/UI/GUI/Button.svelte";
     import { openURL } from "src/ts/globalApi.svelte";
     import { hubURL } from "src/ts/characterCards";
+    import { DBState } from "src/ts/stores.svelte";
     import TriggerV2List from "./TriggerV2List.svelte";
 
     interface Props {
@@ -15,30 +16,37 @@
     }
 
     let { value = $bindable([]), lowLevelAble = false }: Props = $props();
-    const v1Enabled = $derived(value?.[0]?.effect?.[0]?.type !== 'triggercode' && value?.[0]?.effect?.[0]?.type !== 'triggerlua' && value?.[0]?.effect?.[0]?.type !== 'v2Header')
+    let revealLegacyV1Editor = $state(false)
+    const currentTriggerType = $derived(value?.[0]?.effect?.[0]?.type ?? '')
+    const luaEnabled = $derived(currentTriggerType === 'triggerlua')
+    const v2Enabled = $derived(currentTriggerType === 'v2Header')
+    const hasLegacyV1Payload = $derived(Boolean(value?.length) && !luaEnabled && !v2Enabled)
+    const showLegacyV1Editor = $derived(hasLegacyV1Payload && (DBState.db.showDeprecatedTriggerV1 || revealLegacyV1Editor))
 
     const loadTriggerV1List = () => import("./TriggerV1List.svelte").then(m => m.default)
+
+    $effect(() => {
+        if (!hasLegacyV1Payload) {
+            revealLegacyV1Editor = false
+        }
+    })
 </script>
 
 <div class="trigger-list-mode-row seg-tabs">
-    <button type="button" class="trigger-list-mode-btn seg-tab" class:is-active={v1Enabled} class:active={v1Enabled} title="Trigger V1 mode" aria-label="Trigger V1 mode" aria-pressed={v1Enabled} onclick={(async (e) => {
+    <button type="button" class="trigger-list-mode-btn seg-tab" class:is-active={hasLegacyV1Payload} class:active={hasLegacyV1Payload} title="Trigger V1 mode" aria-label="Trigger V1 mode" aria-pressed={hasLegacyV1Payload} disabled={!hasLegacyV1Payload} onclick={(async (e) => {
         e.stopPropagation()
-        const codeType = value?.[0]?.effect?.[0]?.type
-        if(codeType === 'triggercode' || codeType === 'triggerlua' || codeType === 'v2Header'){
-            const t = await alertConfirm(language.triggerSwitchWarn)
-            if(!t){
-                return
-            }
-            value = []
+        if(!hasLegacyV1Payload){
+            return
         }
+        revealLegacyV1Editor = true
     })}>V1</button>
     <button type="button" class="trigger-list-mode-btn seg-tab" class:is-active={
-        value?.[0]?.effect?.[0]?.type === 'v2Header'
+        v2Enabled
     } class:active={
-        value?.[0]?.effect?.[0]?.type === 'v2Header'
-    } title="Trigger V2 mode" aria-label="Trigger V2 mode" aria-pressed={value?.[0]?.effect?.[0]?.type === 'v2Header'} onclick={(async (e) => {
+        v2Enabled
+    } title="Trigger V2 mode" aria-label="Trigger V2 mode" aria-pressed={v2Enabled} onclick={(async (e) => {
         e.stopPropagation()
-        const codeType = value?.[0]?.effect?.[0]?.type
+        const codeType = currentTriggerType
         if(codeType !== 'v2Header'){
             const t = await alertConfirm(language.triggerSwitchWarn)
             if(!t){
@@ -61,9 +69,9 @@
             }]
         }
     })}>V2</button>
-    <button type="button" class="trigger-list-mode-btn seg-tab" class:is-active={value?.[0]?.effect?.[0]?.type === 'triggerlua'} class:active={value?.[0]?.effect?.[0]?.type === 'triggerlua'} title="Trigger Lua mode" aria-label="Trigger Lua mode" aria-pressed={value?.[0]?.effect?.[0]?.type === 'triggerlua'} onclick={(async (e) => {
+    <button type="button" class="trigger-list-mode-btn seg-tab" class:is-active={luaEnabled} class:active={luaEnabled} title="Trigger Lua mode" aria-label="Trigger Lua mode" aria-pressed={luaEnabled} onclick={(async (e) => {
         e.stopPropagation()
-        if(value?.[0]?.effect?.[0]?.type !== 'triggerlua'){
+        if(currentTriggerType !== 'triggerlua'){
             if(value && value.length > 0){
                 const t = await alertConfirm(language.triggerSwitchWarn)
                 if(!t){
@@ -82,20 +90,26 @@
         }
     })}>Lua</button>
 </div>
-{#if v1Enabled}
+{#if hasLegacyV1Payload}
     <span class="trigger-list-warning">{language.triggerV1Warning}</span>
 {/if}
-{#if value?.[0]?.effect?.[0]?.type === 'triggerlua'}
+{#if luaEnabled}
     <TextAreaInput margin="both" autocomplete="off" bind:value={value[0].effect[0].code}></TextAreaInput>
     <Button onclick={() => {
         openURL(hubURL + '/redirect/docs/lua')
     }}>{language.helpBlock}</Button>
-{:else if value?.[0]?.effect?.[0]?.type === 'v2Header'}
+{:else if v2Enabled}
     <TriggerV2List bind:value={value} lowLevelAble={lowLevelAble}/>
-{:else}
+{:else if showLegacyV1Editor}
     {#await loadTriggerV1List() then TriggerV1List}
         <TriggerV1List bind:value={value} lowLevelAble={lowLevelAble}/>
     {/await}
+{:else if hasLegacyV1Payload}
+    <div class="trigger-list-legacy-actions action-rail">
+        <Button onclick={() => {
+            revealLegacyV1Editor = true
+        }}>{language.showDeprecatedTriggerV1}</Button>
+    </div>
 {/if}
 
 <style>
@@ -122,5 +136,9 @@
         color: var(--ds-text-danger);
         overflow-wrap: anywhere;
         word-break: break-word;
+    }
+
+    .trigger-list-legacy-actions {
+        margin-top: var(--ds-space-2);
     }
 </style>

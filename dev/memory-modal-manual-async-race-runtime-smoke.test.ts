@@ -152,9 +152,7 @@ describe("memory modal manual async race runtime smoke", () => {
         },
       ],
       hypaV3: true,
-      hanuraiEnable: false,
       supaModelType: "none",
-      memoryAlgorithmType: "hypaMemoryV3",
       hypaV3PresetId: 0,
       hypaV3Presets: [],
     } as never;

@@ -52,7 +52,7 @@ function stripTransientSettingsFields(settings: Database) {
     const snapshot = safeStructuredClone(settings) as Database;
     delete snapshot.memoryDebug;
     delete snapshot.hypaV3Debug;
-    return canonicalizeDbMemoryPersistenceShape(snapshot);
+    return canonicalizeDbMemoryPersistenceShape(snapshot as unknown as Record<string, unknown>) as unknown as Database;
 }
 
 function stripCharacters(db: Database) {

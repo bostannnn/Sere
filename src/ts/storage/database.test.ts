@@ -138,6 +138,91 @@ describe("database chatReadingMode normalization", () => {
     expect(db.botPresets[0]).not.toHaveProperty("ooba");
   });
 
+  it("removes retired memory config fields and legacy hypav2 data once canonical memory data exists", () => {
+    const db = applySetDatabase({
+      characters: [
+        {
+          chats: [
+            {
+              id: "chat-1",
+              message: [],
+              note: "",
+              name: "Chat 1",
+              localLore: [],
+              hypaV2Data: {
+                lastMainChunkID: 0,
+                chunks: [],
+                mainChunks: [],
+              },
+              hypaV3Data: {
+                summaries: [],
+                categories: [{ id: "", name: "Unclassified" }],
+                lastSelectedSummaries: [],
+              },
+            },
+          ],
+        },
+      ],
+      hypaMemoryKey: "legacy-key",
+      hypaMemory: true,
+      memoryAlgorithmType: "hypaMemoryV3",
+      hanuraiEnable: true,
+      hanuraiSplit: true,
+      hanuraiTokens: 42,
+    });
+
+    const chat = (db.characters[0] as { chats: Array<Record<string, unknown>> }).chats[0];
+
+    expect(db).not.toHaveProperty("hypaMemoryKey");
+    expect(db).not.toHaveProperty("hypaMemory");
+    expect(db).not.toHaveProperty("memoryAlgorithmType");
+    expect(db).not.toHaveProperty("hanuraiEnable");
+    expect(db).not.toHaveProperty("hanuraiSplit");
+    expect(db).not.toHaveProperty("hanuraiTokens");
+    expect(chat).toHaveProperty("memoryData");
+    expect(chat).not.toHaveProperty("hypaV3Data");
+    expect(chat).not.toHaveProperty("hypaV2Data");
+  });
+
+  it("syncs the top-level memory settings fallback to the selected preset on load", () => {
+    const selectedPresetSettings = {
+      summarizationPrompt: "selected prompt",
+      periodicSummarizationInterval: 12,
+    };
+    const db = applySetDatabase({
+      characters: [],
+      memoryPresetId: 1,
+      memorySettings: {
+        summarizationPrompt: "stale prompt",
+        periodicSummarizationInterval: 3,
+      },
+      memoryPresets: [
+        {
+          name: "Preset 1",
+          settings: {
+            summarizationPrompt: "preset one",
+            periodicSummarizationInterval: 5,
+          },
+        },
+        {
+          name: "Preset 2",
+          settings: selectedPresetSettings,
+        },
+      ],
+    });
+
+    expect(db.memoryPresetId).toBe(1);
+    expect(db.memorySettings).toEqual(
+      expect.objectContaining(selectedPresetSettings),
+    );
+  });
+
+  it("defaults the deprecated trigger v1 toggle off", () => {
+    const db = applySetDatabase({ characters: [] });
+
+    expect(db.showDeprecatedTriggerV1).toBe(false);
+  });
+
 });
 
 describe("character evolution model normalization", () => {

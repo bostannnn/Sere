@@ -43,6 +43,8 @@ import { ensureGenerationMessageTarget } from "./generationMessageTarget";
 import { tryServerMemoryMerge } from "./memorySync";
 import type { RagResult, RulebookMetadata } from "./rag/types";
 const processLog = (..._args: unknown[]) => {};
+const LEGACY_MEMORY_MESSAGE_MEMOS = new Set(["supaMemory", "hypaMemory"]);
+const CANONICAL_MEMORY_MESSAGE_MEMO = "memory";
 
 export interface OpenAIChat{
     role: 'system'|'user'|'assistant'|'function'
@@ -1191,7 +1193,10 @@ export async function sendChat(chatProcessIndex = -1,arg:{
 
 
     unformated.chats = chats.map((v) => {
-        if(v.memo !== 'supaMemory' && v.memo !== 'hypaMemory'){
+        if(LEGACY_MEMORY_MESSAGE_MEMOS.has(v.memo ?? '')){
+            v.memo = CANONICAL_MEMORY_MESSAGE_MEMO
+        }
+        if(v.memo !== CANONICAL_MEMORY_MESSAGE_MEMO){
             v.removable = true
         }
         else if(supaMemoryCardUsed){
@@ -1594,7 +1599,7 @@ export async function sendChat(chatProcessIndex = -1,arg:{
                         pmt = [{
                             role: 'system',
                             content: renderPromptMemoryContent(slicedSummaries),
-                            memo: 'supaMemory',
+                            memo: CANONICAL_MEMORY_MESSAGE_MEMO,
                         }]
                     }
                     if(card.innerFormat && pmt.length > 0){

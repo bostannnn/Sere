@@ -496,7 +496,7 @@ async function buildMemoryContextMain(
       {
         role: "system",
         content: memory,
-        memo: "supaMemory",
+        memo: "memory",
       },
       ...chats.slice(startIdx),
     ];
@@ -802,7 +802,7 @@ async function buildMemoryContextMain(
     {
       role: "system",
       content: memory,
-      memo: "supaMemory",
+      memo: "memory",
     },
     ...chats.slice(startIdx),
   ];

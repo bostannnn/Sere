@@ -11,6 +11,15 @@ import type {
 
 type MemoryPromptOverride = { summarizationPrompt?: string };
 
+const LEGACY_MEMORY_CONFIG_KEYS = [
+  "memoryAlgorithmType",
+  "hypaMemory",
+  "hanuraiEnable",
+  "hanuraiSplit",
+  "hanuraiTokens",
+  "hypaMemoryKey",
+] as const;
+
 function cloneMemorySettingsLike<T>(value: T): T {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return value;
@@ -29,6 +38,28 @@ function cloneMemoryPresetLike<T>(preset: T): T {
   return next;
 }
 
+function getSelectedMemorySettingsLike(
+  presets: unknown,
+  presetId: unknown,
+): Record<string, unknown> | undefined {
+  if (!Array.isArray(presets) || presets.length === 0) {
+    return undefined;
+  }
+  const normalizedPresetId = Number.isFinite(Number(presetId))
+    ? Number(presetId)
+    : 0;
+  const selectedPreset =
+    presets[normalizedPresetId] ?? presets[0];
+  if (!selectedPreset || typeof selectedPreset !== "object") {
+    return undefined;
+  }
+  const settings = (selectedPreset as { settings?: unknown }).settings;
+  if (!settings || typeof settings !== "object" || Array.isArray(settings)) {
+    return undefined;
+  }
+  return settings as Record<string, unknown>;
+}
+
 export function canonicalizeDbMemoryPersistenceShape<
   T extends Record<string, unknown>,
 >(value: T): T {
@@ -37,6 +68,7 @@ export function canonicalizeDbMemoryPersistenceShape<
   }
 
   const target = value as T & Record<string, unknown>;
+  const mutableTarget = target as Record<string, unknown>;
   const rawPresets = Array.isArray(target.memoryPresets)
     ? target.memoryPresets
     : (Array.isArray(target.hypaV3Presets) ? target.hypaV3Presets : undefined);
@@ -50,22 +82,31 @@ export function canonicalizeDbMemoryPersistenceShape<
   const rawEnabled = target.memoryEnabled ?? target.hypaV3;
 
   if (rawPresets !== undefined) {
-    target.memoryPresets = rawPresets.map((preset) => cloneMemoryPresetLike(preset));
-  }
-  if (rawSettings !== undefined) {
-    target.memorySettings = cloneMemorySettingsLike(rawSettings);
+    mutableTarget.memoryPresets = rawPresets.map((preset) => cloneMemoryPresetLike(preset));
   }
   if (rawPresetId !== undefined) {
-    target.memoryPresetId = Number.isFinite(Number(rawPresetId)) ? Number(rawPresetId) : 0;
+    mutableTarget.memoryPresetId = Number.isFinite(Number(rawPresetId)) ? Number(rawPresetId) : 0;
+  }
+  const selectedPresetSettings = getSelectedMemorySettingsLike(
+    mutableTarget.memoryPresets,
+    mutableTarget.memoryPresetId ?? rawPresetId,
+  );
+  if (selectedPresetSettings) {
+    mutableTarget.memorySettings = cloneMemorySettingsLike(selectedPresetSettings);
+  } else if (rawSettings !== undefined) {
+    mutableTarget.memorySettings = cloneMemorySettingsLike(rawSettings);
   }
   if (rawEnabled !== undefined) {
-    target.memoryEnabled = Boolean(rawEnabled);
+    mutableTarget.memoryEnabled = Boolean(rawEnabled);
   }
 
   delete target.hypaV3Presets;
   delete target.hypaV3Settings;
   delete target.hypaV3PresetId;
   delete target.hypaV3;
+  for (const legacyKey of LEGACY_MEMORY_CONFIG_KEYS) {
+    delete target[legacyKey];
+  }
 
   return target;
 }
@@ -77,13 +118,17 @@ export function getChatMemoryData(
 }
 
 export function setChatMemoryData(
-  chat: Pick<Chat, "memoryData" | "hypaV3Data"> | null | undefined,
+  chat:
+    | (Pick<Chat, "memoryData" | "hypaV3Data"> & { hypaV2Data?: unknown })
+    | null
+    | undefined,
   data: SerializableMemoryData | undefined,
 ): void {
   if (!chat) return;
   if (chat.memoryData === data && !("hypaV3Data" in chat)) return;
   chat.memoryData = data;
   delete (chat as Record<string, unknown>).hypaV3Data;
+  delete (chat as Record<string, unknown>).hypaV2Data;
 }
 
 export function getCharacterMemoryPromptOverride(

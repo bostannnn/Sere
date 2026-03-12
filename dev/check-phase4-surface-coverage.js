@@ -292,13 +292,6 @@ const PHASE4_UNCOVERED_MATRIX = [
     ],
   },
   {
-    file: "src/lib/UI/3DLoader.svelte",
-    classification: "infra",
-    owner: "ui-shell-contract",
-    rationale: "Legacy 3D utility remains dormant and excluded from active shell migration.",
-    requiredPatterns: ["@ts-nocheck - Legacy file, not currently in use"],
-  },
-  {
     file: "src/lib/UI/Accordion.svelte",
     classification: "migrate",
     owner: "ui-shell-contract",
@@ -397,13 +390,6 @@ const PHASE4_UNCOVERED_MATRIX = [
     owner: "ui-shell-contract",
     rationale: "Portal consumer is an infrastructure primitive, not a user-facing shell surface.",
     requiredPatterns: ["{@render children()}"],
-  },
-  {
-    file: "src/lib/UI/GUI/SideBarArrow.svelte",
-    classification: "infra",
-    owner: "ui-shell-contract",
-    rationale: "Desktop sidebar arrow surface is intentionally disabled in current server-first layout.",
-    requiredPatterns: ["intentionally disabled for desktop server-first layout"],
   },
   {
     file: "src/lib/UI/GUI/SliderInput.svelte",

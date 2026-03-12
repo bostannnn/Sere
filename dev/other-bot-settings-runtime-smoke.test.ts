@@ -278,7 +278,7 @@ describe("other bots settings runtime smoke", () => {
     expect(charSelect?.value).toBe("char-visible-1");
   });
 
-  it("keeps canonical memory settings aligned with the selected preset after legacy preset migration", async () => {
+  it("keeps runtime memory settings aligned to the selected preset after legacy preset migration", async () => {
     const target = document.createElement("div");
     document.body.appendChild(target);
     app = mount(OtherBotSettings, { target });
@@ -292,12 +292,8 @@ describe("other bots settings runtime smoke", () => {
     await flushUi();
 
     const presetSettings = shared.dbState.db.memoryPresets?.[0]?.settings as Record<string, unknown> | undefined;
-    const memorySettings = shared.dbState.db.memorySettings as Record<string, unknown> | undefined;
-
     expect(presetSettings?.periodicSummarizationInterval).toBe(24);
     expect(presetSettings?.maxChatsPerSummary).toBe(24);
-    expect(memorySettings?.periodicSummarizationInterval).toBe(24);
-    expect(memorySettings?.maxChatsPerSummary).toBe(24);
     expect("hypaV3Settings" in shared.dbState.db).toBe(false);
   });
 
@@ -315,15 +311,12 @@ describe("other bots settings runtime smoke", () => {
     await flushUi();
 
     const presetSettings = shared.dbState.db.memoryPresets?.[0]?.settings as Record<string, unknown> | undefined;
-    const memorySettings = shared.dbState.db.memorySettings as Record<string, unknown> | undefined;
-
     expect(presetSettings?.summarizationPrompt).toBe("Prompt from settings UI");
-    expect(memorySettings?.summarizationPrompt).toBe("Prompt from settings UI");
     expect("hypaV3Presets" in shared.dbState.db).toBe(false);
     expect("hypaV3Settings" in shared.dbState.db).toBe(false);
   });
 
-  it("keeps temporary empty number edits stable while slider updates commit through the shared preset mirror", async () => {
+  it("keeps temporary empty number edits stable while slider updates commit through the selected preset", async () => {
     const target = document.createElement("div");
     document.body.appendChild(target);
     app = mount(OtherBotSettings, { target });
@@ -361,11 +354,7 @@ describe("other bots settings runtime smoke", () => {
     await flushUi();
 
     const presetSettings = shared.dbState.db.memoryPresets?.[0]?.settings as Record<string, unknown> | undefined;
-    const legacySettings = shared.dbState.db.memorySettings as Record<string, unknown> | undefined;
-
     expect(presetSettings?.periodicSummarizationInterval).toBe(24);
     expect(presetSettings?.maxChatsPerSummary).toBe(24);
-    expect(legacySettings?.periodicSummarizationInterval).toBe(24);
-    expect(legacySettings?.maxChatsPerSummary).toBe(24);
   });
 });

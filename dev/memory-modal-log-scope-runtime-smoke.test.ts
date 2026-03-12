@@ -104,9 +104,7 @@ function createBaseDb() {
       },
     ],
     memoryEnabled: true,
-    hanuraiEnable: false,
     supaModelType: "none",
-    memoryAlgorithmType: "hypaMemoryV3",
     memoryPresetId: 0,
     memoryPresets: [],
   };
