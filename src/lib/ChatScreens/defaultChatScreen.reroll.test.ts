@@ -1,11 +1,28 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  getStableChatTargetKey,
   replaceMessageTailWithSnapshot,
   trimMessagesForRerollRequest,
 } from "./defaultChatScreen.reroll";
 
 describe("defaultChatScreen reroll helpers", () => {
+  it("builds reroll history keys from both character and chat ids", () => {
+    expect(
+      getStableChatTargetKey({
+        characterId: "char-a",
+        chatId: "chat-1",
+      }),
+    ).toBe("char-a:chat-1");
+    expect(
+      getStableChatTargetKey({
+        characterId: "char-a",
+        chatId: "chat-2",
+      }),
+    ).toBe("char-a:chat-2");
+    expect(getStableChatTargetKey(null)).toBeNull();
+  });
+
   it("replaces only the tail messages covered by a reroll snapshot", () => {
     expect(
       replaceMessageTailWithSnapshot(

@@ -1,5 +1,17 @@
 import type { Message } from "src/ts/storage/database.svelte";
 
+export type StableChatTarget = {
+  characterId: string;
+  chatId: string;
+};
+
+export function getStableChatTargetKey(target: StableChatTarget | null | undefined): string | null {
+  if (!target?.characterId || !target.chatId) {
+    return null;
+  }
+  return `${target.characterId}:${target.chatId}`;
+}
+
 export function replaceMessageTailWithSnapshot(
   messages: Message[],
   rerollSnapshot: Message[],

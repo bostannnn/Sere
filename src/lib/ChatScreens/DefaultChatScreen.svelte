@@ -44,6 +44,7 @@
     import {
         appendRerollSnapshot,
         createInitialRerollHistory,
+        getStableChatTargetKey,
         readNextRerollSnapshot,
         readPreviousRerollSnapshot,
         replaceMessageTailWithSnapshot,
@@ -85,7 +86,7 @@
     let autoMode = $state(false)
     let rerolls:Message[][] = []
     let rerollid = -1
-    let lastCharId: string | null = null
+    let lastRerollTargetKey: string | null = null
     const isDoingChatInputTranslate = false
     let toggleStickers:boolean = $state(false)
     let fileInput:string[] = $state([])
@@ -177,6 +178,16 @@
             return false
         }
         return mutateChatByTarget(DBState.db.characters, target, mutate)
+    }
+
+    function resetRerollsForTarget(target: { characterId: string; chatId: string } | null) {
+        const targetKey = getStableChatTargetKey(target)
+        if (targetKey && lastRerollTargetKey === targetKey) {
+            return
+        }
+        rerolls = []
+        rerollid = -1
+        lastRerollTargetKey = targetKey
     }
 
     $effect(() => {
@@ -499,10 +510,7 @@
         if($isDoingChat){
             return
         }
-        if(lastCharId !== selectedCharacter.chaId){
-            rerolls = []
-            rerollid = -1
-        }
+        resetRerollsForTarget(stableTarget)
 
         let cha = activeChat.message
 
@@ -602,11 +610,7 @@
         if(!stableTarget || !activeChat){
             return
         }
-        const activeCharacterId = stableTarget.characterId
-        if(lastCharId !== activeCharacterId){
-            rerolls = []
-            rerollid = -1
-        }
+        resetRerollsForTarget(stableTarget)
         const genId = activeChat.message.at(-1)?.generationInfo?.generationId
         if(genId){
             const r = Prereroll(genId)
@@ -656,11 +660,7 @@
         if(!stableTarget || !activeChat){
             return
         }
-        const activeCharacterId = stableTarget.characterId
-        if(lastCharId !== activeCharacterId){
-            rerolls = []
-            rerollid = -1
-        }
+        resetRerollsForTarget(stableTarget)
         const genId = activeChat.message.at(-1)?.generationInfo?.generationId
         if(genId){
             const r = PreUnreroll(genId)
@@ -728,7 +728,7 @@
             defaultChatScreenLog(error)
             alertError(error)
         }
-        lastCharId = stableTarget.characterId
+        lastRerollTargetKey = getStableChatTargetKey(stableTarget)
         $isDoingChat = false
         if(DBState.db.playMessage){
             const audio = new Audio(sendSound);
