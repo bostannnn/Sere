@@ -1,11 +1,11 @@
 # Server Functional + Authoritative Test Suite
 
 ## Goal
-Test in two stages so you can validate core behavior first without rebuilding Docker, then verify the new server-authoritative behavior after rebuild.
+Test in two stages so you can validate core behavior first against the currently running deployment, then verify server-authoritative behavior against the candidate build you actually plan to ship.
 
 ## Stage Model
 1. Stage A (`NO_REBUILD_SANITY`): Run against currently deployed container/image. Goal is only to confirm app is basically functional.
-2. Stage B (`AUTHORITATIVE_ACCEPTANCE`): Run after rebuilding container from `codex/server-authoritative-complete`. Goal is to confirm cross-device persistence and convergence guarantees.
+2. Stage B (`AUTHORITATIVE_ACCEPTANCE`): Run against the latest candidate build/image from the current branch or release artifact. Goal is to confirm cross-device persistence and convergence guarantees.
 
 ---
 
@@ -81,7 +81,7 @@ Validate server-authoritative design:
 - Conflict/retry convergence
 
 ### Preconditions
-1. Container rebuilt from `codex/server-authoritative-complete`.
+1. Target environment is rebuilt or redeployed from the candidate build you intend to validate.
 2. Fresh test data directory.
 3. Desktop devtools Network open with:
    - Preserve log ON
