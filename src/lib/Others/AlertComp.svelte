@@ -6,7 +6,6 @@
     import AlertBranchesOverlay from "./AlertComp/AlertBranchesOverlay.svelte";
     import AlertCardExportModal from "./AlertComp/AlertCardExportModal.svelte";
     import AlertChoicePanels from "./AlertComp/AlertChoicePanels.svelte";
-    import AlertHypaV2Modal from "./AlertComp/AlertHypaV2Modal.svelte";
     import AlertRequestDataModal from "./AlertComp/AlertRequestDataModal.svelte";
     import AlertSelectCharModal from "./AlertComp/AlertSelectCharModal.svelte";
     import AlertToast from "./AlertComp/AlertToast.svelte";
@@ -63,8 +62,6 @@
     <AlertSelectCharModal />
 {:else if $alertStore.type === "requestdata"}
     <AlertRequestDataModal alert={$alertStore} />
-{:else if $alertStore.type === "hypaV2"}
-    <AlertHypaV2Modal />
 {:else if $alertStore.type === "addchar" || $alertStore.type === "chatOptions"}
     <AlertChoicePanels alert={$alertStore} />
 {:else if $alertStore.type === "cardexport"}

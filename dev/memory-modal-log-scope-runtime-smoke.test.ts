@@ -85,7 +85,7 @@ function createBaseDb() {
         name: "Character A",
         supaMemory: true,
         chatPage: 0,
-        hypaV3PromptOverride: {
+        memoryPromptOverride: {
           summarizationPrompt: "",
           reSummarizationPrompt: "",
         },
@@ -94,7 +94,7 @@ function createBaseDb() {
             id: "chat-a",
             name: "Chat A",
             message: [{ role: "user", data: "hello", chatId: "a1" }],
-            hypaV3Data: {
+            memoryData: {
               summaries: [],
               categories: [{ id: "", name: "Unclassified" }],
               lastSelectedSummaries: [],
@@ -103,17 +103,16 @@ function createBaseDb() {
         ],
       },
     ],
-    hypaV3: true,
-    hypav2: false,
+    memoryEnabled: true,
     hanuraiEnable: false,
     supaModelType: "none",
     memoryAlgorithmType: "hypaMemoryV3",
-    hypaV3PresetId: 0,
-    hypaV3Presets: [],
+    memoryPresetId: 0,
+    memoryPresets: [],
   };
 }
 
-describe("hypa modal log scope runtime smoke", () => {
+describe("memory modal log scope runtime smoke", () => {
   beforeEach(() => {
     selectedCharID.set(0);
     document.body.innerHTML = "";
@@ -131,7 +130,7 @@ describe("hypa modal log scope runtime smoke", () => {
 
   it("shows log data when manual debug matches active chat", async () => {
     const db = createBaseDb();
-    (db.characters[0].chats[0].hypaV3Data as Record<string, unknown>).lastManualDebug = {
+    (db.characters[0].chats[0].memoryData as Record<string, unknown>).lastManualDebug = {
       timestamp: Date.now(),
       model: "stub-model",
       isResummarize: false,
@@ -147,10 +146,7 @@ describe("hypa modal log scope runtime smoke", () => {
     };
     DBState.db = db as never;
 
-    app = mount(MemoryPanel, {
-      target: target!,
-      props: { embedded: true },
-    });
+    app = mount(MemoryPanel, { target: target! });
     await flushUi();
     await switchToLogTab(target!);
 
@@ -161,7 +157,7 @@ describe("hypa modal log scope runtime smoke", () => {
 
   it("hides global debug when it belongs to another character/chat", async () => {
     const db = createBaseDb();
-    (db as Record<string, unknown>).hypaV3Debug = {
+    (db as Record<string, unknown>).memoryDebug = {
       timestamp: Date.now(),
       model: "other-model",
       isResummarize: false,
@@ -175,10 +171,7 @@ describe("hypa modal log scope runtime smoke", () => {
     };
     DBState.db = db as never;
 
-    app = mount(MemoryPanel, {
-      target: target!,
-      props: { embedded: true },
-    });
+    app = mount(MemoryPanel, { target: target! });
     await flushUi();
     await switchToLogTab(target!);
 

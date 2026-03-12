@@ -10,6 +10,11 @@ import {
   setCharacterMemoryPromptOverride,
   setChatMemoryData,
 } from "src/ts/process/memory/storage";
+import {
+  convertHypaV2DataToMemoryData,
+  type OldHypaV2Data,
+  type SerializableHypaV2Data,
+} from "src/ts/process/memory/hypav2";
 import type { ManualState } from "./types";
 
 export interface ManualSummarizeTarget {
@@ -19,11 +24,10 @@ export interface ManualSummarizeTarget {
 
 interface MemoryModalChatLike {
   id?: string;
+  message?: Array<{ chatId?: string }>;
   memoryData?: SerializableMemoryData & { lastManualDebug?: SummarizeDebugLog };
   hypaV3Data?: SerializableMemoryData & { lastManualDebug?: SummarizeDebugLog };
-  hypaV2Data?: {
-    mainChunks: Array<{ text: string; chatMemos: string[] }>;
-  } | null;
+  hypaV2Data?: SerializableHypaV2Data | OldHypaV2Data | null;
 }
 
 interface MemoryModalCharacterLike {
@@ -362,32 +366,23 @@ export function convertHypaV2ToMemory(args: {
 }): { success: boolean; error?: string } {
   try {
     const chat = args.characters?.[args.selectedCharIndex]?.chats?.[args.effectiveChatIndex];
-    const hypaV2Data = chat?.hypaV2Data ?? undefined;
     if (!chat) return { success: false, error: "Chat not found." };
     if ((getChatMemoryData(chat)?.summaries?.length ?? 0) > 0) {
       return { success: false, error: "Memory data already exists." };
     }
+    const hypaV2Data = chat?.hypaV2Data ?? undefined;
     if (!hypaV2Data) return { success: false, error: "HypaV2 data not found." };
-    if (hypaV2Data.mainChunks.length === 0) {
-      return { success: false, error: "No main chunks found." };
-    }
-    for (const [index, mainChunk] of hypaV2Data.mainChunks.entries()) {
-      if (!Array.isArray(mainChunk.chatMemos)) {
-        return { success: false, error: `Chunk ${index}'s chatMemos is not an array.` };
-      }
-      if (mainChunk.chatMemos.length === 0) {
-        return { success: false, error: `Chunk ${index}'s chatMemos is empty.` };
-      }
-    }
-    setChatMemoryData(chat, {
-      summaries: hypaV2Data.mainChunks.map((mainChunk) => ({
-        text: mainChunk.text,
-        chatMemos: [...mainChunk.chatMemos],
-        isImportant: false,
+    const converted = convertHypaV2DataToMemoryData({
+      data: hypaV2Data,
+      chats: (chat.message ?? []).map((message) => ({
+        memo: typeof message?.chatId === "string" ? message.chatId : "",
       })),
-      categories: [{ id: "", name: args.uncategorizedLabel }],
-      lastSelectedSummaries: [],
+      uncategorizedLabel: args.uncategorizedLabel,
     });
+    if (!converted) {
+      return { success: false, error: "No convertible HypaV2 summaries found." };
+    }
+    setChatMemoryData(chat, converted);
     return { success: true };
   } catch (error) {
     return { success: false, error: `Error occurred: ${toErrorMessage(error)}` };

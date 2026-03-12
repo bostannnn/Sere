@@ -90,7 +90,6 @@
                     >
                         <RulebookLibrarySidebar
                             section="library"
-                            mode="drawer"
                             {systemTree}
                             {expandedSystems}
                             {selectedSystemFilter}
@@ -110,7 +109,7 @@
                         aria-labelledby="rulebook-sidebar-tab-settings"
                         data-testid="rulebook-sidebar-pane-settings"
                     >
-                        <RulebookLibrarySidebar section="settings" mode="drawer" />
+                        <RulebookLibrarySidebar section="settings" />
                     </div>
                 {/if}
             </div>

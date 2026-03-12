@@ -31,25 +31,6 @@ function registerSystemRoutes(arg = {}) {
             next(error);
         }
     });
-
-    const sendLegacyRetired = (res, message) => {
-        res.status(410).send({
-            error: 'ENDPOINT_RETIRED',
-            message,
-        });
-    };
-
-    app.all('/proxy', async (req, res) => {
-        sendLegacyRetired(res, 'Use /data/proxy instead of /proxy.');
-    });
-
-    app.all('/api', async (req, res) => {
-        sendLegacyRetired(res, 'Use /data/* endpoints. /api is retired.');
-    });
-
-    app.all('/api/*', async (req, res) => {
-        sendLegacyRetired(res, 'Use /data/* endpoints. /api/* is retired.');
-    });
 }
 
 module.exports = {

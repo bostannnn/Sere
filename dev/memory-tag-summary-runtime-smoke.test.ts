@@ -116,7 +116,7 @@ function mountApp(component: unknown, target: HTMLElement, props: Record<string,
   return app;
 }
 
-describe("hypa tag/summary runtime smoke", () => {
+describe("memory tag/summary runtime smoke", () => {
   beforeEach(() => {
     document.body.innerHTML = "";
     const memoryData = {
@@ -139,7 +139,6 @@ describe("hypa tag/summary runtime smoke", () => {
       },
     };
     DBState.db.characters[0].chats[0].memoryData = memoryData;
-    DBState.db.characters[0].chats[0].hypaV3Data = memoryData;
     mountedApps = [];
   });
 
@@ -239,19 +238,19 @@ describe("hypa tag/summary runtime smoke", () => {
     });
     await flushUi();
 
-    expect(target.querySelector(".hypa-summary-root.panel-shell")).not.toBeNull();
-    expect(target.querySelectorAll(".hypa-summary-metric-chip.control-chip").length).toBeGreaterThan(0);
-    expect(target.querySelector(".hypa-summary-row-inline.action-rail")).not.toBeNull();
+    expect(target.querySelector(".memory-summary-root.panel-shell")).not.toBeNull();
+    expect(target.querySelectorAll(".memory-summary-metric-chip.control-chip").length).toBeGreaterThan(0);
+    expect(target.querySelector(".memory-summary-row-inline.action-rail")).not.toBeNull();
     const collapseToggle = target.querySelector(
-      ".hypa-summary-toggle-button.control-chip",
+      ".memory-summary-toggle-button.control-chip",
     ) as HTMLButtonElement | null;
     expect(collapseToggle).not.toBeNull();
     expect(collapseToggle?.getAttribute("type")).toBe("button");
-    expect(target.querySelectorAll(".hypa-summary-icon-button.icon-btn.icon-btn--sm").length).toBeGreaterThanOrEqual(3);
-    expect(target.querySelectorAll(".hypa-summary-textarea.control-field").length).toBeGreaterThan(0);
-    expect(target.querySelectorAll(".hypa-summary-chatmemo-button.control-chip").length).toBe(2);
+    expect(target.querySelectorAll(".memory-summary-icon-button.icon-btn.icon-btn--sm").length).toBeGreaterThanOrEqual(3);
+    expect(target.querySelectorAll(".memory-summary-textarea.control-field").length).toBeGreaterThan(0);
+    expect(target.querySelectorAll(".memory-summary-chatmemo-button.control-chip").length).toBe(2);
 
-    const checkbox = target.querySelector(".hypa-summary-checkbox") as HTMLInputElement | null;
+    const checkbox = target.querySelector(".memory-summary-checkbox") as HTMLInputElement | null;
     expect(checkbox).not.toBeNull();
     checkbox?.dispatchEvent(new Event("change", { bubbles: true }));
 

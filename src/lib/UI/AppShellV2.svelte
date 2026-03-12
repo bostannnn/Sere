@@ -602,7 +602,6 @@
         onRegisterLibraryShellActions={(actions) => {
             libraryShellActions = actions;
         }}
-        onOpenHome={openHomeFromTopbar}
         isMobileShell={isMobileShell}
         isMobileChatWorkspace={isMobileChatWorkspace}
         bind:mobileChatPanelOpen

@@ -120,7 +120,6 @@ export interface Database{
     useAdditionalAssetsPreview:boolean,
     usePlainFetch:boolean
     hypaMemory:boolean
-    hypav2:boolean
     memoryAlgorithmType:string // To enable new memory module/algorithms 
     proxyRequestModel:string
     personaPrompt:string
@@ -226,8 +225,6 @@ export interface Database{
     customPromptTemplateToggle:string
     globalChatVariables:{[key:string]:string}
     templateDefaultVariables:string
-    hypaAllocatedTokens:number
-    hypaChunkSize:number
     dallEQuality:string
     font: string
     customFont: string

@@ -7,19 +7,16 @@
     MoreVerticalIcon,
     BarChartIcon,
     Trash2Icon,
-    XIcon,
     SquarePenIcon,
   } from "@lucide/svelte";
   import type { SerializableMemoryData } from "src/ts/process/memory/memory";
   import {
-    memoryModalOpen,
     settingsOpen,
     SettingsMenuIndex,
   } from "src/ts/stores.svelte";
   import type { SearchState, BulkEditState, UIState } from "./types";
 
   interface Props {
-    embedded?: boolean;
     activeTab?: "summary" | "settings" | "log";
     searchState: SearchState | null;
     dropdownOpen: boolean;
@@ -32,7 +29,6 @@
   }
 
   let {
-    embedded = false,
     activeTab = "summary",
     searchState = $bindable(),
     dropdownOpen = $bindable(),
@@ -68,9 +64,6 @@
   }
 
   function openGlobalSettings() {
-    if (!embedded) {
-      $memoryModalOpen = false;
-    }
     $settingsOpen = true;
     $SettingsMenuIndex = 2; // Other bot settings
   }
@@ -88,10 +81,6 @@
     if (onResetData) {
       await onResetData();
     }
-  }
-
-  function closeModal() {
-    $memoryModalOpen = false;
   }
 
   function toggleBulkEditMode() {
@@ -120,13 +109,13 @@
   }
 </script>
 
-<div class="hypa-modal-header">
+<div class="memory-header-shell">
   <!-- Buttons Container -->
-  <div class="hypa-modal-actions action-rail">
+  <div class="memory-header-actions action-rail">
     {#if activeTab === "summary"}
       <!-- Open Search Button -->
       <button
-        class="hypa-modal-icon-btn icon-btn icon-btn--md"
+        class="memory-header-icon-btn icon-btn icon-btn--md"
         title="Search summaries"
         aria-label="Search summaries"
         tabindex="-1"
@@ -139,7 +128,7 @@
     <!-- Bulk Edit Mode Button -->
     {#if bulkEditState && activeTab === "summary"}
       <button
-        class="hypa-modal-icon-btn hypa-modal-icon-btn-accent icon-btn icon-btn--md"
+        class="memory-header-icon-btn memory-header-icon-btn-accent icon-btn icon-btn--md"
         class:is-active={bulkEditState.isEnabled}
         title="Toggle bulk edit"
         aria-label="Toggle bulk edit"
@@ -150,23 +139,10 @@
       </button>
     {/if}
 
-    {#if !embedded}
-      <!-- Open Global Settings Button -->
-      <button
-        class="hypa-modal-icon-btn icon-btn icon-btn--md"
-        title="Open memory settings"
-        aria-label="Open memory settings"
-        tabindex="-1"
-        onclick={openGlobalSettings}
-      >
-        <SettingsIcon size={24} />
-      </button>
-    {/if}
-
     <!-- Open Dropdown Button -->
-    <div class="hypa-modal-dropdown-root">
+    <div class="memory-header-menu-root">
       <button
-        class="hypa-modal-icon-btn icon-btn icon-btn--md"
+        class="memory-header-icon-btn icon-btn icon-btn--md"
         title="More actions"
         aria-label="More actions"
         tabindex="-1"
@@ -176,24 +152,22 @@
       </button>
 
       {#if dropdownOpen}
-        <div class="hypa-modal-dropdown-panel panel-shell">
+        <div class="memory-header-menu-panel panel-shell">
           <!-- Buttons Container -->
-          <div class="hypa-modal-dropdown-actions action-rail">
+          <div class="memory-header-menu-actions action-rail">
             {#if activeTab === "summary"}
-              <button class="hypa-modal-dropdown-item" type="button" onclick={handleToggleFilterSelected}>
+              <button class="memory-header-menu-item" type="button" onclick={handleToggleFilterSelected}>
                 <BarChartIcon size={16} />
                 <span>{filterSelected ? "Show all summaries" : "Show selected only"}</span>
               </button>
             {/if}
 
-            {#if embedded}
-              <button class="hypa-modal-dropdown-item" type="button" onclick={handleOpenGlobalSettings}>
-                <SettingsIcon size={16} />
-                <span>Memory settings</span>
-              </button>
-            {/if}
+            <button class="memory-header-menu-item" type="button" onclick={handleOpenGlobalSettings}>
+              <SettingsIcon size={16} />
+              <span>Memory settings</span>
+            </button>
 
-            <button class="hypa-modal-dropdown-item hypa-modal-dropdown-item-danger" type="button" onclick={async () => await handleResetData()}>
+            <button class="memory-header-menu-item memory-header-menu-item-danger" type="button" onclick={async () => await handleResetData()}>
               <Trash2Icon size={16} />
               <span>Reset memory data</span>
             </button>
@@ -201,24 +175,11 @@
         </div>
       {/if}
     </div>
-
-    {#if !embedded}
-      <!-- Close Modal Button -->
-      <button
-        class="hypa-modal-icon-btn icon-btn icon-btn--md"
-        title="Close modal"
-        aria-label="Close modal"
-        tabindex="-1"
-        onclick={closeModal}
-      >
-        <XIcon size={24} />
-      </button>
-    {/if}
   </div>
 </div>
 
 <style>
-  .hypa-modal-header {
+  .memory-header-shell {
     margin-bottom: var(--ds-space-3);
     display: flex;
     align-items: center;
@@ -226,7 +187,7 @@
     gap: var(--ds-space-2);
   }
 
-  .hypa-modal-actions.action-rail {
+  .memory-header-actions.action-rail {
     flex-wrap: wrap;
     justify-content: flex-end;
     display: flex;
@@ -234,7 +195,7 @@
     gap: var(--ds-space-2);
   }
 
-  .hypa-modal-icon-btn.icon-btn.icon-btn--md {
+  .memory-header-icon-btn.icon-btn.icon-btn--md {
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -245,20 +206,20 @@
       background-color var(--ds-motion-fast) var(--ds-ease-standard);
   }
 
-  .hypa-modal-icon-btn.icon-btn.icon-btn--md:hover {
+  .memory-header-icon-btn.icon-btn.icon-btn--md:hover {
     color: var(--ds-text-primary);
     background: color-mix(in srgb, var(--ds-surface-active) 35%, transparent);
   }
 
-  .hypa-modal-icon-btn-accent.is-active {
+  .memory-header-icon-btn-accent.is-active {
     color: var(--ds-border-strong);
   }
 
-  .hypa-modal-dropdown-root {
+  .memory-header-menu-root {
     position: relative;
   }
 
-  .hypa-modal-dropdown-panel.panel-shell {
+  .memory-header-menu-panel.panel-shell {
     position: absolute;
     right: 0;
     z-index: 70;
@@ -270,7 +231,7 @@
     box-shadow: var(--shadow-lg);
   }
 
-  .hypa-modal-dropdown-actions.action-rail {
+  .memory-header-menu-actions.action-rail {
     display: flex;
     flex-direction: column;
     align-items: stretch;
@@ -279,7 +240,7 @@
     gap: var(--ds-space-1);
   }
 
-  .hypa-modal-dropdown-item {
+  .memory-header-menu-item {
     display: flex;
     align-items: center;
     gap: var(--ds-space-2);
@@ -295,31 +256,31 @@
       border-color var(--ds-motion-fast) var(--ds-ease-standard);
   }
 
-  .hypa-modal-dropdown-item:hover {
+  .memory-header-menu-item:hover {
     background: color-mix(in srgb, var(--ds-surface-active) 45%, transparent);
     border-color: var(--ds-border-subtle);
   }
 
-  .hypa-modal-dropdown-item-danger {
+  .memory-header-menu-item-danger {
     color: var(--ds-text-danger);
   }
 
-  .hypa-modal-dropdown-item-danger:hover {
+  .memory-header-menu-item-danger:hover {
     background: color-mix(in srgb, var(--ds-text-danger) 14%, transparent);
   }
 
   @media (max-width: 960px) {
-    .hypa-modal-header {
+    .memory-header-shell {
       flex-wrap: wrap;
     }
 
-    .hypa-modal-actions.action-rail {
+    .memory-header-actions.action-rail {
       width: 100%;
     }
   }
 
   @media (min-width: 640px) {
-    .hypa-modal-header {
+    .memory-header-shell {
       margin-bottom: var(--ds-space-4);
     }
   }

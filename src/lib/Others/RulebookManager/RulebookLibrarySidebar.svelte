@@ -8,7 +8,6 @@
 
     interface Props {
         section: "library" | "settings";
-        mode?: "legacy" | "drawer";
         systemTree?: Array<[string, Set<string>]>;
         expandedSystems?: Set<string>;
         selectedSystemFilter?: string;
@@ -22,7 +21,6 @@
 
     let {
         section,
-        mode = "legacy",
         systemTree = [],
         expandedSystems = new Set<string>(),
         selectedSystemFilter = "All",
@@ -47,7 +45,7 @@
     });
 </script>
 
-<div class="rag-sidebar-shell" class:is-drawer={mode === "drawer"}>
+<div class="rag-sidebar-shell is-drawer">
     {#if section === "library"}
         <section class="rag-sidebar-section">
             <h3 class="rag-sidebar-title">Library</h3>

@@ -81,7 +81,6 @@ export const alertStore = writable({
     type: 'none',
     msg: 'n',
 } as alertData)
-export const memoryModalOpen = writable(false)
 export const memoryProgressStore = writable({
     open: false,
     miniMsg: '',

@@ -13,14 +13,13 @@ vi.mock(import("src/lang"), () => ({
 vi.mock(import("src/ts/stores.svelte"), async () => {
   const { writable } = await import("svelte/store");
   return {
-    memoryModalOpen: writable(false),
     settingsOpen: writable(false),
     SettingsMenuIndex: writable(-1),
   };
 });
 
 import ModalHeader from "src/lib/Others/MemoryModal/modal-header.svelte";
-import { memoryModalOpen, settingsOpen, SettingsMenuIndex } from "src/ts/stores.svelte";
+import { settingsOpen, SettingsMenuIndex } from "src/ts/stores.svelte";
 
 let mountedApps: Array<Record<string, unknown>> = [];
 
@@ -35,12 +34,11 @@ function mountApp(component: unknown, target: HTMLElement, props: Record<string,
   return app;
 }
 
-describe("hypa modal runtime smoke", () => {
+describe("memory modal runtime smoke", () => {
   beforeEach(() => {
     document.body.innerHTML = "";
     settingsOpen.set(false);
     SettingsMenuIndex.set(-1);
-    memoryModalOpen.set(true);
     mountedApps = [];
   });
 
@@ -59,31 +57,33 @@ describe("hypa modal runtime smoke", () => {
       searchState: null,
       dropdownOpen: false,
       filterSelected: false,
-      hypaV3Data: { summaries: [] },
+      memoryData: { summaries: [] },
     });
 
     await flushUi();
 
-    const actionRail = target.querySelector(".hypa-modal-actions.action-rail");
+    const actionRail = target.querySelector(".memory-header-actions.action-rail");
     expect(actionRail).not.toBeNull();
 
     const actionButtons = [
-      ...target.querySelectorAll(".hypa-modal-actions .hypa-modal-icon-btn.icon-btn.icon-btn--md"),
+      ...target.querySelectorAll(".memory-header-actions .memory-header-icon-btn.icon-btn.icon-btn--md"),
     ] as HTMLButtonElement[];
-    expect(actionButtons.length).toBeGreaterThanOrEqual(4);
+    expect(actionButtons.length).toBe(2);
 
-    const settingsButton = actionButtons.find((button) => button.getAttribute("title") === "Open memory settings");
+    const dropdownButton = actionButtons.find((button) => button.getAttribute("title") === "More actions");
+    expect(dropdownButton).toBeDefined();
+    dropdownButton?.click();
+    await flushUi();
+
+    const settingsButton = Array.from(target.querySelectorAll(".memory-header-menu-item")).find(
+      (button) => button.textContent?.includes("Memory settings"),
+    ) as HTMLButtonElement | undefined;
     expect(settingsButton).toBeDefined();
     settingsButton?.click();
     await flushUi();
+
     expect(get(settingsOpen)).toBe(true);
     expect(get(SettingsMenuIndex)).toBe(2);
-    expect(get(memoryModalOpen)).toBe(false);
-
-    memoryModalOpen.set(true);
-    actionButtons[actionButtons.length - 1]?.click();
-    await flushUi();
-    expect(get(memoryModalOpen)).toBe(false);
   });
 
   it("keeps dropdown action surface on shared primitives", async () => {
@@ -94,16 +94,16 @@ describe("hypa modal runtime smoke", () => {
       searchState: null,
       dropdownOpen: true,
       filterSelected: true,
-      hypaV3Data: { summaries: [] },
+      memoryData: { summaries: [] },
     });
 
     await flushUi();
 
     expect(
-      dropdownTarget.querySelector(".hypa-modal-dropdown-panel.panel-shell"),
+      dropdownTarget.querySelector(".memory-header-menu-panel.panel-shell"),
     ).not.toBeNull();
     expect(
-      dropdownTarget.querySelector(".hypa-modal-dropdown-actions.action-rail"),
+      dropdownTarget.querySelector(".memory-header-menu-actions.action-rail"),
     ).not.toBeNull();
   });
 
@@ -112,12 +112,11 @@ describe("hypa modal runtime smoke", () => {
     document.body.appendChild(target);
 
     mountApp(ModalHeader, target, {
-      embedded: true,
       activeTab: "summary",
       searchState: null,
       dropdownOpen: true,
       filterSelected: false,
-      hypaV3Data: { summaries: [] },
+      memoryData: { summaries: [] },
       bulkEditState: { isEnabled: false, selectedSummaries: new Set(), selectedCategory: "", bulkSelectInput: "" },
     });
 

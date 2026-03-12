@@ -9,7 +9,7 @@ const hoisted = vi.hoisted(() => ({
           chatPage: 0,
           chats: [
             {
-              hypaV3Data: {
+              memoryData: {
                 summaries: [
                   { categoryId: "", chatMemos: [] },
                   { categoryId: "cat-1", chatMemos: [] },
@@ -73,7 +73,7 @@ function mountApp(component: unknown, target: HTMLElement, props: Record<string,
 describe("memory bulk runtime smoke", () => {
   beforeEach(() => {
     document.body.innerHTML = "";
-    DBState.db.characters[0].chats[0].hypaV3Data = {
+    DBState.db.characters[0].chats[0].memoryData = {
       summaries: [
         { categoryId: "", chatMemos: [] },
         { categoryId: "cat-1", chatMemos: [] },
@@ -123,13 +123,13 @@ describe("memory bulk runtime smoke", () => {
     });
     await flushUi();
 
-    expect(target.querySelector(".hypa-bulk-shell.panel-shell")).not.toBeNull();
-    expect(target.querySelector(".hypa-bulk-row.action-rail")).not.toBeNull();
-    expect(target.querySelector(".hypa-bulk-right.action-rail")).not.toBeNull();
-    expect(target.querySelector(".hypa-bulk-input-row.action-rail")).not.toBeNull();
+    expect(target.querySelector(".memory-bulk-shell.panel-shell")).not.toBeNull();
+    expect(target.querySelector(".memory-bulk-row.action-rail")).not.toBeNull();
+    expect(target.querySelector(".memory-bulk-right.action-rail")).not.toBeNull();
+    expect(target.querySelector(".memory-bulk-input-row.action-rail")).not.toBeNull();
 
-    const select = target.querySelector(".hypa-bulk-select.control-field") as HTMLSelectElement | null;
-    const input = target.querySelector(".hypa-bulk-input.control-field") as HTMLInputElement | null;
+    const select = target.querySelector(".memory-bulk-select.control-field") as HTMLSelectElement | null;
+    const input = target.querySelector(".memory-bulk-input.control-field") as HTMLInputElement | null;
     expect(select).not.toBeNull();
     expect(input).not.toBeNull();
 
@@ -144,7 +144,7 @@ describe("memory bulk runtime smoke", () => {
     expect(onUpdateBulkSelectInput).toHaveBeenCalledWith("1,2");
     expect(onParseAndSelectSummaries).toHaveBeenCalledTimes(1);
 
-    const buttons = [...target.querySelectorAll(".hypa-bulk-btn")] as HTMLButtonElement[];
+    const buttons = [...target.querySelectorAll(".memory-bulk-btn")] as HTMLButtonElement[];
     const applyButton = buttons.find((button) => (button.textContent ?? "").includes("Apply"));
     const clearButton = buttons.find((button) => (button.textContent ?? "").includes("Cancel"));
     expect(applyButton).toBeDefined();

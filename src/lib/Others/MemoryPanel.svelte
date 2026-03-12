@@ -5,57 +5,28 @@
   import ModalHeader from "./MemoryModal/modal-header.svelte";
   import ModalSummaryItem from "./MemoryModal/modal-summary-item.svelte";
   import BulkEditActions from "./MemoryModal/bulk-edit-actions.svelte";
-  import SelectInput from "src/lib/UI/GUI/SelectInput.svelte";
-  import OptionInput from "src/lib/UI/GUI/OptionInput.svelte";
   import CheckInput from "src/lib/UI/GUI/CheckInput.svelte";
   import TextAreaInput from "src/lib/UI/GUI/TextAreaInput.svelte";
   import SettingsSubTabs from "src/lib/Setting/SettingsSubTabs.svelte";
   import { useMemoryModal } from "./MemoryModal/useMemoryModal.svelte";
   import { getDbMemoryEnabled } from "src/ts/process/memory/storage";
-
-  interface Props {
-    embedded?: boolean;
-  }
-
-  const {
-    embedded = false,
-  }: Props = $props();
-  const modal = useMemoryModal(() => embedded);
+  const modal = useMemoryModal();
 
 </script>
 
-<!-- Modal Backdrop -->
-<div class={embedded ? "ds-memory-sidebar-root" : "ds-memory-modal-overlay"}>
-  <!-- Modal Wrapper -->
-  <div class={embedded ? "ds-memory-sidebar-wrap" : "ds-memory-modal-wrap"}>
+<div class="ds-memory-sidebar-root">
+  <div class="ds-memory-sidebar-wrap">
     <!-- Modal Window -->
     <!-- svelte-ignore a11y_click_events_have_key_events -->
     <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <div
-      class="ds-memory-modal-window"
-      class:ds-memory-sidebar-window={embedded}
-      class:ds-memory-modal-window-empty={modal.memoryData.summaries.length === 0}
-      onclick={(e) => {
-        e.stopPropagation();
-        modal.openDropdownClosed();
-      }}
-    >
-      {#if !embedded}
-        <!-- Header -->
-        <ModalHeader
-          {embedded}
-          activeTab={modal.memoryWorkspaceTab}
-          bind:searchState={modal.searchState}
-          bind:dropdownOpen={modal.uiState.dropdownOpen}
-          bind:filterSelected={modal.filterSelected}
-          bulkEditState={modal.bulkEditState}
-          uiState={modal.uiState}
-          memoryData={modal.memoryData}
-          onResetData={modal.handleResetData}
-          onToggleBulkEditMode={modal.handleToggleBulkEditMode}
-        />
-      {/if}
-
+      <div
+        class="ds-memory-modal-window ds-memory-sidebar-window"
+        class:ds-memory-modal-window-empty={modal.memoryData.summaries.length === 0}
+        onclick={(e) => {
+          e.stopPropagation();
+          modal.openDropdownClosed();
+        }}
+      >
       <SettingsSubTabs
         className="ds-memory-tabs"
         items={modal.memoryWorkspaceTabItems}
@@ -72,20 +43,17 @@
             id="memory-panel-summary"
             aria-label="Summary panel"
           >
-            {#if embedded}
-              <ModalHeader
-                {embedded}
-                activeTab={modal.memoryWorkspaceTab}
-                bind:searchState={modal.searchState}
-                bind:dropdownOpen={modal.uiState.dropdownOpen}
-                bind:filterSelected={modal.filterSelected}
-                bulkEditState={modal.bulkEditState}
-                uiState={modal.uiState}
-                memoryData={modal.memoryData}
-                onResetData={modal.handleResetData}
-                onToggleBulkEditMode={modal.handleToggleBulkEditMode}
-              />
-            {/if}
+            <ModalHeader
+              activeTab={modal.memoryWorkspaceTab}
+              bind:searchState={modal.searchState}
+              bind:dropdownOpen={modal.uiState.dropdownOpen}
+              bind:filterSelected={modal.filterSelected}
+              bulkEditState={modal.bulkEditState}
+              uiState={modal.uiState}
+              memoryData={modal.memoryData}
+              onResetData={modal.handleResetData}
+              onToggleBulkEditMode={modal.handleToggleBulkEditMode}
+            />
 
             {#if modal.memoryData.summaries.length === 0}
               {#if modal.isHypaV2ConversionPossible()}
@@ -177,26 +145,7 @@
                   />
                 {/if}
 
-                {#if !embedded && modal.chatList.length > 1}
-                  <div class="ds-memory-modal-chat-row">
-                    <span class="ds-memory-modal-chat-label">Chat</span>
-                    <SelectInput
-                      className="ds-memory-modal-chat-select"
-                      value={modal.effectiveChatIndex}
-                      onchange={(e) => {
-                        modal.setModalChatIndexFromSelect(parseInt(e.currentTarget.value));
-                      }}
-                    >
-                      {#each modal.chatList as chat, i (chat.id ?? i)}
-                        <OptionInput value={i}>
-                          {chat.name && chat.name.trim().length > 0 ? chat.name : `Chat ${i + 1}`}
-                        </OptionInput>
-                      {/each}
-                    </SelectInput>
-                  </div>
-                {/if}
-
-                <div class={`ds-memory-modal-manual-sticky${embedded ? " ds-memory-modal-manual-embedded" : ""}`}>
+                <div class="ds-memory-modal-manual-sticky ds-memory-modal-manual-embedded">
                   <div class="ds-memory-modal-manual-row">
                     <div class="ds-memory-modal-manual-col">
                       <label class="ds-memory-modal-manual-label" for={modal.manualRangeStartInputId}>Manual summarize range</label>

@@ -443,8 +443,6 @@ export function setDatabase(data:Database){
     data.customPromptTemplateToggle ??= ''
     data.globalChatVariables ??= {}
     data.templateDefaultVariables ??= ''
-    data.hypaAllocatedTokens ??= 3000
-    data.hypaChunkSize ??= 3000
     data.dallEQuality ??= 'standard'
     data.customTextTheme.FontColorQuote1 ??= '#8BE9FD'
     data.customTextTheme.FontColorQuote2 ??= '#FFB86C'
@@ -526,9 +524,8 @@ export function setDatabase(data:Database){
     )
     setDbMemoryPresetId(data, data.memoryPresetId ?? data.hypaV3PresetId ?? 0)
     setDbMemoryDebug(data, data.memoryDebug ?? data.hypaV3Debug)
-    // Keep runtime on the neutral memory contract while mirroring legacy fields during migration.
+    // Keep runtime on the neutral memory contract while reading legacy fields during migration.
     setDbMemoryEnabled(data, data.memoryEnabled ?? data.hypaV3 ?? true)
-    data.hypav2 = false
     data.hanuraiEnable = false
     data.hanuraiSplit = false
     data.supaModelType = 'none'

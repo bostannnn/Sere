@@ -3,7 +3,7 @@ import { SvelteSet } from "svelte/reactivity";
 import { fromStore } from "svelte/store";
 import { alertNormalWait } from "src/ts/alert";
 import { language } from "src/lang";
-import { DBState, memoryModalOpen, selectedCharID } from "src/ts/stores.svelte";
+import { DBState, selectedCharID } from "src/ts/stores.svelte";
 import { pickLatestSummarizeDebug } from "src/ts/process/memorySync";
 import type {
   SerializableMemoryData,
@@ -44,9 +44,7 @@ import type {
 
 const memoryModalLog = (..._args: unknown[]) => {};
 
-export function useMemoryModal(getEmbedded: () => boolean) {
-  let modalChatIndex = $state(0);
-  let wasOpen = $state(false);
+export function useMemoryModal() {
   let lastManualScopeKey = $state<string | null>(null);
   let memoryData = $state<SerializableMemoryData>(
     createEmptyMemoryData(language.memoryModal.unclassified),
@@ -56,7 +54,6 @@ export function useMemoryModal(getEmbedded: () => boolean) {
   let filterSelected = $state(false);
   let memoryWorkspaceTab = $state<MemoryWorkspaceTab>("summary");
   const selectedCharIndex = fromStore(selectedCharID);
-  const memoryModalOpenState = fromStore(memoryModalOpen);
 
   const currentChar = $derived(DBState.db.characters?.[selectedCharIndex.current] ?? null);
   const promptOverrideCharacter = $derived.by(() =>
@@ -64,7 +61,7 @@ export function useMemoryModal(getEmbedded: () => boolean) {
   );
   const chatList = $derived(currentChar?.chats ?? []);
   const effectiveChatIndex = $derived.by(() => {
-    const baseIndex = getEmbedded() ? (currentChar?.chatPage ?? 0) : modalChatIndex;
+    const baseIndex = currentChar?.chatPage ?? 0;
     if (chatList.length === 0) return 0;
     if (baseIndex < 0) return 0;
     if (baseIndex >= chatList.length) return chatList.length - 1;
@@ -72,7 +69,6 @@ export function useMemoryModal(getEmbedded: () => boolean) {
   });
   const activeChat = $derived(chatList[effectiveChatIndex]);
   const activeChatId = $derived(activeChat?.id ?? null);
-  const isOpen = $derived(getEmbedded() || memoryModalOpenState.current);
   const categories = $derived.by(() => {
     const uncategorized = { id: "", name: language.memoryModal.unclassified };
     const savedCategories = memoryData.categories || [];
@@ -194,19 +190,6 @@ export function useMemoryModal(getEmbedded: () => boolean) {
   });
 
   $effect(() => {
-    if (isOpen && !wasOpen && !getEmbedded()) {
-      modalChatIndex = currentChar?.chatPage ?? 0;
-    }
-    wasOpen = isOpen;
-    if (!isOpen && !getEmbedded()) {
-      modalChatIndex = currentChar?.chatPage ?? 0;
-    }
-    if (!getEmbedded() && chatList.length > 0 && modalChatIndex >= chatList.length) {
-      modalChatIndex = chatList.length - 1;
-    }
-  });
-
-  $effect(() => {
     const nextScopeKey = `${currentChar?.chaId ?? ""}:${activeChatId ?? ""}`;
     if (lastManualScopeKey === null) {
       lastManualScopeKey = nextScopeKey;
@@ -287,7 +270,7 @@ export function useMemoryModal(getEmbedded: () => boolean) {
       promptOverrideCharacter.memoryPromptOverride = {
         summarizationPrompt: value,
       };
-      promptOverrideCharacter.hypaV3PromptOverride = promptOverrideCharacter.memoryPromptOverride;
+      delete (promptOverrideCharacter as Record<string, unknown>).hypaV3PromptOverride;
     },
     selectMemoryWorkspaceTabById(id: number) {
       selectMemoryWorkspaceTab(id === 1 ? "settings" : id === 2 ? "log" : "summary");
@@ -387,9 +370,6 @@ export function useMemoryModal(getEmbedded: () => boolean) {
     },
     openDropdownClosed() {
       uiState.dropdownOpen = false;
-    },
-    setModalChatIndexFromSelect(nextIndex: number) {
-      if (!Number.isNaN(nextIndex)) modalChatIndex = nextIndex;
     },
     clearSearchResults() {
       if (!searchState) return;

@@ -53,12 +53,12 @@
 
 <!-- Bulk Edit Action Bar -->
 {#if bulkEditState.isEnabled}
-  <div class="hypa-bulk-shell panel-shell">
-    <div class="hypa-bulk-row action-rail">
-      <div class="hypa-bulk-right action-rail">
+  <div class="memory-bulk-shell panel-shell">
+    <div class="memory-bulk-row action-rail">
+      <div class="memory-bulk-right action-rail">
         <!-- Category Selection -->
         <select
-          class="hypa-bulk-select control-field"
+          class="memory-bulk-select control-field"
           value={bulkEditState.selectedCategory}
           onchange={handleCategoryChange}
         >
@@ -69,7 +69,7 @@
 
         <!-- Apply Category Button -->
         <button
-          class="hypa-bulk-btn hypa-bulk-btn-accent"
+          class="memory-bulk-btn memory-bulk-btn-accent"
           class:is-disabled={bulkEditState.selectedSummaries.size === 0}
           onclick={applyCategoryToSelected}
           disabled={bulkEditState.selectedSummaries.size === 0}
@@ -78,17 +78,17 @@
         </button>
 
         <!-- Bulk Select by Numbers -->
-        <div class="hypa-bulk-input-row action-rail">
+        <div class="memory-bulk-input-row action-rail">
           <input
             type="text"
             value={bulkEditState.bulkSelectInput}
             oninput={handleBulkSelectInputChange}
             placeholder="1,3,5-8"
-            class="hypa-bulk-input control-field"
+            class="memory-bulk-input control-field"
             onkeydown={handleBulkSelectKeydown}
           />
           <button
-            class="hypa-bulk-btn hypa-bulk-btn-outline hypa-bulk-btn-compact"
+            class="memory-bulk-btn memory-bulk-btn-outline memory-bulk-btn-compact"
             onclick={parseAndSelectSummaries}
           >
             {language.select}
@@ -97,7 +97,7 @@
 
         <!-- Clear Selection Button -->
         <button
-          class="hypa-bulk-btn hypa-bulk-btn-danger hypa-bulk-btn-compact"
+          class="memory-bulk-btn memory-bulk-btn-danger memory-bulk-btn-compact"
           onclick={clearSelection}
         >
           {language.cancel}
@@ -108,7 +108,7 @@
 {/if}
 
 <style>
-  .hypa-bulk-shell.panel-shell {
+  .memory-bulk-shell.panel-shell {
     position: sticky;
     bottom: 0;
     border-top: 1px solid var(--ds-border-subtle);
@@ -117,7 +117,7 @@
     padding: var(--ds-space-3);
   }
 
-  .hypa-bulk-row.action-rail {
+  .memory-bulk-row.action-rail {
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -125,18 +125,18 @@
     flex-wrap: wrap;
   }
 
-  .hypa-bulk-right.action-rail,
-  .hypa-bulk-input-row.action-rail {
+  .memory-bulk-right.action-rail,
+  .memory-bulk-input-row.action-rail {
     display: flex;
     align-items: center;
     gap: var(--ds-space-2);
   }
 
-  .hypa-bulk-right {
+  .memory-bulk-right {
     flex-wrap: wrap;
   }
 
-  .hypa-bulk-btn {
+  .memory-bulk-btn {
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -154,46 +154,46 @@
       opacity var(--ds-motion-fast) var(--ds-ease-standard);
   }
 
-  .hypa-bulk-btn:hover {
+  .memory-bulk-btn:hover {
     border-color: var(--ds-border-strong);
     background: var(--ds-surface-active);
   }
 
-  .hypa-bulk-btn-accent {
+  .memory-bulk-btn-accent {
     color: var(--ds-text-primary);
     border-color: var(--ds-border-strong);
     background: color-mix(in srgb, var(--ds-surface-active) 70%, var(--ds-surface-2) 30%);
   }
 
-  .hypa-bulk-btn-danger {
+  .memory-bulk-btn-danger {
     border-color: color-mix(in srgb, var(--color-red-500) 55%, var(--ds-border-subtle));
     color: color-mix(in srgb, var(--color-red-300) 88%, var(--ds-text-primary));
     background: color-mix(in srgb, var(--color-red-500) 14%, transparent);
   }
 
-  .hypa-bulk-btn-outline {
+  .memory-bulk-btn-outline {
     border-color: var(--ds-border-strong);
     color: var(--ds-border-strong);
     background: color-mix(in srgb, var(--ds-border-strong) 14%, transparent);
   }
 
-  .hypa-bulk-btn-compact {
+  .memory-bulk-btn-compact {
     padding-inline: var(--ds-space-3);
   }
 
-  .hypa-bulk-btn.is-disabled,
-  .hypa-bulk-btn:disabled {
+  .memory-bulk-btn.is-disabled,
+  .memory-bulk-btn:disabled {
     opacity: 0.5;
     cursor: not-allowed;
   }
 
-  .hypa-bulk-btn.is-disabled:hover,
-  .hypa-bulk-btn:disabled:hover {
+  .memory-bulk-btn.is-disabled:hover,
+  .memory-bulk-btn:disabled:hover {
     border-color: var(--ds-border-subtle);
     background: var(--ds-surface-3);
   }
 
-  .hypa-bulk-select.control-field {
+  .memory-bulk-select.control-field {
     min-height: var(--ds-height-control-sm);
     border: 1px solid var(--ds-border-subtle);
     border-radius: var(--ds-radius-sm);
@@ -204,11 +204,11 @@
     outline: none;
   }
 
-  .hypa-bulk-select.control-field:focus {
+  .memory-bulk-select.control-field:focus {
     border-color: var(--ds-border-strong);
   }
 
-  .hypa-bulk-input.control-field {
+  .memory-bulk-input.control-field {
     width: 8rem;
     min-height: var(--ds-height-control-sm);
     border: 1px solid var(--ds-border-subtle);
@@ -220,11 +220,11 @@
     outline: none;
   }
 
-  .hypa-bulk-input.control-field::placeholder {
+  .memory-bulk-input.control-field::placeholder {
     color: color-mix(in srgb, var(--ds-text-secondary) 75%, transparent);
   }
 
-  .hypa-bulk-input.control-field:focus {
+  .memory-bulk-input.control-field:focus {
     border-color: var(--ds-border-strong);
   }
 </style>

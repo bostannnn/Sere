@@ -8,7 +8,6 @@ vi.mock(import("src/ts/stores.svelte"), async () => {
   const CharEmotion = writable<Record<string, [string, string, number][]>>({});
   const ReloadGUIPointer = writable(0);
   const CharConfigSubMenu = writable(0);
-  const memoryModalOpen = writable(false);
   const bookmarkListOpen = writable(false);
   const selIdState = { selId: 0 };
   const DBState = {
@@ -56,7 +55,6 @@ vi.mock(import("src/ts/stores.svelte"), async () => {
     CharEmotion,
     ReloadGUIPointer,
     CharConfigSubMenu,
-    memoryModalOpen,
     bookmarkListOpen,
     selIdState,
   };

@@ -151,7 +151,7 @@ ensureIncludes(hostContent, hostFile, "handleRightPanelTabKeydown(event, \"memor
 ensureIncludes(hostContent, hostFile, "handleRightPanelTabKeydown(event, \"evolution\")", failures);
 ensureIncludes(hostContent, hostFile, "<SideChatList chara={selectedCharacter ?? undefined} />", failures);
 ensureIncludes(hostContent, hostFile, "<CharConfig />", failures);
-ensureIncludes(hostContent, hostFile, "<MemoryPanel embedded />", failures);
+ensureIncludes(hostContent, hostFile, "<MemoryPanel />", failures);
 ensureIncludes(hostContent, hostFile, "<EvolutionSettings />", failures);
 ensureNotIncludes(hostContent, hostFile, "data-testid=\"chat-sidebar-toggle\"", failures);
 ensureNotIncludes(hostContent, hostFile, "data-testid=\"chat-sidebar-close\"", failures);

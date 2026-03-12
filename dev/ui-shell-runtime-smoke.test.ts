@@ -21,7 +21,6 @@ vi.mock(import("src/ts/stores.svelte"), async () => {
   const selectedCharID = writable(-1);
   const uiShellV2Enabled = writable(true);
   const openRulebookManager = writable(false);
-  const memoryModalOpen = writable(false);
   const memoryProgressStore = writable({
     open: false,
     miniMsg: "",
@@ -82,7 +81,6 @@ vi.mock(import("src/ts/stores.svelte"), async () => {
     uiShellV2Enabled,
     appRouteStore,
     openRulebookManager,
-    memoryModalOpen,
     memoryProgressStore,
     hypaV3ProgressStore,
     selIdState,
@@ -204,7 +202,6 @@ import {
   SettingsMenuIndex,
   appRouteStore,
   bookmarkListOpen,
-  memoryModalOpen,
   openPersonaList,
   openPresetList,
   openRulebookManager,
@@ -263,7 +260,6 @@ describe("ui shell runtime smoke", () => {
     bookmarkListOpen.set(false);
     popupStore.children = null;
     popupStore.openId = 0;
-    memoryModalOpen.set(false);
     DBState.db.characters = [
       {
         chaId: "char-1",
@@ -788,8 +784,6 @@ describe("ui shell runtime smoke", () => {
     openPresetList.set(true);
     openPersonaList.set(true);
     bookmarkListOpen.set(true);
-    memoryModalOpen.set(true);
-
     settingsOpen.set(true);
     selectedCharID.set(-1);
     openRulebookManager.set(false);
@@ -799,8 +793,6 @@ describe("ui shell runtime smoke", () => {
     expect(get(openPresetList)).toBe(false);
     expect(get(openPersonaList)).toBe(false);
     expect(get(bookmarkListOpen)).toBe(false);
-    expect(get(memoryModalOpen)).toBe(true);
-
     settingsOpen.set(false);
     openRulebookManager.set(true);
     await flushUi();
@@ -893,11 +885,6 @@ describe("ui shell runtime smoke", () => {
     await flushUi();
     expect(get(bookmarkListOpen)).toBe(false);
 
-    memoryModalOpen.set(true);
-    await flushUi();
-    window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
-    await flushUi();
-    expect(get(memoryModalOpen)).toBe(true);
   });
 
   it("closes right sidebar on Escape", async () => {

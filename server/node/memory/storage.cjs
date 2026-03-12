@@ -51,9 +51,9 @@ function canonicalizeMemorySettingsShape(settings) {
 
 function setMemoryData(chat, data) {
     if (!chat || typeof chat !== 'object') return;
-    if (chat.memoryData === data && chat.hypaV3Data === data) return;
+    if (chat.memoryData === data && !('hypaV3Data' in chat)) return;
     chat.memoryData = data;
-    chat.hypaV3Data = data;
+    delete chat.hypaV3Data;
 }
 
 function getMemoryPromptOverride(character) {
@@ -73,20 +73,18 @@ function setMemoryPromptOverride(character, promptOverride) {
     const currentPrompt = getMemoryPromptOverride(character)?.summarizationPrompt || '';
     const nextPrompt = normalizedPromptOverride?.summarizationPrompt || '';
     const memoryPrompt = character.memoryPromptOverride;
-    const legacyPrompt = character.hypaV3PromptOverride;
     const memoryNormalized = !!memoryPrompt && typeof memoryPrompt === 'object' && typeof memoryPrompt.summarizationPrompt === 'string';
-    const legacyNormalized = !!legacyPrompt && typeof legacyPrompt === 'object' && typeof legacyPrompt.summarizationPrompt === 'string';
 
     if (
         currentPrompt === nextPrompt &&
-        memoryPrompt === legacyPrompt &&
-        (normalizedPromptOverride ? memoryNormalized && legacyNormalized : !memoryPrompt && !legacyPrompt)
+        !('hypaV3PromptOverride' in character) &&
+        (normalizedPromptOverride ? memoryNormalized : !memoryPrompt)
     ) {
         return;
     }
 
     character.memoryPromptOverride = normalizedPromptOverride;
-    character.hypaV3PromptOverride = normalizedPromptOverride;
+    delete character.hypaV3PromptOverride;
 }
 
 function getMemoryPresets(settings) {

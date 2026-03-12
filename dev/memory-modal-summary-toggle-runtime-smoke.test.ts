@@ -3,7 +3,7 @@ import { mount, tick, unmount } from "svelte";
 
 vi.mock(import("src/lang"), () => ({
   language: {
-    ToggleMemory: "Toggle HypaMemory",
+    ToggleMemory: "Toggle Memory",
     memoryModal: {
       titleLabel: "Memory",
       unclassified: "Unclassified",
@@ -69,7 +69,7 @@ async function flushUi() {
   await Promise.resolve();
 }
 
-describe("hypa modal summary toggle runtime smoke", () => {
+describe("memory modal summary toggle runtime smoke", () => {
   beforeEach(() => {
     DBState.db = {
       characters: [
@@ -79,7 +79,7 @@ describe("hypa modal summary toggle runtime smoke", () => {
           name: "Character A",
           supaMemory: true,
           chatPage: 0,
-          hypaV3PromptOverride: {
+          memoryPromptOverride: {
             summarizationPrompt: "",
             reSummarizationPrompt: "",
           },
@@ -88,7 +88,7 @@ describe("hypa modal summary toggle runtime smoke", () => {
               id: "chat-a",
               name: "Chat A",
               message: [{ role: "user", data: "hello", chatId: "a1" }],
-              hypaV3Data: {
+              memoryData: {
                 summaries: [{ text: "summary", chatMemos: [], isImportant: false }],
                 categories: [{ id: "", name: "Unclassified" }],
                 lastSelectedSummaries: [],
@@ -97,13 +97,12 @@ describe("hypa modal summary toggle runtime smoke", () => {
           ],
         },
       ],
-      hypaV3: true,
-      hypav2: false,
+      memoryEnabled: true,
       hanuraiEnable: false,
       supaModelType: "none",
       memoryAlgorithmType: "hypaMemoryV3",
-      hypaV3PresetId: 0,
-      hypaV3Presets: [],
+      memoryPresetId: 0,
+      memoryPresets: [],
     } as never;
     selectedCharID.set(0);
     document.body.innerHTML = "";
@@ -119,20 +118,17 @@ describe("hypa modal summary toggle runtime smoke", () => {
     target = undefined;
   });
 
-  it("shows the HypaMemory toggle on Summary and removes it from Settings", async () => {
-    app = mount(MemoryPanel, {
-      target: target!,
-      props: { embedded: true },
-    });
+  it("shows the memory toggle on Summary and removes it from Settings", async () => {
+    app = mount(MemoryPanel, { target: target! });
     await flushUi();
 
-    expect(target?.textContent).toContain("Toggle HypaMemory");
+    expect(target?.textContent).toContain("Toggle Memory");
 
     const tabs = Array.from(target?.querySelectorAll(".ds-settings-tab") ?? []) as HTMLButtonElement[];
     tabs.find((tab) => tab.textContent?.includes("Settings"))?.click();
     await flushUi();
 
-    expect(target?.textContent).not.toContain("Toggle HypaMemory");
+    expect(target?.textContent).not.toContain("Toggle Memory");
     expect(target?.textContent).toContain("Per-character memory prompt override");
   });
 });

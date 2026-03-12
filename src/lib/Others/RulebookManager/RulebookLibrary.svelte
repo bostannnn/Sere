@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { DBState, openRulebookManager, ragProgressStore } from 'src/ts/stores.svelte';
+    import { DBState, ragProgressStore } from 'src/ts/stores.svelte';
     import { rulebookRag } from "../../../ts/process/rag/rag";
     import { rulebookStorage } from "../../../ts/process/rag/storage";
     import { selectMultipleFile } from "src/ts/util";
@@ -9,9 +9,6 @@
     import TextInput from "../../UI/GUI/TextInput.svelte";
     import Button from '../../UI/GUI/Button.svelte';
     import { createCardTiltController } from "../../UI/cardTilt";
-    import RulebookLibraryLegacyHeader from "./RulebookLibraryLegacyHeader.svelte";
-    import RulebookLibraryToolbar from "./RulebookLibraryToolbar.svelte";
-    import RulebookLibraryLegacySidebar from "./RulebookLibraryLegacySidebar.svelte";
     import RulebookLibraryBookCardDisplay from "./RulebookLibraryBookCardDisplay.svelte";
     import RulebookLibraryRightDrawer from "./RulebookLibraryRightDrawer.svelte";
     import RulebookLibraryEmptyState from "./RulebookLibraryEmptyState.svelte";
@@ -52,8 +49,6 @@
 
     interface Props {
         shellSearchQuery?: string;
-        onClose?: () => void;
-        useShellChrome?: boolean;
         isMobileShell?: boolean;
         rightSidebarOpen?: boolean;
         rightSidebarTab?: "library" | "settings";
@@ -64,8 +59,6 @@
 
     let {
         shellSearchQuery = $bindable(""),
-        onClose = () => openRulebookManager.set(false),
-        useShellChrome = false,
         isMobileShell = false,
         rightSidebarOpen = $bindable(true),
         rightSidebarTab = $bindable("library"),
@@ -234,11 +227,6 @@
     }
 
     $effect(() => {
-        if (!useShellChrome) {
-            registerShellActions(null);
-            return;
-        }
-
         // Re-register when filter state changes so shell topbar labels stay in sync.
         getFilterSnapshot();
 
@@ -413,40 +401,10 @@
 
 </script>
 
-<div
-    class="rag-dashboard"
-    class:rag-dashboard-shell={useShellChrome}
-    class:rag-dashboard-shell-mobile={useShellChrome && isMobileShell}
->
-    {#if !useShellChrome}
-        <RulebookLibraryLegacyHeader bind:shellSearchQuery={shellSearchQuery} onClose={onClose} />
-    {/if}
-
-    <div class="rag-dashboard-body" class:rag-dashboard-body-shell={useShellChrome}>
-        {#if !useShellChrome}
-            <RulebookLibraryLegacySidebar
-                systemTree={systemTree()}
-                {expandedSystems}
-                {selectedSystemFilter}
-                {selectedEditionFilter}
-                rulebookCount={rulebooks.length}
-                onToggleSystem={toggleSystem}
-                onSelectSystem={selectSystem}
-                onSelectEdition={selectEdition}
-                onClearFilters={clearFilters}
-            />
-        {/if}
-
-        <main class="rag-main-content panel-shell" class:rag-main-content-shell={useShellChrome}>
-            {#if !useShellChrome}
-                <RulebookLibraryToolbar
-                    filteredCount={filteredRulebooks.length}
-                    bind:viewMode={viewMode}
-                    onSelectFiles={selectFiles}
-                />
-            {/if}
-
-            <div class="rag-content-area list-shell" class:rag-content-area-shell={useShellChrome} class:is-grid={viewMode === 'grid'} class:is-list={viewMode === 'list'}>
+<div class="rag-dashboard rag-dashboard-shell" class:rag-dashboard-shell-mobile={isMobileShell}>
+    <div class="rag-dashboard-body rag-dashboard-body-shell">
+        <main class="rag-main-content panel-shell rag-main-content-shell">
+            <div class="rag-content-area list-shell rag-content-area-shell" class:is-grid={viewMode === 'grid'} class:is-list={viewMode === 'list'}>
                 {#each filteredRulebooks as book (book.id)}
                     <div
                         class="ds-settings-card panel-shell rag-book-card"
@@ -510,7 +468,7 @@
         </main>
     </div>
 
-    {#if useShellChrome && !isMobileShell}
+    {#if !isMobileShell}
         <RulebookLibraryRightDrawer
             rightSidebarOpen={rightSidebarOpen}
             bind:rightSidebarTab={rightSidebarTab}

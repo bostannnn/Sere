@@ -1129,11 +1129,6 @@ function createBaseV2(char:character) {
                             ? getCharacterMemoryPromptOverride(char)?.summarizationPrompt
                             : '',
                     },
-                    hypaV3PromptOverride: {
-                        summarizationPrompt: typeof getCharacterMemoryPromptOverride(char)?.summarizationPrompt === 'string'
-                            ? getCharacterMemoryPromptOverride(char)?.summarizationPrompt
-                            : '',
-                    },
                     virtualscript: '', //removed dude to security issue
                     largePortrait: char.largePortrait,
                     lorePlus: char.lorePlus,
@@ -1561,11 +1556,6 @@ export function createBaseV3(char:character){
                             ? getCharacterMemoryPromptOverride(char)?.summarizationPrompt
                             : '',
                     },
-                    hypaV3PromptOverride: {
-                        summarizationPrompt: typeof getCharacterMemoryPromptOverride(char)?.summarizationPrompt === 'string'
-                            ? getCharacterMemoryPromptOverride(char)?.summarizationPrompt
-                            : '',
-                    },
                     virtualscript: '', //removed dude to security issue
                     largePortrait: char.largePortrait,
                     lorePlus: char.lorePlus,
@@ -1665,6 +1655,7 @@ type CharacterCardV2Risu = {
                 memoryPromptOverride?:{
                     summarizationPrompt?: string
                 }
+                // Legacy import-only compatibility.
                 hypaV3PromptOverride?:{
                     summarizationPrompt?: string
                 }

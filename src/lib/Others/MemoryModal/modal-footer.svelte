@@ -56,7 +56,7 @@
 </script>
 
 <!-- Next Summarization Target -->
-<div class="hypa-footer-section">
+<div class="memory-footer-section">
   {#await getNextSummarizationTarget() then nextMessage}
     {#if nextMessage}
       {@const chatId =
@@ -65,22 +65,22 @@
           : nextMessage.chatId == null
             ? language.memoryModal.nextSummarizationNoMessageIdLabel
             : nextMessage.chatId}
-      <div class="hypa-footer-muted">
+      <div class="memory-footer-muted">
         {language.memoryModal.nextSummarizationLabel.replace("{0}", chatId)}
       </div>
 
       <textarea
-        class="hypa-footer-textarea control-field"
+        class="memory-footer-textarea control-field"
         readonly
         value={nextMessage.data}
       ></textarea>
     {:else}
-      <span class="hypa-footer-error"
+      <span class="memory-footer-error"
         >{language.memoryModal.nextSummarizationNoMessagesFoundLabel}</span
       >
     {/if}
   {:catch error}
-    <span class="hypa-footer-error"
+    <span class="memory-footer-error"
       >{language.memoryModal.nextSummarizationLoadingError.replace(
         "{0}",
         error.message
@@ -89,31 +89,31 @@
   {/await}
 </div>
 
-<div class="hypa-footer-section">
-  <div class="hypa-footer-muted">
+<div class="memory-footer-section">
+  <div class="memory-footer-muted">
     {language.memoryModal.summarizationConditionLabel}
   </div>
 
   <!-- No First Message -->
   {#if !getFirstMessage()}
-    <span class="hypa-footer-error"
+    <span class="memory-footer-error"
       >{language.memoryModal.emptySelectedFirstMessageLabel}</span
     >
   {/if}
 </div>
 
 <style>
-  .hypa-footer-section {
+  .memory-footer-section {
     margin-top: var(--ds-space-2);
   }
 
-  .hypa-footer-muted {
+  .memory-footer-muted {
     margin-bottom: var(--ds-space-2);
     color: var(--ds-text-secondary);
     font-size: var(--ds-font-size-sm);
   }
 
-  .hypa-footer-textarea.control-field {
+  .memory-footer-textarea.control-field {
     width: 100%;
     min-height: 10rem;
     resize: none;
@@ -127,25 +127,25 @@
     outline: none;
   }
 
-  .hypa-footer-textarea.control-field:focus {
+  .memory-footer-textarea.control-field:focus {
     border-color: var(--ds-border-strong);
   }
 
-  .hypa-footer-error {
+  .memory-footer-error {
     color: var(--ds-text-danger);
     font-size: var(--ds-font-size-sm);
   }
 
   @media (min-width: 640px) {
-    .hypa-footer-section {
+    .memory-footer-section {
       margin-top: var(--ds-space-4);
     }
 
-    .hypa-footer-muted {
+    .memory-footer-muted {
       margin-bottom: var(--ds-space-4);
     }
 
-    .hypa-footer-textarea.control-field {
+    .memory-footer-textarea.control-field {
       min-height: 14rem;
       padding: var(--ds-space-4);
     }

@@ -74,7 +74,6 @@ vi.mock(import("src/ts/stores.svelte"), async () => {
     bookmarkListOpen: writable(false),
     CharConfigSubMenu: writable(0),
     MobileGUI: writable(false),
-    memoryModalOpen: writable(false),
   };
 });
 

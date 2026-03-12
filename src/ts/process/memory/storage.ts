@@ -81,9 +81,9 @@ export function setChatMemoryData(
   data: SerializableMemoryData | undefined,
 ): void {
   if (!chat) return;
-  if (chat.memoryData === data && chat.hypaV3Data === data) return;
+  if (chat.memoryData === data && !("hypaV3Data" in chat)) return;
   chat.memoryData = data;
-  chat.hypaV3Data = data;
+  delete (chat as Record<string, unknown>).hypaV3Data;
 }
 
 export function getCharacterMemoryPromptOverride(
@@ -119,26 +119,21 @@ export function setCharacterMemoryPromptOverride(
   const currentPrompt = getCharacterMemoryPromptOverride(char)?.summarizationPrompt ?? "";
   const nextPrompt = normalizedValue?.summarizationPrompt ?? "";
   const memoryPrompt = char.memoryPromptOverride;
-  const legacyPrompt = char.hypaV3PromptOverride;
   const memoryNormalized =
     !!memoryPrompt &&
     typeof memoryPrompt === "object" &&
     typeof memoryPrompt.summarizationPrompt === "string";
-  const legacyNormalized =
-    !!legacyPrompt &&
-    typeof legacyPrompt === "object" &&
-    typeof legacyPrompt.summarizationPrompt === "string";
 
   if (
     currentPrompt === nextPrompt &&
-    memoryPrompt === legacyPrompt &&
-    (normalizedValue ? memoryNormalized && legacyNormalized : !memoryPrompt && !legacyPrompt)
+    !("hypaV3PromptOverride" in char) &&
+    (normalizedValue ? memoryNormalized : !memoryPrompt)
   ) {
     return;
   }
 
   char.memoryPromptOverride = normalizedValue;
-  char.hypaV3PromptOverride = normalizedValue;
+  delete (char as Record<string, unknown>).hypaV3PromptOverride;
 }
 
 export function getDbMemoryEnabled(
@@ -151,8 +146,9 @@ export function setDbMemoryEnabled(
   db: Pick<Database, "memoryEnabled" | "hypaV3">,
   enabled: boolean,
 ): void {
+  if (db.memoryEnabled === enabled && !("hypaV3" in db)) return;
   db.memoryEnabled = enabled;
-  db.hypaV3 = enabled;
+  delete (db as Record<string, unknown>).hypaV3;
 }
 
 export function getDbMemoryPresets(
@@ -172,7 +168,7 @@ export function setDbMemoryPresets(
       }))
     : [];
   db.memoryPresets = normalizedPresets;
-  db.hypaV3Presets = normalizedPresets;
+  delete (db as Record<string, unknown>).hypaV3Presets;
 }
 
 export function getDbMemoryPresetId(
@@ -185,8 +181,9 @@ export function setDbMemoryPresetId(
   db: Pick<Database, "memoryPresetId" | "hypaV3PresetId">,
   presetId: number,
 ): void {
+  if (db.memoryPresetId === presetId && !("hypaV3PresetId" in db)) return;
   db.memoryPresetId = presetId;
-  db.hypaV3PresetId = presetId;
+  delete (db as Record<string, unknown>).hypaV3PresetId;
 }
 
 export function getDbMemorySettings(
@@ -200,7 +197,7 @@ export function setDbMemorySettings(
   settings: MemorySettings,
 ): void {
   db.memorySettings = settings;
-  db.hypaV3Settings = settings;
+  delete (db as Record<string, unknown>).hypaV3Settings;
 }
 
 export function getDbMemoryDebug(
@@ -214,5 +211,5 @@ export function setDbMemoryDebug(
   debug: SummarizeDebugLog | undefined,
 ): void {
   db.memoryDebug = debug;
-  db.hypaV3Debug = debug;
+  delete (db as Record<string, unknown>).hypaV3Debug;
 }

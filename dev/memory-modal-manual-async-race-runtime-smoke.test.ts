@@ -100,7 +100,7 @@ vi.mock(import("src/lib/UI/GUI/TextAreaInput.svelte"), async () => ({
 }));
 
 import MemoryPanel from "src/lib/Others/MemoryPanel.svelte";
-import { DBState, memoryModalOpen, selectedCharID } from "src/ts/stores.svelte";
+import { DBState, selectedCharID } from "src/ts/stores.svelte";
 
 let app: Record<string, unknown> | undefined;
 let target: HTMLDivElement | undefined;
@@ -110,7 +110,7 @@ async function flushUi() {
   await Promise.resolve();
 }
 
-describe("hypa modal manual async race runtime smoke", () => {
+describe("memory modal manual async race runtime smoke", () => {
   beforeEach(() => {
     shared.fetchCalls.length = 0;
     shared.globalFetchMock.mockClear();
@@ -152,7 +152,6 @@ describe("hypa modal manual async race runtime smoke", () => {
         },
       ],
       hypaV3: true,
-      hypav2: false,
       hanuraiEnable: false,
       supaModelType: "none",
       memoryAlgorithmType: "hypaMemoryV3",
@@ -160,7 +159,6 @@ describe("hypa modal manual async race runtime smoke", () => {
       hypaV3Presets: [],
     } as never;
     selectedCharID.set(0);
-    memoryModalOpen.set(true);
 
     document.body.innerHTML = "";
     target = document.createElement("div");
@@ -185,10 +183,7 @@ describe("hypa modal manual async race runtime smoke", () => {
       }),
     );
 
-    app = mount(MemoryPanel, {
-      target: target!,
-      props: { embedded: true },
-    });
+    app = mount(MemoryPanel, { target: target! });
     await flushUi();
 
     const summarizeButton = target?.querySelector(".ds-memory-modal-manual-submit") as HTMLButtonElement | null;
@@ -230,81 +225,21 @@ describe("hypa modal manual async race runtime smoke", () => {
     await flushUi();
     await flushUi();
 
-    const chatAData = DBState.db.characters[0].chats[0].hypaV3Data as { summaries?: Array<{ text?: string }> };
-    const chatBData = DBState.db.characters[0].chats[1].hypaV3Data as { summaries?: Array<{ text?: string }>; lastManualDebug?: unknown };
+    const chatAData = DBState.db.characters[0].chats[0].memoryData as { summaries?: Array<{ text?: string }> };
+    const chatBData = DBState.db.characters[0].chats[1].memoryData as
+      | { summaries?: Array<{ text?: string }>; lastManualDebug?: unknown }
+      | undefined;
     expect(chatAData.summaries?.[0]?.text).toBe("summary-for-chat-a");
-    expect(chatBData.summaries?.length ?? 0).toBe(0);
-    expect(chatBData.lastManualDebug).toBeUndefined();
+    expect(chatBData).toBeUndefined();
+    expect("hypaV3Data" in DBState.db.characters[0].chats[0]).toBe(false);
     expect(target?.textContent).toContain("No summaries yet");
   });
 
-  it("keeps manual summarize writes scoped to request target when modal chat changes mid-request", async () => {
-    let resolveFetch:
-      | ((value: { ok: boolean; data: Record<string, unknown> }) => void)
-      | null = null;
-    shared.globalFetchMock.mockImplementationOnce(async () =>
-      await new Promise((resolve) => {
-        resolveFetch = resolve;
-      }),
-    );
-
-    app = mount(MemoryPanel, {
-      target: target!,
-      props: { embedded: false },
-    });
+  it("does not expose the removed standalone chat selector while requests are in flight", async () => {
+    app = mount(MemoryPanel, { target: target! });
     await flushUi();
 
-    const summarizeButton = target?.querySelector(".ds-memory-modal-manual-submit") as HTMLButtonElement | null;
-    const chatSelectValueInput = target?.querySelector(
-      ".ds-memory-modal-chat-select [data-testid='bindable-field-value']",
-    ) as HTMLInputElement | null;
-    expect(summarizeButton).not.toBeNull();
-    expect(chatSelectValueInput).not.toBeNull();
-
-    summarizeButton?.click();
-    await flushUi();
-
-    expect(shared.globalFetchMock).toHaveBeenCalledTimes(1);
-    const firstRequest = shared.globalFetchMock.mock.calls[0]?.[1] as { body?: { chatId?: string } } | undefined;
-    expect(firstRequest?.body?.chatId).toBe("chat-a");
-
-    chatSelectValueInput!.value = "1";
-    chatSelectValueInput!.dispatchEvent(new Event("change", { bubbles: true }));
-    await flushUi();
-
-    resolveFetch?.({
-      ok: true,
-      data: {
-        hypaV3Data: {
-          summaries: [{ text: "summary-for-chat-a", chatMemos: [], isImportant: false }],
-          categories: [{ id: "", name: "Unclassified" }],
-          lastSelectedSummaries: [],
-        },
-        debug: {
-          timestamp: Date.now(),
-          model: "test-model",
-          isResummarize: false,
-          prompt: "Prompt",
-          input: "Input",
-          formatted: [{ role: "user", content: "hello" }],
-          characterId: "char-embedded",
-          chatId: "chat-a",
-          start: 1,
-          end: 1,
-          source: "manual",
-          promptSource: "preset_or_default",
-        },
-      },
-    });
-    await flushUi();
-    await flushUi();
-
-    const chatAData = DBState.db.characters[0].chats[0].hypaV3Data as { summaries?: Array<{ text?: string }> };
-    const chatBData = DBState.db.characters[0].chats[1].hypaV3Data as { summaries?: Array<{ text?: string }>; lastManualDebug?: unknown };
-    expect(chatAData.summaries?.[0]?.text).toBe("summary-for-chat-a");
-    expect(chatBData.summaries?.length ?? 0).toBe(0);
-    expect(chatBData.lastManualDebug).toBeUndefined();
-    expect(target?.textContent).toContain("No summaries yet");
+    expect(target?.querySelector(".ds-memory-modal-chat-select")).toBeNull();
   });
 
   it("persists manual summarize result into live character store after characters array replacement", async () => {
@@ -317,10 +252,7 @@ describe("hypa modal manual async race runtime smoke", () => {
       }),
     );
 
-    app = mount(MemoryPanel, {
-      target: target!,
-      props: { embedded: true },
-    });
+    app = mount(MemoryPanel, { target: target! });
     await flushUi();
 
     const summarizeButton = target?.querySelector(".ds-memory-modal-manual-submit") as HTMLButtonElement | null;
@@ -332,12 +264,12 @@ describe("hypa modal manual async race runtime smoke", () => {
       ...character,
       chats: character.chats.map((chat) => ({
         ...chat,
-        hypaV3Data: chat.hypaV3Data
+        memoryData: (chat.memoryData ?? chat.hypaV3Data)
           ? {
-              ...chat.hypaV3Data,
-              summaries: [...(chat.hypaV3Data.summaries ?? [])],
-              categories: [...(chat.hypaV3Data.categories ?? [])],
-              lastSelectedSummaries: [...(chat.hypaV3Data.lastSelectedSummaries ?? [])],
+              ...(chat.memoryData ?? chat.hypaV3Data)!,
+              summaries: [...((chat.memoryData ?? chat.hypaV3Data)?.summaries ?? [])],
+              categories: [...((chat.memoryData ?? chat.hypaV3Data)?.categories ?? [])],
+              lastSelectedSummaries: [...((chat.memoryData ?? chat.hypaV3Data)?.lastSelectedSummaries ?? [])],
             }
           : undefined,
       })),
@@ -371,12 +303,13 @@ describe("hypa modal manual async race runtime smoke", () => {
     await flushUi();
     await flushUi();
 
-    const chatAData = DBState.db.characters[0].chats[0].hypaV3Data as {
+    const chatAData = DBState.db.characters[0].chats[0].memoryData as {
       summaries?: Array<{ text?: string }>;
       lastManualDebug?: { chatId?: string };
     };
     expect(chatAData.summaries?.[0]?.text).toBe("summary-after-store-replace");
     expect(chatAData.lastManualDebug?.chatId).toBe("chat-a");
+    expect("hypaV3Data" in DBState.db.characters[0].chats[0]).toBe(false);
     expect(target?.textContent).not.toContain("No summaries yet");
   });
 });

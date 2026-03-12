@@ -2119,21 +2119,6 @@ body {
   margin-top: var(--ds-space-2);
 }
 
-.ds-memory-modal-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 40;
-  padding: var(--ds-space-1);
-  background: color-mix(in srgb, var(--surface-overlay) 64%, transparent);
-}
-
-.ds-memory-modal-wrap {
-  display: flex;
-  justify-content: center;
-  width: 100%;
-  height: 100%;
-}
-
 .ds-memory-sidebar-root {
   position: relative;
   width: 100%;
@@ -2197,39 +2182,6 @@ body {
   flex-direction: column;
   gap: var(--ds-space-2);
   min-height: 0;
-}
-
-.ds-memory-modal-chat-row {
-  display: flex;
-  align-items: center;
-  gap: var(--ds-space-2);
-  margin-bottom: var(--ds-space-2);
-}
-
-.ds-memory-modal-chat-label {
-  color: var(--ds-text-secondary);
-  font-size: var(--ds-font-size-sm);
-}
-
-.ds-memory-modal-chat-select {
-  flex: 1 1 auto;
-  min-width: 0;
-  padding: var(--ds-space-2) var(--ds-space-3);
-  border: 1px solid var(--ds-border-subtle);
-  border-radius: var(--ds-radius-md);
-  background: var(--ds-surface-3);
-  color: var(--ds-text-primary);
-  font-size: var(--ds-font-size-sm);
-}
-
-.ds-memory-modal-chat-select:focus {
-  outline: none;
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--ds-border-strong) 50%, transparent);
-}
-
-.ds-memory-modal-chat-option {
-  background: var(--ds-surface-3);
-  color: var(--ds-text-primary);
 }
 
 .ds-memory-modal-scroll {
@@ -2438,10 +2390,6 @@ body {
   background: transparent;
 }
 
-.ds-memory-modal-chat-row.ds-memory-modal-chat-row-embedded {
-  margin-bottom: 0;
-}
-
 .ds-memory-modal-manual-row {
   display: flex;
   flex-direction: column;
@@ -2566,10 +2514,6 @@ body {
 }
 
 @media (min-width: 640px) {
-  .ds-memory-modal-overlay {
-    padding: var(--ds-space-2);
-  }
-
   .ds-memory-modal-window {
     padding: var(--ds-space-6);
   }

@@ -73,9 +73,6 @@ const gameStateEditorFile = "/Users/andrewbostan/Documents/RisuAII/src/lib/SideB
 const rulebookLibraryFile = "/Users/andrewbostan/Documents/RisuAII/src/lib/Others/RulebookManager/RulebookLibrary.svelte";
 const rulebookLibraryCssFile = "/Users/andrewbostan/Documents/RisuAII/src/lib/Others/RulebookManager/RulebookLibrary.css";
 const rulebookLibrarySidebarFile = "/Users/andrewbostan/Documents/RisuAII/src/lib/Others/RulebookManager/RulebookLibrarySidebar.svelte";
-const rulebookLibraryHeaderFile = "/Users/andrewbostan/Documents/RisuAII/src/lib/Others/RulebookManager/RulebookLibraryLegacyHeader.svelte";
-const rulebookLibraryToolbarFile = "/Users/andrewbostan/Documents/RisuAII/src/lib/Others/RulebookManager/RulebookLibraryToolbar.svelte";
-const rulebookLibraryLegacySidebarFile = "/Users/andrewbostan/Documents/RisuAII/src/lib/Others/RulebookManager/RulebookLibraryLegacySidebar.svelte";
 const rulebookLibraryBookCardFile = "/Users/andrewbostan/Documents/RisuAII/src/lib/Others/RulebookManager/RulebookLibraryBookCardDisplay.svelte";
 const rulebookLibraryRightDrawerFile = "/Users/andrewbostan/Documents/RisuAII/src/lib/Others/RulebookManager/RulebookLibraryRightDrawer.svelte";
 const rulebookLibraryEmptyStateFile = "/Users/andrewbostan/Documents/RisuAII/src/lib/Others/RulebookManager/RulebookLibraryEmptyState.svelte";
@@ -136,9 +133,6 @@ const gameStateEditorContent = readFile(gameStateEditorFile);
 const rulebookLibraryContent = [
   readFile(rulebookLibraryFile),
   readFile(rulebookLibraryCssFile),
-  readFile(rulebookLibraryHeaderFile),
-  readFile(rulebookLibraryToolbarFile),
-  readFile(rulebookLibraryLegacySidebarFile),
   readFile(rulebookLibraryBookCardFile),
   readFile(rulebookLibraryRightDrawerFile),
   readFile(rulebookLibraryEmptyStateFile),
@@ -306,11 +300,12 @@ ensureIncludes(stageContent, stageFile, "<HomeCharacterDirectory bind:shellSearc
 ensureIncludes(stageContent, stageFile, "workspace === \"settings\"", failures);
 ensureIncludes(stageContent, stageFile, "<Settings />", failures);
 ensureIncludes(stageContent, stageFile, "workspace === \"library\"", failures);
-ensureIncludes(stageContent, stageFile, "useShellChrome={true}", failures);
 ensureIncludes(stageContent, stageFile, "bind:rightSidebarOpen={librarySidebarOpen}", failures);
 ensureIncludes(stageContent, stageFile, "bind:rightSidebarTab={librarySidebarTab}", failures);
 ensureIncludes(stageContent, stageFile, "bind:viewMode={libraryViewMode}", failures);
 ensureIncludes(stageContent, stageFile, "registerShellActions={onRegisterLibraryShellActions}", failures);
+ensureNotIncludes(stageContent, stageFile, "useShellChrome=", failures);
+ensureNotIncludes(stageContent, stageFile, "onClose={onOpenHome}", failures);
 ensureIncludes(stageContent, stageFile, "{#key workspace}", failures);
 ensureNotIncludes(stageContent, stageFile, "<GlobalLauncher", failures);
 ensureIncludes(stageContent, stageFile, ".ds-app-v2-stage-view :global(.rag-dashboard) {", failures);
@@ -559,7 +554,6 @@ ensureIncludes(gameStateEditorContent, gameStateEditorFile, "title=\"Remove vari
 ensureIncludes(gameStateEditorContent, gameStateEditorFile, "ariaLabel={`Remove ${key}`}", failures);
 ensureIncludes(gameStateEditorContent, gameStateEditorFile, "title=\"Add variable\" ariaLabel=\"Add variable\"", failures);
 ensureIncludes(rulebookLibraryContent, rulebookLibraryFile, "class=\"rag-empty-state panel-shell empty-state\"", failures);
-ensureIncludes(rulebookLibraryContent, rulebookLibraryFile, "<input class=\"control-field\" type=\"text\" bind:value={shellSearchQuery}", failures);
 ensureIncludes(rulebookLibraryContent, rulebookLibraryFile, "class=\"rag-badge control-chip system\"", failures);
 ensureIncludes(rulebookLibraryContent, rulebookLibraryFile, "class=\"rag-badge control-chip edition\"", failures);
 ensureIncludes(rulebookLibraryContent, rulebookLibraryFile, "class=\"rag-badge control-chip chunks\"", failures);
@@ -570,15 +564,7 @@ ensureIncludes(rulebookLibraryContent, rulebookLibraryFile, "data-testid=\"ruleb
 ensureIncludes(rulebookLibrarySidebarContent, rulebookLibrarySidebarFile, "class=\"rag-system-list list-shell\"", failures);
 ensureIncludes(rulebookLibrarySidebarContent, rulebookLibrarySidebarFile, "class=\"rag-tree-toggle icon-btn icon-btn--sm\"", failures);
 ensureIncludes(rulebookLibrarySidebarContent, rulebookLibrarySidebarFile, "aria-expanded={expandedSystems.has(system)}", failures);
-ensureIncludes(rulebookLibraryContent, rulebookLibraryFile, "class=\"rag-toolbar-right action-rail\"", failures);
-ensureIncludes(rulebookLibraryContent, rulebookLibraryFile, "class=\"rag-view-toggle seg-tabs\"", failures);
-ensureIncludes(rulebookLibraryContent, rulebookLibraryFile, "className={`rag-view-toggle-btn seg-tab", failures);
-ensureIncludes(rulebookLibraryContent, rulebookLibraryFile, "ariaLabel=\"Grid view\"", failures);
-ensureIncludes(rulebookLibraryContent, rulebookLibraryFile, "ariaLabel=\"List view\"", failures);
-ensureIncludes(rulebookLibraryContent, rulebookLibraryFile, "ariaPressed={viewMode === 'grid'}", failures);
-ensureIncludes(rulebookLibraryContent, rulebookLibraryFile, "ariaPressed={viewMode === 'list'}", failures);
-ensureIncludes(rulebookLibraryContent, rulebookLibraryFile, "id=\"rulebook-library-close\"", failures);
-ensureIncludes(rulebookLibraryContent, rulebookLibraryFile, "ariaLabel=\"Close rulebook library\"", failures);
+ensureIncludes(rulebookLibrarySidebarContent, rulebookLibrarySidebarFile, "<div class=\"rag-sidebar-shell is-drawer\">", failures);
 ensureIncludes(rulebookLibraryContent, rulebookLibraryFile, "class=\"ds-settings-card panel-shell rag-book-card\"", failures);
 ensureIncludes(rulebookLibraryContent, rulebookLibraryFile, "class=\"rag-book-actions action-rail\"", failures);
 ensureIncludes(rulebookLibraryContent, rulebookLibraryFile, "class=\"rag-staging-drawer panel-shell panel-shell--overlay\"", failures);
@@ -590,7 +576,10 @@ ensureIncludes(rulebookLibraryContent, rulebookLibraryFile, "setSystemFilter: se
 ensureIncludes(rulebookLibraryContent, rulebookLibraryFile, "setEditionFilter: selectEdition", failures);
 ensureIncludes(rulebookLibraryContent, rulebookLibraryFile, "clearFilters,", failures);
 ensureIncludes(rulebookLibraryContent, rulebookLibraryFile, "getFilterSnapshot,", failures);
-ensureIncludes(rulebookLibraryContent, rulebookLibraryFile, "{#if useShellChrome && !isMobileShell}", failures);
+ensureIncludes(rulebookLibraryContent, rulebookLibraryFile, "{#if !isMobileShell}", failures);
+ensureNotIncludes(rulebookLibraryContent, rulebookLibraryFile, "useShellChrome", failures);
+ensureNotIncludes(rulebookLibraryContent, rulebookLibraryFile, "RulebookLibraryLegacy", failures);
+ensureNotIncludes(rulebookLibraryContent, rulebookLibraryFile, "RulebookLibraryToolbar", failures);
 ensureIncludes(textInputContent, textInputFile, "class={`ds-ui-input control-field ds-ui-input--text", failures);
 ensureIncludes(numberInputContent, numberInputFile, "class={`ds-ui-input control-field ds-ui-input--number", failures);
 ensureIncludes(selectInputContent, selectInputFile, "class={`ds-ui-input control-field ds-ui-select", failures);
@@ -672,6 +661,8 @@ ensureIncludes(requestLogsViewerContent, requestLogsViewerFile, ".request-log-co
 ensureIncludes(requestLogsViewerContent, requestLogsViewerFile, ".alert-requestlog-empty.empty-state {", failures);
 ensureIncludes(requestLogsViewerContent, requestLogsViewerFile, ".alert-requestlog-list.list-shell {", failures);
 ensureIncludes(requestLogsViewerContent, requestLogsViewerFile, ".alert-requestlog-card.panel-shell {", failures);
+ensureIncludes(hypaModalContent, hypaModalFile, "class=\"ds-memory-sidebar-root\"", failures);
+ensureIncludes(hypaModalContent, hypaModalFile, "class=\"ds-memory-sidebar-wrap\"", failures);
 ensureIncludes(hypaModalContent, hypaModalFile, "class=\"ds-memory-modal-convert-card panel-shell\"", failures);
 ensureIncludes(hypaModalContent, hypaModalFile, "class=\"ds-memory-modal-convert-button control-chip\"", failures);
 ensureIncludes(hypaModalContent, hypaModalFile, "class=\"ds-memory-modal-empty-note empty-state\"", failures);
@@ -682,6 +673,10 @@ ensureIncludes(hypaModalContent, hypaModalFile, "class=\"ds-memory-modal-manual-
 ensureIncludes(hypaModalContent, hypaModalFile, "class=\"ds-memory-modal-debug-textarea control-field\"", failures);
 ensureIncludes(hypaModalContent, hypaModalFile, "import SettingsSubTabs from \"src/lib/Setting/SettingsSubTabs.svelte\";", failures);
 ensureIncludes(hypaModalContent, hypaModalFile, "className=\"ds-memory-tabs\"", failures);
+ensureNotIncludes(hypaModalContent, hypaModalFile, "embedded?:", failures);
+ensureNotIncludes(hypaModalContent, hypaModalFile, "embedded =", failures);
+ensureNotIncludes(hypaModalContent, hypaModalFile, "{embedded}", failures);
+ensureNotIncludes(hypaModalContent, hypaModalFile, "ds-memory-modal-chat-select", failures);
 ensureNotRegex(
   hypaModalContent,
   hypaModalFile,
@@ -696,25 +691,25 @@ ensureNotRegex(
   failures,
   "search nav buttons must remain keyboard reachable",
 );
-ensureIncludes(hypaModalHeaderContent, hypaModalHeaderFile, "<div class=\"hypa-modal-actions action-rail\">", failures);
-ensureIncludes(hypaModalHeaderContent, hypaModalHeaderFile, "class=\"hypa-modal-icon-btn icon-btn icon-btn--md\"", failures);
-ensureIncludes(hypaModalHeaderContent, hypaModalHeaderFile, "class=\"hypa-modal-dropdown-panel panel-shell\"", failures);
-ensureIncludes(hypaModalHeaderContent, hypaModalHeaderFile, "<div class=\"hypa-modal-dropdown-actions action-rail\">", failures);
-ensureIncludes(hypaModalHeaderContent, hypaModalHeaderFile, ".hypa-modal-actions.action-rail {", failures);
-ensureIncludes(hypaModalHeaderContent, hypaModalHeaderFile, ".hypa-modal-icon-btn.icon-btn.icon-btn--md {", failures);
-ensureIncludes(hypaModalHeaderContent, hypaModalHeaderFile, ".hypa-modal-dropdown-panel.panel-shell {", failures);
-ensureIncludes(hypaModalHeaderContent, hypaModalHeaderFile, ".hypa-modal-dropdown-actions.action-rail {", failures);
-ensureIncludes(hypaBulkEditActionsContent, hypaBulkEditActionsFile, "class=\"hypa-bulk-shell panel-shell\"", failures);
-ensureIncludes(hypaBulkEditActionsContent, hypaBulkEditActionsFile, "class=\"hypa-bulk-row action-rail\"", failures);
-ensureIncludes(hypaBulkEditActionsContent, hypaBulkEditActionsFile, "class=\"hypa-bulk-right action-rail\"", failures);
-ensureIncludes(hypaBulkEditActionsContent, hypaBulkEditActionsFile, "class=\"hypa-bulk-input-row action-rail\"", failures);
-ensureIncludes(hypaBulkEditActionsContent, hypaBulkEditActionsFile, "class=\"hypa-bulk-select control-field\"", failures);
-ensureIncludes(hypaBulkEditActionsContent, hypaBulkEditActionsFile, "class=\"hypa-bulk-input control-field\"", failures);
-ensureIncludes(hypaBulkEditActionsContent, hypaBulkEditActionsFile, ".hypa-bulk-shell.panel-shell {", failures);
-ensureIncludes(hypaBulkEditActionsContent, hypaBulkEditActionsFile, ".hypa-bulk-row.action-rail {", failures);
-ensureIncludes(hypaBulkEditActionsContent, hypaBulkEditActionsFile, ".hypa-bulk-right.action-rail,", failures);
-ensureIncludes(hypaBulkEditActionsContent, hypaBulkEditActionsFile, ".hypa-bulk-select.control-field {", failures);
-ensureIncludes(hypaBulkEditActionsContent, hypaBulkEditActionsFile, ".hypa-bulk-input.control-field {", failures);
+ensureIncludes(hypaModalHeaderContent, hypaModalHeaderFile, "<div class=\"memory-header-actions action-rail\">", failures);
+ensureIncludes(hypaModalHeaderContent, hypaModalHeaderFile, "class=\"memory-header-icon-btn icon-btn icon-btn--md\"", failures);
+ensureIncludes(hypaModalHeaderContent, hypaModalHeaderFile, "class=\"memory-header-menu-panel panel-shell\"", failures);
+ensureIncludes(hypaModalHeaderContent, hypaModalHeaderFile, "<div class=\"memory-header-menu-actions action-rail\">", failures);
+ensureIncludes(hypaModalHeaderContent, hypaModalHeaderFile, ".memory-header-actions.action-rail {", failures);
+ensureIncludes(hypaModalHeaderContent, hypaModalHeaderFile, ".memory-header-icon-btn.icon-btn.icon-btn--md {", failures);
+ensureIncludes(hypaModalHeaderContent, hypaModalHeaderFile, ".memory-header-menu-panel.panel-shell {", failures);
+ensureIncludes(hypaModalHeaderContent, hypaModalHeaderFile, ".memory-header-menu-actions.action-rail {", failures);
+ensureIncludes(hypaBulkEditActionsContent, hypaBulkEditActionsFile, "class=\"memory-bulk-shell panel-shell\"", failures);
+ensureIncludes(hypaBulkEditActionsContent, hypaBulkEditActionsFile, "class=\"memory-bulk-row action-rail\"", failures);
+ensureIncludes(hypaBulkEditActionsContent, hypaBulkEditActionsFile, "class=\"memory-bulk-right action-rail\"", failures);
+ensureIncludes(hypaBulkEditActionsContent, hypaBulkEditActionsFile, "class=\"memory-bulk-input-row action-rail\"", failures);
+ensureIncludes(hypaBulkEditActionsContent, hypaBulkEditActionsFile, "class=\"memory-bulk-select control-field\"", failures);
+ensureIncludes(hypaBulkEditActionsContent, hypaBulkEditActionsFile, "class=\"memory-bulk-input control-field\"", failures);
+ensureIncludes(hypaBulkEditActionsContent, hypaBulkEditActionsFile, ".memory-bulk-shell.panel-shell {", failures);
+ensureIncludes(hypaBulkEditActionsContent, hypaBulkEditActionsFile, ".memory-bulk-row.action-rail {", failures);
+ensureIncludes(hypaBulkEditActionsContent, hypaBulkEditActionsFile, ".memory-bulk-right.action-rail,", failures);
+ensureIncludes(hypaBulkEditActionsContent, hypaBulkEditActionsFile, ".memory-bulk-select.control-field {", failures);
+ensureIncludes(hypaBulkEditActionsContent, hypaBulkEditActionsFile, ".memory-bulk-input.control-field {", failures);
 ensureNotIncludes(hypaModalContent, hypaModalFile, "<ModalFooter", failures);
 ensureIncludes(hypaTagManagerContent, hypaTagManagerFile, "class=\"ds-memory-tag-modal panel-shell\"", failures);
 ensureIncludes(hypaTagManagerContent, hypaTagManagerFile, "class=\"ds-memory-tag-close icon-btn icon-btn--sm\"", failures);
@@ -727,23 +722,23 @@ ensureIncludes(hypaTagManagerContent, hypaTagManagerFile, "class=\"ds-memory-tag
 ensureIncludes(hypaTagManagerContent, hypaTagManagerFile, "class=\"ds-memory-tag-icon-btn ds-memory-tag-icon-btn-edit icon-btn icon-btn--sm\"", failures);
 ensureIncludes(hypaTagManagerContent, hypaTagManagerFile, "class=\"ds-memory-tag-icon-btn ds-memory-tag-icon-btn-delete icon-btn icon-btn--sm\"", failures);
 ensureIncludes(hypaTagManagerContent, hypaTagManagerFile, "class=\"ds-memory-tag-empty empty-state\"", failures);
-ensureIncludes(hypaSummaryItemContent, hypaSummaryItemFile, "class=\"hypa-summary-root panel-shell\"", failures);
-ensureIncludes(hypaSummaryItemContent, hypaSummaryItemFile, "class=\"hypa-summary-metric-chip control-chip\"", failures);
-ensureIncludes(hypaSummaryItemContent, hypaSummaryItemFile, "class=\"hypa-summary-row-inline action-rail\"", failures);
-ensureIncludes(hypaSummaryItemContent, hypaSummaryItemFile, "class=\"hypa-summary-icon-button icon-btn icon-btn--sm\"", failures);
-ensureIncludes(hypaSummaryItemContent, hypaSummaryItemFile, "class=\"hypa-summary-icon-button hypa-summary-danger-hover icon-btn icon-btn--sm\"", failures);
-ensureIncludes(hypaSummaryItemContent, hypaSummaryItemFile, "class=\"hypa-summary-icon-button hypa-summary-accent-hover icon-btn icon-btn--sm\"", failures);
-ensureIncludes(hypaSummaryItemContent, hypaSummaryItemFile, "class=\"hypa-summary-toggle-button control-chip\"", failures);
-ensureIncludes(hypaSummaryItemContent, hypaSummaryItemFile, "class=\"hypa-summary-textarea hypa-summary-textarea-focus control-field\"", failures);
-ensureIncludes(hypaSummaryItemContent, hypaSummaryItemFile, "class=\"hypa-summary-textarea control-field\"", failures);
-ensureIncludes(hypaSummaryItemContent, hypaSummaryItemFile, "class=\"hypa-summary-chatmemo-button control-chip\"", failures);
-ensureIncludes(hypaSummaryItemContent, hypaSummaryItemFile, ".hypa-summary-root.panel-shell {", failures);
-ensureIncludes(hypaSummaryItemContent, hypaSummaryItemFile, ".hypa-summary-metric-chip.control-chip {", failures);
-ensureIncludes(hypaSummaryItemContent, hypaSummaryItemFile, ".hypa-summary-icon-button.icon-btn.icon-btn--sm {", failures);
-ensureIncludes(hypaSummaryItemContent, hypaSummaryItemFile, ".hypa-summary-toggle-button.control-chip {", failures);
-ensureIncludes(hypaSummaryItemContent, hypaSummaryItemFile, ".hypa-summary-textarea.control-field {", failures);
-ensureIncludes(hypaSummaryItemContent, hypaSummaryItemFile, ".hypa-summary-textarea-focus.control-field:focus {", failures);
-ensureIncludes(hypaSummaryItemContent, hypaSummaryItemFile, ".hypa-summary-chatmemo-button.control-chip {", failures);
+ensureIncludes(hypaSummaryItemContent, hypaSummaryItemFile, "class=\"memory-summary-root panel-shell\"", failures);
+ensureIncludes(hypaSummaryItemContent, hypaSummaryItemFile, "class=\"memory-summary-metric-chip control-chip\"", failures);
+ensureIncludes(hypaSummaryItemContent, hypaSummaryItemFile, "class=\"memory-summary-row-inline action-rail\"", failures);
+ensureIncludes(hypaSummaryItemContent, hypaSummaryItemFile, "class=\"memory-summary-icon-button icon-btn icon-btn--sm\"", failures);
+ensureIncludes(hypaSummaryItemContent, hypaSummaryItemFile, "class=\"memory-summary-icon-button memory-summary-danger-hover icon-btn icon-btn--sm\"", failures);
+ensureIncludes(hypaSummaryItemContent, hypaSummaryItemFile, "class=\"memory-summary-icon-button memory-summary-accent-hover icon-btn icon-btn--sm\"", failures);
+ensureIncludes(hypaSummaryItemContent, hypaSummaryItemFile, "class=\"memory-summary-toggle-button control-chip\"", failures);
+ensureIncludes(hypaSummaryItemContent, hypaSummaryItemFile, "class=\"memory-summary-textarea memory-summary-textarea-focus control-field\"", failures);
+ensureIncludes(hypaSummaryItemContent, hypaSummaryItemFile, "class=\"memory-summary-textarea control-field\"", failures);
+ensureIncludes(hypaSummaryItemContent, hypaSummaryItemFile, "class=\"memory-summary-chatmemo-button control-chip\"", failures);
+ensureIncludes(hypaSummaryItemContent, hypaSummaryItemFile, ".memory-summary-root.panel-shell {", failures);
+ensureIncludes(hypaSummaryItemContent, hypaSummaryItemFile, ".memory-summary-metric-chip.control-chip {", failures);
+ensureIncludes(hypaSummaryItemContent, hypaSummaryItemFile, ".memory-summary-icon-button.icon-btn.icon-btn--sm {", failures);
+ensureIncludes(hypaSummaryItemContent, hypaSummaryItemFile, ".memory-summary-toggle-button.control-chip {", failures);
+ensureIncludes(hypaSummaryItemContent, hypaSummaryItemFile, ".memory-summary-textarea.control-field {", failures);
+ensureIncludes(hypaSummaryItemContent, hypaSummaryItemFile, ".memory-summary-textarea-focus.control-field:focus {", failures);
+ensureIncludes(hypaSummaryItemContent, hypaSummaryItemFile, ".memory-summary-chatmemo-button.control-chip {", failures);
 ensureIncludes(stylesContent, stylesFile, ".ds-memory-tag-modal.panel-shell {", failures);
 ensureIncludes(stylesContent, stylesFile, ".ds-memory-tag-close.icon-btn.icon-btn--sm {", failures);
 ensureIncludes(stylesContent, stylesFile, ".ds-memory-tag-add-row.action-rail {", failures);

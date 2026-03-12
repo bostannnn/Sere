@@ -263,24 +263,24 @@
 </script>
 
 <div
-  class="hypa-summary-root panel-shell"
-  class:hypa-summary-root-selected={isSelected()}
+  class="memory-summary-root panel-shell"
+  class:memory-summary-root-selected={isSelected()}
 >
   <!-- Original Summary Header -->
-  <div class="hypa-summary-row-between">
+  <div class="memory-summary-row-between">
     <!-- Summary Number / Metrics Container -->
-    <div class="hypa-summary-row-inline">
+    <div class="memory-summary-row-inline">
       <!-- Bulk Edit Checkbox -->
       {#if bulkEditState?.isEnabled}
         <input
           type="checkbox"
-          class="hypa-summary-checkbox"
+          class="memory-summary-checkbox"
           checked={isSelected()}
           onchange={() => onToggleSummarySelection?.(summaryIndex)}
         />
       {/if}
 
-      <span class="hypa-summary-label"
+      <span class="memory-summary-label"
         >{language.memoryModal.summaryNumberLabel.replace(
           "{0}",
           (summaryIndex + 1).toString()
@@ -288,31 +288,31 @@
       >
 
       {#if filterSelected && memoryData.metrics}
-        <div class="hypa-summary-chip-wrap-tight">
+        <div class="memory-summary-chip-wrap-tight">
           {#if memoryData.metrics.lastImportantSummaries.includes(summaryIndex)}
             <span
-              class="hypa-summary-metric-chip control-chip"
+              class="memory-summary-metric-chip control-chip"
             >
               Important
             </span>
           {/if}
           {#if memoryData.metrics.lastRecentSummaries.includes(summaryIndex)}
             <span
-              class="hypa-summary-metric-chip control-chip"
+              class="memory-summary-metric-chip control-chip"
             >
               Recent
             </span>
           {/if}
           {#if memoryData.metrics.lastSimilarSummaries.includes(summaryIndex)}
             <span
-              class="hypa-summary-metric-chip control-chip"
+              class="memory-summary-metric-chip control-chip"
             >
               Similar
             </span>
           {/if}
           {#if memoryData.metrics.lastRandomSummaries.includes(summaryIndex)}
             <span
-              class="hypa-summary-metric-chip control-chip"
+              class="memory-summary-metric-chip control-chip"
             >
               Random
             </span>
@@ -322,50 +322,50 @@
     </div>
 
     <!-- Buttons Container -->
-    <div class="hypa-summary-row-inline action-rail">
+    <div class="memory-summary-row-inline action-rail">
       <!-- Reroll Button -->
       <button
         type="button"
-        class="hypa-summary-icon-button icon-btn icon-btn--sm"
+        class="memory-summary-icon-button icon-btn icon-btn--sm"
         title="Reroll summary"
         aria-label="Reroll summary"
         tabindex="-1"
         disabled={isOrphan()}
         onclick={async () => await toggleReroll()}
       >
-        <RefreshCw class="hypa-summary-icon" />
+        <RefreshCw class="memory-summary-icon" />
       </button>
 
       <!-- Delete This Button -->
       <button
         type="button"
-        class="hypa-summary-icon-button hypa-summary-danger-hover icon-btn icon-btn--sm"
+        class="memory-summary-icon-button memory-summary-danger-hover icon-btn icon-btn--sm"
         title="Delete summary"
         aria-label="Delete summary"
         tabindex="-1"
         onclick={async () => await deleteThis()}
       >
-        <Trash2Icon class="hypa-summary-icon" />
+        <Trash2Icon class="memory-summary-icon" />
       </button>
 
       <!-- Delete After Button -->
       <button
         type="button"
-        class="hypa-summary-icon-button hypa-summary-danger-hover icon-btn icon-btn--sm"
+        class="memory-summary-icon-button memory-summary-danger-hover icon-btn icon-btn--sm"
         title="Delete summaries after this"
         aria-label="Delete summaries after this"
         tabindex="-1"
         onclick={async () => await deleteAfter()}
       >
-        <ScissorsLineDashed class="hypa-summary-icon" />
+        <ScissorsLineDashed class="memory-summary-icon" />
       </button>
     </div>
   </div>
 
   <!-- Original Summary -->
-  <div class="hypa-summary-section">
+  <div class="memory-summary-section">
     <textarea
-      class="hypa-summary-textarea hypa-summary-textarea-focus control-field"
+      class="memory-summary-textarea memory-summary-textarea-focus control-field"
       bind:this={summaryItemState.originalRef}
       value={summaryText}
       oninput={(event) => {
@@ -381,43 +381,43 @@
 
   {#if rerolled}
     <!-- Rerolled Summary Header -->
-    <div class="hypa-summary-section">
-      <div class="hypa-summary-row-between">
-        <span class="hypa-summary-label"
+    <div class="memory-summary-section">
+      <div class="memory-summary-row-between">
+        <span class="memory-summary-label"
           >{language.memoryModal.rerolledSummaryLabel}</span
         >
-        <div class="hypa-summary-row-inline action-rail">
+        <div class="memory-summary-row-inline action-rail">
           <!-- Cancel Button -->
           <button
             type="button"
-            class="hypa-summary-icon-button icon-btn icon-btn--sm"
+            class="memory-summary-icon-button icon-btn icon-btn--sm"
             title="Cancel rerolled summary"
             aria-label="Cancel rerolled summary"
             tabindex="-1"
             onclick={cancelRerolled}
           >
-            <XIcon class="hypa-summary-icon" />
+            <XIcon class="memory-summary-icon" />
           </button>
 
           <!-- Apply Button -->
           <button
             type="button"
-            class="hypa-summary-icon-button hypa-summary-accent-hover icon-btn icon-btn--sm"
+            class="memory-summary-icon-button memory-summary-accent-hover icon-btn icon-btn--sm"
             title="Apply rerolled summary"
             aria-label="Apply rerolled summary"
             tabindex="-1"
             onclick={applyRerolled}
           >
-            <CheckIcon class="hypa-summary-icon" />
+            <CheckIcon class="memory-summary-icon" />
           </button>
         </div>
       </div>
     </div>
 
     <!-- Rerolled Summary -->
-    <div class="hypa-summary-section">
+    <div class="memory-summary-section">
       <textarea
-        class="hypa-summary-textarea hypa-summary-textarea-focus control-field"
+        class="memory-summary-textarea memory-summary-textarea-focus control-field"
         tabindex="-1"
         bind:value={rerolled}
       >
@@ -426,18 +426,18 @@
   {/if}
 
   <!-- Connected Messages Header -->
-  <div class="hypa-summary-section">
-    <div class="hypa-summary-row-between">
+  <div class="memory-summary-section">
+    <div class="memory-summary-row-between">
       <button
         type="button"
-        class="hypa-summary-toggle-button control-chip"
+        class="memory-summary-toggle-button control-chip"
         tabindex="-1"
         onclick={toggleSummaryCollapse}
       >
         {#if isCollapsed()}
-          <ChevronDownIcon class="hypa-summary-icon" />
+          <ChevronDownIcon class="memory-summary-icon" />
         {:else}
-          <ChevronUpIcon class="hypa-summary-icon" />
+          <ChevronUpIcon class="memory-summary-icon" />
         {/if}
         <span>{language.memoryModal.connectedMessageCountLabel.replace(
           "{0}",
@@ -449,13 +449,13 @@
 
   {#if !isCollapsed()}
     <!-- Connected Message IDs -->
-    <div class="hypa-summary-chatmemo-wrap">
+    <div class="memory-summary-chatmemo-wrap">
       {#key summary.chatMemos.length}
         {#each summary.chatMemos as chatMemo, memoIndex (chatMemo)}
           <button
             type="button"
-            class="hypa-summary-chatmemo-button control-chip"
-            class:hypa-summary-chatmemo-button-active={isMessageExpanded(chatMemo)}
+            class="memory-summary-chatmemo-button control-chip"
+            class:memory-summary-chatmemo-button-active={isMessageExpanded(chatMemo)}
             tabindex="-1"
             bind:this={summaryItemState.chatMemoRefs[memoIndex]}
             onclick={() => toggleExpandMessage(chatMemo)}
@@ -468,11 +468,11 @@
 
     {#if expandedMessageState?.summaryIndex === summaryIndex}
       <!-- Expanded Message -->
-      <div class="hypa-summary-section">
+      <div class="memory-summary-section">
         {#await getMessageFromChatMemo(expandedMessageState.selectedChatMemo) then expandedMessage}
           {#if expandedMessage}
             <!-- Role -->
-            <div class="hypa-summary-subtitle">
+            <div class="memory-summary-subtitle">
               {language.memoryModal.connectedMessageRoleLabel.replace(
                 "{0}",
                 expandedMessage.role
@@ -481,18 +481,18 @@
 
             <!-- Content -->
             <textarea
-              class="hypa-summary-textarea control-field"
+              class="memory-summary-textarea control-field"
               readonly
               tabindex="-1"
               value={expandedMessage.data}
             ></textarea>
           {:else}
-            <span class="hypa-summary-error-text"
+            <span class="memory-summary-error-text"
               >{language.memoryModal.connectedMessageNotFoundLabel}</span
             >
           {/if}
         {:catch error}
-          <span class="hypa-summary-error-text"
+          <span class="memory-summary-error-text"
             >{language.memoryModal.connectedMessageLoadingError.replace(
               "{0}",
               error.message
@@ -506,7 +506,7 @@
 </div>
 
 <style>
-  .hypa-summary-root.panel-shell {
+  .memory-summary-root.panel-shell {
     display: flex;
     flex-direction: column;
     padding: var(--ds-space-2);
@@ -515,34 +515,34 @@
     background: color-mix(in srgb, var(--ds-surface-2) 80%, transparent);
   }
 
-  .hypa-summary-root-selected {
+  .memory-summary-root-selected {
     border-color: var(--ds-border-strong);
   }
 
-  .hypa-summary-row-between {
+  .memory-summary-row-between {
     display: flex;
     align-items: center;
     justify-content: space-between;
   }
 
-  .hypa-summary-row-inline {
+  .memory-summary-row-inline {
     display: flex;
     align-items: center;
     gap: var(--ds-space-2);
   }
 
-  .hypa-summary-label {
+  .memory-summary-label {
     color: var(--ds-text-secondary);
     font-size: var(--ds-font-size-sm);
   }
 
-  .hypa-summary-chip-wrap-tight {
+  .memory-summary-chip-wrap-tight {
     display: flex;
     flex-wrap: wrap;
     gap: var(--ds-space-1);
   }
 
-  .hypa-summary-metric-chip.control-chip {
+  .memory-summary-metric-chip.control-chip {
     padding: 2px 6px;
     border-radius: var(--ds-radius-pill);
     background: var(--ds-surface-3);
@@ -551,7 +551,7 @@
     white-space: nowrap;
   }
 
-  .hypa-summary-checkbox {
+  .memory-summary-checkbox {
     width: 1rem;
     height: 1rem;
     border-radius: var(--ds-radius-sm);
@@ -562,31 +562,31 @@
     outline: none;
   }
 
-  .hypa-summary-checkbox:focus {
+  .memory-summary-checkbox:focus {
     box-shadow: 0 0 0 2px color-mix(in srgb, var(--ds-border-strong) 45%, transparent);
   }
 
-  .hypa-summary-icon-button.icon-btn.icon-btn--sm {
+  .memory-summary-icon-button.icon-btn.icon-btn--sm {
     padding: var(--ds-space-2);
     color: var(--ds-text-secondary);
     transition: color var(--ds-motion-fast) var(--ds-ease-standard),
       background-color var(--ds-motion-fast) var(--ds-ease-standard);
   }
 
-  .hypa-summary-icon-button.icon-btn.icon-btn--sm:hover {
+  .memory-summary-icon-button.icon-btn.icon-btn--sm:hover {
     color: var(--ds-text-primary);
   }
 
-  :global(.hypa-summary-icon) {
+  :global(.memory-summary-icon) {
     width: 1rem;
     height: 1rem;
   }
 
-  .hypa-summary-section {
+  .memory-summary-section {
     margin-top: var(--ds-space-2);
   }
 
-  .hypa-summary-textarea.control-field {
+  .memory-summary-textarea.control-field {
     width: 100%;
     min-height: 10rem;
     padding: var(--ds-space-2);
@@ -598,18 +598,18 @@
     transition: border-color var(--ds-motion-fast) var(--ds-ease-standard);
   }
 
-  .hypa-summary-textarea-focus.control-field:focus {
+  .memory-summary-textarea-focus.control-field:focus {
     outline: none;
     box-shadow: 0 0 0 2px color-mix(in srgb, var(--ds-border-strong) 45%, transparent);
   }
 
-  .hypa-summary-subtitle {
+  .memory-summary-subtitle {
     margin-bottom: var(--ds-space-2);
     color: var(--ds-text-secondary);
     font-size: var(--ds-font-size-sm);
   }
 
-  .hypa-summary-toggle-button.control-chip {
+  .memory-summary-toggle-button.control-chip {
     display: flex;
     align-items: center;
     gap: var(--ds-space-2);
@@ -621,19 +621,19 @@
     transition: color var(--ds-motion-fast) var(--ds-ease-standard);
   }
 
-  .hypa-summary-toggle-button.control-chip:hover {
+  .memory-summary-toggle-button.control-chip:hover {
     color: var(--ds-text-primary);
     background: color-mix(in srgb, var(--ds-surface-active) 80%, transparent);
   }
 
-  .hypa-summary-chatmemo-wrap {
+  .memory-summary-chatmemo-wrap {
     display: flex;
     flex-wrap: wrap;
     gap: var(--ds-space-2);
     margin-top: var(--ds-space-2);
   }
 
-  .hypa-summary-chatmemo-button.control-chip {
+  .memory-summary-chatmemo-button.control-chip {
     padding: var(--ds-space-2) var(--ds-space-3);
     border-radius: var(--ds-radius-pill);
     background: var(--ds-surface-3);
@@ -643,41 +643,41 @@
       box-shadow var(--ds-motion-fast) var(--ds-ease-standard);
   }
 
-  .hypa-summary-chatmemo-button.control-chip:hover {
+  .memory-summary-chatmemo-button.control-chip:hover {
     background: var(--ds-surface-active);
   }
 
-  .hypa-summary-chatmemo-button.hypa-summary-chatmemo-button-active.control-chip {
+  .memory-summary-chatmemo-button.memory-summary-chatmemo-button-active.control-chip {
     box-shadow: 0 0 0 2px var(--ds-border-strong);
   }
 
-  .hypa-summary-danger-hover:hover {
+  .memory-summary-danger-hover:hover {
     color: var(--ds-text-danger);
   }
 
-  .hypa-summary-accent-hover:hover {
+  .memory-summary-accent-hover:hover {
     color: var(--ds-border-strong);
   }
 
-  .hypa-summary-error-text {
+  .memory-summary-error-text {
     color: var(--ds-text-danger);
     font-size: var(--ds-font-size-sm);
   }
 
   @media (min-width: 640px) {
-    .hypa-summary-root.panel-shell {
+    .memory-summary-root.panel-shell {
       padding: var(--ds-space-4);
     }
 
-    .hypa-summary-section {
+    .memory-summary-section {
       margin-top: var(--ds-space-4);
     }
 
-    .hypa-summary-subtitle {
+    .memory-summary-subtitle {
       margin-bottom: var(--ds-space-4);
     }
 
-    .hypa-summary-textarea.control-field {
+    .memory-summary-textarea.control-field {
       min-height: 14rem;
       padding: var(--ds-space-4);
     }

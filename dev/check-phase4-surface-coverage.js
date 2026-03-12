@@ -145,10 +145,10 @@ const PHASE4_UNCOVERED_MATRIX = [
     file: "src/lib/Others/MemoryModal/modal-footer.svelte",
     classification: "migrate",
     owner: "ui-shell-contract",
-    rationale: "Hypa modal footer keeps control-field semantics for summarization target preview and explicit error-state typography.",
+    rationale: "Memory footer keeps control-field semantics for summarization target preview and explicit error-state typography.",
     requiredPatterns: [
-      "class=\"hypa-footer-textarea control-field\"",
-      "class=\"hypa-footer-error\"",
+      "class=\"memory-footer-textarea control-field\"",
+      "class=\"memory-footer-error\"",
     ],
   },
   {
@@ -514,12 +514,6 @@ const PHASE4_UNCOVERED_MATRIX = [
     classification: "migrate",
     owner: "ui-shell-contract",
     rationale: "Branches overlay is an interactive alert surface layered outside the main shell contracts and must be tracked directly.",
-  },
-  {
-    file: "src/lib/Others/AlertComp/AlertHypaV2Modal.svelte",
-    classification: "migrate",
-    owner: "ui-shell-contract",
-    rationale: "Legacy Hypa alert modal remains an interactive surface and needs an explicit migration matrix entry.",
   },
   {
     file: "src/lib/Others/AlertComp/AlertRequestDataModal.svelte",

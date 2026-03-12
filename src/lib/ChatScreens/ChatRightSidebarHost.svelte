@@ -253,7 +253,7 @@
                         handleRightPanelTabKeydown(event, "memory")
                     }}
                 >
-                    <MemoryPanel embedded />
+                    <MemoryPanel />
                 </div>
             {:else}
             <div

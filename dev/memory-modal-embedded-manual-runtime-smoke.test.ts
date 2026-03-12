@@ -11,7 +11,7 @@ const shared = vi.hoisted(() => {
     return {
       ok: true,
       data: {
-        hypaV3Data: {
+        memoryData: {
           summaries: [],
           categories: [{ id: "", name: "Unclassified" }],
           lastSelectedSummaries: [],
@@ -103,7 +103,7 @@ vi.mock(import("src/lib/UI/GUI/TextAreaInput.svelte"), async () => ({
 }));
 
 import MemoryPanel from "src/lib/Others/MemoryPanel.svelte";
-import { DBState, memoryModalOpen, selectedCharID } from "src/ts/stores.svelte";
+import { DBState, selectedCharID } from "src/ts/stores.svelte";
 
 let app: Record<string, unknown> | undefined;
 let target: HTMLDivElement | undefined;
@@ -113,7 +113,7 @@ async function flushUi() {
   await Promise.resolve();
 }
 
-describe("hypa modal embedded manual summarize runtime smoke", () => {
+describe("memory modal embedded manual summarize runtime smoke", () => {
   beforeEach(() => {
     shared.fetchCalls.length = 0;
     shared.globalFetchMock.mockClear();
@@ -126,7 +126,7 @@ describe("hypa modal embedded manual summarize runtime smoke", () => {
           name: "Embedded Character",
           supaMemory: true,
           chatPage: 0,
-          hypaV3PromptOverride: {
+          memoryPromptOverride: {
             summarizationPrompt: "",
             reSummarizationPrompt: "",
           },
@@ -144,16 +144,14 @@ describe("hypa modal embedded manual summarize runtime smoke", () => {
           ],
         },
       ],
-      hypaV3: true,
-      hypav2: false,
+      memoryEnabled: true,
       hanuraiEnable: false,
       supaModelType: "none",
       memoryAlgorithmType: "hypaMemoryV3",
-      hypaV3PresetId: 0,
-      hypaV3Presets: [],
+      memoryPresetId: 0,
+      memoryPresets: [],
     } as never;
     selectedCharID.set(0);
-    memoryModalOpen.set(true);
 
     document.body.innerHTML = "";
     target = document.createElement("div");
@@ -169,10 +167,7 @@ describe("hypa modal embedded manual summarize runtime smoke", () => {
   });
 
   it("uses active chatPage chatId for manual summarize while embedded and mounted", async () => {
-    app = mount(MemoryPanel, {
-      target: target!,
-      props: { embedded: true },
-    });
+    app = mount(MemoryPanel, { target: target! });
     await flushUi();
 
     const summarizeButton = target?.querySelector(".ds-memory-modal-manual-submit") as HTMLButtonElement | null;
@@ -195,43 +190,15 @@ describe("hypa modal embedded manual summarize runtime smoke", () => {
     expect(shared.fetchCalls[1]?.body.chatId).toBe("chat-b");
   });
 
-  it("uses selected modal chat in non-embedded mode manual summarize", async () => {
-    app = mount(MemoryPanel, {
-      target: target!,
-      props: { embedded: false },
-    });
+  it("does not expose the removed standalone chat selector", async () => {
+    app = mount(MemoryPanel, { target: target! });
     await flushUi();
 
-    const summarizeButton = target?.querySelector(".ds-memory-modal-manual-submit") as HTMLButtonElement | null;
-    expect(summarizeButton).not.toBeNull();
-
-    summarizeButton?.click();
-    await flushUi();
-
-    expect(shared.globalFetchMock).toHaveBeenCalledTimes(1);
-    const firstRequest = shared.globalFetchMock.mock.calls[0]?.[1] as { body?: { chatId?: string } } | undefined;
-    expect(firstRequest?.body?.chatId).toBe("chat-a");
-
-    const chatSelectValueInput = target?.querySelector(
-      ".ds-memory-modal-chat-select [data-testid='bindable-field-value']",
-    ) as HTMLInputElement | null;
-    expect(chatSelectValueInput).not.toBeNull();
-    chatSelectValueInput!.value = "1";
-    chatSelectValueInput!.dispatchEvent(new Event("change", { bubbles: true }));
-    await flushUi();
-
-    summarizeButton?.click();
-    await flushUi();
-
-    expect(shared.globalFetchMock).toHaveBeenCalledTimes(2);
-    expect(shared.fetchCalls[1]?.body.chatId).toBe("chat-b");
+    expect(target?.querySelector(".ds-memory-modal-chat-select")).toBeNull();
   });
 
   it("renders inline range validation error for invalid manual summarize range", async () => {
-    app = mount(MemoryPanel, {
-      target: target!,
-      props: { embedded: true },
-    });
+    app = mount(MemoryPanel, { target: target! });
     await flushUi();
 
     const startInput = target?.querySelector("#memory-manual-range-start") as HTMLInputElement | null;
@@ -254,10 +221,7 @@ describe("hypa modal embedded manual summarize runtime smoke", () => {
   });
 
   it("clears manual feedback when active chat scope changes", async () => {
-    app = mount(MemoryPanel, {
-      target: target!,
-      props: { embedded: true },
-    });
+    app = mount(MemoryPanel, { target: target! });
     await flushUi();
 
     const startInput = target?.querySelector("#memory-manual-range-start") as HTMLInputElement | null;
@@ -283,10 +247,7 @@ describe("hypa modal embedded manual summarize runtime smoke", () => {
   });
 
   it("renders summary/settings/log tabs and settings prompt override without legacy title", async () => {
-    app = mount(MemoryPanel, {
-      target: target!,
-      props: { embedded: true },
-    });
+    app = mount(MemoryPanel, { target: target! });
     await flushUi();
 
     expect(target?.textContent).not.toContain("Memory");
@@ -321,7 +282,7 @@ describe("hypa modal embedded manual summarize runtime smoke", () => {
         {
           ...DBState.db.characters[0],
           chaId: "char-a",
-          hypaV3PromptOverride: {
+          memoryPromptOverride: {
             summarizationPrompt: "TRACKER_A",
             reSummarizationPrompt: "",
           },
@@ -330,7 +291,7 @@ describe("hypa modal embedded manual summarize runtime smoke", () => {
               id: "chat-a",
               name: "Chat A",
               message: [{ role: "user", data: "hello", chatId: "a1" }],
-              hypaV3Data: {
+              memoryData: {
                 summaries: [],
                 categories: [{ id: "", name: "Unclassified" }],
                 lastSelectedSummaries: [],
@@ -343,7 +304,7 @@ describe("hypa modal embedded manual summarize runtime smoke", () => {
           ...DBState.db.characters[0],
           chaId: "char-c",
           name: "Character C",
-          hypaV3PromptOverride: {
+          memoryPromptOverride: {
             summarizationPrompt: "TRACKER_C",
             reSummarizationPrompt: "",
           },
@@ -352,7 +313,7 @@ describe("hypa modal embedded manual summarize runtime smoke", () => {
               id: "chat-c",
               name: "Chat C",
               message: [{ role: "user", data: "hola", chatId: "c1" }],
-              hypaV3Data: {
+              memoryData: {
                 summaries: [],
                 categories: [{ id: "", name: "Unclassified" }],
                 lastSelectedSummaries: [],
@@ -367,10 +328,7 @@ describe("hypa modal embedded manual summarize runtime smoke", () => {
     shared.fetchCalls.length = 0;
     shared.globalFetchMock.mockClear();
 
-    app = mount(MemoryPanel, {
-      target: target!,
-      props: { embedded: true },
-    });
+    app = mount(MemoryPanel, { target: target! });
     await flushUi();
 
     const tabs = Array.from(target?.querySelectorAll(".ds-settings-tab") ?? []) as HTMLButtonElement[];
@@ -409,10 +367,7 @@ describe("hypa modal embedded manual summarize runtime smoke", () => {
   });
 
   it("uses provided range and shows scoped log without legacy runtime rows", async () => {
-    app = mount(MemoryPanel, {
-      target: target!,
-      props: { embedded: true },
-    });
+    app = mount(MemoryPanel, { target: target! });
     await flushUi();
 
     const startInput = target?.querySelector("#memory-manual-range-start") as HTMLInputElement | null;
