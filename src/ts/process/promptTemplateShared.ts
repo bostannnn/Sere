@@ -1,10 +1,6 @@
 export const MEMORY_PROMPT_TAG = "Past Events Summary";
 
-export function normalizeTemplateRange<T>(
-  items: T[],
-  rangeStart?: number,
-  rangeEnd?: number | "end",
-): T[] {
+export function normalizeTemplateRange(items, rangeStart, rangeEnd) {
   const source = Array.isArray(items) ? items : [];
   let start = Number.isFinite(Number(rangeStart)) ? Number(rangeStart) : 0;
   let end = rangeEnd === "end"
@@ -33,16 +29,13 @@ export function normalizeTemplateRange<T>(
   return source.slice(start, end);
 }
 
-export function hasTemplateRangeConfig(
-  rangeStart?: number,
-  rangeEnd?: number | "end",
-): boolean {
+export function hasTemplateRangeConfig(rangeStart, rangeEnd) {
   return Number.isFinite(Number(rangeStart))
     || rangeEnd === "end"
     || Number.isFinite(Number(rangeEnd));
 }
 
-export function renderPromptMemoryContent(summaryItems: string[]): string {
+export function renderPromptMemoryContent(summaryItems) {
   const summaries = Array.isArray(summaryItems)
     ? summaryItems.filter((item) => typeof item === "string" && item.trim().length > 0)
     : [];

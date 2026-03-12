@@ -41,6 +41,12 @@ import { convertInlineImagesToInlays } from "./inlineInlays";
 import { syncGameStateFromServer, updateGameStateFromMessage } from "./gameStateSync";
 import { ensureGenerationMessageTarget } from "./generationMessageTarget";
 import { tryServerMemoryMerge } from "./memorySync";
+import {
+    getPlainPromptLabel,
+    markRecentUserCachePoints,
+    systemizePromptChats,
+    trimPromptChats,
+} from "./promptPostProcess";
 import * as promptTemplateShared from "./promptTemplateShared";
 import type { RagResult, RulebookMetadata } from "./rag/types";
 const processLog = (..._args: unknown[]) => {};
@@ -831,7 +837,7 @@ export async function sendChat(chatProcessIndex = -1,arg:{
                     let chats = normalizeTemplateRange(unformated.chats, card.rangeStart, card.rangeEnd)
 
                     if(usingPromptTemplate && DBState.db.promptSettings.sendChatAsSystem && (!card.chatAsOriginalOnSystem)){
-                        chats = systemizeChat(chats)
+                        chats = systemizePromptChats(chats)
                     }
                     await tokenizeChatArray(chats)
                     break
@@ -1266,20 +1272,6 @@ export async function sendChat(chatProcessIndex = -1,arg:{
         }
         promptBlocks.push({ label, role, content })
     }
-    function getPlainLabel(type2?: string){
-        switch(type2){
-            case 'main':
-                return 'Main Prompt'
-            case 'globalNote':
-                return 'Global Note'
-            case 'jailbreak':
-                return 'Jailbreak'
-            case 'normal':
-                return 'Plain Prompt'
-            default:
-                return 'Plain Prompt'
-        }
-    }
 
     // RAG Rulebook Retrieval
     if (currentChar.ragSettings?.enabled && currentChar.ragSettings.enabledRulebooks?.length > 0) {
@@ -1515,7 +1507,7 @@ export async function sendChat(chatProcessIndex = -1,arg:{
                         pushPromptInfoBody(prompt.role, prompt.content, promptBodyformatedForChatStore)
                     }
 
-                    addPromptBlock(getPlainLabel(card.type === 'plain' ? card.type2 : card.type), prompt.role, prompt.content)
+                    addPromptBlock(getPlainPromptLabel(card.type === 'plain' ? card.type2 : card.type), prompt.role, prompt.content)
                     pushPrompts([prompt])
                     break
                 }
@@ -1533,7 +1525,7 @@ export async function sendChat(chatProcessIndex = -1,arg:{
                         break
                     }
                     if(usingPromptTemplate && DBState.db.promptSettings.sendChatAsSystem && (!card.chatAsOriginalOnSystem)){
-                        chats = systemizeChat(chats)
+                        chats = systemizePromptChats(chats)
                     }
                     for(const item of chats){
                         addPromptBlock(`Chat History (${card.rangeStart}..${card.rangeEnd})`, item.role, item.content)
@@ -1541,18 +1533,7 @@ export async function sendChat(chatProcessIndex = -1,arg:{
                     pushPrompts(chats)
 
                     if(DBState.db.automaticCachePoint && !hasCachePoint){
-                        let pointer = formated.length - 1
-                        let depthRemaining = 3
-                        while(pointer >= 0){
-                            if(depthRemaining === 0){
-                                break
-                            }
-                            if(formated[pointer].role === 'user'){
-                                formated[pointer].cachePoint = true
-                                depthRemaining--
-                            }
-                            pointer--
-                        }
+                        markRecentUserCachePoints(formated, 3)
                     }
                     break
                 }
@@ -1627,16 +1608,10 @@ export async function sendChat(chatProcessIndex = -1,arg:{
     }
 
 
-    formated = formated.map((v) => {
-        v.content = v.content.trim()
-        return v
-    })
+    formated = trimPromptChats(formated)
 
     if(DBState.db.promptInfoInsideChat && DBState.db.promptTextInfoInsideChat){
-        promptBodyformatedForChatStore = promptBodyformatedForChatStore.map((v) => {
-            v.content = v.content.trim()
-            return v
-        })
+        promptBodyformatedForChatStore = trimPromptChats(promptBodyformatedForChatStore)
     }
 
 
@@ -2358,22 +2333,4 @@ export async function sendChat(chatProcessIndex = -1,arg:{
 
     await flushServerChatSnapshot()
     return true
-}
-
-function systemizeChat(chat:OpenAIChat[]){
-    for(let i=0;i<chat.length;i++){
-        if(chat[i].role === 'user' || chat[i].role === 'assistant'){
-            const attr = chat[i].attr ?? []
-            if(chat[i].name?.startsWith('example_')){
-                chat[i].content = chat[i].name + ': ' + chat[i].content
-            }
-            else if(!attr.includes('nameAdded')){
-                chat[i].content = chat[i].role + ': ' + chat[i].content
-            }
-            chat[i].role = 'system'
-            delete chat[i].memo
-            delete chat[i].name
-        }
-    }
-    return chat
 }

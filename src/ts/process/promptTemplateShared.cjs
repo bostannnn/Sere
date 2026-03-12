@@ -1,46 +1,10 @@
-const MEMORY_PROMPT_TAG = "Past Events Summary";
+const fs = require("node:fs");
+const path = require("node:path");
+const vm = require("node:vm");
 
-function normalizeTemplateRange(items, rangeStart, rangeEnd) {
-    const source = Array.isArray(items) ? items : [];
-    let start = Number.isFinite(Number(rangeStart)) ? Number(rangeStart) : 0;
-    let end = rangeEnd === "end"
-        ? source.length
-        : (Number.isFinite(Number(rangeEnd)) ? Number(rangeEnd) : source.length);
-
-    if (start === -1000) {
-        start = 0;
-        end = source.length;
-    }
-    if (start < 0) {
-        start = source.length + start;
-        if (start < 0) {
-            start = 0;
-        }
-    }
-    if (end < 0) {
-        end = source.length + end;
-        if (end < 0) {
-            end = 0;
-        }
-    }
-    if (start >= end) {
-        return [];
-    }
-    return source.slice(start, end);
-}
-
-function hasTemplateRangeConfig(rangeStart, rangeEnd) {
-    return Number.isFinite(Number(rangeStart))
-        || rangeEnd === "end"
-        || Number.isFinite(Number(rangeEnd));
-}
-
-function renderPromptMemoryContent(summaryItems) {
-    const summaries = Array.isArray(summaryItems)
-        ? summaryItems.filter((item) => typeof item === "string" && item.trim().length > 0)
-        : [];
-    return `<${MEMORY_PROMPT_TAG}>\n${summaries.join("\n\n")}\n</${MEMORY_PROMPT_TAG}>`;
-}
+const sourcePath = path.join(__dirname, "promptTemplateShared.ts");
+const sourceText = fs.readFileSync(sourcePath, "utf8");
+const wrappedSource = `${sourceText.replace(/^export\s+/gm, "")}
 
 module.exports = {
     MEMORY_PROMPT_TAG,
@@ -48,3 +12,15 @@ module.exports = {
     normalizeTemplateRange,
     renderPromptMemoryContent,
 };
+`;
+
+const sandbox = {
+    module: { exports: {} },
+    exports: {},
+};
+
+vm.runInNewContext(wrappedSource, sandbox, {
+    filename: sourcePath,
+});
+
+module.exports = sandbox.module.exports;
