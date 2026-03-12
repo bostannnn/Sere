@@ -118,7 +118,6 @@ export const advancedSettingsItems: SettingItem[] = [
     },
 
     // More Toggles
-    { id: 'adv.remPunc', type: 'check', labelKey: 'removePunctuationHypa', bindKey: 'removePunctuationHypa', helpKey: 'removePunctuationHypa', classes: 'ds-settings-renderer-offset-md' },
     { id: 'adv.devTools', type: 'check', labelKey: 'enableDevTools', bindKey: 'enableDevTools', classes: 'ds-settings-renderer-offset-md' },
     { id: 'adv.scrollToActive', type: 'check', labelKey: 'enableScrollToActiveChar', bindKey: 'enableScrollToActiveChar', helpKey: 'enableScrollToActiveChar', classes: 'ds-settings-renderer-offset-md' },
 

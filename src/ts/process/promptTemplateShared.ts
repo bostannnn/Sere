@@ -1,4 +1,5 @@
 export const MEMORY_PROMPT_TAG = "Past Events Summary";
+export const MEMORY_MESSAGE_MEMO = "memory";
 
 export function normalizeTemplateRange(items, rangeStart, rangeEnd) {
   const source = Array.isArray(items) ? items : [];
@@ -40,4 +41,43 @@ export function renderPromptMemoryContent(summaryItems) {
     ? summaryItems.filter((item) => typeof item === "string" && item.trim().length > 0)
     : [];
   return `<${MEMORY_PROMPT_TAG}>\n${summaries.join("\n\n")}\n</${MEMORY_PROMPT_TAG}>`;
+}
+
+export function resolveMemoryTemplateMessages(sourceMessages, summaryItems, rangeStart, rangeEnd) {
+  const source = Array.isArray(sourceMessages)
+    ? sourceMessages.filter((item) => item && typeof item === "object")
+    : [];
+  if (source.length === 0) {
+    return {
+      messages: [],
+      skippedReason: "no_memory_data",
+    };
+  }
+
+  const summaries = Array.isArray(summaryItems)
+    ? summaryItems.filter((item) => typeof item === "string" && item.trim().length > 0)
+    : [];
+  if (!hasTemplateRangeConfig(rangeStart, rangeEnd) || summaries.length === 0) {
+    return {
+      messages: source,
+    };
+  }
+
+  const slicedSummaries = normalizeTemplateRange(summaries, rangeStart, rangeEnd);
+  if (slicedSummaries.length === 0) {
+    return {
+      messages: [],
+      skippedReason: "memory_range_empty",
+    };
+  }
+
+  const firstMessage = source[0] ?? {};
+  return {
+    messages: [{
+      ...firstMessage,
+      role: typeof firstMessage.role === "string" ? firstMessage.role : "system",
+      content: renderPromptMemoryContent(slicedSummaries),
+      memo: MEMORY_MESSAGE_MEMO,
+    }],
+  };
 }

@@ -7,7 +7,7 @@ const shared = vi.hoisted(() => ({
   },
 }));
 
-function createHypaPresetSettings() {
+function createMemoryPresetSettings() {
   return {
     summarizationPrompt: "summary prompt",
     reSummarizationPrompt: "resummary prompt",
@@ -76,11 +76,11 @@ function createDbState() {
       key: "",
       model: "",
     },
-    hypaV3PresetId: 0,
-    hypaV3Presets: [
+    memoryPresetId: 0,
+    memoryPresets: [
       {
         name: "Default Preset",
-        settings: createHypaPresetSettings(),
+        settings: createMemoryPresetSettings(),
       },
     ],
     promptTemplate: [],
@@ -150,7 +150,7 @@ vi.mock(import("src/ts/process/memory/memory"), () => ({
   createMemoryPreset: (name = "Generated", settings: Record<string, unknown> = {}) => ({
     name,
     settings: {
-      ...createHypaPresetSettings(),
+      ...createMemoryPresetSettings(),
       ...settings,
     },
   }),
@@ -278,7 +278,7 @@ describe("other bots settings runtime smoke", () => {
     expect(charSelect?.value).toBe("char-visible-1");
   });
 
-  it("keeps runtime memory settings aligned to the selected preset after legacy preset migration", async () => {
+  it("keeps runtime memory settings aligned to the selected preset", async () => {
     const target = document.createElement("div");
     document.body.appendChild(target);
     app = mount(OtherBotSettings, { target });
@@ -294,10 +294,9 @@ describe("other bots settings runtime smoke", () => {
     const presetSettings = shared.dbState.db.memoryPresets?.[0]?.settings as Record<string, unknown> | undefined;
     expect(presetSettings?.periodicSummarizationInterval).toBe(24);
     expect(presetSettings?.maxChatsPerSummary).toBe(24);
-    expect("hypaV3Settings" in shared.dbState.db).toBe(false);
   });
 
-  it("writes the summarization prompt into the selected memory preset without recreating legacy mirrors", async () => {
+  it("writes the summarization prompt into the selected memory preset", async () => {
     const target = document.createElement("div");
     document.body.appendChild(target);
     app = mount(OtherBotSettings, { target });
@@ -312,8 +311,6 @@ describe("other bots settings runtime smoke", () => {
 
     const presetSettings = shared.dbState.db.memoryPresets?.[0]?.settings as Record<string, unknown> | undefined;
     expect(presetSettings?.summarizationPrompt).toBe("Prompt from settings UI");
-    expect("hypaV3Presets" in shared.dbState.db).toBe(false);
-    expect("hypaV3Settings" in shared.dbState.db).toBe(false);
   });
 
   it("keeps temporary empty number edits stable while slider updates commit through the selected preset", async () => {

@@ -246,9 +246,6 @@ export function setDatabase(data:Database){
     if(checkNullish(data.voicevoxUrl)){
         data.voicevoxUrl = ''
     }
-    if(checkNullish(data.supaMemoryPrompt)){
-        data.supaMemoryPrompt = ''
-    }
     if(checkNullish(data.showMemoryLimit)){
         data.showMemoryLimit = false
     }
@@ -384,7 +381,6 @@ export function setDatabase(data:Database){
     data.openrouterFallback ??= true
     data.openrouterMiddleOut ??= false
     data.openrouterAllowReasoningOnlyForDeepSeekV32Speciale ??= false
-    data.removePunctuationHypa ??= true
     data.memoryLimitThickness ??= 1
     data.modules ??= []
     data.enabledModules ??= []
@@ -493,7 +489,6 @@ export function setDatabase(data:Database){
     data.reasoningEffort ??= 0
     const normalizedMemoryPresets = data.memoryPresets?.length ? data.memoryPresets : [
         createMemoryPreset("Default", {
-            summarizationPrompt: data.supaMemoryPrompt ? data.supaMemoryPrompt : "",
             ...(data.memorySettings ?? {})
         })
     ]
@@ -522,13 +517,6 @@ export function setDatabase(data:Database){
     setDbMemoryDebug(data, data.memoryDebug)
     setDbMemoryEnabled(data, data.memoryEnabled ?? true)
     data.supaModelType = 'none'
-    const legacyMemoryConfig = data as unknown as Record<string, unknown>
-    delete legacyMemoryConfig.hypaMemoryKey
-    delete legacyMemoryConfig.hypaMemory
-    delete legacyMemoryConfig.memoryAlgorithmType
-    delete legacyMemoryConfig.hanuraiEnable
-    delete legacyMemoryConfig.hanuraiSplit
-    delete legacyMemoryConfig.hanuraiTokens
     data.showDeprecatedTriggerV1 ??= false
     data.showDeprecatedTriggerV2 ??= false
     data.returnCSSError ??= true

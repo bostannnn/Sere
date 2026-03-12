@@ -23,7 +23,7 @@ const {
     resolveSummarySlotAllocation,
 } = require('./similarity.cjs');
 const { stripThoughtBlocks } = require('../llm/scripts.cjs');
-const { MEMORY_PROMPT_TAG } = require('../../../src/ts/process/promptTemplateShared.cjs');
+const { MEMORY_MESSAGE_MEMO, MEMORY_PROMPT_TAG } = require('../../../src/ts/process/promptTemplateShared.cjs');
 
 function wrapWithXml(tag, content) {
     return `<${tag}>\n${content}\n</${tag}>`;
@@ -403,7 +403,7 @@ async function buildServerMemoryMessages(arg = {}) {
     return [{
         role: 'system',
         content: wrapWithXml(MEMORY_PROMPT_TAG, selectedTexts.join('\n\n')),
-        memo: 'memory',
+        memo: MEMORY_MESSAGE_MEMO,
         summaryItems: summaries.map((summary) => summary?.text || '').filter(Boolean),
     }];
 }

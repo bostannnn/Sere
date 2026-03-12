@@ -43,7 +43,6 @@ export interface Database{
         data:loreBook[]
     }[]
     loreBookPage: number
-    supaMemoryPrompt: string
     username: string
     userIcon: string
     userNote: string
@@ -184,7 +183,6 @@ export interface Database{
     min_p:number
     top_a:number
     lastPatchNoteCheckVersion?:string,
-    removePunctuationHypa?:boolean
     memoryLimitThickness?:number
     modules: RisuModule[]
     enabledModules: string[]

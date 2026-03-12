@@ -15,10 +15,8 @@ const {
     renderCharacterEvolutionStateForPrompt,
 } = require('./character_evolution.cjs');
 const {
-    hasTemplateRangeConfig,
-    MEMORY_PROMPT_TAG,
     normalizeTemplateRange,
-    renderPromptMemoryContent: renderMemoryPromptContent,
+    resolveMemoryTemplateMessages,
 } = require('../../../src/ts/process/promptTemplateShared.cjs');
 
 const TRACE_AUDIT_MAX_MESSAGE_COUNT = 64;
@@ -391,45 +389,23 @@ async function buildMessagesFromPromptTemplate(character, chat, settings, arg = 
                 const source = unformatted.memory.length > 0
                     ? unformatted.memory
                     : [];
-                if (source.length === 0) {
+                const resolvedMemory = resolveMemoryTemplateMessages(
+                    source,
+                    Array.isArray(source[0]?.summaryItems) ? source[0].summaryItems : [],
+                    card.rangeStart,
+                    card.rangeEnd,
+                );
+                if (resolvedMemory.messages.length === 0) {
                     promptBlocks.push({
                         role: 'system',
                         title: blockTitle,
                         source: 'template',
                         skipped: true,
-                        reason: 'no_memory_data',
+                        reason: resolvedMemory.skippedReason || 'no_memory_data',
                     });
                     break;
                 }
-                const summaryItems = Array.isArray(source[0]?.summaryItems) ? source[0].summaryItems : [];
-                if (hasTemplateRangeConfig(card.rangeStart, card.rangeEnd) && summaryItems.length > 0) {
-                    const slicedSummaries = normalizeTemplateRange(summaryItems, card.rangeStart, card.rangeEnd);
-                    if (slicedSummaries.length === 0) {
-                        promptBlocks.push({
-                            role: 'system',
-                            title: blockTitle,
-                            source: 'template',
-                            skipped: true,
-                            reason: 'memory_range_empty',
-                        });
-                        break;
-                    }
-                    const rendered = renderTemplateSlot(
-                        card.innerFormat,
-                        renderMemoryPromptContent(slicedSummaries),
-                        character,
-                        settings
-                    );
-                    const parsed = parsePromptAsMessages(
-                        rendered,
-                        character,
-                        settings,
-                        normalizeTemplateRole(source[0]?.role)
-                    );
-                    pushPromptMessagesWithTitle(messages, promptBlocks, parsed, blockTitle, 'template');
-                    break;
-                }
-                for (const item of source) {
+                for (const item of resolvedMemory.messages) {
                     if (!item || typeof item !== 'object') continue;
                     const rendered = renderTemplateSlot(card.innerFormat, toStringOrEmpty(item.content), character, settings);
                     const parsed = parsePromptAsMessages(rendered, character, settings, normalizeTemplateRole(item.role));

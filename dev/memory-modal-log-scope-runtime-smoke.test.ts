@@ -10,10 +10,6 @@ vi.mock(import("src/lang"), () => ({
       resetConfirmMessage: "Reset?",
       resetConfirmSecondMessage: "Reset again?",
       searchPlaceholder: "Search",
-      convertLabel: "Convert",
-      convertButton: "Convert",
-      convertSuccessMessage: "Converted",
-      convertErrorMessage: "Error: {0}",
     },
   },
 }));

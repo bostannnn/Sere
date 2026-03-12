@@ -101,9 +101,10 @@ vi.mock(import("src/ts/stores.svelte"), async () => {
                     },
                   },
                 ],
-                hypaV2Data: {
-                  chunks: [{ text: "Chunk 1" }],
-                  mainChunks: [{ text: "Summary 1" }],
+                memoryData: {
+                  summaries: [{ text: "Summary 1", chatMemos: [], isImportant: false }],
+                  categories: [{ id: "", name: "Unclassified" }],
+                  lastSelectedSummaries: [],
                 },
               },
             ],

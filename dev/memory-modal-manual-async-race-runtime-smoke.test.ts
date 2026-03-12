@@ -8,7 +8,7 @@ const shared = vi.hoisted(() => {
     return {
       ok: true,
       data: {
-        hypaV3Data: {
+        memoryData: {
           summaries: [],
           categories: [{ id: "", name: "Unclassified" }],
           lastSelectedSummaries: [],
@@ -123,16 +123,15 @@ describe("memory modal manual async race runtime smoke", () => {
           name: "Embedded Character",
           supaMemory: true,
           chatPage: 0,
-          hypaV3PromptOverride: {
+          memoryPromptOverride: {
             summarizationPrompt: "",
-            reSummarizationPrompt: "",
           },
           chats: [
             {
               id: "chat-a",
               name: "Chat A",
               message: [{ role: "user", data: "hello", chatId: "a1" }],
-              hypaV3Data: {
+              memoryData: {
                 summaries: [],
                 categories: [{ id: "", name: "Unclassified" }],
                 lastSelectedSummaries: [],
@@ -142,7 +141,7 @@ describe("memory modal manual async race runtime smoke", () => {
               id: "chat-b",
               name: "Chat B",
               message: [{ role: "user", data: "world", chatId: "b1" }],
-              hypaV3Data: {
+              memoryData: {
                 summaries: [],
                 categories: [{ id: "", name: "Unclassified" }],
                 lastSelectedSummaries: [],
@@ -151,10 +150,9 @@ describe("memory modal manual async race runtime smoke", () => {
           ],
         },
       ],
-      hypaV3: true,
       supaModelType: "none",
-      hypaV3PresetId: 0,
-      hypaV3Presets: [],
+      memoryPresetId: 0,
+      memoryPresets: [],
     } as never;
     selectedCharID.set(0);
 
@@ -199,7 +197,7 @@ describe("memory modal manual async race runtime smoke", () => {
     resolveFetch?.({
       ok: true,
       data: {
-        hypaV3Data: {
+        memoryData: {
           summaries: [{ text: "summary-for-chat-a", chatMemos: [], isImportant: false }],
           categories: [{ id: "", name: "Unclassified" }],
           lastSelectedSummaries: [],
@@ -228,8 +226,8 @@ describe("memory modal manual async race runtime smoke", () => {
       | { summaries?: Array<{ text?: string }>; lastManualDebug?: unknown }
       | undefined;
     expect(chatAData.summaries?.[0]?.text).toBe("summary-for-chat-a");
-    expect(chatBData).toBeUndefined();
-    expect("hypaV3Data" in DBState.db.characters[0].chats[0]).toBe(false);
+    expect(chatBData?.summaries ?? []).toEqual([]);
+    expect(chatBData?.lastManualDebug).toBeUndefined();
     expect(target?.textContent).toContain("No summaries yet");
   });
 
@@ -262,12 +260,12 @@ describe("memory modal manual async race runtime smoke", () => {
       ...character,
       chats: character.chats.map((chat) => ({
         ...chat,
-        memoryData: (chat.memoryData ?? chat.hypaV3Data)
+        memoryData: chat.memoryData
           ? {
-              ...(chat.memoryData ?? chat.hypaV3Data)!,
-              summaries: [...((chat.memoryData ?? chat.hypaV3Data)?.summaries ?? [])],
-              categories: [...((chat.memoryData ?? chat.hypaV3Data)?.categories ?? [])],
-              lastSelectedSummaries: [...((chat.memoryData ?? chat.hypaV3Data)?.lastSelectedSummaries ?? [])],
+              ...chat.memoryData,
+              summaries: [...(chat.memoryData?.summaries ?? [])],
+              categories: [...(chat.memoryData?.categories ?? [])],
+              lastSelectedSummaries: [...(chat.memoryData?.lastSelectedSummaries ?? [])],
             }
           : undefined,
       })),
@@ -277,7 +275,7 @@ describe("memory modal manual async race runtime smoke", () => {
     resolveFetch?.({
       ok: true,
       data: {
-        hypaV3Data: {
+        memoryData: {
           summaries: [{ text: "summary-after-store-replace", chatMemos: [], isImportant: false }],
           categories: [{ id: "", name: "Unclassified" }],
           lastSelectedSummaries: [],
@@ -307,7 +305,6 @@ describe("memory modal manual async race runtime smoke", () => {
     };
     expect(chatAData.summaries?.[0]?.text).toBe("summary-after-store-replace");
     expect(chatAData.lastManualDebug?.chatId).toBe("chat-a");
-    expect("hypaV3Data" in DBState.db.characters[0].chats[0]).toBe(false);
     expect(target?.textContent).not.toContain("No summaries yet");
   });
 });

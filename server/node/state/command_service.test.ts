@@ -273,7 +273,7 @@ describe("command service", () => {
     expect(fsRm).toHaveBeenCalledWith("/tmp/risu-test/characters/char-a/chats/chat-b.json", { force: true });
   });
 
-  it("strips retired memory aliases on settings.replace while keeping canonical memory settings", async () => {
+  it("keeps canonical memory settings intact on settings.replace", async () => {
     const files = new Map<string, unknown>([
       [
         "/tmp/risu-test/settings.json",
@@ -345,22 +345,6 @@ describe("command service", () => {
             ],
             memoryPresetId: 0,
             memoryEnabled: true,
-            memoryAlgorithmType: "hypaMemoryV3",
-            hypaMemory: true,
-            hypaMemoryKey: "legacy-key",
-            hanuraiEnable: true,
-            hanuraiSplit: true,
-            hanuraiTokens: 42,
-            hypaV3Presets: [
-              {
-                name: "Legacy",
-                settings: {
-                  summarizationPrompt: "ignored prompt",
-                },
-              },
-            ],
-            hypaV3PresetId: 0,
-            hypaV3: true,
           },
         },
       ],
@@ -380,14 +364,5 @@ describe("command service", () => {
     ]);
     expect(persistedEnvelope?.data?.memoryPresetId).toBe(0);
     expect(persistedEnvelope?.data?.memoryEnabled).toBe(true);
-    expect("hypaV3Presets" in (persistedEnvelope?.data || {})).toBe(false);
-    expect("hypaV3PresetId" in (persistedEnvelope?.data || {})).toBe(false);
-    expect("hypaV3" in (persistedEnvelope?.data || {})).toBe(false);
-    expect("memoryAlgorithmType" in (persistedEnvelope?.data || {})).toBe(false);
-    expect("hypaMemory" in (persistedEnvelope?.data || {})).toBe(false);
-    expect("hypaMemoryKey" in (persistedEnvelope?.data || {})).toBe(false);
-    expect("hanuraiEnable" in (persistedEnvelope?.data || {})).toBe(false);
-    expect("hanuraiSplit" in (persistedEnvelope?.data || {})).toBe(false);
-    expect("hanuraiTokens" in (persistedEnvelope?.data || {})).toBe(false);
   });
 });

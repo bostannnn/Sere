@@ -34,7 +34,11 @@ export type {
 export { createMemoryPreset, getCurrentMemoryPreset, summarize };
 
 const logPrefix = "[Memory]";
-const { MEMORY_PROMPT_TAG: memoryPromptTag } = promptTemplateShared as {
+const {
+  MEMORY_MESSAGE_MEMO: memoryMessageMemo,
+  MEMORY_PROMPT_TAG: memoryPromptTag,
+} = promptTemplateShared as {
+  MEMORY_MESSAGE_MEMO: string
   MEMORY_PROMPT_TAG: string
 };
 const minChatsForSimilarity = 3;
@@ -499,7 +503,7 @@ async function buildMemoryContextMain(
       {
         role: "system",
         content: memory,
-        memo: "memory",
+        memo: memoryMessageMemo,
       },
       ...chats.slice(startIdx),
     ];
@@ -805,7 +809,7 @@ async function buildMemoryContextMain(
     {
       role: "system",
       content: memory,
-      memo: "memory",
+      memo: memoryMessageMemo,
     },
     ...chats.slice(startIdx),
   ];

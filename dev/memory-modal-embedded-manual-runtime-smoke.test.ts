@@ -392,8 +392,6 @@ describe("memory modal embedded manual summarize runtime smoke", () => {
 
     expect(target?.textContent).toContain("Last summarize log");
     expect(target?.textContent).toContain("Range:");
-    expect(target?.textContent).not.toContain("HypaV2 enabled");
-    expect(target?.textContent).not.toContain("Hanurai enabled");
     expect(target?.textContent).not.toContain("SupaModelType");
     expect(target?.textContent).not.toContain("Memory algorithm");
     expect(target?.textContent).not.toContain("Periodic:");

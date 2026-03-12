@@ -138,7 +138,7 @@ describe("database chatReadingMode normalization", () => {
     expect(db.botPresets[0]).not.toHaveProperty("ooba");
   });
 
-  it("removes retired memory config fields while preserving canonical memory data", () => {
+  it("preserves canonical memory data without legacy memory aliases", () => {
     const db = applySetDatabase({
       characters: [
         {
@@ -158,25 +158,11 @@ describe("database chatReadingMode normalization", () => {
           ],
         },
       ],
-      hypaMemoryKey: "legacy-key",
-      hypaMemory: true,
-      memoryAlgorithmType: "hypaMemoryV3",
-      hanuraiEnable: true,
-      hanuraiSplit: true,
-      hanuraiTokens: 42,
     });
 
     const chat = (db.characters[0] as { chats: Array<Record<string, unknown>> }).chats[0];
 
-    expect(db).not.toHaveProperty("hypaMemoryKey");
-    expect(db).not.toHaveProperty("hypaMemory");
-    expect(db).not.toHaveProperty("memoryAlgorithmType");
-    expect(db).not.toHaveProperty("hanuraiEnable");
-    expect(db).not.toHaveProperty("hanuraiSplit");
-    expect(db).not.toHaveProperty("hanuraiTokens");
     expect(chat).toHaveProperty("memoryData");
-    expect(chat).not.toHaveProperty("hypaV3Data");
-    expect(chat).not.toHaveProperty("hypaV2Data");
   });
 
   it("syncs the top-level memory settings fallback to the selected preset on load", () => {

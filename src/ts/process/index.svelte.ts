@@ -50,17 +50,19 @@ import {
 import * as promptTemplateShared from "./promptTemplateShared";
 import type { RagResult, RulebookMetadata } from "./rag/types";
 const processLog = (..._args: unknown[]) => {};
-const CANONICAL_MEMORY_MESSAGE_MEMO = "memory";
 const {
-    hasTemplateRangeConfig,
-    MEMORY_PROMPT_TAG: promptMemoryTag,
+    MEMORY_MESSAGE_MEMO,
     normalizeTemplateRange,
-    renderPromptMemoryContent,
+    resolveMemoryTemplateMessages,
 } = promptTemplateShared as {
-    hasTemplateRangeConfig: (rangeStart?: number, rangeEnd?: number | 'end') => boolean
-    MEMORY_PROMPT_TAG: string
+    MEMORY_MESSAGE_MEMO: string
     normalizeTemplateRange: <T>(items: T[], rangeStart?: number, rangeEnd?: number | 'end') => T[]
-    renderPromptMemoryContent: (summaryItems: string[]) => string
+    resolveMemoryTemplateMessages: (
+        sourceMessages: OpenAIChat[],
+        summaryItems?: string[],
+        rangeStart?: number,
+        rangeEnd?: number | 'end',
+    ) => { messages: OpenAIChat[]; skippedReason?: string }
 }
 
 export interface OpenAIChat{
@@ -1169,7 +1171,7 @@ export async function sendChat(chatProcessIndex = -1,arg:{
 
 
     unformated.chats = chats.map((v) => {
-        if(v.memo !== CANONICAL_MEMORY_MESSAGE_MEMO){
+        if(v.memo !== MEMORY_MESSAGE_MEMO){
             v.removable = true
         }
         else if(supaMemoryCardUsed){
@@ -1538,18 +1540,16 @@ export async function sendChat(chatProcessIndex = -1,arg:{
                     break
                 }
                 case 'memory':{
-                    let pmt = safeStructuredClone(memories)
-                    if(hasTemplateRangeConfig(card.rangeStart, card.rangeEnd) && selectedMemorySummaryTexts.length > 0){
-                        const slicedSummaries = normalizeTemplateRange(selectedMemorySummaryTexts, card.rangeStart, card.rangeEnd)
-                        if(slicedSummaries.length === 0){
-                            break
-                        }
-                        pmt = [{
-                            role: 'system',
-                            content: renderPromptMemoryContent(slicedSummaries),
-                            memo: CANONICAL_MEMORY_MESSAGE_MEMO,
-                        }]
+                    const resolvedMemoryTemplate = resolveMemoryTemplateMessages(
+                        safeStructuredClone(memories),
+                        selectedMemorySummaryTexts,
+                        card.rangeStart,
+                        card.rangeEnd,
+                    )
+                    if(resolvedMemoryTemplate.messages.length === 0){
+                        break
                     }
+                    const pmt = resolvedMemoryTemplate.messages
                     if(card.innerFormat && pmt.length > 0){
                         for(let i=0;i<pmt.length;i++){
                             pmt[i].content = risuChatParser(card.innerFormat, {chara: currentChar}).replace('{{slot}}', pmt[i].content)

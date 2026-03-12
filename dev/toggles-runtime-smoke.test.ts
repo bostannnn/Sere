@@ -18,7 +18,6 @@ vi.mock(import("src/ts/stores.svelte"), async () => {
       db: {
         customPromptTemplateToggle: "",
         globalChatVariables: {},
-        hypaV3: false,
       },
     },
     MobileGUI: writable(false),

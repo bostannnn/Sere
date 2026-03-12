@@ -126,7 +126,6 @@ export const languageEnglish = {
             "This option is used to set the number of responses to generate on support models. other then first response will be act as cached reroll. this can reduce the cost of the model, but it can also increase the cost if you use it without reroll.",
         requestretrys: "This option is used to set the number of request retrys when request fails.",
         emotionPrompt: "This option is used to set the prompt that is used to detect emotion. if it is blank, it will use the default prompt.",
-        removePunctuationHypa: "If enabled, it will remove punctuation before executing memory processing.",
         additionalParams:
             'Additional parameters that would be added to the request body. if you want to exclude some parameters, you can put `{{none}}` to the value. if you want to add a header instead of body, you can put `header::` in front of the key like `header::Authorization`. if you want value as json, you can put `json::` in front of the value like `json::{"key":"value"}`. otherwise, type of the value would be determined automatically.',
         antiClaudeOverload:
@@ -230,7 +229,7 @@ export const languageEnglish = {
         hideAllImagesDesc: "Hides bot icons, bot image assets, and RisuRealm cover images.",
         embedding:
             "Embedding model is used for similarity search across multiple features:\n\n" +
-            "- **Long Term Memory**: HypaV2, Memory, Hanurai Memory, and SupaMemory (with Memory enabled)\n" +
+            "- **Long Term Memory**: Memory summarization and retrieval\n" +
             "- **Additional Text**: Matching character additional info based on context\n" +
             "- **Dynamic Assets**: Finding similar asset names when exact match is not found\n" +
             "- **Emotion Images**: When Emotion method is set to 'embedding'\n" +
@@ -989,7 +988,6 @@ export const languageEnglish = {
     openrouterProviderOnly: "Allowing Only Specific Providers",
     openrouterProviderIgnore: "Ignoring Providers",
     geminiApiKey: "Gemini API Key",
-    removePunctuationHypa: "Memory Punctuation Removal",
     memoryLimitThickness: "Memory Limit Thickness",
     inputCardPassword: "Input Card Password",
     ccv2Desc: "Character Card V2 is a format widely used in chatbot programs.",
@@ -1048,7 +1046,6 @@ export const languageEnglish = {
     tokenizer: "Tokenizer",
     chatFormating: "Chat Formating",
     useInstructPrompt: "Use Instruction Prompt",
-    hanuraiMemory: "HanuraiMemory",
     textAreaSize: "Input Area Size",
     textAreaTextSize: "Input Area Text Size",
     sideBarSize: "Sidebar Size",
@@ -1072,8 +1069,6 @@ export const languageEnglish = {
     useRegexLorebook: "Use Regex",
     customPromptTemplateToggle: "Custom Toggles",
     defaultVariables: "Default Variables",
-    supaDesc: "SupaMemory is a long-term memory system that uses summarized data to AI.",
-    hanuraiDesc: "HanuraiMemory is a memory system that uses vector search.",
     lowLevelAccess: "Low Level Access",
     resultStoredVar: "Variable to Store Result",
     triggerEffRunLLM: "Run Main Model",
@@ -1238,10 +1233,6 @@ export const languageEnglish = {
         titleLabel: "Memory",
         resetConfirmMessage: "This action cannot be undone. Do you want to reset memory data?",
         resetConfirmSecondMessage: "This action is irreversible. Do you really, really want to reset memory data?",
-        convertLabel: "No summaries yet, but you may convert HypaV2 data to Memory.",
-        convertButton: "Convert to Memory",
-        convertSuccessMessage: "Successfully converted HypaV2 data to Memory",
-        convertErrorMessage: "Failed to convert HypaV2 data to Memory: {0}",
         noSummariesLabel: "No summaries yet",
         searchPlaceholder: "Enter #N, ID, or query",
         summaryNumberLabel: "Summary #{0}",

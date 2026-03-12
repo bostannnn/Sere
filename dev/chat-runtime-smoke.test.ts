@@ -23,7 +23,6 @@ vi.mock(import("src/ts/stores.svelte"), async () => {
       classicMaxWidth: false,
       customPromptTemplateToggle: "",
       globalChatVariables: {},
-      hypaV3: false,
       selectedPersona: 0,
       personas: [{ id: "persona-1" }],
       username: "tester",

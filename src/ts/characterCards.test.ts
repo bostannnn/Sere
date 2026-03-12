@@ -200,16 +200,18 @@ describe("character card memory compatibility", () => {
     const char = createCharacter();
 
     const v3Card = createBaseV3(structuredClone(char) as never);
-    expect(v3Card.data.extensions.risuai?.memoryPromptOverride?.summarizationPrompt).toBe("Export prompt");
-    expect("hypaV3PromptOverride" in (v3Card.data.extensions.risuai ?? {})).toBe(false);
+    expect(v3Card.data.extensions.risuai?.memoryPromptOverride).toEqual({
+      summarizationPrompt: "Export prompt",
+    });
 
     await exportCharacterCard(structuredClone(char) as never, "json", { spec: "v2" });
     expect(shared.downloadFileMock).toHaveBeenCalledTimes(1);
 
     const exportedPayload = shared.downloadFileMock.mock.calls[0]?.[1];
     const exportedCard = JSON.parse(Buffer.from(exportedPayload).toString("utf-8"));
-    expect(exportedCard.data.extensions.risuai.memoryPromptOverride.summarizationPrompt).toBe("Export prompt");
-    expect("hypaV3PromptOverride" in exportedCard.data.extensions.risuai).toBe(false);
+    expect(exportedCard.data.extensions.risuai.memoryPromptOverride).toEqual({
+      summarizationPrompt: "Export prompt",
+    });
   });
 
   it("imports canonical memory prompt override", async () => {
