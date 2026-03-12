@@ -22,6 +22,7 @@ const {
     buildCategoryIndexPools,
     resolveSummarySlotAllocation,
 } = require('./similarity.cjs');
+const { stripThoughtBlocks } = require('../llm/scripts.cjs');
 
 function wrapWithXml(tag, content) {
     return `<${tag}>\n${content}\n</${tag}>`;
@@ -66,7 +67,10 @@ function convertStoredMessageToOpenAI(message) {
     if (message.disabled === true) return null;
 
     const roleRaw = toStringOrEmpty(message.role).toLowerCase();
-    const content = toStringOrEmpty(message.data);
+    const rawContent = toStringOrEmpty(message.data);
+    const content = (roleRaw === 'char' || roleRaw === 'assistant' || roleRaw === 'bot' || roleRaw === 'model')
+        ? stripThoughtBlocks(rawContent)
+        : rawContent;
     if (!content.trim()) return null;
 
     let role = null;

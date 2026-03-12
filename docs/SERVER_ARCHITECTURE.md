@@ -215,19 +215,18 @@ Client                          Server
 
 ```
 data/
-├── users/default/
-│   ├── settings.json
-│   ├── characters/
-│   │   └── {characterId}/
-│   │       ├── character.json
-│   │       └── chats/
-│   │           └── {chatId}.json
-│   ├── assets/other/          # Uploaded images/files
-│   ├── prompts/               # Prompt presets
-│   ├── themes/                # UI themes
-│   ├── color_schemes/         # Color schemes
-│   └── rag/
-│       └── rulebooks/
+├── settings.json
+├── characters/
+│   └── {characterId}/
+│       ├── character.json
+│       └── chats/
+│           └── {chatId}.json
+├── assets/other/          # Uploaded images/files
+├── prompts/               # Prompt presets
+├── themes/                # UI themes
+├── color_schemes/         # Color schemes
+└── rag/
+    └── rulebooks/
 │           └── {rulebookId}.json  # Chunks + embeddings
 ├── models/                    # Cached embedding models
 └── logs/

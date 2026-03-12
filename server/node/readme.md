@@ -40,7 +40,7 @@ Set `RISU_DEV_NODE_API=0` before `pnpm dev` to disable this behavior.
 - First run in node-server mode:
   - If no password exists, client prompts to set one on the first protected API call.
   - Password record is saved to `<dataRoot>/save/__password` as a `scrypt$...` hash record.
-    - default data root: `data/users/default`
+    - default data root: `data`
     - legacy fallback for existing installs: `./save/__password`
 - Change password in UI:
   - Open **Settings -> Advanced -> Server password status -> Change Server Password**.
@@ -82,7 +82,7 @@ Set `RISU_DEV_NODE_API=0` before `pnpm dev` to disable this behavior.
 
 ## Smoke Tests
 
-Always use an isolated temp data root — never point smoke tests at `data/users/default`.
+Always use an isolated temp data root — never point smoke tests at `data`.
 
 **Terminal 1 — start clean server:**
 

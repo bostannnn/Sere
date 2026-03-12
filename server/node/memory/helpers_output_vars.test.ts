@@ -16,6 +16,11 @@ class MockLLMHttpError extends Error {
 function createTestHelpers(llmOutput: string) {
   return createMemoryHelpers({
     toStringOrEmpty: (value: unknown) => (typeof value === "string" ? value.trim() : ""),
+    stripThoughtBlocks: (value: unknown) =>
+      String(value ?? "")
+        .replace(/<Thoughts>[\s\S]*?<\/Thoughts>\s*/gi, "")
+        .replace(/<think>[\s\S]*?<\/think>\s*/gi, "")
+        .trim(),
     resolveMemorySettings: () => ({ summarizationModel: "subModel" }),
     resolveGenerateModelSelection: () => ({ provider: "stub-provider", model: "stub-model" }),
     normalizeProvider: () => "stub-provider",
@@ -57,5 +62,23 @@ describe("memory helper summary output placeholder replacement", () => {
     });
 
     expect(result).toBe("Evie with Fallback User");
+  });
+
+  it("strips assistant thought blocks when converting stored messages for memory summarization", () => {
+    const helpers = createTestHelpers("unused");
+
+    const converted = helpers.convertStoredMessageForMemorySummary({
+      role: "char",
+      data: "<Thoughts>\nhidden\n</Thoughts>\nVisible reply",
+      chatId: "m1",
+      name: "Eva",
+    });
+
+    expect(converted).toEqual({
+      role: "assistant",
+      content: "Visible reply",
+      memo: "m1",
+      name: "Eva",
+    });
   });
 });

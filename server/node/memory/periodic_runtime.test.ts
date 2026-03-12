@@ -56,6 +56,32 @@ describe("memory periodic summarization runtime gating", () => {
     expect(plan.summarizable.length).toBe(2);
   });
 
+  it("strips assistant thought blocks before periodic summarization prompt assembly", () => {
+    const plan = planPeriodicMemorySummarization({
+      character: {
+        supaMemory: true,
+      },
+      settings: baseSettings,
+      chat: {
+        message: [
+          { role: "user", data: "Hello", chatId: "m1" },
+          { role: "char", data: "<Thoughts>hidden</Thoughts>\nVisible reply", chatId: "m2" },
+        ],
+        memoryData: {
+          summaries: [],
+          lastSummarizedMessageIndex: 0,
+        },
+      },
+    });
+
+    expect(plan.shouldRun).toBe(true);
+    expect(plan.summarizable).toEqual([
+      expect.objectContaining({ role: "user", content: "Hello" }),
+      expect.objectContaining({ role: "assistant", content: "Visible reply" }),
+    ]);
+    expect(JSON.stringify(plan.promptMessages)).not.toContain("<Thoughts>");
+  });
+
   it("keeps character-level memory toggle as the hard gate", () => {
     const plan = planPeriodicMemorySummarization({
       character: {

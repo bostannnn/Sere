@@ -256,6 +256,28 @@ describe("server prompt memory ranges", () => {
     expect(content).not.toContain("Summary 4");
   });
 
+  it("supports bounded negative memory ranges from the end", async () => {
+    const assembled = await buildMessagesFromPromptTemplate(
+      {},
+      {},
+      {
+        promptTemplate: [
+          { type: "memory", innerFormat: "{{slot}}", rangeStart: -5, rangeEnd: -2 },
+        ],
+      },
+      {
+        buildServerMemoryMessages: createMemoryBuilder(["Summary 1", "Summary 2", "Summary 3", "Summary 4", "Summary 5"]),
+      },
+    );
+
+    const content = String(assembled?.messages?.[0]?.content || "");
+    expect(content).toContain("Summary 1");
+    expect(content).toContain("Summary 2");
+    expect(content).toContain("Summary 3");
+    expect(content).not.toContain("Summary 4");
+    expect(content).not.toContain("Summary 5");
+  });
+
   it("supports memory range end markers", async () => {
     const assembled = await buildMessagesFromPromptTemplate(
       {},

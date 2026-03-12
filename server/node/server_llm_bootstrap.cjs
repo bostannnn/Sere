@@ -99,6 +99,7 @@ function createServerLlmBootstrap(arg = {}) {
         executeMemorySummaryFromMessages,
     } = createMemoryHelpers({
         toStringOrEmpty,
+        stripThoughtBlocks,
         resolveMemorySettings,
         resolveGenerateModelSelection,
         normalizeProvider,

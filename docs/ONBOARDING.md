@@ -189,7 +189,7 @@ git config core.hooksPath .githooks
 
 | Command | Data root | Safe for testing? |
 |---------|-----------|-------------------|
-| `pnpm run runserver` | `data/users/default/` | **No — production data** |
+| `pnpm run runserver` | `data/` | **No — production data** |
 | `pnpm run runserver:tmp` | `/tmp/risu-smoke-data` | Yes, but may persist across reboots |
 | `pnpm run runserver:test` | `.dev-test-data/` | **Yes — isolated, gitignored** |
 
@@ -222,7 +222,7 @@ git config core.hooksPath .githooks
 ### Node Server Password (First Run)
 - On first protected `/data/*` request, if no password is configured, the UI prompts to set one.
 - Password auth token is stored per-tab in `sessionStorage.risuauth` (legacy `localStorage.risuauth` is auto-migrated and cleared).
-- Server stores password record in `<dataRoot>/save/__password` as `scrypt$...` (`data/users/default` by default).
+- Server stores password record in `<dataRoot>/save/__password` as `scrypt$...` (`data` by default).
 - Change password from UI in:
   - `Settings -> Advanced -> Server password status -> Change Server Password`
   - Change flow asks for current password, then new password + confirmation.

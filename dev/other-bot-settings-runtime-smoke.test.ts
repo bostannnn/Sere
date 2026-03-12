@@ -91,6 +91,7 @@ function createDbState() {
 }
 
 vi.mock(import("src/lang"), () => ({
+  changeLanguage: vi.fn(),
   language: {
     otherBots: "Other Bots",
     longTermMemory: "Long Term Memory",
@@ -146,9 +147,12 @@ vi.mock(import("src/ts/alert"), () => ({
 }));
 
 vi.mock(import("src/ts/process/memory/memory"), () => ({
-  createMemoryPreset: () => ({
-    name: "Generated",
-    settings: createHypaPresetSettings(),
+  createMemoryPreset: (name = "Generated", settings: Record<string, unknown> = {}) => ({
+    name,
+    settings: {
+      ...createHypaPresetSettings(),
+      ...settings,
+    },
   }),
 }));
 
@@ -159,6 +163,7 @@ vi.mock(import("src/ts/globalApi.svelte"), () => ({
 
 vi.mock(import("src/ts/util"), () => ({
   selectSingleFile: async () => null,
+  checkNullish: (value: unknown) => value === null || value === undefined,
 }));
 
 vi.mock(import("src/ts/process/emotion/defaultPrompt"), () => ({
@@ -206,7 +211,10 @@ describe("other bots settings runtime smoke", () => {
     selector = 'input[type="text"], input[type="number"], input[type="range"]',
   ): HTMLInputElement | null {
     const labels = Array.from(document.querySelectorAll(".ds-settings-label"));
-    const label = labels.find((node) => (node.textContent ?? "").trim() === labelText);
+    const label = labels.find((node) => {
+      const text = (node.textContent ?? "").trim();
+      return text === labelText || text.includes(labelText);
+    });
     if (!label) return null;
 
     let next: Element | null = label.nextElementSibling;
@@ -291,6 +299,32 @@ describe("other bots settings runtime smoke", () => {
     expect(legacySettings?.periodicSummarizationInterval).toBe(24);
     expect(legacySettings?.maxChatsPerSummary).toBe(24);
     expect(shared.dbState.db.hypaV3Settings).toBe(shared.dbState.db.memorySettings);
+  });
+
+  it("writes the summarization prompt into the selected memory preset and legacy mirrors", async () => {
+    const target = document.createElement("div");
+    document.body.appendChild(target);
+    app = mount(OtherBotSettings, { target });
+    await flushUi();
+
+    const promptInput = getInputFollowingLabel("Summarization Prompt");
+    expect(promptInput).not.toBeNull();
+
+    promptInput!.value = "Prompt from settings UI";
+    promptInput!.dispatchEvent(new Event("input", { bubbles: true }));
+    await flushUi();
+
+    const presetSettings = shared.dbState.db.memoryPresets?.[0]?.settings as Record<string, unknown> | undefined;
+    const memorySettings = shared.dbState.db.memorySettings as Record<string, unknown> | undefined;
+    const legacyPresetSettings = shared.dbState.db.hypaV3Presets?.[0]?.settings as
+      | Record<string, unknown>
+      | undefined;
+    const legacySettings = shared.dbState.db.hypaV3Settings as Record<string, unknown> | undefined;
+
+    expect(presetSettings?.summarizationPrompt).toBe("Prompt from settings UI");
+    expect(memorySettings?.summarizationPrompt).toBe("Prompt from settings UI");
+    expect(legacyPresetSettings?.summarizationPrompt).toBe("Prompt from settings UI");
+    expect(legacySettings?.summarizationPrompt).toBe("Prompt from settings UI");
   });
 
   it("keeps temporary empty number edits stable while slider updates commit through the shared preset mirror", async () => {

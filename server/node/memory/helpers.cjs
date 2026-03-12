@@ -2,6 +2,9 @@ function createMemoryHelpers(arg = {}) {
     const toStringOrEmpty = typeof arg.toStringOrEmpty === 'function'
         ? arg.toStringOrEmpty
         : ((value) => (typeof value === 'string' ? value.trim() : ''));
+    const stripThoughtBlocks = typeof arg.stripThoughtBlocks === 'function'
+        ? arg.stripThoughtBlocks
+        : ((value) => toStringOrEmpty(value));
     const resolveMemorySettings = typeof arg.resolveMemorySettings === 'function'
         ? arg.resolveMemorySettings
         : (() => ({}));
@@ -81,7 +84,11 @@ function createMemoryHelpers(arg = {}) {
             ? 'user'
             : ((roleRaw === 'assistant' || roleRaw === 'char') ? 'assistant' : null);
         if (!role) return null;
-        const content = sanitizeMemorySummarizationContent(message.data);
+        const rawContent = toStringOrEmpty(message.data);
+        const sanitizedSource = role === 'assistant'
+            ? stripThoughtBlocks(rawContent)
+            : rawContent;
+        const content = sanitizeMemorySummarizationContent(sanitizedSource);
         if (!content) return null;
         return {
             role,
