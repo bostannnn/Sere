@@ -3,6 +3,7 @@
     import type { triggerscript } from "src/ts/storage/database.svelte";
     import { language } from "src/lang";
     import { alertConfirm } from "src/ts/alert";
+    import { isTriggerLuaEffect, isTriggerV2HeaderEffect } from "src/ts/process/triggerModeGuards";
     import TextAreaInput from "src/lib/UI/GUI/TextAreaInput.svelte";
     import Button from "src/lib/UI/GUI/Button.svelte";
     import { openURL } from "src/ts/globalApi.svelte";
@@ -17,9 +18,11 @@
 
     let { value = $bindable([]), lowLevelAble = false }: Props = $props();
     let revealLegacyV1Editor = $state(false)
-    const currentTriggerType = $derived(value?.[0]?.effect?.[0]?.type ?? '')
-    const luaEnabled = $derived(currentTriggerType === 'triggerlua')
-    const v2Enabled = $derived(currentTriggerType === 'v2Header')
+    const primaryEffect = $derived(value?.[0]?.effect?.[0] ?? null)
+    const luaEffect = $derived(isTriggerLuaEffect(primaryEffect) ? primaryEffect : null)
+    const v2HeaderEffect = $derived(isTriggerV2HeaderEffect(primaryEffect) ? primaryEffect : null)
+    const luaEnabled = $derived(luaEffect !== null)
+    const v2Enabled = $derived(v2HeaderEffect !== null)
     const hasLegacyV1Payload = $derived(Boolean(value?.length) && !luaEnabled && !v2Enabled)
     const showLegacyV1Editor = $derived(hasLegacyV1Payload && (DBState.db.showDeprecatedTriggerV1 || revealLegacyV1Editor))
 
@@ -46,8 +49,7 @@
         v2Enabled
     } title="Trigger V2 mode" aria-label="Trigger V2 mode" aria-pressed={v2Enabled} onclick={(async (e) => {
         e.stopPropagation()
-        const codeType = currentTriggerType
-        if(codeType !== 'v2Header'){
+        if(!v2Enabled){
             const t = await alertConfirm(language.triggerSwitchWarn)
             if(!t){
                 return
@@ -71,7 +73,7 @@
     })}>V2</button>
     <button type="button" class="trigger-list-mode-btn seg-tab" class:is-active={luaEnabled} class:active={luaEnabled} title="Trigger Lua mode" aria-label="Trigger Lua mode" aria-pressed={luaEnabled} onclick={(async (e) => {
         e.stopPropagation()
-        if(currentTriggerType !== 'triggerlua'){
+        if(!luaEnabled){
             if(value && value.length > 0){
                 const t = await alertConfirm(language.triggerSwitchWarn)
                 if(!t){
@@ -93,8 +95,15 @@
 {#if hasLegacyV1Payload}
     <span class="trigger-list-warning">{language.triggerV1Warning}</span>
 {/if}
-{#if luaEnabled}
-    <TextAreaInput margin="both" autocomplete="off" bind:value={value[0].effect[0].code}></TextAreaInput>
+{#if luaEffect}
+    <TextAreaInput
+        margin="both"
+        autocomplete="off"
+        value={luaEffect.code}
+        onValueChange={(code) => {
+            luaEffect.code = code
+        }}
+    ></TextAreaInput>
     <Button onclick={() => {
         openURL(hubURL + '/redirect/docs/lua')
     }}>{language.helpBlock}</Button>

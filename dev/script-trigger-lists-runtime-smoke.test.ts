@@ -81,6 +81,11 @@ vi.mock(import("src/ts/process/triggers"), () => ({
   requestAllowList: [],
 }));
 
+vi.mock(import("src/ts/process/triggerModeGuards"), () => ({
+  isTriggerLuaEffect: (effect: { type?: string } | null | undefined) => effect?.type === "triggerlua",
+  isTriggerV2HeaderEffect: (effect: { type?: string } | null | undefined) => effect?.type === "v2Header",
+}));
+
 vi.mock(import("src/lib/UI/GUI/Button.svelte"), async () => ({
   default: (await import("./test-stubs/ComponentActionButtonStub.svelte")).default,
 }));
