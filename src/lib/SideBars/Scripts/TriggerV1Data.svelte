@@ -32,6 +32,55 @@
         idx
     }: Props = $props();
     let open = $state(false)
+    type TriggerCondition = triggerscript["conditions"][number]
+    type TriggerEffect = triggerscript["effect"][number]
+
+    function updateTrigger(patch: Partial<triggerscript>) {
+        value = {
+            ...value,
+            ...patch,
+        }
+    }
+
+    function replaceConditionAt(index: number, nextCondition: TriggerCondition) {
+        updateTrigger({
+            conditions: value.conditions.map((condition, conditionIndex) => {
+                return conditionIndex === index ? nextCondition : condition
+            })
+        })
+    }
+
+    function removeConditionAt(index: number) {
+        updateTrigger({
+            conditions: value.conditions.filter((_, conditionIndex) => conditionIndex !== index)
+        })
+    }
+
+    function appendCondition(nextCondition: TriggerCondition) {
+        updateTrigger({
+            conditions: [...value.conditions, nextCondition]
+        })
+    }
+
+    function replaceEffectAt(index: number, nextEffect: TriggerEffect) {
+        updateTrigger({
+            effect: value.effect.map((effect, effectIndex) => {
+                return effectIndex === index ? nextEffect : effect
+            })
+        })
+    }
+
+    function removeEffectAt(index: number) {
+        updateTrigger({
+            effect: value.effect.filter((_, effectIndex) => effectIndex !== index)
+        })
+    }
+
+    function appendEffect(nextEffect: TriggerEffect) {
+        updateTrigger({
+            effect: [...value.effect, nextEffect]
+        })
+    }
 
     $effect(() => {
         onValueChange(value)
@@ -66,9 +115,17 @@
     {#if open}
         <div class="script-item-body">
             <span class="script-item-title-label">{language.name}</span>
-            <TextInput size="sm" bind:value={value.comment} />
+            <TextInput size="sm" value={value.comment} oninput={(e) => {
+                updateTrigger({
+                    comment: e.currentTarget.value
+                })
+            }} />
             <span class="script-item-section-label">{language.type}</span>
-            <SelectInput bind:value={value.type}>
+            <SelectInput value={value.type} onchange={(e) => {
+                updateTrigger({
+                    type: e.currentTarget.value as triggerscript["type"]
+                })
+            }}>
                 <OptionInput value="start">{language.triggerStart}</OptionInput>
                 <OptionInput value="output">{language.triggerOutput}</OptionInput>
                 <OptionInput value="input">{language.triggerInput}</OptionInput>
@@ -77,13 +134,12 @@
             
             <span class="script-item-section-label">Conditions
                 <button type="button" title="Add condition" aria-label="Add condition" class="trigger-v1-inline-action icon-btn icon-btn--sm" onclick={() => {
-                    value.conditions.push({
+                    appendCondition({
                         type: 'value',
                         value: '',
                         operator: 'true',
                         var: ''
                     })
-                    value.conditions = value.conditions
 
                 }}><PlusIcon size={18} /></button>
             </span>
@@ -97,35 +153,35 @@
                     {/if}
                     <span class="script-item-field-label-muted">{language.type}
                         <button type="button" title={`Remove condition ${i + 1}`} aria-label={`Remove condition ${i + 1}`} class="trigger-v1-inline-action icon-btn icon-btn--sm" onclick={() => {
-                            value.conditions.splice(i, 1)
-                            value.conditions = value.conditions
+                            removeConditionAt(i)
         
                         }}><XIcon size={18} /></button>
 
                     </span>
-                    <SelectInput bind:value={cond.type} size="sm" onchange={() => {
-                        if(cond.type === 'exists'){
-                            value.conditions[i] = {
+                    <SelectInput value={cond.type} size="sm" onchange={(e) => {
+                        const nextType = e.currentTarget.value as TriggerCondition["type"]
+                        if(nextType === 'exists'){
+                            replaceConditionAt(i, {
                                 type: 'exists',
                                 value: '',
                                 type2: 'loose',
                                 depth: 3
-                            }
+                            })
                         }
-                        if(cond.type === 'var' || cond.type === 'value'){
-                            value.conditions[i] = {
-                                type: cond.type,
+                        if(nextType === 'var' || nextType === 'value'){
+                            replaceConditionAt(i, {
+                                type: nextType,
                                 var: '',
                                 value: '',
                                 operator: '='
-                            }
+                            })
                         }
-                        if(cond.type === 'chatindex'){
-                            value.conditions[i] = {
+                        if(nextType === 'chatindex'){
+                            replaceConditionAt(i, {
                                 type: 'chatindex',
                                 value: '',
                                 operator: '='
-                            }
+                            })
                         }
                     }}>
                         <OptionInput value="value">{language.ifValue}</OptionInput>
@@ -135,27 +191,61 @@
                     </SelectInput>
 
                     {#if cond.type === 'exists'}
-                        <SelectInput bind:value={cond.type2} size="sm">
+                        <SelectInput value={cond.type2} size="sm" onchange={(e) => {
+                            replaceConditionAt(i, {
+                                ...cond,
+                                type2: e.currentTarget.value as NonNullable<typeof cond.type2>
+                            })
+                        }}>
                             <OptionInput value="loose">{language.triggerMatchLoose}</OptionInput>
                             <OptionInput value="strict">{language.triggerMatchStrict}</OptionInput>
                             <OptionInput value="regex">{language.triggerMatchRegex}</OptionInput>
                         </SelectInput>
                         <span  class="script-item-field-label-muted">{language.value}</span>
-                        <TextAreaInput highlight bind:value={cond.value} />
+                        <TextAreaInput highlight value={cond.value} onValueChange={(nextValue) => {
+                            replaceConditionAt(i, {
+                                ...cond,
+                                value: nextValue
+                            })
+                        }} />
 
                         <span  class="script-item-field-label-muted">{language.searchDepth}</span>
-                        <NumberInput size="sm" bind:value={cond.depth} />
+                        <NumberInput size="sm" value={cond.depth} onChange={(e) => {
+                            const nextDepth = e.currentTarget.valueAsNumber
+                            if(!Number.isFinite(nextDepth)){
+                                return
+                            }
+                            replaceConditionAt(i, {
+                                ...cond,
+                                depth: nextDepth
+                            })
+                        }} />
                     {/if}
                     {#if cond.type === 'var' || cond.type === 'chatindex' || cond.type === 'value'}
                         {#if cond.type === 'var'}
                             <span class="script-item-field-label-muted">{language.varableName}</span>
-                            <TextInput size="sm" bind:value={cond.var} />
+                            <TextInput size="sm" value={cond.var} oninput={(e) => {
+                                replaceConditionAt(i, {
+                                    ...cond,
+                                    var: e.currentTarget.value
+                                })
+                            }} />
                         {/if}
                         {#if cond.type === 'value'}
-                            <TextAreaInput highlight size="sm" bind:value={cond.var} />
+                            <TextAreaInput highlight size="sm" value={cond.var} onValueChange={(nextVar) => {
+                                replaceConditionAt(i, {
+                                    ...cond,
+                                    var: nextVar
+                                })
+                            }} />
                         {/if}
                         <span  class="script-item-field-label-muted">{language.value}</span>
-                        <SelectInput bind:value={cond.operator} size="sm">
+                        <SelectInput value={cond.operator} size="sm" onchange={(e) => {
+                            replaceConditionAt(i, {
+                                ...cond,
+                                operator: e.currentTarget.value as typeof cond.operator
+                            })
+                        }}>
                             <OptionInput value="true">{language.truthy}</OptionInput>
                             <OptionInput value="=">{language.equal}</OptionInput>
                             <OptionInput value="!=">{language.notEqual}</OptionInput>
@@ -167,7 +257,12 @@
 
                         </SelectInput>
                         {#if cond.operator !== 'null' && cond.operator !== 'true'}
-                            <TextAreaInput highlight size="sm" bind:value={cond.value} />
+                            <TextAreaInput highlight size="sm" value={cond.value} onValueChange={(nextValue) => {
+                                replaceConditionAt(i, {
+                                    ...cond,
+                                    value: nextValue
+                                })
+                            }} />
                         {/if}
                     {/if}
                 {/each}
@@ -176,21 +271,20 @@
             <span class="script-item-section-label">Effects
                 <button type="button" title="Add effect" aria-label="Add effect" class="trigger-v1-inline-action icon-btn icon-btn--sm" onclick={() => {
                     if(value.type === 'start'){
-                        value.effect.push({
+                        appendEffect({
                             type: 'systemprompt',
                             value: '',
                             location: 'historyend'
                         })
                     }
                     else{
-                        value.effect.push({
+                        appendEffect({
                             type: 'setvar',
                             var: '',
                             value: '',
                             operator: '='
                         })
                     }
-                    value.effect = value.effect
 
                 }}><PlusIcon size={18} /></button>
             </span>
@@ -205,110 +299,110 @@
                     {/if}
                     <span class="script-item-field-label-muted">{language.type}
                         <button type="button" title={`Remove effect ${i + 1}`} aria-label={`Remove effect ${i + 1}`} class="trigger-v1-inline-action icon-btn icon-btn--sm" onclick={() => {
-                            value.effect.splice(i, 1)
-                            value.effect = value.effect
+                            removeEffectAt(i)
         
                         }}><XIcon size={18} /></button>
 
                     </span>
-                    <SelectInput bind:value={effect.type} size="sm" onchange={() => {
-                        if(effect.type === 'systemprompt'){
-                            value.effect[i] = {
+                    <SelectInput value={effect.type} size="sm" onchange={(e) => {
+                        const nextType = e.currentTarget.value as TriggerEffect["type"]
+                        if(nextType === 'systemprompt'){
+                            replaceEffectAt(i, {
                                 type: 'systemprompt',
                                 value: '',
                                 location: 'historyend'
-                            }
+                            })
                         }
-                        else if(effect.type === 'setvar'){
-                            value.effect[i] = {
+                        else if(nextType === 'setvar'){
+                            replaceEffectAt(i, {
                                 type: 'setvar',
                                 var: '',
                                 value: '',
                                 operator: '='
-                            }
+                            })
                         }
-                        else if(effect.type === 'impersonate'){
-                            value.effect[i] = {
+                        else if(nextType === 'impersonate'){
+                            replaceEffectAt(i, {
                                 type: 'impersonate',
                                 role: 'char',
                                 value: ''
-                            }
+                            })
                         }
-                        else if(effect.type === 'command'){
-                            value.effect[i] = {
+                        else if(nextType === 'command'){
+                            replaceEffectAt(i, {
                                 type: 'command',
                                 value: ''
-                            }
+                            })
                         }
-                        else if(effect.type === 'stop'){
-                            value.effect[i] = {
+                        else if(nextType === 'stop'){
+                            replaceEffectAt(i, {
                                 type: 'stop',
-                            }
+                            })
                         }
-                        else if(effect.type === 'runtrigger'){
-                            value.effect[i] = {
+                        else if(nextType === 'runtrigger'){
+                            replaceEffectAt(i, {
                                 type: 'runtrigger',
                                 value: ''
-                            }
+                            })
                         }
-                        else if(effect.type === 'runLLM'){
-                            value.effect[i] = {
+                        else if(nextType === 'runLLM'){
+                            replaceEffectAt(i, {
                                 type: 'runLLM',
                                 value: '',
                                 inputVar: ''
-                            }
+                            })
                         }
-                        else if(effect.type === 'checkSimilarity'){
-                            value.effect[i] = {
+                        else if(nextType === 'checkSimilarity'){
+                            replaceEffectAt(i, {
                                 type: 'checkSimilarity',
                                 source: '',
                                 value: '',
                                 inputVar: ''
-                            }
+                            })
                         }
-                        else if(effect.type === 'showAlert'){
-                            value.effect[i] = {
+                        else if(nextType === 'showAlert'){
+                            replaceEffectAt(i, {
                                 type: 'showAlert',
                                 alertType: 'normal',
                                 value: '',
                                 inputVar: ''
-                            }
+                            })
                         }
-                        else if(effect.type === 'extractRegex'){
-                            value.effect[i] ={
+                        else if(nextType === 'extractRegex'){
+                            replaceEffectAt(i, {
                                 type: 'extractRegex',
                                 value: '',
                                 regex: '',
                                 flags: '',
                                 inputVar: '',
                                 result:''
-                            }
+                            })
                         }
-                        else if(effect.type === 'sendAIprompt'){
-                            value.effect[i] = {
+                        else if(nextType === 'sendAIprompt'){
+                            replaceEffectAt(i, {
                                 type: 'sendAIprompt'                           
-                            }
+                            })
                         }
-                        else if(effect.type === 'cutchat'){
-                            value.effect[i] = {
+                        else if(nextType === 'cutchat'){
+                            replaceEffectAt(i, {
                                 type: 'cutchat',
                                 start: '',
                                 end: ''                           
-                            }
+                            })
                         }
-                        else if(effect.type === 'modifychat'){
-                            value.effect[i] = {
+                        else if(nextType === 'modifychat'){
+                            replaceEffectAt(i, {
                                 type: 'modifychat',
                                 value: '',
                                 index: ''
-                            }
+                            })
                         }
-                        else if(effect.type === 'runAxLLM'){
-                            value.effect[i] = {
+                        else if(nextType === 'runAxLLM'){
+                            replaceEffectAt(i, {
                                 type: 'runAxLLM',
                                 value: '',
                                 inputVar: ''
-                            }
+                            })
                         }
                     }}>
                         <OptionInput value="setvar">{language.triggerEffSetVar}</OptionInput>
@@ -348,19 +442,39 @@
 
                     {#if effect.type === 'systemprompt'}
                         <span class="script-item-field-label-muted">{language.location}</span>
-                        <SelectInput bind:value={effect.location}>
+                        <SelectInput value={effect.location} onchange={(e) => {
+                            replaceEffectAt(i, {
+                                ...effect,
+                                location: e.currentTarget.value as NonNullable<typeof effect.location>
+                            })
+                        }}>
                             <OptionInput value="start">{language.promptstart}</OptionInput>
                             <OptionInput value="historyend">{language.historyend}</OptionInput>
                             <OptionInput value="promptend">{language.promptend}</OptionInput>
                         </SelectInput>
                         <span class="script-item-field-label-muted">{language.value}</span>
-                        <TextAreaInput highlight bind:value={effect.value} />
+                        <TextAreaInput highlight value={effect.value} onValueChange={(nextValue) => {
+                            replaceEffectAt(i, {
+                                ...effect,
+                                value: nextValue
+                            })
+                        }} />
                     {/if}
                     {#if effect.type === 'setvar'}
                         <span class="script-item-field-label-muted">{language.varableName}</span>
-                        <TextInput bind:value={effect.var} />
+                        <TextInput value={effect.var} oninput={(e) => {
+                            replaceEffectAt(i, {
+                                ...effect,
+                                var: e.currentTarget.value
+                            })
+                        }} />
                         <span class="script-item-field-label-muted">{language.operator}</span>
-                        <SelectInput bind:value={effect.operator} >
+                        <SelectInput value={effect.operator} onchange={(e) => {
+                            replaceEffectAt(i, {
+                                ...effect,
+                                operator: e.currentTarget.value as NonNullable<typeof effect.operator>
+                            })
+                        }} >
                             <OptionInput value="=">{language.TriggerSetToVar}</OptionInput>
                             <OptionInput value="+=">{language.TriggerAddToVar}</OptionInput>
                             <OptionInput value="-=">{language.TriggerSubToVar}</OptionInput>
@@ -368,37 +482,82 @@
                             <OptionInput value="/=">{language.TriggerDivToVar}</OptionInput>
                         </SelectInput>
                         <span class="script-item-field-label-muted">{language.value}</span>
-                        <TextAreaInput highlight bind:value={effect.value} />
+                        <TextAreaInput highlight value={effect.value} onValueChange={(nextValue) => {
+                            replaceEffectAt(i, {
+                                ...effect,
+                                value: nextValue
+                            })
+                        }} />
                     {/if}
 
                     {#if effect.type === 'runtrigger'}
                         <span class="script-item-field-label-muted">{language.name}</span>
-                        <TextInput size="sm" bind:value={effect.value} />
+                        <TextInput size="sm" value={effect.value} oninput={(e) => {
+                            replaceEffectAt(i, {
+                                ...effect,
+                                value: e.currentTarget.value
+                            })
+                        }} />
                     {/if}
                     {#if effect.type === 'command'}
                         <span class="script-item-field-label-muted">{language.value}</span>
-                        <TextAreaInput highlight bind:value={effect.value} />
+                        <TextAreaInput highlight value={effect.value} onValueChange={(nextValue) => {
+                            replaceEffectAt(i, {
+                                ...effect,
+                                value: nextValue
+                            })
+                        }} />
                     {/if}
                     {#if effect.type === 'runLLM'}
                         <span class="script-item-field-label-muted">{language.prompt} <Help key="triggerLLMPrompt" /></span>
-                        <TextAreaInput highlight bind:value={effect.value} />
+                        <TextAreaInput highlight value={effect.value} onValueChange={(nextValue) => {
+                            replaceEffectAt(i, {
+                                ...effect,
+                                value: nextValue
+                            })
+                        }} />
 
                         <span class="script-item-field-label-muted">{language.resultStoredVar}</span>
-                        <TextInput bind:value={effect.inputVar} />
+                        <TextInput value={effect.inputVar} oninput={(e) => {
+                            replaceEffectAt(i, {
+                                ...effect,
+                                inputVar: e.currentTarget.value
+                            })
+                        }} />
                     {/if}
                     {#if effect.type === 'checkSimilarity'}
                         <span class="script-item-field-label-muted">{language.prompt}</span>
-                        <TextAreaInput highlight bind:value={effect.source} />
+                        <TextAreaInput highlight value={effect.source} onValueChange={(nextSource) => {
+                            replaceEffectAt(i, {
+                                ...effect,
+                                source: nextSource
+                            })
+                        }} />
 
                         <span class="script-item-field-label-muted">{language.value}</span>
-                        <TextAreaInput highlight bind:value={effect.value} />
+                        <TextAreaInput highlight value={effect.value} onValueChange={(nextValue) => {
+                            replaceEffectAt(i, {
+                                ...effect,
+                                value: nextValue
+                            })
+                        }} />
 
                         <span class="script-item-field-label-muted">{language.resultStoredVar}</span>
-                        <TextInput bind:value={effect.inputVar} />
+                        <TextInput value={effect.inputVar} oninput={(e) => {
+                            replaceEffectAt(i, {
+                                ...effect,
+                                inputVar: e.currentTarget.value
+                            })
+                        }} />
                     {/if}
                     {#if effect.type === 'showAlert'}
                         <span class="script-item-field-label-muted">{language.type}</span>
-                        <SelectInput bind:value={effect.alertType}>
+                        <SelectInput value={effect.alertType} onchange={(e) => {
+                            replaceEffectAt(i, {
+                                ...effect,
+                                alertType: e.currentTarget.value as NonNullable<typeof effect.alertType>
+                            })
+                        }}>
                             <OptionInput value="normal">{language.normal}</OptionInput>
                             <OptionInput value="error">{language.error}</OptionInput>
                             <OptionInput value="input">{language.input}</OptionInput>
@@ -406,62 +565,137 @@
                         </SelectInput>
 
                         <span class="script-item-field-label-muted">{language.value}</span>
-                        <TextAreaInput highlight bind:value={effect.value} />
+                        <TextAreaInput highlight value={effect.value} onValueChange={(nextValue) => {
+                            replaceEffectAt(i, {
+                                ...effect,
+                                value: nextValue
+                            })
+                        }} />
 
                         <span class="script-item-field-label-muted">{language.resultStoredVar}</span>
-                        <TextInput bind:value={effect.inputVar} />
+                        <TextInput value={effect.inputVar} oninput={(e) => {
+                            replaceEffectAt(i, {
+                                ...effect,
+                                inputVar: e.currentTarget.value
+                            })
+                        }} />
                     {/if}
                     {#if effect.type === 'impersonate'}
                         <span class="script-item-field-label-muted">{language.role}</span>
-                        <SelectInput bind:value={effect.role} size="sm">
+                        <SelectInput value={effect.role} size="sm" onchange={(e) => {
+                            replaceEffectAt(i, {
+                                ...effect,
+                                role: e.currentTarget.value as NonNullable<typeof effect.role>
+                            })
+                        }}>
                             <OptionInput value="user">{language.user}</OptionInput>
                             <OptionInput value="char">{language.character}</OptionInput>
                         </SelectInput>
                         <span class="script-item-field-label-muted">{language.value}</span>
-                        <TextAreaInput highlight bind:value={effect.value} />
+                        <TextAreaInput highlight value={effect.value} onValueChange={(nextValue) => {
+                            replaceEffectAt(i, {
+                                ...effect,
+                                value: nextValue
+                            })
+                        }} />
                     {/if}
 
                     {#if effect.type === 'extractRegex'}
                         <span class="script-item-field-label-muted">{language.value}</span>
-                        <TextAreaInput highlight bind:value={effect.value} />
+                        <TextAreaInput highlight value={effect.value} onValueChange={(nextValue) => {
+                            replaceEffectAt(i, {
+                                ...effect,
+                                value: nextValue
+                            })
+                        }} />
 
                         <span class="script-item-field-label-muted">{language.regex}</span>
-                        <TextInput bind:value={effect.regex} />
+                        <TextInput value={effect.regex} oninput={(e) => {
+                            replaceEffectAt(i, {
+                                ...effect,
+                                regex: e.currentTarget.value
+                            })
+                        }} />
 
                         <span class="script-item-field-label-muted">{language.flags}</span>
-                        <TextInput bind:value={effect.flags} />
+                        <TextInput value={effect.flags} oninput={(e) => {
+                            replaceEffectAt(i, {
+                                ...effect,
+                                flags: e.currentTarget.value
+                            })
+                        }} />
 
                         <span class="script-item-field-label-muted">{language.resultFormat}</span>
-                        <TextInput bind:value={effect.result} />
+                        <TextInput value={effect.result} oninput={(e) => {
+                            replaceEffectAt(i, {
+                                ...effect,
+                                result: e.currentTarget.value
+                            })
+                        }} />
 
                         <span class="script-item-field-label-muted">{language.resultStoredVar}</span>
-                        <TextInput bind:value={effect.inputVar} />
+                        <TextInput value={effect.inputVar} oninput={(e) => {
+                            replaceEffectAt(i, {
+                                ...effect,
+                                inputVar: e.currentTarget.value
+                            })
+                        }} />
                     {/if}
 
 
                     {#if effect.type === 'cutchat'}
                         <span class="script-item-field-label-muted">{language.start}</span>
-                        <TextInput bind:value={effect.start} />
+                        <TextInput value={effect.start} oninput={(e) => {
+                            replaceEffectAt(i, {
+                                ...effect,
+                                start: e.currentTarget.value
+                            })
+                        }} />
 
                         <span class="script-item-field-label-muted">{language.end}</span>
-                        <TextInput bind:value={effect.end} />
+                        <TextInput value={effect.end} oninput={(e) => {
+                            replaceEffectAt(i, {
+                                ...effect,
+                                end: e.currentTarget.value
+                            })
+                        }} />
                     {/if}
 
                     {#if effect.type === 'modifychat'}
                         <span class="script-item-field-label-muted">{language.index}</span>
-                        <TextInput bind:value={effect.index} />
+                        <TextInput value={effect.index} oninput={(e) => {
+                            replaceEffectAt(i, {
+                                ...effect,
+                                index: e.currentTarget.value
+                            })
+                        }} />
 
                         <span class="script-item-field-label-muted">{language.value}</span>
-                        <TextAreaInput highlight bind:value={effect.value} />
+                        <TextAreaInput highlight value={effect.value} onValueChange={(nextValue) => {
+                            replaceEffectAt(i, {
+                                ...effect,
+                                value: nextValue
+                            })
+                        }} />
                     
                     {/if}
 
                     {#if effect.type === 'runAxLLM'}
                     <span class="script-item-field-label-muted">{language.prompt} <Help key="triggerLLMPrompt" /></span>
-                    <TextAreaInput highlight bind:value={effect.value} />
+                    <TextAreaInput highlight value={effect.value} onValueChange={(nextValue) => {
+                        replaceEffectAt(i, {
+                            ...effect,
+                            value: nextValue
+                        })
+                    }} />
 
                     <span class="script-item-field-label-muted">{language.resultStoredVar}</span>
-                    <TextInput bind:value={effect.inputVar} />
+                    <TextInput value={effect.inputVar} oninput={(e) => {
+                        replaceEffectAt(i, {
+                            ...effect,
+                            inputVar: e.currentTarget.value
+                        })
+                    }} />
                     {/if}
                 {/each}
             </div>

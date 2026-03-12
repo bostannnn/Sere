@@ -33,6 +33,25 @@
             revealLegacyV1Editor = false
         }
     })
+
+    function updateLuaCode(code: string) {
+        if (!luaEffect || !Array.isArray(value) || value.length === 0) {
+            return
+        }
+        value = value.map((trigger, triggerIndex) => {
+            if (triggerIndex !== 0) {
+                return trigger
+            }
+            const primaryEffect = trigger.effect?.[0]
+            if (!isTriggerLuaEffect(primaryEffect)) {
+                return trigger
+            }
+            return {
+                ...trigger,
+                effect: [{ type: "triggerlua", code }],
+            }
+        })
+    }
 </script>
 
 <div class="trigger-list-mode-row seg-tabs">
@@ -100,9 +119,7 @@
         margin="both"
         autocomplete="off"
         value={luaEffect.code}
-        onValueChange={(code) => {
-            luaEffect.code = code
-        }}
+        onValueChange={updateLuaCode}
     ></TextAreaInput>
     <Button onclick={() => {
         openURL(hubURL + '/redirect/docs/lua')

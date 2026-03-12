@@ -84,8 +84,11 @@ export async function processMultiCommand(command:string) {
 
 async function processCommand(command:string, pipe:string):Promise<false | string>{
     const db = getDatabase()
-    const currentChar = db.characters[get(selectedCharID)]
-    const currentChat = currentChar.chats[currentChar.chatPage]
+    const currentChar = getCurrentCharacter()
+    const currentChat = getCurrentChat()
+    if(!currentChar || !currentChat){
+        return false
+    }
     const parsedCommand = commandParser(command, pipe)
     const { commandName, namedArg } = parsedCommand
     let { arg } = parsedCommand
@@ -266,30 +269,16 @@ async function processCommand(command:string, pipe:string):Promise<false | strin
         }
         case 'setvar':{
             commandLog(namedArg, arg)
-            const db = getDatabase()
-            const selectedChar = get(selectedCharID)
-            const char = db.characters[selectedChar]
-            const chat = char.chats[char.chatPage]
-            chat.scriptstate = chat.scriptstate ?? {}
-            chat.scriptstate['$' + namedArg['key']] = arg
-            commandLog(chat.scriptstate)
-
-            char.chats[char.chatPage] = chat
-            db.characters[selectedChar] = char
-            setDatabase(db)
+            currentChat.scriptstate = currentChat.scriptstate ?? {}
+            currentChat.scriptstate['$' + namedArg['key']] = arg
+            commandLog(currentChat.scriptstate)
+            setCurrentChat(currentChat)
             return ''
         }
         case 'addvar':{
-            const db = getDatabase()
-            const selectedChar = get(selectedCharID)
-            const char = db.characters[selectedChar]
-            const chat = char.chats[char.chatPage]
-            chat.scriptstate = chat.scriptstate ?? {}
-            chat.scriptstate['$' + namedArg['key']] = (Number(chat.scriptstate['$' + namedArg['key']]) + Number(arg)).toString()
-
-            char.chats[char.chatPage] = chat
-            db.characters[selectedChar] = char
-            setDatabase(db)
+            currentChat.scriptstate = currentChat.scriptstate ?? {}
+            currentChat.scriptstate['$' + namedArg['key']] = (Number(currentChat.scriptstate['$' + namedArg['key']]) + Number(arg)).toString()
+            setCurrentChat(currentChat)
             return ''
         }
         case 'getvar':{

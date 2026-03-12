@@ -1,4 +1,10 @@
-import { getDatabase, resolveChatStateByCharacterAndChatId, setDatabase } from 'src/ts/storage/database.svelte';
+import {
+    getDatabase,
+    resolveChatStateByTarget,
+    resolveSelectedChatState,
+    resolveSelectedChatTarget,
+    setDatabase,
+} from 'src/ts/storage/database.svelte';
 import { selectedCharID } from 'src/ts/stores.svelte';
 import { get } from 'svelte/store';
 import { isDoingChat, sendChat } from '../index.svelte';
@@ -22,15 +28,17 @@ async function sendPofile(arg:sendFileArg){
     let speaker = ''
     let parseMode = 0
     const db = getDatabase()
-    let currentChar = db.characters[get(selectedCharID)]
-    let currentChat = currentChar.chats[currentChar.chatPage]
+    const selectedState = resolveSelectedChatState(db.characters, get(selectedCharID))
+    let currentChar = selectedState.character
+    let currentChat = selectedState.chat
+    if(!currentChar || !currentChat){
+        return
+    }
     currentChat.id ??= v4()
-    const stableTarget = currentChar?.chaId && currentChat?.id
-        ? {
-            characterId: currentChar.chaId,
-            chatId: currentChat.id,
-        }
-        : null
+    const stableTarget = resolveSelectedChatTarget(db.characters, get(selectedCharID))
+    if(!stableTarget){
+        return
+    }
     const lines = arg.file.split('\n')
     for(let i=0;i<lines.length;i++){
         multisendLog(i)
@@ -51,21 +59,13 @@ async function sendPofile(arg:sendFileArg){
                 role: 'user',
                 data: text
             })
-            currentChar.chats[currentChar.chatPage] = currentChat
-            db.characters[get(selectedCharID)] = currentChar
             setDatabase(db)
             isDoingChat.set(false)
-            await sendChat(-1, stableTarget ? { target: stableTarget } : {});
-            if(stableTarget){
-                const stableChatState = resolveChatStateByCharacterAndChatId(
-                    db.characters,
-                    stableTarget.characterId,
-                    stableTarget.chatId,
-                )
-                if(stableChatState.character && stableChatState.chat){
-                    currentChar = stableChatState.character
-                    currentChat = stableChatState.chat
-                }
+            await sendChat(-1, { target: stableTarget });
+            const stableChatState = resolveChatStateByTarget(db.characters, stableTarget)
+            if(stableChatState.character && stableChatState.chat){
+                currentChar = stableChatState.character
+                currentChat = stableChatState.chat
             }
             const res = currentChat.message[currentChat.message.length-1]
             const msgStr = res.data.split('\n').filter((a) => {

@@ -33,12 +33,14 @@ import {
   resolveChatById,
   resolveChatBackgroundMode as resolveChatBackgroundModeFromDatabase,
   resolveChatIndexById,
+  resolveChatStateByTarget,
   resolveChatStateByCharacterAndChatId,
   resolveGlobalRagSettings as resolveGlobalRagSettingsFromDatabase,
   resolveSafeChatIndex,
   resolveSelectedCharacter,
   resolveSelectedChat,
   resolveSelectedChatMessages,
+  resolveSelectedChatTarget,
   setChatByCharacterAndChatId,
   setDatabase,
 } from "./database.svelte";
@@ -437,6 +439,33 @@ describe("selected chat helpers", () => {
       chat: secondChat,
       chatIndex: 1,
       messages: secondChat.message,
+    });
+    expect(
+      resolveChatStateByTarget(characters as never, {
+        characterId: "alpha",
+        chatId: secondChat.id,
+      }),
+    ).toMatchObject({
+      character: characters[0],
+      characterIndex: 0,
+      chat: secondChat,
+      chatIndex: 1,
+      messages: secondChat.message,
+    });
+    expect(
+      resolveChatStateByTarget(characters as never, {
+        characterId: "alpha",
+      }),
+    ).toMatchObject({
+      character: characters[0],
+      characterIndex: 0,
+      chat: secondChat,
+      chatIndex: 1,
+      messages: secondChat.message,
+    });
+    expect(resolveSelectedChatTarget(characters as never, 0)).toEqual({
+      characterId: "alpha",
+      chatId: secondChat.id,
     });
   });
 

@@ -36,19 +36,32 @@ interface Props {
         onValueChange(value)
     })
 
-    const checkFlagContain = (flag:string, matchFlag:string) => {
-        if(flag.length === 1){
-            matchFlag = value.flag.replace(/<(.+?)>/g, '')
+    const updateScript = (patch: Partial<customscript>) => {
+        value = {
+            ...value,
+            ...patch,
         }
-        return matchFlag.includes(flag)
+    }
+
+    const checkFlagContain = (flag:string, matchFlag:string) => {
+        const normalizedMatchFlag = matchFlag ?? ''
+        if(flag.length === 1){
+            return normalizedMatchFlag.replace(/<(.+?)>/g, '').includes(flag)
+        }
+        return normalizedMatchFlag.includes(flag)
     }
 
     const toggleFlag = (flag:string) => {
-        if(checkFlagContain(flag, value.flag)){
-            value.flag = value.flag.replace(flag, '')
+        const currentFlag = value.flag ?? ''
+        if(checkFlagContain(flag, currentFlag)){
+            updateScript({
+                flag: currentFlag.replace(flag, '')
+            })
         }
         else{
-            value.flag += flag
+            updateScript({
+                flag: currentFlag + flag
+            })
         }
     }
 
@@ -61,11 +74,16 @@ interface Props {
     }
 
     const changeOrder = (order:number) => {
-        if(value.flag.includes('<order')){
-            value.flag = value.flag.replace(/<order (-?\d+)>/, `<order ${order}>`)
+        const currentFlag = value.flag ?? ''
+        if(currentFlag.includes('<order')){
+            updateScript({
+                flag: currentFlag.replace(/<order (-?\d+)>/, `<order ${order}>`)
+            })
         }
         else{
-            value.flag += `<order ${order}>`
+            updateScript({
+                flag: currentFlag + `<order ${order}>`
+            })
         }
     }
 
@@ -116,11 +134,18 @@ interface Props {
     {#if open}
         <div class="script-item-body">
             <span class="script-item-title-label">{language.name}</span>
-            <TextInput size="sm" bind:value={value.comment} onchange={() => {
+            <TextInput size="sm" value={value.comment} oninput={(e) => {
+                updateScript({
+                    comment: e.currentTarget.value
+                })
+            }} onchange={() => {
                 $ReloadGUIPointer += 1
             }} />
             <span class="script-item-section-label">Modification Type</span>
-            <SelectInput bind:value={value.type} onchange={() => {
+            <SelectInput value={value.type} onchange={(e) => {
+                updateScript({
+                    type: e.currentTarget.value as customscript["type"]
+                })
                 $ReloadGUIPointer += 1
             }}>
                 <OptionInput value="editinput">{language.editInput}</OptionInput>
@@ -131,9 +156,15 @@ interface Props {
                 <OptionInput value="disabled">{language.disabled}</OptionInput>
             </SelectInput>
             <span class="script-item-title-label">IN:</span>
-            <TextInput size="sm" bind:value={value.in} />
+            <TextInput size="sm" value={value.in} oninput={(e) => {
+                updateScript({
+                    in: e.currentTarget.value
+                })
+            }} />
             <span class="script-item-title-label">OUT:</span>
-            <TextAreaInput highlight autocomplete="off" size="sm" bind:value={value.out} onInput={() => {
+            <TextAreaInput highlight autocomplete="off" size="sm" value={value.out} onValueChange={(out) => {
+                updateScript({ out })
+            }} onInput={() => {
                 $ReloadGUIPointer += 1
             }} />
             {#if value.ableFlag}
@@ -160,7 +191,7 @@ interface Props {
                     </div>
 
                     <span class="script-item-subsection-label">Order Flag</span>
-                    <NumberInput value={getOrder(value.flag)} onChange={(e)=>{
+                    <NumberInput value={getOrder(value.flag ?? '')} onChange={(e)=>{
                         const nextOrder = e.currentTarget.valueAsNumber
                         if(!Number.isFinite(nextOrder)){
                             return
@@ -171,10 +202,11 @@ interface Props {
                 </Accordion>
             {/if}
             <div class="regex-data-customflag-row">
-                <Check bind:check={value.ableFlag} onChange={() => {
-                    if(!value.flag){
-                        value.flag = 'g'
-                    }
+                <Check check={value.ableFlag} onChange={(ableFlag) => {
+                    updateScript({
+                        ableFlag,
+                        flag: ableFlag && !(value.flag ?? '') ? 'g' : value.flag
+                    })
                 }}/>
                 <span>Custom Flag</span>
             </div>

@@ -123,6 +123,34 @@
         return getEffectiveCharacterEvolutionSettings(DBState.db, character)
     })
 
+    function resolveStableTargetFromSelection(options: { ensureChatId?: boolean } = {}) {
+        const selectedState = resolveSelectedChatState(DBState.db.characters, $selectedCharID)
+        const selectedCharacter = selectedState.character
+        const selectedChat = selectedState.chat
+        if (!selectedCharacter?.chaId || !selectedChat) {
+            return null
+        }
+        if (options.ensureChatId && !selectedChat.id) {
+            selectedChat.id = v4()
+        }
+        if (!selectedChat.id) {
+            return null
+        }
+        return {
+            characterId: selectedCharacter.chaId,
+            chatId: selectedChat.id,
+        }
+    }
+
+    function isSameStableTarget(
+        left: { characterId: string; chatId: string } | null,
+        right: { characterId: string; chatId: string } | null,
+    ) {
+        return !!left && !!right
+            && left.characterId === right.characterId
+            && left.chatId === right.chatId
+    }
+
     $effect(() => {
         repairCharacterChatPage(currentCharacter)
     })
@@ -422,20 +450,24 @@
     }
 
     async function sendMain(continueResponse:boolean) {
-        const selectedState = resolveSelectedChatState(DBState.db.characters, $selectedCharID)
+        const stableTarget = resolveStableTargetFromSelection({ ensureChatId: true })
+        if(!stableTarget){
+            return
+        }
+        const selectedState = resolveChatStateByCharacterAndChatId(
+            DBState.db.characters,
+            stableTarget.characterId,
+            stableTarget.chatId,
+        )
         const selectedCharacter = selectedState.character
+        const activeChat = selectedState.chat
         if(!selectedCharacter){
             return
         }
         repairCharacterChatPage(selectedCharacter)
-        const activeChat = selectedState.chat ?? resolveSelectedChat(selectedCharacter)
         if(!activeChat || !Array.isArray(activeChat.message)){
             return
         }
-        if(!selectedCharacter.chaId){
-            return
-        }
-        activeChat.id ??= v4()
         if($isDoingChat){
             return
         }
@@ -528,10 +560,7 @@
         rerolls = []
         await sleep(10)
         updateInputSizeAll()
-        await sendChatMain(continueResponse, {
-            characterId: selectedCharacter.chaId,
-            chatId: activeChat.id,
-        })
+        await sendChatMain(continueResponse, stableTarget)
 
     }
 
@@ -691,11 +720,14 @@
             autoMode = false
             return
         }
-        const selectedChar = $selectedCharID
+        const stableTarget = resolveStableTargetFromSelection({ ensureChatId: true })
+        if(!stableTarget){
+            return
+        }
         autoMode = true
         while(autoMode){
-            await sendChatMain()
-            if(selectedChar !== $selectedCharID){
+            await sendChatMain(false, stableTarget)
+            if(!isSameStableTarget(stableTarget, resolveStableTargetFromSelection())){
                 autoMode = false
             }
         }

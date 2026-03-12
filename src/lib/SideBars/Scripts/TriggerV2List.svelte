@@ -173,6 +173,10 @@
     
     let isRestoringMode = $state(false)
     let previousSelectedTriggerIndex = $state(-1)
+
+    const setEditTriggerDraft = (effect: triggerEffectV2 | null) => {
+        editTrigger = effect ? safeStructuredClone(effect) as triggerEffectV2 : null as triggerEffectV2
+    }
     
     const scrollManager = $state({
         mode0ScrollPosition: { menu0: 0, trigger: 0 },
@@ -2104,7 +2108,7 @@
             selectedEffectIndex = effectIndex
             
             if (effect) {
-                editTrigger = effect as triggerEffectV2
+                setEditTriggerDraft(effect as triggerEffectV2)
             }
         } else if (mode === 0) {
             if (!isTriggerSelected(effectIndex)) {
@@ -3978,53 +3982,54 @@
 
                     <Button className="mt-4" onclick={() => {
                         if(!value || !value[selectedIndex] || selectedIndex < 0 || selectedIndex >= value.length) return;
+                        const nextEditTrigger = safeStructuredClone(editTrigger) as triggerEffectV2
                         if(selectedEffectIndex === -1){
-                            value[selectedIndex].effect.push(editTrigger)
+                            value[selectedIndex].effect.push(nextEditTrigger)
 
-                            if(editTrigger.type === 'v2If'  || editTrigger.type === 'v2IfAdvanced' || editTrigger.type === 'v2Loop' || editTrigger.type === 'v2Else' || editTrigger.type === 'v2LoopNTimes'){
+                            if(nextEditTrigger.type === 'v2If'  || nextEditTrigger.type === 'v2IfAdvanced' || nextEditTrigger.type === 'v2Loop' || nextEditTrigger.type === 'v2Else' || nextEditTrigger.type === 'v2LoopNTimes'){
                                 value[selectedIndex].effect.push({
                                     type: 'v2EndIndent',
-                                    indent: editTrigger.indent + 1,
-                                    endOfLoop: editTrigger.type === 'v2Loop' || editTrigger.type === 'v2LoopNTimes'
+                                    indent: nextEditTrigger.indent + 1,
+                                    endOfLoop: nextEditTrigger.type === 'v2Loop' || nextEditTrigger.type === 'v2LoopNTimes'
                                 })
 
                                 if(addElse){
                                     value[selectedIndex].effect.push({
                                         type: 'v2Else',
-                                        indent: editTrigger.indent
+                                        indent: nextEditTrigger.indent
                                     })
                                     value[selectedIndex].effect.push({
                                         type: 'v2EndIndent',
-                                        indent: editTrigger.indent + 1
+                                        indent: nextEditTrigger.indent + 1
                                     })
                                 }
                             }
                         }
                         else if(menuMode === 2){
-                            editTrigger.indent = (value[selectedIndex].effect[selectedEffectIndex] as triggerEffectV2).indent
-                            if(editTrigger.type === 'v2If' || editTrigger.type === 'v2IfAdvanced' || editTrigger.type === 'v2Loop' || editTrigger.type === 'v2LoopNTimes' || editTrigger.type === 'v2Else'){
+                            nextEditTrigger.indent = (value[selectedIndex].effect[selectedEffectIndex] as triggerEffectV2).indent
+                            if(nextEditTrigger.type === 'v2If' || nextEditTrigger.type === 'v2IfAdvanced' || nextEditTrigger.type === 'v2Loop' || nextEditTrigger.type === 'v2LoopNTimes' || nextEditTrigger.type === 'v2Else'){
                                 value[selectedIndex].effect.splice(selectedEffectIndex, 0, {
                                     type: 'v2EndIndent',
-                                    indent: editTrigger.indent + 1,
-                                    endOfLoop: editTrigger.type === 'v2Loop' || editTrigger.type === 'v2LoopNTimes'
+                                    indent: nextEditTrigger.indent + 1,
+                                    endOfLoop: nextEditTrigger.type === 'v2Loop' || nextEditTrigger.type === 'v2LoopNTimes'
                                 })
                                 
                                 if(addElse){
                                     value[selectedIndex].effect.splice(selectedEffectIndex, 0, {
                                         type: 'v2Else',
-                                        indent: editTrigger.indent
+                                        indent: nextEditTrigger.indent
                                     })
                                     value[selectedIndex].effect.splice(selectedEffectIndex, 0, {
                                         type: 'v2EndIndent',
-                                        indent: editTrigger.indent + 1
+                                        indent: nextEditTrigger.indent + 1
                                     })
                                 }
                             }
-                            value[selectedIndex].effect.splice(selectedEffectIndex, 0, editTrigger)
+                            value[selectedIndex].effect.splice(selectedEffectIndex, 0, nextEditTrigger)
                         }
                         else if(menuMode === 3){
                             const originalEffect = value[selectedIndex].effect[selectedEffectIndex] as triggerEffectV2
-                            const isIfType = editTrigger.type === 'v2If' || editTrigger.type === 'v2IfAdvanced'
+                            const isIfType = nextEditTrigger.type === 'v2If' || nextEditTrigger.type === 'v2IfAdvanced'
                             
                             if(isIfType){
                                 let hasExistingElse = false
@@ -4078,10 +4083,10 @@
                                 }
                             }
                             
-                            value[selectedIndex].effect[selectedEffectIndex] = editTrigger
+                            value[selectedIndex].effect[selectedEffectIndex] = nextEditTrigger
                         }
                         else{
-                            value[selectedIndex].effect[selectedEffectIndex] = editTrigger
+                            value[selectedIndex].effect[selectedEffectIndex] = nextEditTrigger
                         }
                         if(selectedIndex > 0) {
                             selectedTriggerIndex = selectedIndex;

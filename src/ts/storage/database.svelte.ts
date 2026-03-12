@@ -688,6 +688,16 @@ export function resolveSelectedChatState(
     }
 }
 
+export interface ChatTargetRef {
+    characterId: string
+    chatId: string
+}
+
+type ChatTargetLookup = {
+    characterId: string
+    chatId?: string | null
+}
+
 export function resolveCharacterEntryIndexById(
     characters: Array<character | groupChat> | undefined | null,
     characterId: string,
@@ -745,6 +755,55 @@ export function resolveChatStateByCharacterAndChatId(
         chat,
         chatIndex,
         messages: chat?.message ?? [],
+    }
+}
+
+export function resolveChatStateByTarget(
+    characters: Array<character | groupChat> | undefined | null,
+    target: ChatTargetLookup | null | undefined,
+) {
+    if (!target?.characterId) {
+        return {
+            character: null,
+            characterIndex: -1,
+            chat: null,
+            chatIndex: -1,
+            messages: [],
+        }
+    }
+
+    if (target.chatId) {
+        return resolveChatStateByCharacterAndChatId(
+            characters,
+            target.characterId,
+            target.chatId,
+        )
+    }
+
+    const characterIndex = resolveCharacterEntryIndexById(characters, target.characterId)
+    const character = characterIndex >= 0 ? characters?.[characterIndex] ?? null : null
+    const chatIndex = resolveSafeChatIndex(character?.chats, character?.chatPage)
+    const chat = chatIndex >= 0 ? character?.chats?.[chatIndex] ?? null : null
+    return {
+        character,
+        characterIndex,
+        chat,
+        chatIndex,
+        messages: chat?.message ?? [],
+    }
+}
+
+export function resolveSelectedChatTarget(
+    characters: Array<character | groupChat> | undefined | null,
+    selectedCharacterIndex: number,
+): ChatTargetRef | null {
+    const { character, chat } = resolveSelectedChatState(characters, selectedCharacterIndex)
+    if (!character?.chaId || !chat?.id) {
+        return null
+    }
+    return {
+        characterId: character.chaId,
+        chatId: chat.id,
     }
 }
 

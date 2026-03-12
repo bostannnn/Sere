@@ -4,9 +4,10 @@ import { get, writable } from "svelte/store";
 import {
     changeToPreset,
     getDatabase,
+    resolveChatStateByTarget,
     resolveChatStateByCharacterAndChatId,
     resolveGlobalRagSettings,
-    resolveSelectedChat,
+    resolveSelectedChatState,
     setChatByCharacterAndChatId,
     type character,
     type Chat,
@@ -283,27 +284,8 @@ export async function sendChat(chatProcessIndex = -1,arg:{
     DBState.db.statics.messages += 1
     const selectedChar = get(selectedCharID)
     const selectedChatState = arg.target
-        ? resolveChatStateByCharacterAndChatId(DBState.db.characters, arg.target.characterId, arg.target.chatId)
-        : (() => {
-            const character = DBState.db.characters[selectedChar]
-            if(!character){
-                return {
-                    character: null,
-                    characterIndex: -1,
-                    chat: null,
-                    chatIndex: -1,
-                    messages: [],
-                }
-            }
-            const chat = resolveSelectedChat(character)
-            return {
-                character,
-                characterIndex: selectedChar,
-                chat,
-                chatIndex: character.chats.findIndex((candidate) => candidate === chat),
-                messages: chat?.message ?? [],
-            }
-        })()
+        ? resolveChatStateByTarget(DBState.db.characters, arg.target)
+        : resolveSelectedChatState(DBState.db.characters, selectedChar)
     const nowChatroom = selectedChatState.character
     const selectedChatEntry = selectedChatState.chat
     if (!nowChatroom || !selectedChatEntry) {
