@@ -139,7 +139,7 @@ function createAuditPayloadBuilders(arg = {}) {
             summaryPreview: truncateAuditText(summary),
         };
         if (endpoint === 'memory_manual_summarize') {
-            const memoryData = body?.memoryData || body?.hypaV3Data;
+            const memoryData = body?.memoryData;
             const summariesCount = Array.isArray(memoryData?.summaries) ? memoryData.summaries.length : 0;
             return {
                 ...base,

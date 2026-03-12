@@ -103,14 +103,14 @@ export function setDatabase(data:Database){
         ensureCharacterEvolution(char)
         setCharacterMemoryPromptOverride(
             char,
-            char.memoryPromptOverride ?? char.hypaV3PromptOverride ?? { summarizationPrompt: '' }
+            char.memoryPromptOverride ?? { summarizationPrompt: '' }
         )
         if (!Array.isArray(char?.chats)) {
             continue
         }
         for (const chat of char.chats) {
             normalizeChatBackground(chat)
-            setChatMemoryData(chat, chat.memoryData ?? chat.hypaV3Data)
+            setChatMemoryData(chat, chat.memoryData)
         }
     }
     if(checkNullish(data.apiType)){
@@ -491,10 +491,10 @@ export function setDatabase(data:Database){
     data.OaiCompAPIKeys ??= {}
     data.globalRagSettings = resolveGlobalRagSettings(data.globalRagSettings)
     data.reasoningEffort ??= 0
-    const normalizedMemoryPresets = (data.memoryPresets ?? data.hypaV3Presets)?.length ? (data.memoryPresets ?? data.hypaV3Presets) : [
+    const normalizedMemoryPresets = data.memoryPresets?.length ? data.memoryPresets : [
         createMemoryPreset("Default", {
             summarizationPrompt: data.supaMemoryPrompt ? data.supaMemoryPrompt : "",
-            ...(data.memorySettings ?? data.hypaV3Settings)
+            ...(data.memorySettings ?? {})
         })
     ]
     const mappedMemoryPresets = normalizedMemoryPresets.map((preset, i) =>
@@ -509,7 +509,7 @@ export function setDatabase(data:Database){
     }
     setDbMemoryPresets(data, mappedMemoryPresets)
     const normalizedMemoryPresetId = Math.min(
-        Math.max(Number(data.memoryPresetId ?? data.hypaV3PresetId ?? 0) || 0, 0),
+        Math.max(Number(data.memoryPresetId ?? 0) || 0, 0),
         Math.max(mappedMemoryPresets.length - 1, 0)
     )
     setDbMemoryPresetId(data, normalizedMemoryPresetId)
@@ -517,12 +517,10 @@ export function setDatabase(data:Database){
         data,
         mappedMemoryPresets[normalizedMemoryPresetId]?.settings
             ?? data.memorySettings
-            ?? data.hypaV3Settings
             ?? createMemoryPreset('Default').settings
     )
-    setDbMemoryDebug(data, data.memoryDebug ?? data.hypaV3Debug)
-    // Keep runtime on the neutral memory contract while reading legacy fields during migration.
-    setDbMemoryEnabled(data, data.memoryEnabled ?? data.hypaV3 ?? true)
+    setDbMemoryDebug(data, data.memoryDebug)
+    setDbMemoryEnabled(data, data.memoryEnabled ?? true)
     data.supaModelType = 'none'
     const legacyMemoryConfig = data as unknown as Record<string, unknown>
     delete legacyMemoryConfig.hypaMemoryKey

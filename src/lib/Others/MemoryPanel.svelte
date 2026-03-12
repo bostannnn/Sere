@@ -56,26 +56,9 @@
             />
 
             {#if modal.memoryData.summaries.length === 0}
-              {#if modal.isHypaV2ConversionPossible()}
-                <div class="ds-memory-modal-convert-card panel-shell">
-                  <div class="ds-memory-modal-convert-center">
-                    <div class="ds-memory-modal-convert-label">
-                      {language.memoryModal.convertLabel}
-                    </div>
-                    <button
-                      type="button"
-                      class="ds-memory-modal-convert-button control-chip"
-                      onclick={modal.handleConvertHypaV2}
-                    >
-                      {language.memoryModal.convertButton}
-                    </button>
-                  </div>
-                </div>
-              {:else}
-                <div class="ds-memory-modal-empty-note empty-state">
-                  {language.memoryModal.noSummariesLabel}
-                </div>
-              {/if}
+              <div class="ds-memory-modal-empty-note empty-state">
+                {language.memoryModal.noSummariesLabel}
+              </div>
             {:else if modal.searchState}
               <div class="ds-memory-modal-search-sticky">
                 <div class="ds-memory-modal-search-row">

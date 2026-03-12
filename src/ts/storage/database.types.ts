@@ -7,7 +7,6 @@ import type { OobaChatCompletionRequestParams } from '../model/ooba';
 import type { MemorySettings, MemoryPreset, SerializableMemoryData } from '../process/memory/memory';
 import type { OnnxModelFiles } from '../process/transformers';
 import type { RisuModule } from '../process/modules';
-import type { SerializableHypaV2Data } from '../process/memory/hypav2';
 import type { LLMFlags, LLMFormat, LLMTokenizer } from '../model/modellist';
 import type { HypaModel } from '../process/memory/hypamemory';
 import type { Hotkey } from '../defaulthotkeys';
@@ -284,10 +283,6 @@ export interface Database{
     memorySettings?: MemorySettings
     memoryPresets?: MemoryPreset[]
     memoryPresetId?: number
-    hypaV3:boolean // migration-only legacy read path
-    hypaV3Settings: MemorySettings // migration-only legacy read path
-    hypaV3Presets: MemoryPreset[] // migration-only legacy read path
-    hypaV3PresetId: number // migration-only legacy read path
     OaiCompAPIKeys: {[key:string]:string}
     inlayErrorResponse:boolean
     globalRagSettings: RagSettings
@@ -382,29 +377,6 @@ export interface Database{
     newMessageButtonStyle?: string
     createFolderOnBranch?:boolean
     memoryDebug?:{
-        timestamp:number
-        model:string
-        prompt:string
-        input:string
-        formatted:{role:string, content:string}[]
-        rawResponse?:string
-        characterId?:string
-        chatId?:string
-        start?:number
-        end?:number
-        source?:"manual"|"periodic"
-        promptSource?:"request_override"|"character_override"|"preset_or_default"
-        periodic?:{
-            totalChats:number
-            lastIndex:number
-            newMessages:number
-            interval:number
-            toSummarizeCount:number
-            skippedReason?:string
-            chatName?:string
-        }
-    }
-    hypaV3Debug?:{ // migration-only legacy read path
         timestamp:number
         model:string
         prompt:string
@@ -747,7 +719,6 @@ export interface character{
     prebuiltAssetStyle?:string
     prebuiltAssetExclude?:string[]
     memoryPromptOverride?: MemoryPromptOverride
-    hypaV3PromptOverride?: MemoryPromptOverride // migration-only legacy read path
     modules?:string[]
     gameState?: Record<string, any>
     characterEvolution?: CharacterEvolutionSettings
@@ -838,7 +809,6 @@ export interface groupChat{
     prebuiltAssetStyle?:string
     prebuiltAssetExclude?:string[]
     memoryPromptOverride?: MemoryPromptOverride
-    hypaV3PromptOverride?: MemoryPromptOverride // migration-only legacy read path
     modules?:string[]
     gameState?: Record<string, any>
     characterEvolution?: CharacterEvolutionSettings
@@ -991,8 +961,6 @@ export interface Chat{
     localLore: loreBook[]
     backgroundMode?: 'inherit' | 'default' | 'custom'
     backgroundImage?: string
-    supaMemoryData?:string
-    hypaV2Data?:SerializableHypaV2Data // migration-only legacy read path
     lastMemory?:string
     suggestMessages?:string[]
     isStreaming?:boolean
@@ -1002,7 +970,6 @@ export interface Chat{
     bindedPersona?:string
     fmIndex?:number
     memoryData?:SerializableMemoryData
-    hypaV3Data?:SerializableMemoryData // migration-only legacy read path
     folderId?:string
     lastDate?:number
     bookmarks?: string[];

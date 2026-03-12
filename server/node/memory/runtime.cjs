@@ -23,6 +23,7 @@ const {
     resolveSummarySlotAllocation,
 } = require('./similarity.cjs');
 const { stripThoughtBlocks } = require('../llm/scripts.cjs');
+const { MEMORY_PROMPT_TAG } = require('../../../src/ts/process/promptTemplateShared.cjs');
 
 function wrapWithXml(tag, content) {
     return `<${tag}>\n${content}\n</${tag}>`;
@@ -30,7 +31,6 @@ function wrapWithXml(tag, content) {
 
 const SUMMARY_HEADING_REGEX = /^\s*Roleplay Scene Summary\s*\n+/i;
 const SUMMARY_KEYWORDS_REGEX = /\n+\s*Keywords?\s*:\s*.*$/is;
-const MEMORY_PROMPT_TAG = 'Past Events Summary';
 
 function stripSummaryForPrompt(content) {
     const text = toStringOrEmpty(content);

@@ -913,8 +913,8 @@ async function importCharacterCardSpec(card:CharacterCardV2Risu|CharacterCardV3,
         defaultVariables: data?.extensions?.risuai?.defaultVariables ?? '',
         chatFolders: [],
         memoryPromptOverride: {
-            summarizationPrompt: typeof (data?.extensions?.risuai?.memoryPromptOverride ?? data?.extensions?.risuai?.hypaV3PromptOverride)?.summarizationPrompt === 'string'
-                ? (data.extensions.risuai.memoryPromptOverride ?? data.extensions.risuai.hypaV3PromptOverride).summarizationPrompt
+            summarizationPrompt: typeof data?.extensions?.risuai?.memoryPromptOverride?.summarizationPrompt === 'string'
+                ? data.extensions.risuai.memoryPromptOverride.summarizationPrompt
                 : '',
         },
         prebuiltAssetCommand: data?.extensions?.risuai?.prebuiltAssetCommand ?? '',
@@ -1653,10 +1653,6 @@ type CharacterCardV2Risu = {
                 additionalText?:string
                 randomAltFirstMessageOnNewChat?:boolean
                 memoryPromptOverride?:{
-                    summarizationPrompt?: string
-                }
-                // Legacy import-only compatibility.
-                hypaV3PromptOverride?:{
                     summarizationPrompt?: string
                 }
                 virtualscript?:string

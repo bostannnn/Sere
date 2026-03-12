@@ -10,11 +10,6 @@ import {
   setCharacterMemoryPromptOverride,
   setChatMemoryData,
 } from "src/ts/process/memory/storage";
-import {
-  convertHypaV2DataToMemoryData,
-  type OldHypaV2Data,
-  type SerializableHypaV2Data,
-} from "src/ts/process/memory/hypav2";
 import type { ManualState } from "./types";
 
 export interface ManualSummarizeTarget {
@@ -26,8 +21,6 @@ interface MemoryModalChatLike {
   id?: string;
   message?: Array<{ chatId?: string }>;
   memoryData?: SerializableMemoryData & { lastManualDebug?: SummarizeDebugLog };
-  hypaV3Data?: SerializableMemoryData & { lastManualDebug?: SummarizeDebugLog };
-  hypaV2Data?: SerializableHypaV2Data | OldHypaV2Data | null;
 }
 
 interface MemoryModalCharacterLike {
@@ -48,9 +41,6 @@ export function createEmptyMemoryData(
 export function normalizePromptOverrideCharacter(
   char: {
     memoryPromptOverride?: {
-      summarizationPrompt?: unknown;
-    };
-    hypaV3PromptOverride?: {
       summarizationPrompt?: unknown;
     };
   } | null,
@@ -153,7 +143,7 @@ function persistManualDebugForActiveChat(args: {
   const targetCharacter = characters[targetIndices.characterIndex];
   const targetChat = targetCharacter?.chats?.[targetIndices.chatIndex];
   if (!targetCharacter || !targetChat) return;
-  const nextData = targetChat.memoryData ?? targetChat.hypaV3Data ?? createEmptyMemoryData(uncategorizedLabel);
+  const nextData = targetChat.memoryData ?? createEmptyMemoryData(uncategorizedLabel);
   nextData.lastManualDebug = debug;
   setChatMemoryData(targetChat, nextData);
   if (isTargetActive(target)) {
@@ -168,9 +158,6 @@ export async function manualSummarizeRange(args: {
   currentChar: { chaId?: string } | null;
   promptOverrideCharacter: {
     memoryPromptOverride?: {
-      summarizationPrompt?: string;
-    };
-    hypaV3PromptOverride?: {
       summarizationPrompt?: string;
     };
   } | null;
@@ -242,7 +229,7 @@ export async function manualSummarizeRange(args: {
       "/data/memory/manual-summarize",
       requestPayload,
     );
-    const resultMemoryData = (result.memoryData ?? result.hypaV3Data) as SerializableMemoryData | undefined;
+    const resultMemoryData = result.memoryData as SerializableMemoryData | undefined;
     if (resultMemoryData) {
       syncMemoryDataFromServer({
         data: resultMemoryData,
@@ -344,47 +331,4 @@ export async function manualSummarizeRange(args: {
     manualState.feedbackMessage = `Manual summarize failed: ${toErrorMessage(error)}`;
   }
   manualState.processing = false;
-}
-
-export function isHypaV2ConversionPossible(args: {
-  characters: MemoryModalCharacterLike[] | undefined;
-  selectedCharIndex: number;
-  effectiveChatIndex: number;
-}): boolean {
-  const chat = args.characters?.[args.selectedCharIndex]?.chats?.[args.effectiveChatIndex];
-  return (
-    (getChatMemoryData(chat)?.summaries?.length ?? 0) === 0 &&
-    chat?.hypaV2Data != null
-  );
-}
-
-export function convertHypaV2ToMemory(args: {
-  characters: MemoryModalCharacterLike[] | undefined;
-  selectedCharIndex: number;
-  effectiveChatIndex: number;
-  uncategorizedLabel: string;
-}): { success: boolean; error?: string } {
-  try {
-    const chat = args.characters?.[args.selectedCharIndex]?.chats?.[args.effectiveChatIndex];
-    if (!chat) return { success: false, error: "Chat not found." };
-    if ((getChatMemoryData(chat)?.summaries?.length ?? 0) > 0) {
-      return { success: false, error: "Memory data already exists." };
-    }
-    const hypaV2Data = chat?.hypaV2Data ?? undefined;
-    if (!hypaV2Data) return { success: false, error: "HypaV2 data not found." };
-    const converted = convertHypaV2DataToMemoryData({
-      data: hypaV2Data,
-      chats: (chat.message ?? []).map((message) => ({
-        memo: typeof message?.chatId === "string" ? message.chatId : "",
-      })),
-      uncategorizedLabel: args.uncategorizedLabel,
-    });
-    if (!converted) {
-      return { success: false, error: "No convertible HypaV2 summaries found." };
-    }
-    setChatMemoryData(chat, converted);
-    return { success: true };
-  } catch (error) {
-    return { success: false, error: `Error occurred: ${toErrorMessage(error)}` };
-  }
 }

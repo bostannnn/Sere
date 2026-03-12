@@ -17,6 +17,7 @@ import type {
 export interface AcceptedEvolutionProposalPayload extends Record<string, unknown> {
     state?: CharacterEvolutionState
     version?: number | string
+    acceptedAt?: number | string
     chatCreationError?: string
 }
 

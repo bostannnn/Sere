@@ -41,10 +41,21 @@ import { convertInlineImagesToInlays } from "./inlineInlays";
 import { syncGameStateFromServer, updateGameStateFromMessage } from "./gameStateSync";
 import { ensureGenerationMessageTarget } from "./generationMessageTarget";
 import { tryServerMemoryMerge } from "./memorySync";
+import * as promptTemplateShared from "./promptTemplateShared";
 import type { RagResult, RulebookMetadata } from "./rag/types";
 const processLog = (..._args: unknown[]) => {};
-const LEGACY_MEMORY_MESSAGE_MEMOS = new Set(["supaMemory", "hypaMemory"]);
 const CANONICAL_MEMORY_MESSAGE_MEMO = "memory";
+const {
+    hasTemplateRangeConfig,
+    MEMORY_PROMPT_TAG: promptMemoryTag,
+    normalizeTemplateRange,
+    renderPromptMemoryContent,
+} = promptTemplateShared as {
+    hasTemplateRangeConfig: (rangeStart?: number, rangeEnd?: number | 'end') => boolean
+    MEMORY_PROMPT_TAG: string
+    normalizeTemplateRange: <T>(items: T[], rangeStart?: number, rangeEnd?: number | 'end') => T[]
+    renderPromptMemoryContent: (summaryItems: string[]) => string
+}
 
 export interface OpenAIChat{
     role: 'system'|'user'|'assistant'|'function'
@@ -96,47 +107,6 @@ const SNAPSHOT_SYNC_MAX_ATTEMPTS = 3
 const SNAPSHOT_SYNC_RETRY_BASE_DELAY_MS = 350
 const dataUrlImageRegex = /data:image\/[a-zA-Z0-9.+-]+;base64,[A-Za-z0-9+/=]+/g;
 const markdownDataImageRegex = /!\[[^\]]*]\((data:image\/[a-zA-Z0-9.+-]+;base64,[^)]+)\)/g;
-const promptMemoryTag = "Past Events Summary"
-
-function normalizeTemplateRange<T>(items:T[], rangeStart?:number, rangeEnd?:number|'end'): T[] {
-    const source = Array.isArray(items) ? items : []
-    let start = Number.isFinite(Number(rangeStart)) ? Number(rangeStart) : 0
-    let end = (rangeEnd === 'end')
-        ? source.length
-        : (Number.isFinite(Number(rangeEnd)) ? Number(rangeEnd) : source.length)
-
-    if(start === -1000){
-        start = 0
-        end = source.length
-    }
-    if(start < 0){
-        start = source.length + start
-        if(start < 0){
-            start = 0
-        }
-    }
-    if(end < 0){
-        end = source.length + end
-        if(end < 0){
-            end = 0
-        }
-    }
-    if(start >= end){
-        return []
-    }
-    return source.slice(start, end)
-}
-
-function hasTemplateRangeConfig(rangeStart?:number, rangeEnd?:number|'end'): boolean {
-    return Number.isFinite(Number(rangeStart))
-        || rangeEnd === 'end'
-        || Number.isFinite(Number(rangeEnd))
-}
-
-function renderPromptMemoryContent(summaryItems:string[]): string {
-    return `<${promptMemoryTag}>\n${summaryItems.join('\n\n')}\n</${promptMemoryTag}>`
-}
-
 export async function sendChat(chatProcessIndex = -1,arg:{
     chatAdditonalTokens?:number,
     signal?:AbortSignal,
@@ -1193,9 +1163,6 @@ export async function sendChat(chatProcessIndex = -1,arg:{
 
 
     unformated.chats = chats.map((v) => {
-        if(LEGACY_MEMORY_MESSAGE_MEMOS.has(v.memo ?? '')){
-            v.memo = CANONICAL_MEMORY_MESSAGE_MEMO
-        }
         if(v.memo !== CANONICAL_MEMORY_MESSAGE_MEMO){
             v.removable = true
         }

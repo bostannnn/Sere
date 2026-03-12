@@ -138,7 +138,7 @@ describe("database chatReadingMode normalization", () => {
     expect(db.botPresets[0]).not.toHaveProperty("ooba");
   });
 
-  it("removes retired memory config fields and legacy hypav2 data once canonical memory data exists", () => {
+  it("removes retired memory config fields while preserving canonical memory data", () => {
     const db = applySetDatabase({
       characters: [
         {
@@ -149,12 +149,7 @@ describe("database chatReadingMode normalization", () => {
               note: "",
               name: "Chat 1",
               localLore: [],
-              hypaV2Data: {
-                lastMainChunkID: 0,
-                chunks: [],
-                mainChunks: [],
-              },
-              hypaV3Data: {
+              memoryData: {
                 summaries: [],
                 categories: [{ id: "", name: "Unclassified" }],
                 lastSelectedSummaries: [],

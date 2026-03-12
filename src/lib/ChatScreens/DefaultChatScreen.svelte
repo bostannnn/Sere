@@ -42,23 +42,25 @@
     import { runComfyTemplateById } from 'src/ts/integrations/comfy/execute';
     import ReviewWorkspace from '../Evolution/ReviewWorkspace.svelte';
     import {
-        createCharacterEvolutionProposal,
+        replaceMessageTailWithSnapshot,
+        trimMessagesForRerollRequest,
+    } from './defaultChatScreen.reroll';
+    import {
         getCharacterEvolutionErrorMessage,
         getPendingCharacterEvolutionProposal,
     } from 'src/ts/evolution';
     import {
-        acceptEvolutionProposalAction,
-        rejectEvolutionProposalAction,
-    } from 'src/ts/character-evolution/actions';
-    import {
-        getEvolutionProposalIdentity,
-        withAcceptedEvolutionState,
-        withPendingEvolutionProposal,
-    } from 'src/ts/character-evolution/workflow';
+        acceptEvolutionProposalReview,
+        createEvolutionProposalDraftState,
+        hasAcceptedEvolutionForChat,
+        rejectEvolutionProposalReview,
+        requestEvolutionProposal,
+    } from 'src/ts/character-evolution/reviewActions';
     import {
         ensureCharacterEvolution,
         getEffectiveCharacterEvolutionSettings,
     } from 'src/ts/characterEvolution';
+    import { findSingleCharacterById, replaceCharacterById } from 'src/ts/storage/characterList';
     const defaultChatScreenLog = (..._args: unknown[]) => {};
     
     interface Props {
@@ -117,25 +119,15 @@
     $effect(() => {
         repairCharacterChatPage(currentCharacter)
     })
-    function findCharacterIndexById(characterId: string): number {
-        return DBState.db.characters.findIndex((entry) => entry?.type !== 'group' && entry?.chaId === characterId)
-    }
-
     function findCharacterById(characterId: string) {
-        const characterIndex = findCharacterIndexById(characterId)
-        if (characterIndex < 0) {
-            return null
-        }
-        const entry = DBState.db.characters[characterIndex]
-        return entry && entry.type !== 'group' ? entry : null
+        return findSingleCharacterById(DBState.db.characters, characterId)
     }
 
     function commitCharacter(characterId: string, nextCharacter: NonNullable<ReturnType<typeof findCharacterById>>) {
-        const characterIndex = findCharacterIndexById(characterId)
-        if (characterIndex < 0) {
+        if (!characterId) {
             return
         }
-        DBState.db.characters[characterIndex] = nextCharacter
+        replaceCharacterById(DBState.db.characters, nextCharacter)
     }
 
     const evolutionHandoffBlockedForCurrentChat = $derived.by(() => {
@@ -290,41 +282,27 @@
         }
         const characterId = currentCharacter.chaId
         const activeChat = currentChatEntry
-        const alreadyAccepted = currentCharacter.characterEvolution.lastProcessedChatId
-            && currentCharacter.characterEvolution.lastProcessedChatId === activeChat?.id
-        if (currentCharacter.characterEvolution.pendingProposal) {
-            alertError("Resolve the current evolution proposal before running another handoff.")
-            return
-        }
+        const alreadyAccepted = hasAcceptedEvolutionForChat(currentCharacter, activeChat?.id ?? null)
         if (alreadyAccepted && !forceReplay) {
             if (typeof window !== 'undefined' && !window.confirm("This chat was already accepted for evolution. Replay handoff for recovery?")) {
                 return
             }
             forceReplay = true
         }
-        if (!characterId || !activeChat?.id) {
-            alertError("Cannot start evolution handoff without a saved character and chat.")
-            return
-        }
         evolutionBusy = true
         evolutionAction = 'handoff'
         openMenu = false
         try {
-            const payload = await createCharacterEvolutionProposal(
-                characterId,
-                activeChat.id,
-                forceReplay ? { forceReplay: true } : {},
-            )
-            const characterEntry = findCharacterById(characterId)
-            if (!characterEntry) {
-                return
-            }
-            const proposal = payload.proposal as typeof characterEntry.characterEvolution.pendingProposal
-            const nextCharacter = withPendingEvolutionProposal(characterEntry, proposal)
-            commitCharacter(characterId, nextCharacter)
+            const result = await requestEvolutionProposal({
+                characterEntry: currentCharacter,
+                chatId: activeChat?.id ?? null,
+                forceReplay,
+                resolveCharacterById: findCharacterById,
+            })
+            commitCharacter(characterId, result.nextCharacter)
             if (currentCharacter?.chaId === characterId) {
-                evolutionProposalDraft = JSON.parse(JSON.stringify(proposal?.proposedState ?? {}))
-                evolutionProposalDraftKey = getEvolutionProposalIdentity(characterId, proposal)
+                evolutionProposalDraft = result.proposalDraft
+                evolutionProposalDraftKey = result.proposalDraftKey
                 showEvolutionProposal = true
             }
             alertNormal(forceReplay ? "Evolution proposal was regenerated for the accepted chat." : "Evolution proposal is ready for review.")
@@ -344,12 +322,7 @@
         evolutionBusy = true
         evolutionAction = 'reject'
         try {
-            await rejectEvolutionProposalAction(characterId)
-            const characterEntry = findCharacterById(characterId)
-            if (!characterEntry) {
-                return
-            }
-            const nextCharacter = withPendingEvolutionProposal(characterEntry, null)
+            const nextCharacter = await rejectEvolutionProposalReview(currentCharacter)
             commitCharacter(characterId, nextCharacter)
             if (currentCharacter?.chaId === characterId) {
                 evolutionProposalDraft = null
@@ -377,21 +350,12 @@
             const acceptedSourceChatId = currentCharacter.characterEvolution.pendingProposal?.sourceChatId
                 ?? currentChatEntry?.id
                 ?? null
-            const payload = await acceptEvolutionProposalAction({
-                characterId,
+            const { nextCharacter, payload } = await acceptEvolutionProposalReview({
+                characterEntry: currentCharacter,
                 proposedState,
                 createNextChat,
-            })
-            const characterEntry = findCharacterById(characterId)
-            if (!characterEntry) {
-                return
-            }
-            const nextCharacter = withAcceptedEvolutionState({
-                characterEntry,
-                state: payload.state as typeof characterEntry.characterEvolution.currentState,
-                version: payload.version,
-                acceptedAt: (payload as { acceptedAt?: number | string }).acceptedAt,
                 sourceChatId: acceptedSourceChatId,
+                resolveCharacterById: findCharacterById,
             })
             commitCharacter(characterId, nextCharacter)
             if (currentCharacter?.chaId === characterId) {
@@ -422,15 +386,15 @@
 
     $effect(() => {
         const proposal = getPendingCharacterEvolutionProposal(currentCharacter)
-        const proposalIdentity = getEvolutionProposalIdentity(currentCharacter?.chaId, proposal)
-        if (!proposalIdentity) {
+        const nextDraftState = createEvolutionProposalDraftState(currentCharacter?.chaId, proposal)
+        if (!nextDraftState.proposalDraftKey) {
             evolutionProposalDraft = null
             evolutionProposalDraftKey = null
             return
         }
-        if (!evolutionProposalDraft || evolutionProposalDraftKey !== proposalIdentity) {
-            evolutionProposalDraft = JSON.parse(JSON.stringify(proposal?.proposedState ?? {}))
-            evolutionProposalDraftKey = proposalIdentity
+        if (!evolutionProposalDraft || evolutionProposalDraftKey !== nextDraftState.proposalDraftKey) {
+            evolutionProposalDraft = nextDraftState.proposalDraft
+            evolutionProposalDraftKey = nextDraftState.proposalDraftKey
         }
     })
 
@@ -630,11 +594,7 @@
             if(Array.isArray(rerolls[rerollid + 1])){
                 rerollid += 1
                 const rerollData = safeStructuredClone(rerolls[rerollid])
-                const msgs = activeChat.message
-                for(let i = 0; i < rerollData.length; i++){
-                    msgs[msgs.length - rerollData.length + i] = rerollData[i]
-                }
-                activeChat.message = msgs
+                activeChat.message = replaceMessageTailWithSnapshot(activeChat.message, rerollData)
             }
             return
         }
@@ -642,25 +602,11 @@
             rerolls.push(safeStructuredClone([activeChat.message.at(-1)]))
             rerollid = rerolls.length - 1
         }
-        const cha = safeStructuredClone(activeChat.message)
+        const cha = trimMessagesForRerollRequest(safeStructuredClone(activeChat.message))
         if(cha.length === 0 ){
             return
         }
         openMenu = false
-        const saying = cha[cha.length - 1].saying
-        let sayingQu = 2
-        while(cha[cha.length - 1].role !== 'user'){
-            if(cha[cha.length - 1].saying === saying){
-                sayingQu -= 1
-                if(sayingQu === 0){
-                    break
-                }
-            }
-            const msg = cha.pop()
-            if(!msg){
-                return
-            }
-        }
         activeChat.message = cha
         await sendChatMain()
     }
@@ -692,11 +638,7 @@
         if(Array.isArray(rerolls[rerollid - 1])){
             rerollid -= 1
             const rerollData = safeStructuredClone(rerolls[rerollid])
-            const msgs = activeChat.message
-            for(let i = 0; i < rerollData.length; i++){
-                msgs[msgs.length - rerollData.length + i] = rerollData[i]
-            }
-            activeChat.message = msgs
+            activeChat.message = replaceMessageTailWithSnapshot(activeChat.message, rerollData)
         }
     }
 

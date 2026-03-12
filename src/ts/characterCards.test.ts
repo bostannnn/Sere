@@ -13,7 +13,7 @@ const shared = vi.hoisted(() => ({
   alertNormalMock: vi.fn(),
 }));
 
-vi.mock(import("src/lang"), () => ({
+vi.mock("src/lang", () => ({
   language: {
     importedCharacter: "Imported",
     successExport: "Exported",
@@ -23,7 +23,7 @@ vi.mock(import("src/lang"), () => ({
   },
 }));
 
-vi.mock(import("src/ts/alert"), () => ({
+vi.mock("src/ts/alert", () => ({
   alertCardExport: vi.fn(),
   alertConfirm: vi.fn(),
   alertError: vi.fn(),
@@ -35,7 +35,7 @@ vi.mock(import("src/ts/alert"), () => ({
   alertWait: vi.fn(),
 }));
 
-vi.mock(import("src/ts/storage/database.svelte"), () => ({
+vi.mock("src/ts/storage/database.svelte", () => ({
   getDatabase: () => shared.db,
   setDatabase: (next: Record<string, unknown>) => {
     shared.db = next as typeof shared.db;
@@ -48,7 +48,7 @@ vi.mock(import("src/ts/storage/database.svelte"), () => ({
   importPreset: vi.fn(),
 }));
 
-vi.mock(import("src/ts/util"), () => ({
+vi.mock("src/ts/util", () => ({
   checkNullish: (value: unknown) => value === null || value === undefined,
   decryptBuffer: async (value: Uint8Array) => value,
   isKnownUri: () => false,
@@ -56,7 +56,7 @@ vi.mock(import("src/ts/util"), () => ({
   sleep: async () => {},
 }));
 
-vi.mock(import("src/ts/globalApi.svelte"), () => ({
+vi.mock("src/ts/globalApi.svelte", () => ({
   AppendableBuffer: class AppendableBuffer {},
   BlankWriter: class BlankWriter {
     async init() {}
@@ -73,7 +73,7 @@ vi.mock(import("src/ts/globalApi.svelte"), () => ({
   VirtualWriter: class VirtualWriter {},
 }));
 
-vi.mock(import("src/ts/stores.svelte"), async () => {
+vi.mock("src/ts/stores.svelte", async () => {
   const { writable } = await import("svelte/store");
   return {
     SettingsMenuIndex: writable(-1),
@@ -81,17 +81,17 @@ vi.mock(import("src/ts/stores.svelte"), async () => {
   };
 });
 
-vi.mock(import("src/ts/parser.svelte"), () => ({
+vi.mock("src/ts/parser.svelte", () => ({
   checkImageType: () => "PNG",
   convertImage: async (data: Uint8Array) => data,
   hasher: async () => "hash",
 }));
 
-vi.mock(import("src/ts/process/files/inlays"), () => ({
+vi.mock("src/ts/process/files/inlays", () => ({
   reencodeImage: async (data: Uint8Array) => data,
 }));
 
-vi.mock(import("src/ts/pngChunk"), () => ({
+vi.mock("src/ts/pngChunk", () => ({
   PngChunk: {
     streamWriter: class StreamWriter {
       async init() {}
@@ -101,7 +101,7 @@ vi.mock(import("src/ts/pngChunk"), () => ({
   },
 }));
 
-vi.mock(import("src/ts/process/processzip"), () => ({
+vi.mock("src/ts/process/processzip", () => ({
   CharXImporter: class CharXImporter {},
   CharXSkippableChecker: async () => ({ success: false, hash: "" }),
   CharXWriter: class CharXWriter {
@@ -111,7 +111,7 @@ vi.mock(import("src/ts/process/processzip"), () => ({
   },
 }));
 
-vi.mock(import("src/ts/process/modules"), () => ({
+vi.mock("src/ts/process/modules", () => ({
   exportModule: async () => new Uint8Array(),
   readModule: async () => ({}),
 }));
@@ -212,9 +212,9 @@ describe("character card memory compatibility", () => {
     expect("hypaV3PromptOverride" in exportedCard.data.extensions.risuai).toBe(false);
   });
 
-  it("imports legacy hypaV3 prompt override into canonical memory prompt override", async () => {
+  it("imports canonical memory prompt override", async () => {
     const { importCharacterProcess } = await import("src/ts/characterCards");
-    const legacyCard = {
+    const card = {
       spec: "chara_card_v3",
       spec_version: "3.0",
       data: {
@@ -240,8 +240,8 @@ describe("character card memory compatibility", () => {
         character_version: "",
         extensions: {
           risuai: {
-            hypaV3PromptOverride: {
-              summarizationPrompt: "Legacy prompt",
+            memoryPromptOverride: {
+              summarizationPrompt: "Canonical prompt",
             },
           },
         },
@@ -255,8 +255,8 @@ describe("character card memory compatibility", () => {
     };
 
     const importedIndex = await importCharacterProcess({
-      name: "legacy-card.json",
-      data: new TextEncoder().encode(JSON.stringify(legacyCard)),
+      name: "canonical-card.json",
+      data: new TextEncoder().encode(JSON.stringify(card)),
     });
 
     expect(importedIndex).toBe(0);
@@ -265,7 +265,6 @@ describe("character card memory compatibility", () => {
     expect(
       (shared.db.characters[0]?.memoryPromptOverride as { summarizationPrompt?: string } | undefined)
         ?.summarizationPrompt,
-    ).toBe("Legacy prompt");
-    expect("hypaV3PromptOverride" in shared.db.characters[0]).toBe(false);
+    ).toBe("Canonical prompt");
   });
 });

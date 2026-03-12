@@ -29,8 +29,12 @@ vi.mock(import("src/lib/SideBars/Evolution/EvolutionSetupPanel.svelte"), async (
   default: (await import("./test-stubs/SimplePanelStub.svelte")).default,
 }));
 
-vi.mock(import("src/lib/SideBars/Evolution/evolutionSettings.actions"), () => ({
+vi.mock(import("src/ts/character-evolution/actions"), () => ({
   acceptEvolutionProposalAction: mocks.acceptEvolutionProposalAction,
+  rejectEvolutionProposalAction: vi.fn(async () => {}),
+}));
+
+vi.mock(import("src/lib/SideBars/Evolution/evolutionSettings.actions"), () => ({
   getEvolutionProposalIdentity: vi.fn((characterId: string | undefined, proposal: { proposalId?: string; sourceChatId?: string; createdAt?: number } | null | undefined) => {
     if (!characterId || !proposal) {
       return null;

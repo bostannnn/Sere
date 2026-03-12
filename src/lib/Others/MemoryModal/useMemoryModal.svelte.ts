@@ -1,7 +1,6 @@
 import { untrack } from "svelte";
 import { SvelteSet } from "svelte/reactivity";
 import { fromStore } from "svelte/store";
-import { alertNormalWait } from "src/ts/alert";
 import { language } from "src/lang";
 import { DBState, selectedCharID } from "src/ts/stores.svelte";
 import { pickLatestSummarizeDebug } from "src/ts/process/memorySync";
@@ -17,9 +16,7 @@ import {
 } from "src/ts/process/memory/storage";
 import { alertConfirmTwice } from "./utils";
 import {
-  convertHypaV2ToMemory,
   createEmptyMemoryData,
-  isHypaV2ConversionPossible,
   manualSummarizeRange,
 } from "./helpers";
 import {
@@ -270,7 +267,6 @@ export function useMemoryModal() {
       promptOverrideCharacter.memoryPromptOverride = {
         summarizationPrompt: value,
       };
-      delete (promptOverrideCharacter as unknown as Record<string, unknown>).hypaV3PromptOverride;
     },
     selectMemoryWorkspaceTabById(id: number) {
       selectMemoryWorkspaceTab(id === 1 ? "settings" : id === 2 ? "log" : "summary");
@@ -334,39 +330,6 @@ export function useMemoryModal() {
     },
     isSummaryVisible(index: number) {
       return isSummaryVisible({ memoryData, filterSelected, index });
-    },
-    isHypaV2ConversionPossible() {
-      return isHypaV2ConversionPossible({
-        characters: DBState.db.characters,
-        selectedCharIndex: selectedCharIndex.current,
-        effectiveChatIndex,
-      });
-    },
-    convertHypaV2ToMemory() {
-      return convertHypaV2ToMemory({
-        characters: DBState.db.characters,
-        selectedCharIndex: selectedCharIndex.current,
-        effectiveChatIndex,
-        uncategorizedLabel: language.memoryModal.unclassified,
-      });
-    },
-    async handleConvertHypaV2() {
-      const result = convertHypaV2ToMemory({
-        characters: DBState.db.characters,
-        selectedCharIndex: selectedCharIndex.current,
-        effectiveChatIndex,
-        uncategorizedLabel: language.memoryModal.unclassified,
-      });
-      const convertedData =
-        getChatMemoryData(DBState.db.characters?.[selectedCharIndex.current]?.chats?.[effectiveChatIndex]);
-      if (result.success && convertedData) {
-        syncActiveChatMemoryData(convertedData as SerializableMemoryData);
-      }
-      await alertNormalWait(
-        result.success
-          ? language.memoryModal.convertSuccessMessage
-          : language.memoryModal.convertErrorMessage.replace("{0}", result.error ?? "Unknown error"),
-      );
     },
     openDropdownClosed() {
       uiState.dropdownOpen = false;

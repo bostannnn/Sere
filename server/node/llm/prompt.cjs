@@ -14,10 +14,15 @@ const {
     getEffectiveCharacterEvolutionSettings,
     renderCharacterEvolutionStateForPrompt,
 } = require('./character_evolution.cjs');
+const {
+    hasTemplateRangeConfig,
+    MEMORY_PROMPT_TAG,
+    normalizeTemplateRange,
+    renderPromptMemoryContent: renderMemoryPromptContent,
+} = require('../../../src/ts/process/promptTemplateShared.cjs');
 
 const TRACE_AUDIT_MAX_MESSAGE_COUNT = 64;
 const TRACE_AUDIT_MAX_CONTENT_CHARS = 1200;
-const MEMORY_PROMPT_TAG = 'Past Events Summary';
 
 function safeJsonClone(value, fallback = null) {
     try {
@@ -179,43 +184,6 @@ function shiftPromptBlockIndices(promptBlocks, startIndex, delta) {
         if (!Number.isInteger(idx) || idx < normalizedStart) continue;
         block.index = idx + normalizedDelta;
     }
-}
-
-function normalizeTemplateRange(items, rangeStart, rangeEnd) {
-    const source = Array.isArray(items) ? items : [];
-    let start = Number.isFinite(Number(rangeStart)) ? Number(rangeStart) : 0;
-    let end = rangeEnd === 'end'
-        ? source.length
-        : (Number.isFinite(Number(rangeEnd)) ? Number(rangeEnd) : source.length);
-
-    if (start === -1000) {
-        start = 0;
-        end = source.length;
-    }
-    if (start < 0) {
-        start = source.length + start;
-        if (start < 0) start = 0;
-    }
-    if (end < 0) {
-        end = source.length + end;
-        if (end < 0) end = 0;
-    }
-    if (start >= end) return [];
-    return source.slice(start, end);
-}
-
-function hasTemplateRangeConfig(card) {
-    if (!card || typeof card !== 'object') return false;
-    return Number.isFinite(Number(card.rangeStart))
-        || card.rangeEnd === 'end'
-        || Number.isFinite(Number(card.rangeEnd));
-}
-
-function renderMemoryPromptContent(summaryItems) {
-    const summaries = Array.isArray(summaryItems)
-        ? summaryItems.filter((item) => typeof item === 'string' && item.trim())
-        : [];
-    return `<${MEMORY_PROMPT_TAG}>\n${summaries.join('\n\n')}\n</${MEMORY_PROMPT_TAG}>`;
 }
 
 function convertStoredChatToOpenAIMessages(storedMessages, arg = {}) {
@@ -434,7 +402,7 @@ async function buildMessagesFromPromptTemplate(character, chat, settings, arg = 
                     break;
                 }
                 const summaryItems = Array.isArray(source[0]?.summaryItems) ? source[0].summaryItems : [];
-                if (hasTemplateRangeConfig(card) && summaryItems.length > 0) {
+                if (hasTemplateRangeConfig(card.rangeStart, card.rangeEnd) && summaryItems.length > 0) {
                     const slicedSummaries = normalizeTemplateRange(summaryItems, card.rangeStart, card.rangeEnd);
                     if (slicedSummaries.length === 0) {
                         promptBlocks.push({

@@ -273,7 +273,7 @@ describe("command service", () => {
     expect(fsRm).toHaveBeenCalledWith("/tmp/risu-test/characters/char-a/chats/chat-b.json", { force: true });
   });
 
-  it("canonicalizes legacy hypaV3 memory settings to memory fields on settings.replace", async () => {
+  it("strips retired memory aliases on settings.replace while keeping canonical memory settings", async () => {
     const files = new Map<string, unknown>([
       [
         "/tmp/risu-test/settings.json",
@@ -281,16 +281,16 @@ describe("command service", () => {
           revision: 2,
           data: {
             theme: "dark",
-            hypaV3Presets: [
+            memoryPresets: [
               {
-                name: "Legacy",
+                name: "Default",
                 settings: {
                   summarizationPrompt: "old",
                 },
               },
             ],
-            hypaV3PresetId: 0,
-            hypaV3: true,
+            memoryPresetId: 0,
+            memoryEnabled: true,
           },
         },
       ],
@@ -335,6 +335,16 @@ describe("command service", () => {
           type: "settings.replace",
           settings: {
             theme: "light",
+            memoryPresets: [
+              {
+                name: "Default",
+                settings: {
+                  summarizationPrompt: "new prompt",
+                },
+              },
+            ],
+            memoryPresetId: 0,
+            memoryEnabled: true,
             memoryAlgorithmType: "hypaMemoryV3",
             hypaMemory: true,
             hypaMemoryKey: "legacy-key",
@@ -345,7 +355,7 @@ describe("command service", () => {
               {
                 name: "Legacy",
                 settings: {
-                  summarizationPrompt: "new prompt",
+                  summarizationPrompt: "ignored prompt",
                 },
               },
             ],
@@ -362,7 +372,7 @@ describe("command service", () => {
     };
     expect(persistedEnvelope?.data?.memoryPresets).toEqual([
       {
-        name: "Legacy",
+        name: "Default",
         settings: {
           summarizationPrompt: "new prompt",
         },

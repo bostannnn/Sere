@@ -1,6 +1,6 @@
 function getMemoryData(chat) {
     if (!chat || typeof chat !== 'object') return undefined;
-    return chat.memoryData || chat.hypaV3Data;
+    return chat.memoryData;
 }
 
 const LEGACY_MEMORY_CONFIG_KEYS = [
@@ -42,12 +42,12 @@ function canonicalizeMemorySettingsShape(settings) {
     const target = settings;
     const rawPresets = Array.isArray(target.memoryPresets)
         ? target.memoryPresets
-        : (Array.isArray(target.hypaV3Presets) ? target.hypaV3Presets : undefined);
+        : undefined;
     const rawSettings = (target.memorySettings && typeof target.memorySettings === 'object')
         ? target.memorySettings
-        : ((target.hypaV3Settings && typeof target.hypaV3Settings === 'object') ? target.hypaV3Settings : undefined);
-    const rawPresetId = target.memoryPresetId ?? target.hypaV3PresetId;
-    const rawEnabled = target.memoryEnabled ?? target.hypaV3;
+        : undefined;
+    const rawPresetId = target.memoryPresetId;
+    const rawEnabled = target.memoryEnabled;
 
     if (rawPresets !== undefined) {
         target.memoryPresets = rawPresets.map((preset) => cloneMemoryPresetLike(preset));
@@ -81,7 +81,7 @@ function canonicalizeMemorySettingsShape(settings) {
 
 function setMemoryData(chat, data) {
     if (!chat || typeof chat !== 'object') return;
-    if (chat.memoryData === data && !('hypaV3Data' in chat)) return;
+    if (chat.memoryData === data) return;
     chat.memoryData = data;
     delete chat.hypaV3Data;
     delete chat.hypaV2Data;
@@ -89,7 +89,7 @@ function setMemoryData(chat, data) {
 
 function getMemoryPromptOverride(character) {
     if (!character || typeof character !== 'object') return undefined;
-    return character.memoryPromptOverride || character.hypaV3PromptOverride;
+    return character.memoryPromptOverride;
 }
 
 function setMemoryPromptOverride(character, promptOverride) {
@@ -108,7 +108,6 @@ function setMemoryPromptOverride(character, promptOverride) {
 
     if (
         currentPrompt === nextPrompt &&
-        !('hypaV3PromptOverride' in character) &&
         (normalizedPromptOverride ? memoryNormalized : !memoryPrompt)
     ) {
         return;
@@ -120,21 +119,18 @@ function setMemoryPromptOverride(character, promptOverride) {
 
 function getMemoryPresets(settings) {
     if (!settings || typeof settings !== 'object') return [];
-    return Array.isArray(settings.memoryPresets)
-        ? settings.memoryPresets
-        : (Array.isArray(settings.hypaV3Presets) ? settings.hypaV3Presets : []);
+    return Array.isArray(settings.memoryPresets) ? settings.memoryPresets : [];
 }
 
 function getMemoryPresetId(settings) {
     if (!settings || typeof settings !== 'object') return 0;
-    const raw = settings.memoryPresetId ?? settings.hypaV3PresetId;
+    const raw = settings.memoryPresetId;
     return Number.isFinite(Number(raw)) ? Number(raw) : 0;
 }
 
 function isMemoryEnabled(settings) {
     if (!settings || typeof settings !== 'object') return true;
     if (typeof settings.memoryEnabled === 'boolean') return settings.memoryEnabled;
-    if (typeof settings.hypaV3 === 'boolean') return settings.hypaV3;
     return true;
 }
 

@@ -20,6 +20,7 @@ import { getCurrentMemoryPreset, createMemoryPreset } from "./memory.preset";
 import { summarize, stripSummaryForPrompt, wrapWithXml } from "./memory.summarizer";
 import { childToParentRRF, HypaProcesserEx, simpleCC } from "./memory.similarity";
 import { getChatMemoryData, getDbMemoryDebug, setDbMemoryDebug } from "./storage";
+import * as promptTemplateShared from "../promptTemplateShared";
 
 export type {
   MemoryPreset,
@@ -33,7 +34,9 @@ export type {
 export { createMemoryPreset, getCurrentMemoryPreset, summarize };
 
 const logPrefix = "[Memory]";
-const memoryPromptTag = "Past Events Summary";
+const { MEMORY_PROMPT_TAG: memoryPromptTag } = promptTemplateShared as {
+  MEMORY_PROMPT_TAG: string
+};
 const minChatsForSimilarity = 3;
 const summarySeparator = "\n\n";
 const memoryLog = (..._args: unknown[]) => {};
