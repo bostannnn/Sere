@@ -94,7 +94,6 @@ describe("memory modal summary toggle runtime smoke", () => {
         },
       ],
       memoryEnabled: true,
-      supaModelType: "none",
       memoryPresetId: 0,
       memoryPresets: [],
     } as never;

@@ -95,6 +95,9 @@ const emotionEmbeddingModels: Set<EmbeddingModel> = new Set([
 
 export function setDatabase(data:Database){
     stripRemovedProviderFields(data as unknown as Record<string, unknown>)
+    const legacyMemoryFields = data as unknown as Record<string, unknown>
+    delete legacyMemoryFields.maxSupaChunkSize
+    delete legacyMemoryFields.supaModelType
     if(checkNullish(data.characters)){
         data.characters = []
     }
@@ -109,6 +112,7 @@ export function setDatabase(data:Database){
             continue
         }
         for (const chat of char.chats) {
+            delete (chat as unknown as Record<string, unknown>).lastMemory
             normalizeChatBackground(chat)
             setChatMemoryData(chat, chat.memoryData)
         }
@@ -255,9 +259,6 @@ export function setDatabase(data:Database){
     if(checkNullish(data.memoryApiKey)){
         data.memoryApiKey = ""
     }
-    if(checkNullish(data.supaModelType)){
-        data.supaModelType = "none"
-    }
     if(checkNullish(data.askRemoval)){
         data.askRemoval = true
     }
@@ -387,7 +388,6 @@ export function setDatabase(data:Database){
     data.additionalParams ??= []
     data.heightMode ??= 'normal'
     data.antiClaudeOverload ??= false
-    data.maxSupaChunkSize ??= 1200
     data.ollamaURL ??= ''
     data.ollamaModel ??= ''
     data.autoContinueChat ??= false
@@ -516,7 +516,6 @@ export function setDatabase(data:Database){
     )
     setDbMemoryDebug(data, data.memoryDebug)
     setDbMemoryEnabled(data, data.memoryEnabled ?? true)
-    data.supaModelType = 'none'
     data.showDeprecatedTriggerV1 ??= false
     data.showDeprecatedTriggerV2 ??= false
     data.returnCSSError ??= true

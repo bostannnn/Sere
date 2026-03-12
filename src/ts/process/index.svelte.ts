@@ -52,6 +52,11 @@ import {
     trimPromptChats,
 } from "./promptPostProcess";
 import {
+    applyPromptInnerFormat,
+    resolveChatTemplateMessages,
+    resolveMemoryTemplateCardMessages,
+} from "./promptAssembly";
+import {
     applyPromptMemoryContext,
 } from "./promptMemoryContext";
 import { splitPromptMessagesForMemoryTemplate } from "./promptMemoryFormatting";
@@ -59,18 +64,9 @@ import * as promptTemplateShared from "./promptTemplateShared";
 import type { RagResult, RulebookMetadata } from "./rag/types";
 const processLog = (..._args: unknown[]) => {};
 const {
-    normalizeTemplateRange,
     resolvePromptTemplateBlockTitle,
-    resolveMemoryTemplateMessages,
 } = promptTemplateShared as {
-    normalizeTemplateRange: <T>(items: T[], rangeStart?: number, rangeEnd?: number | 'end') => T[]
     resolvePromptTemplateBlockTitle: (card?: { type?: string; type2?: string; name?: string }) => string
-    resolveMemoryTemplateMessages: (
-        sourceMessages: OpenAIChat[],
-        summaryItems?: string[],
-        rangeStart?: number,
-        rangeEnd?: number | 'end',
-    ) => { messages: OpenAIChat[]; skippedReason?: string }
 }
 
 export interface OpenAIChat{
@@ -844,11 +840,13 @@ export async function sendChat(chatProcessIndex = -1,arg:{
                     break
                 }
                 case 'chat':{
-                    let chats = normalizeTemplateRange(unformated.chats, card.rangeStart, card.rangeEnd)
-
-                    if(usingPromptTemplate && DBState.db.promptSettings.sendChatAsSystem && (!card.chatAsOriginalOnSystem)){
-                        chats = systemizePromptChats(chats)
-                    }
+                    const chats = resolveChatTemplateMessages({
+                        chats: unformated.chats,
+                        rangeStart: card.rangeStart,
+                        rangeEnd: card.rangeEnd,
+                        sendChatAsSystem: usingPromptTemplate && DBState.db.promptSettings.sendChatAsSystem,
+                        chatAsOriginalOnSystem: card.chatAsOriginalOnSystem,
+                    })
                     await tokenizeChatArray(chats)
                     break
                 }
@@ -1177,7 +1175,6 @@ export async function sendChat(chatProcessIndex = -1,arg:{
             currentTokens -= await tokenizer.tokenizeChat(chats[0])
             chats.splice(0, 1)
         }
-        currentChat.lastMemory = chats[0].memo
     }
 
     const biases:[string,number][] = DBState.db.bias.concat(currentChar.bias).map((v) => {
@@ -1523,12 +1520,15 @@ export async function sendChat(chatProcessIndex = -1,arg:{
                     break
                 }
                 case 'chat':{
-                    let chats = normalizeTemplateRange(unformated.chats, card.rangeStart, card.rangeEnd)
+                    const chats = resolveChatTemplateMessages({
+                        chats: unformated.chats,
+                        rangeStart: card.rangeStart,
+                        rangeEnd: card.rangeEnd,
+                        sendChatAsSystem: usingPromptTemplate && DBState.db.promptSettings.sendChatAsSystem,
+                        chatAsOriginalOnSystem: card.chatAsOriginalOnSystem,
+                    })
                     if(chats.length === 0){
                         break
-                    }
-                    if(usingPromptTemplate && DBState.db.promptSettings.sendChatAsSystem && (!card.chatAsOriginalOnSystem)){
-                        chats = systemizePromptChats(chats)
                     }
                     for(const item of chats){
                         addPromptBlock(`Chat History (${card.rangeStart}..${card.rangeEnd})`, item.role, item.content)
@@ -1541,23 +1541,23 @@ export async function sendChat(chatProcessIndex = -1,arg:{
                     break
                 }
                 case 'memory':{
-                    const resolvedMemoryTemplate = resolveMemoryTemplateMessages(
-                        safeStructuredClone(memoryMessages),
-                        selectedMemorySummaryTexts,
-                        card.rangeStart,
-                        card.rangeEnd,
-                    )
+                    const resolvedMemoryTemplate = resolveMemoryTemplateCardMessages({
+                        memoryMessages: safeStructuredClone(memoryMessages),
+                        selectedSummaryTexts: selectedMemorySummaryTexts,
+                        rangeStart: card.rangeStart,
+                        rangeEnd: card.rangeEnd,
+                    })
                     if(resolvedMemoryTemplate.messages.length === 0){
                         break
                     }
-                    const pmt = resolvedMemoryTemplate.messages
-                    if(card.innerFormat && pmt.length > 0){
-                        for(let i=0;i<pmt.length;i++){
-                            pmt[i].content = risuChatParser(card.innerFormat, {chara: currentChar}).replace('{{slot}}', pmt[i].content)
-
-                            if(DBState.db.promptInfoInsideChat && DBState.db.promptTextInfoInsideChat){
-                                pushPromptInfoBody(pmt[i].role, card.innerFormat, promptBodyformatedForChatStore)
-                            }
+                    const pmt = applyPromptInnerFormat(
+                        resolvedMemoryTemplate.messages,
+                        card.innerFormat,
+                        (innerFormat, slotContent) => risuChatParser(innerFormat, {chara: currentChar}).replace('{{slot}}', slotContent),
+                    )
+                    if(card.innerFormat && DBState.db.promptInfoInsideChat && DBState.db.promptTextInfoInsideChat){
+                        for(const item of pmt){
+                            pushPromptInfoBody(item.role, card.innerFormat, promptBodyformatedForChatStore)
                         }
                     }
 
@@ -1568,12 +1568,11 @@ export async function sendChat(chatProcessIndex = -1,arg:{
                     break
                 }
                 case 'characterState':{
-                    const pmt = safeStructuredClone(unformated.characterState)
-                    if(card.innerFormat && pmt.length > 0){
-                        for(let i=0;i<pmt.length;i++){
-                            pmt[i].content = risuChatParser(card.innerFormat, {chara: currentChar}).replace('{{slot}}', pmt[i].content)
-                        }
-                    }
+                    const pmt = applyPromptInnerFormat(
+                        safeStructuredClone(unformated.characterState),
+                        card.innerFormat,
+                        (innerFormat, slotContent) => risuChatParser(innerFormat, {chara: currentChar}).replace('{{slot}}', slotContent),
+                    )
                     for(const item of pmt){
                         addPromptBlock(resolvePromptTemplateBlockTitle(card), item.role, item.content)
                     }
@@ -1581,12 +1580,11 @@ export async function sendChat(chatProcessIndex = -1,arg:{
                     break
                 }
                 case 'gameState':{
-                    const pmt = safeStructuredClone(unformated.gameState)
-                    if(card.innerFormat && pmt.length > 0){
-                        for(let i=0; i<pmt.length; i++){
-                            pmt[i].content = risuChatParser(card.innerFormat, {chara: currentChar}).replace('{{slot}}', pmt[i].content)
-                        }
-                    }
+                    const pmt = applyPromptInnerFormat(
+                        safeStructuredClone(unformated.gameState),
+                        card.innerFormat,
+                        (innerFormat, slotContent) => risuChatParser(innerFormat, {chara: currentChar}).replace('{{slot}}', slotContent),
+                    )
                     pushPrompts(pmt)
                     break
                 }

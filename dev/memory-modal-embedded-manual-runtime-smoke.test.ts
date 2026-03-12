@@ -145,7 +145,6 @@ describe("memory modal embedded manual summarize runtime smoke", () => {
         },
       ],
       memoryEnabled: true,
-      supaModelType: "none",
       memoryPresetId: 0,
       memoryPresets: [],
     } as never;

@@ -100,7 +100,6 @@ function createBaseDb() {
       },
     ],
     memoryEnabled: true,
-    supaModelType: "none",
     memoryPresetId: 0,
     memoryPresets: [],
   };

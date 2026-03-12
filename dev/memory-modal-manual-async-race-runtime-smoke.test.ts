@@ -150,7 +150,6 @@ describe("memory modal manual async race runtime smoke", () => {
           ],
         },
       ],
-      supaModelType: "none",
       memoryPresetId: 0,
       memoryPresets: [],
     } as never;

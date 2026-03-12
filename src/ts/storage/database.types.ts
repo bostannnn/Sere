@@ -88,7 +88,6 @@ export interface Database{
     roundIcons:boolean
     useStreaming:boolean
     memoryApiKey:string
-    supaModelType:string
     textScreenColor?:string
     textBorder?:boolean
     textScreenRounded?:boolean
@@ -192,7 +191,6 @@ export interface Database{
     heightMode:string
     noWaitForTranslate:boolean
     antiClaudeOverload:boolean
-    maxSupaChunkSize:number
     ollamaURL:string
     ollamaModel:string
     autoContinueChat:boolean
@@ -959,7 +957,6 @@ export interface Chat{
     localLore: loreBook[]
     backgroundMode?: 'inherit' | 'default' | 'custom'
     backgroundImage?: string
-    lastMemory?:string
     suggestMessages?:string[]
     isStreaming?:boolean
     scriptstate?:{[key:string]:string|number|boolean}

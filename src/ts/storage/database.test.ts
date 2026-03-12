@@ -165,6 +165,31 @@ describe("database chatReadingMode normalization", () => {
     expect(chat).toHaveProperty("memoryData");
   });
 
+  it("strips removed legacy memory fields from loaded databases", () => {
+    const db = applySetDatabase({
+      characters: [
+        {
+          chats: [
+            {
+              id: "chat-1",
+              message: [],
+              note: "",
+              name: "Chat 1",
+              localLore: [],
+              lastMemory: "legacy-memory-marker",
+            },
+          ],
+        },
+      ],
+      maxSupaChunkSize: 4096,
+      supaModelType: "legacy",
+    });
+
+    expect(db).not.toHaveProperty("maxSupaChunkSize");
+    expect(db).not.toHaveProperty("supaModelType");
+    expect((db.characters[0] as { chats: Array<Record<string, unknown>> }).chats[0]).not.toHaveProperty("lastMemory");
+  });
+
   it("syncs the top-level memory settings fallback to the selected preset on load", () => {
     const selectedPresetSettings = {
       summarizationPrompt: "selected prompt",

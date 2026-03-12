@@ -34,8 +34,6 @@
     import { postChatFile } from 'src/ts/process/files/multisend';
     import { getInlayAsset } from 'src/ts/process/files/inlays';
     import { isMobile, isNodeServer } from "src/ts/platform";
-    import { saveServerDatabase } from "src/ts/storage/serverDb";
-    import { resolveServerAuthToken } from "src/ts/storage/serverAuth";
     import Chats from './Chats.svelte';
     import Button from '../UI/GUI/Button.svelte';
     import GameStateHud from '../SideBars/GameStateHUD.svelte';
@@ -51,20 +49,24 @@
     } from './defaultChatScreen.reroll';
     import {
         getCharacterEvolutionErrorMessage,
-        getPendingCharacterEvolutionProposal,
     } from 'src/ts/evolution';
     import {
-        acceptEvolutionProposalReview,
-        createEvolutionProposalDraftState,
-        hasAcceptedEvolutionForChat,
-        rejectEvolutionProposalReview,
-        requestEvolutionProposal,
-    } from 'src/ts/character-evolution/reviewActions';
+        acceptEvolutionReviewFlow,
+        getEvolutionBusyLabel,
+        rejectEvolutionReviewFlow,
+        runEvolutionHandoffFlow,
+        syncEvolutionProposalDraft,
+        type EvolutionBusyAction,
+    } from 'src/ts/character-evolution/reviewFlow';
     import {
         ensureCharacterEvolution,
         getEffectiveCharacterEvolutionSettings,
     } from 'src/ts/characterEvolution';
     import { findSingleCharacterById, replaceCharacterById } from 'src/ts/storage/characterList';
+    import {
+        flushUserMessageBeforeGeneration,
+        getUserMessagePersistFailureMessage,
+    } from './defaultChatScreen.serverSync';
     const defaultChatScreenLog = (..._args: unknown[]) => {};
     
     interface Props {
@@ -90,7 +92,7 @@
     let isScrollingToMessage = $state(false)
     let showEvolutionProposal = $state(false)
     let evolutionBusy = $state(false)
-    let evolutionAction: 'handoff' | 'accept' | 'reject' | null = $state(null)
+    let evolutionAction: EvolutionBusyAction = $state(null)
     let evolutionProposalDraft = $state(null)
     let evolutionProposalDraftKey = $state<string | null>(null)
     let {
@@ -151,51 +153,6 @@
         }
         ensureCharacterEvolution(character)
     })
-
-    function extractHttpStatusFromError(error: unknown): number | null {
-        const message = `${(error as Error | undefined)?.message ?? error ?? ''}`
-        const match = message.match(/\((\d{3})\)/)
-        if(!match){
-            return null
-        }
-        return parseInt(match[1])
-    }
-
-    function getUserMessagePersistFailureMessage(error: unknown) {
-        const status = extractHttpStatusFromError(error)
-        if(status === 429){
-            return 'Message was not sent: authentication is rate-limited. Wait and retry.'
-        }
-        if(status === 401 || status === 403){
-            return 'Message was not sent: authentication failed. Re-enter password and retry.'
-        }
-        return 'Message was not sent because it could not be saved to server. Retry after server restart.'
-    }
-
-    async function flushUserMessageBeforeGeneration(selectedChar: number) {
-        const activeChar = DBState.db.characters[selectedChar]
-        const activeChat = resolveSelectedChat(activeChar)
-        if (!activeChar?.chaId || !activeChat?.id) {
-            return
-        }
-        try {
-            await saveServerDatabase(getDatabase(), {
-                character: [activeChar.chaId],
-                chat: [[activeChar.chaId, activeChat.id]],
-            })
-            return
-        } catch (error) {
-            const status = extractHttpStatusFromError(error)
-            if(status !== 401 && status !== 403){
-                throw error
-            }
-            await resolveServerAuthToken({ interactive: true })
-            await saveServerDatabase(getDatabase(), {
-                character: [activeChar.chaId],
-                chat: [[activeChar.chaId, activeChat.id]],
-            })
-        }
-    }
 
     function scrollToBottom() {
         (chatsInstance as { scrollToLatestMessage?: () => void } | null)?.scrollToLatestMessage?.();
@@ -285,31 +242,30 @@
             return
         }
         const characterId = currentCharacter.chaId
-        const activeChat = currentChatEntry
-        const alreadyAccepted = hasAcceptedEvolutionForChat(currentCharacter, activeChat?.id ?? null)
-        if (alreadyAccepted && !forceReplay) {
-            if (typeof window !== 'undefined' && !window.confirm("This chat was already accepted for evolution. Replay handoff for recovery?")) {
-                return
-            }
-            forceReplay = true
-        }
         evolutionBusy = true
         evolutionAction = 'handoff'
         openMenu = false
         try {
-            const result = await requestEvolutionProposal({
+            const result = await runEvolutionHandoffFlow({
                 characterEntry: currentCharacter,
-                chatId: activeChat?.id ?? null,
+                chatId: currentChatEntry?.id ?? null,
                 forceReplay,
                 resolveCharacterById: findCharacterById,
+                confirmReplay: () => {
+                    return typeof window === 'undefined'
+                        || window.confirm("This chat was already accepted for evolution. Replay handoff for recovery?")
+                },
             })
+            if (result.cancelled || !result.nextCharacter) {
+                return
+            }
             commitCharacter(characterId, result.nextCharacter)
             if (currentCharacter?.chaId === characterId) {
                 evolutionProposalDraft = result.proposalDraft
                 evolutionProposalDraftKey = result.proposalDraftKey
                 showEvolutionProposal = true
             }
-            alertNormal(forceReplay ? "Evolution proposal was regenerated for the accepted chat." : "Evolution proposal is ready for review.")
+            alertNormal(result.replayedAcceptedChat ? "Evolution proposal was regenerated for the accepted chat." : "Evolution proposal is ready for review.")
         } catch (error) {
             alertError(getCharacterEvolutionErrorMessage(error))
         } finally {
@@ -326,7 +282,7 @@
         evolutionBusy = true
         evolutionAction = 'reject'
         try {
-            const nextCharacter = await rejectEvolutionProposalReview(currentCharacter)
+            const nextCharacter = await rejectEvolutionReviewFlow(currentCharacter)
             commitCharacter(characterId, nextCharacter)
             if (currentCharacter?.chaId === characterId) {
                 evolutionProposalDraft = null
@@ -354,7 +310,7 @@
             const acceptedSourceChatId = currentCharacter.characterEvolution.pendingProposal?.sourceChatId
                 ?? currentChatEntry?.id
                 ?? null
-            const { nextCharacter, payload } = await acceptEvolutionProposalReview({
+            const { nextCharacter, chatCreationError } = await acceptEvolutionReviewFlow({
                 characterEntry: currentCharacter,
                 proposedState,
                 createNextChat,
@@ -367,9 +323,6 @@
                 evolutionProposalDraftKey = null
                 showEvolutionProposal = false
             }
-            const chatCreationError = typeof payload.chatCreationError === 'string'
-                ? payload.chatCreationError
-                : ''
             alertNormal(
                 createNextChat
                     ? (chatCreationError
@@ -389,8 +342,10 @@
     }
 
     $effect(() => {
-        const proposal = getPendingCharacterEvolutionProposal(currentCharacter)
-        const nextDraftState = createEvolutionProposalDraftState(currentCharacter?.chaId, proposal)
+        const nextDraftState = syncEvolutionProposalDraft({
+            characterId: currentCharacter?.chaId,
+            proposal: currentCharacter?.characterEvolution.pendingProposal,
+        })
         if (!nextDraftState.proposalDraftKey) {
             evolutionProposalDraft = null
             evolutionProposalDraftKey = null
@@ -420,16 +375,7 @@
     })
 
     const evolutionBusyLabel = $derived.by(() => {
-        if (evolutionAction === 'handoff') {
-            return 'Running evolution handoff'
-        }
-        if (evolutionAction === 'accept') {
-            return 'Accepting evolution update'
-        }
-        if (evolutionAction === 'reject') {
-            return 'Rejecting evolution update'
-        }
-        return 'Working'
+        return getEvolutionBusyLabel(evolutionAction)
     })
 
     function shouldSendOnEnter(e: KeyboardEvent){
@@ -554,7 +500,11 @@
         activeChat.message = cha
         if (isNodeServer && appendedUserMessage) {
             try {
-                await flushUserMessageBeforeGeneration(selectedChar)
+                await flushUserMessageBeforeGeneration({
+                    database: getDatabase(),
+                    character: selectedCharacter,
+                    chat: activeChat,
+                })
             } catch (error) {
                 activeChat.message = beforeSendMessages
                 messageInput = pendingInput

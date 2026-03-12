@@ -32,12 +32,12 @@
         cloneEvolutionState,
     } from "src/ts/character-evolution/workflow"
     import {
-        acceptEvolutionProposalReview,
-        createEvolutionProposalDraftState,
+        acceptEvolutionReviewFlow,
         hasAcceptedEvolutionForChat,
-        rejectEvolutionProposalReview,
-        requestEvolutionProposal,
-    } from "src/ts/character-evolution/reviewActions"
+        rejectEvolutionReviewFlow,
+        runEvolutionHandoffFlow,
+        syncEvolutionProposalDraft,
+    } from "src/ts/character-evolution/reviewFlow"
     import { findSingleCharacterById, replaceCharacterById } from "src/ts/storage/characterList"
     import {
         loadEvolutionVersionState,
@@ -321,7 +321,7 @@
 
         accepting = true
         try {
-            commitCharacter(await rejectEvolutionProposalReview(characterEntry))
+            commitCharacter(await rejectEvolutionReviewFlow(characterEntry))
             if (currentCharacter?.chaId === characterEntry.chaId) {
                 proposalDraft = null
                 proposalDraftKey = null
@@ -343,7 +343,7 @@
         accepting = true
         try {
             const acceptedSourceChatId = characterEntry.characterEvolution.pendingProposal?.sourceChatId ?? null
-            const { payload, nextCharacter } = await acceptEvolutionProposalReview({
+            const { nextCharacter, chatCreationError } = await acceptEvolutionReviewFlow({
                 characterEntry,
                 proposedState: proposalDraft,
                 createNextChat,
@@ -360,11 +360,6 @@
             selectedWorkspaceTab = EVOLUTION_STATE_TAB
 
             await handleRefreshVersions(characterEntry.chaId)
-
-            const chatCreationError =
-                typeof payload.chatCreationError === "string" && payload.chatCreationError.trim()
-                    ? payload.chatCreationError.trim()
-                    : ""
 
             alertNormal(
                 createNextChat
@@ -398,12 +393,15 @@
 
         replayingAcceptedChat = true
         try {
-            const result = await requestEvolutionProposal({
+            const result = await runEvolutionHandoffFlow({
                 characterEntry,
                 chatId,
                 forceReplay: true,
                 resolveCharacterById: findCharacterById,
             })
+            if (!result.nextCharacter) {
+                return
+            }
             commitCharacter(result.nextCharacter)
             alertNormal("Evolution proposal was regenerated for the accepted chat.")
         } catch (error) {
@@ -414,11 +412,10 @@
     }
 
     $effect(() => {
-        const pendingProposal = currentPendingProposal
-        const nextDraftState = createEvolutionProposalDraftState(
-            currentCharacter?.chaId,
-            pendingProposal,
-        )
+        const nextDraftState = syncEvolutionProposalDraft({
+            characterId: currentCharacter?.chaId,
+            proposal: currentPendingProposal,
+        })
 
         if (nextDraftState.proposalDraftKey) {
             if (!proposalDraft || proposalDraftKey !== nextDraftState.proposalDraftKey) {
