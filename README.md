@@ -49,12 +49,9 @@ You can get detailed information on https://github.com/kwaroran/Risuai/wiki (Wor
 - `docs/CODE_REVIEW_PLAYBOOK.md` — default branch review workflow, coverage rules, and stop criteria
 - `docs/SERVER_CODE_REVIEW.md` — current server audit and known issues
 - `docs/DESIGN_RULES.md` — UI shell design contracts (navigation, tokens, state)
-- `docs/MIGRATION_PLAN.md` — UI Shell V2 migration phases
-- `docs/MIGRATION_MAP.md` — prototype-to-production component mapping
-- `docs/CONCEPT_COMPLETION_CHECKLIST.md` — UI migration gate checklist
-- `docs/CORE_PRODUCT_SPEC.md` — product pillars and domain model
-- `docs/UI_SYSTEM_REDESIGN_RFC.md` — unified app shell design spec
 - `docs/MIGRATION_SMOKE_CHECKLIST.md` — API smoke pack and export/import regression gates
+- `docs/qa/` — manual QA suites for core, memory, RAG, and server-authoritative flows
+- `docs/archive/` — archived product/prototype planning docs kept for historical reference
 - `COMFY_COMMANDER.md` — Comfy Commander core feature guide
 
 ## Community

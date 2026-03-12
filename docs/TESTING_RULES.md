@@ -363,7 +363,7 @@ After all command checks pass, open the prototype in a browser and verify:
 5. Responsive behavior holds at ~600px, 768px, 980px viewport widths
 6. Visual layer hierarchy: topbar lighter than drawers, overlays stronger than panels, active states distinct
 
-Use `docs/UI_CHANGE_CHECKLIST.md` as the pass/fail criteria for each step.
+Use `docs/DESIGN_RULES.md` plus any affected QA checklist under `docs/qa/` as the pass/fail criteria for each step.
 
 When the change touches Memory sidebar/manual summarize flows, also run:
 
