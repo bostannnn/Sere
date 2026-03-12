@@ -12,17 +12,19 @@
 
     interface Props {
         mode?: "modal" | "page";
+        source?: "client" | "server";
         title?: string;
         onClose?: () => void;
     }
 
-    const {
-        mode = "page",
-        title = language.ShowLog,
-        onClose,
-    }: Props = $props();
+    const props: Props = $props();
+    const mode = $derived(props.mode ?? "page");
+    const source = $derived(props.source ?? "client");
+    const title = $derived(props.title ?? (source === "server" ? language.serverLLMLogs : language.sessionLogs));
+    const onClose = $derived(props.onClose);
 
     const isModal = $derived(mode === "modal");
+    const isClientSource = $derived(source === "client");
     const requestLogsViewerLog = (..._args: unknown[]) => {};
 
     type ClientLogRecord = {
@@ -269,7 +271,7 @@
     }
 
     onMount(() => {
-        if (isNodeServer) {
+        if (source === "server" && isNodeServer) {
             loadServerLogs().catch((error) => {
                 requestLogsViewerLog("Failed to load server logs:", error);
             });
@@ -277,18 +279,36 @@
     });
 
     $effect(() => {
-        if (!isModal) {
+        if (!isModal && source === "client") {
             expandedLogs = new Set(logs.map((_, i) => i));
             allExpanded = true;
         }
     });
 
     $effect(() => {
-        if (!isModal) {
+        if (!isModal && source === "server") {
             expandedServerLogs = new Set(serverLogs.map((_, i) => i));
             allServerExpanded = true;
         }
     });
+
+    function toggleExpandAll() {
+        if (source === "server") {
+            if (allServerExpanded) {
+                expandedServerLogs = new Set();
+            } else {
+                expandedServerLogs = new Set(serverLogs.map((_, i) => i));
+            }
+            allServerExpanded = !allServerExpanded;
+            return;
+        }
+        if (allExpanded) {
+            expandedLogs = new Set();
+        } else {
+            expandedLogs = new Set(logs.map((_, i) => i));
+        }
+        allExpanded = !allExpanded;
+    }
 </script>
 
 <div
@@ -304,15 +324,8 @@
         <h1 class="alert-requestlog-title">{title}</h1>
         <div class="alert-requestlog-header-actions action-rail">
             {#if isModal}
-                <Button size="sm" onclick={() => {
-                    if (allExpanded) {
-                        expandedLogs = new Set();
-                    } else {
-                        expandedLogs = new Set(logs.map((_, i) => i));
-                    }
-                    allExpanded = !allExpanded;
-                }}>
-                    {allExpanded ? language.collapseAll : language.expandAll}
+                <Button size="sm" onclick={toggleExpandAll}>
+                    {(source === "server" ? allServerExpanded : allExpanded) ? language.collapseAll : language.expandAll}
                 </Button>
             {/if}
             {#if isModal}
@@ -329,222 +342,210 @@
         </div>
     </div>
     <div class="alert-requestlog-body">
-        <div class="alert-requestlog-section-title">
-            Client Request Logs ({logs.length})
-        </div>
-        {#if logs.length === 0}
-            <div class="alert-requestlog-empty empty-state">
-                {language.noRequestLogs}
+        {#if isClientSource}
+            <div class="alert-requestlog-section-title">
+                {language.sessionLogs} ({logs.length})
             </div>
-        {:else}
-            <div class="alert-requestlog-list list-shell">
-                {#each logs as log, i (i)}
-                    {@const isExpanded = expandedLogs.has(i)}
-                    {@const showDetail = isModal ? isExpanded : true}
-                    {@const meta = getClientLogMeta(log)}
-                    <div class="alert-requestlog-card panel-shell">
-                        <button
-                            type="button"
-                            class="alert-requestlog-toggle"
-                            class:alert-requestlog-toggle-static={!isModal}
-                            title={isModal ? (isExpanded ? "Collapse log entry" : "Expand log entry") : "Request log entry"}
-                            aria-label={isModal ? (isExpanded ? "Collapse request log entry" : "Expand request log entry") : "Request log entry"}
-                            aria-expanded={isModal ? isExpanded : true}
-                            onclick={() => {
-                                if (!isModal) {
-                                    return;
-                                }
-                                const newSet = new Set(expandedLogs);
-                                if (isExpanded) {
-                                    newSet.delete(i);
-                                } else {
-                                    newSet.add(i);
-                                }
-                                expandedLogs = newSet;
-                            }}
-                        >
-                            <div class="alert-requestlog-toggle-main">
-                                <span
-                                    class="request-log-status-badge control-chip"
-                                    class:request-log-status-success={log.success}
-                                    class:request-log-status-error={!log.success}
-                                >
-                                    {log.status ?? (log.success ? "OK" : "ERR")}
-                                </span>
-                                <div class="alert-requestlog-main-content">
-                                    <span class="alert-requestlog-url" title={log.url}>
-                                        {log.url}
+            {#if logs.length === 0}
+                <div class="alert-requestlog-empty empty-state">
+                    {language.noSessionLogs}
+                </div>
+            {:else}
+                <div class="alert-requestlog-list list-shell">
+                    {#each logs as log, i (i)}
+                        {@const isExpanded = expandedLogs.has(i)}
+                        {@const showDetail = isModal ? isExpanded : true}
+                        {@const meta = getClientLogMeta(log)}
+                        <div class="alert-requestlog-card panel-shell">
+                            <button
+                                type="button"
+                                class="alert-requestlog-toggle"
+                                class:alert-requestlog-toggle-static={!isModal}
+                                title={isModal ? (isExpanded ? "Collapse log entry" : "Expand log entry") : "Request log entry"}
+                                aria-label={isModal ? (isExpanded ? "Collapse request log entry" : "Expand request log entry") : "Request log entry"}
+                                aria-expanded={isModal ? isExpanded : true}
+                                onclick={() => {
+                                    if (!isModal) {
+                                        return;
+                                    }
+                                    const newSet = new Set(expandedLogs);
+                                    if (isExpanded) {
+                                        newSet.delete(i);
+                                    } else {
+                                        newSet.add(i);
+                                    }
+                                    expandedLogs = newSet;
+                                }}
+                            >
+                                <div class="alert-requestlog-toggle-main">
+                                    <span
+                                        class="request-log-status-badge control-chip"
+                                        class:request-log-status-success={log.success}
+                                        class:request-log-status-error={!log.success}
+                                    >
+                                        {log.status ?? (log.success ? "OK" : "ERR")}
                                     </span>
-                                    <div class="alert-requestlog-meta-row">
-                                        {#if meta.endpoint}
-                                            <span class="request-log-meta-badge control-chip">endpoint: {meta.endpoint}</span>
-                                        {/if}
-                                        {#if meta.mode}
-                                            <span class="request-log-meta-badge control-chip">mode: {meta.mode}</span>
-                                        {/if}
-                                        {#if meta.provider}
-                                            <span class="request-log-meta-badge control-chip">provider: {meta.provider}</span>
-                                        {/if}
-                                        {#if meta.model}
-                                            <span class="request-log-meta-badge request-log-meta-badge-model control-chip" title={meta.model}>model: {meta.model}</span>
-                                        {/if}
-                                        {#if meta.chatId}
-                                            <span class="request-log-meta-badge control-chip">chat: {shortId(meta.chatId)}</span>
-                                        {/if}
+                                    <div class="alert-requestlog-main-content">
+                                        <span class="alert-requestlog-url" title={log.url}>
+                                            {log.url}
+                                        </span>
+                                        <div class="alert-requestlog-meta-row">
+                                            {#if meta.endpoint}
+                                                <span class="request-log-meta-badge control-chip">endpoint: {meta.endpoint}</span>
+                                            {/if}
+                                            {#if meta.mode}
+                                                <span class="request-log-meta-badge control-chip">mode: {meta.mode}</span>
+                                            {/if}
+                                            {#if meta.provider}
+                                                <span class="request-log-meta-badge control-chip">provider: {meta.provider}</span>
+                                            {/if}
+                                            {#if meta.model}
+                                                <span class="request-log-meta-badge request-log-meta-badge-model control-chip" title={meta.model}>model: {meta.model}</span>
+                                            {/if}
+                                            {#if meta.chatId}
+                                                <span class="request-log-meta-badge control-chip">chat: {shortId(meta.chatId)}</span>
+                                            {/if}
+                                        </div>
                                     </div>
+                                    <span class="alert-requestlog-date">{log.date}</span>
                                 </div>
-                                <span class="alert-requestlog-date">{log.date}</span>
-                            </div>
-                            <div class="alert-requestlog-chevron">
-                                {#if isModal}
-                                    {#if isExpanded}
-                                        <ChevronUpIcon size={20} />
-                                    {:else}
-                                        <ChevronDownIcon size={20} />
+                                <div class="alert-requestlog-chevron">
+                                    {#if isModal}
+                                        {#if isExpanded}
+                                            <ChevronUpIcon size={20} />
+                                        {:else}
+                                            <ChevronDownIcon size={20} />
+                                        {/if}
                                     {/if}
-                                {/if}
-                            </div>
-                        </button>
-                        {#if showDetail}
-                            <div class="alert-requestlog-detail">
-                                <div class="alert-requestlog-detail-stack">
-                                    <div>
-                                        <div class="alert-requestlog-detail-header">
-                                            <span class="alert-requestlog-detail-label">Summary</span>
-                                            <button
-                                                type="button"
-                                                class="request-log-copy-btn icon-btn icon-btn--sm"
-                                                class:request-log-copy-btn-copied={copiedKey === `${i}-entry`}
-                                                aria-label="Copy full client log entry"
-                                                onclick={(e) => { e.stopPropagation(); copyToClipboard(getClientLogExport(log), `${i}-entry`); }}
-                                                title="Copy Full Log"
-                                            >
-                                                {#if copiedKey === `${i}-entry`}
-                                                    <CheckIcon size={14} />
-                                                {:else}
-                                                    <CopyIcon size={14} />
-                                                {/if}
-                                            </button>
+                                </div>
+                            </button>
+                            {#if showDetail}
+                                <div class="alert-requestlog-detail">
+                                    <div class="alert-requestlog-detail-stack">
+                                        <div>
+                                            <div class="alert-requestlog-detail-header">
+                                                <span class="alert-requestlog-detail-label">Summary</span>
+                                                <button
+                                                    type="button"
+                                                    class="request-log-copy-btn icon-btn icon-btn--sm"
+                                                    class:request-log-copy-btn-copied={copiedKey === `${i}-entry`}
+                                                    aria-label="Copy full client log entry"
+                                                    onclick={(e) => { e.stopPropagation(); copyToClipboard(getClientLogExport(log), `${i}-entry`); }}
+                                                    title="Copy Full Log"
+                                                >
+                                                    {#if copiedKey === `${i}-entry`}
+                                                        <CheckIcon size={14} />
+                                                    {:else}
+                                                        <CopyIcon size={14} />
+                                                    {/if}
+                                                </button>
+                                            </div>
+                                            <!-- eslint-disable-next-line svelte/no-at-html-tags -->
+                                            <pre class="request-log-code hljs">{@html highlightJson(toJsonString({
+                                                endpoint: meta.endpoint,
+                                                mode: meta.mode,
+                                                provider: meta.provider,
+                                                model: meta.model,
+                                                chatId: meta.chatId,
+                                                status: log.status ?? null,
+                                                success: !!log.success,
+                                            }))}</pre>
                                         </div>
-                                        <!-- eslint-disable-next-line svelte/no-at-html-tags -->
-                                        <pre class="request-log-code hljs">{@html highlightJson(toJsonString({
-                                            endpoint: meta.endpoint,
-                                            mode: meta.mode,
-                                            provider: meta.provider,
-                                            model: meta.model,
-                                            chatId: meta.chatId,
-                                            status: log.status ?? null,
-                                            success: !!log.success,
-                                        }))}</pre>
-                                    </div>
-                                    <div>
-                                        <div class="alert-requestlog-detail-header">
-                                            <span class="alert-requestlog-detail-label">URL</span>
-                                            <button
-                                                type="button"
-                                                class="request-log-copy-btn icon-btn icon-btn--sm"
-                                                class:request-log-copy-btn-copied={copiedKey === `${i}-url`}
-                                                aria-label="Copy request URL"
-                                                onclick={(e) => { e.stopPropagation(); copyToClipboard(log.url, `${i}-url`); }}
-                                                title="Copy"
-                                            >
-                                                {#if copiedKey === `${i}-url`}
-                                                    <CheckIcon size={14} />
-                                                {:else}
-                                                    <CopyIcon size={14} />
-                                                {/if}
-                                            </button>
+                                        <div>
+                                            <div class="alert-requestlog-detail-header">
+                                                <span class="alert-requestlog-detail-label">URL</span>
+                                                <button
+                                                    type="button"
+                                                    class="request-log-copy-btn icon-btn icon-btn--sm"
+                                                    class:request-log-copy-btn-copied={copiedKey === `${i}-url`}
+                                                    aria-label="Copy request URL"
+                                                    onclick={(e) => { e.stopPropagation(); copyToClipboard(log.url, `${i}-url`); }}
+                                                    title="Copy"
+                                                >
+                                                    {#if copiedKey === `${i}-url`}
+                                                        <CheckIcon size={14} />
+                                                    {:else}
+                                                        <CopyIcon size={14} />
+                                                    {/if}
+                                                </button>
+                                            </div>
+                                            <pre class="request-log-code hljs alert-text-sm">{log.url}</pre>
                                         </div>
-                                        <pre class="request-log-code hljs alert-text-sm">{log.url}</pre>
-                                    </div>
-                                    <div>
-                                        <div class="alert-requestlog-detail-header">
-                                            <span class="alert-requestlog-detail-label">Request Body</span>
-                                            <button
-                                                type="button"
-                                                class="request-log-copy-btn icon-btn icon-btn--sm"
-                                                class:request-log-copy-btn-copied={copiedKey === `${i}-body`}
-                                                aria-label="Copy request body"
-                                                onclick={(e) => { e.stopPropagation(); copyToClipboard(toJsonString(log.body), `${i}-body`); }}
-                                                title="Copy"
-                                            >
-                                                {#if copiedKey === `${i}-body`}
-                                                    <CheckIcon size={14} />
-                                                {:else}
-                                                    <CopyIcon size={14} />
-                                                {/if}
-                                            </button>
+                                        <div>
+                                            <div class="alert-requestlog-detail-header">
+                                                <span class="alert-requestlog-detail-label">Request Body</span>
+                                                <button
+                                                    type="button"
+                                                    class="request-log-copy-btn icon-btn icon-btn--sm"
+                                                    class:request-log-copy-btn-copied={copiedKey === `${i}-body`}
+                                                    aria-label="Copy request body"
+                                                    onclick={(e) => { e.stopPropagation(); copyToClipboard(toJsonString(log.body), `${i}-body`); }}
+                                                    title="Copy"
+                                                >
+                                                    {#if copiedKey === `${i}-body`}
+                                                        <CheckIcon size={14} />
+                                                    {:else}
+                                                        <CopyIcon size={14} />
+                                                    {/if}
+                                                </button>
+                                            </div>
+                                            <!-- eslint-disable-next-line svelte/no-at-html-tags -->
+                                            <pre class="request-log-code hljs">{@html highlightJson(log.body)}</pre>
                                         </div>
-                                        <!-- eslint-disable-next-line svelte/no-at-html-tags -->
-                                        <pre class="request-log-code hljs">{@html highlightJson(log.body)}</pre>
-                                    </div>
-                                    <div>
-                                        <div class="alert-requestlog-detail-header">
-                                            <span class="alert-requestlog-detail-label">Request Header</span>
-                                            <button
-                                                type="button"
-                                                class="request-log-copy-btn icon-btn icon-btn--sm"
-                                                class:request-log-copy-btn-copied={copiedKey === `${i}-header`}
-                                                aria-label="Copy request header"
-                                                onclick={(e) => { e.stopPropagation(); copyToClipboard(toJsonString(log.header), `${i}-header`); }}
-                                                title="Copy"
-                                            >
-                                                {#if copiedKey === `${i}-header`}
-                                                    <CheckIcon size={14} />
-                                                {:else}
-                                                    <CopyIcon size={14} />
-                                                {/if}
-                                            </button>
+                                        <div>
+                                            <div class="alert-requestlog-detail-header">
+                                                <span class="alert-requestlog-detail-label">Request Header</span>
+                                                <button
+                                                    type="button"
+                                                    class="request-log-copy-btn icon-btn icon-btn--sm"
+                                                    class:request-log-copy-btn-copied={copiedKey === `${i}-header`}
+                                                    aria-label="Copy request header"
+                                                    onclick={(e) => { e.stopPropagation(); copyToClipboard(toJsonString(log.header), `${i}-header`); }}
+                                                    title="Copy"
+                                                >
+                                                    {#if copiedKey === `${i}-header`}
+                                                        <CheckIcon size={14} />
+                                                    {:else}
+                                                        <CopyIcon size={14} />
+                                                    {/if}
+                                                </button>
+                                            </div>
+                                            <!-- eslint-disable-next-line svelte/no-at-html-tags -->
+                                            <pre class="request-log-code hljs request-log-code-max-32">{@html highlightJson(log.header)}</pre>
                                         </div>
-                                        <!-- eslint-disable-next-line svelte/no-at-html-tags -->
-                                        <pre class="request-log-code hljs request-log-code-max-32">{@html highlightJson(log.header)}</pre>
-                                    </div>
-                                    <div>
-                                        <div class="alert-requestlog-detail-header">
-                                            <span class="alert-requestlog-detail-label">Response</span>
-                                            <button
-                                                type="button"
-                                                class="request-log-copy-btn icon-btn icon-btn--sm"
-                                                class:request-log-copy-btn-copied={copiedKey === `${i}-response`}
-                                                aria-label="Copy response body"
-                                                onclick={(e) => { e.stopPropagation(); copyToClipboard(toJsonString(log.response), `${i}-response`); }}
-                                                title="Copy"
-                                            >
-                                                {#if copiedKey === `${i}-response`}
-                                                    <CheckIcon size={14} />
-                                                {:else}
-                                                    <CopyIcon size={14} />
-                                                {/if}
-                                            </button>
+                                        <div>
+                                            <div class="alert-requestlog-detail-header">
+                                                <span class="alert-requestlog-detail-label">Response</span>
+                                                <button
+                                                    type="button"
+                                                    class="request-log-copy-btn icon-btn icon-btn--sm"
+                                                    class:request-log-copy-btn-copied={copiedKey === `${i}-response`}
+                                                    aria-label="Copy response body"
+                                                    onclick={(e) => { e.stopPropagation(); copyToClipboard(toJsonString(log.response), `${i}-response`); }}
+                                                    title="Copy"
+                                                >
+                                                    {#if copiedKey === `${i}-response`}
+                                                        <CheckIcon size={14} />
+                                                    {:else}
+                                                        <CopyIcon size={14} />
+                                                    {/if}
+                                                </button>
+                                            </div>
+                                            <!-- eslint-disable-next-line svelte/no-at-html-tags -->
+                                            <pre class="request-log-code hljs request-log-code-max-64">{@html highlightJson(log.response)}</pre>
                                         </div>
-                                        <!-- eslint-disable-next-line svelte/no-at-html-tags -->
-                                        <pre class="request-log-code hljs request-log-code-max-64">{@html highlightJson(log.response)}</pre>
                                     </div>
                                 </div>
-                            </div>
-                        {/if}
-                    </div>
-                {/each}
-            </div>
-        {/if}
-
-        {#if isNodeServer}
-                    <div class="alert-requestlog-server-section">
+                            {/if}
+                        </div>
+                    {/each}
+                </div>
+            {/if}
+        {:else if isNodeServer}
+            <div class="alert-requestlog-server-section">
                 <div class="alert-requestlog-server-header">
-                    <div class="alert-requestlog-section-title">Server LLM Logs (Durable) ({serverLogs.length})</div>
+                    <div class="alert-requestlog-section-title">{language.serverLLMLogs} ({serverLogs.length})</div>
                     <div class="alert-requestlog-header-actions action-rail">
-                        {#if isModal}
-                            <Button size="sm" onclick={() => {
-                                if (allServerExpanded) {
-                                    expandedServerLogs = new Set();
-                                } else {
-                                    expandedServerLogs = new Set(serverLogs.map((_, i) => i));
-                                }
-                                allServerExpanded = !allServerExpanded;
-                            }}>
-                                {allServerExpanded ? language.collapseAll : language.expandAll}
-                            </Button>
-                        {/if}
                         <Button size="sm" onclick={loadServerLogs} disabled={serverLogsLoading}>
                             {serverLogsLoading ? "Loading..." : "Refresh"}
                         </Button>
@@ -558,7 +559,7 @@
                 {#if serverLogsLoading && serverLogs.length === 0}
                     <div class="alert-requestlog-empty empty-state">Loading server logs...</div>
                 {:else if serverLogs.length === 0}
-                    <div class="alert-requestlog-empty empty-state">No server LLM logs yet.</div>
+                    <div class="alert-requestlog-empty empty-state">{language.noServerLLMLogs}</div>
                 {:else}
                     <div class="alert-requestlog-list list-shell">
                         {#each serverLogs as log, i (i)}
@@ -744,6 +745,8 @@
                     </div>
                 {/if}
             </div>
+        {:else}
+            <div class="alert-requestlog-empty empty-state">{language.noServerLLMLogs}</div>
         {/if}
     </div>
     </div>

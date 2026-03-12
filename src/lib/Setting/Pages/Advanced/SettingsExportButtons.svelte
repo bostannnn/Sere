@@ -37,11 +37,22 @@
         <Button
             size="sm"
             onclick={async () => {
-                alertRequestLogs()
+                alertRequestLogs("client")
             }}
         >
-            {language.ShowLog}
+            {language.showSessionLogs}
         </Button>
+
+        {#if isNodeServer}
+            <Button
+                size="sm"
+                onclick={async () => {
+                    alertRequestLogs("server")
+                }}
+            >
+                {language.showServerLLMLogs}
+            </Button>
+        {/if}
 
         <Button
             size="sm"

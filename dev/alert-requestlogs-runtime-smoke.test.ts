@@ -122,10 +122,12 @@ vi.mock(import("src/ts/stores.svelte"), async () => {
 vi.mock(import("src/lang"), () => {
   const language = new Proxy(
     {
-      ShowLog: "Request Logs",
+      sessionLogs: "Session Logs",
+      serverLLMLogs: "Server LLM Logs",
       collapseAll: "Collapse all",
       expandAll: "Expand all",
-      noRequestLogs: "No request logs",
+      noSessionLogs: "No session logs yet.",
+      noServerLLMLogs: "No server LLM logs yet.",
       hideErrorDetails: "Hide details",
       showErrorDetails: "Show details",
       translating: "Translating",
@@ -311,7 +313,7 @@ describe("alert comp runtime smoke", () => {
   it("routes requestlogs store type to RequestLogsViewer", async () => {
     alertStore.set({
       type: "requestlogs",
-      msg: "",
+      msg: "client",
     });
 
     const target = document.createElement("div");
@@ -321,6 +323,44 @@ describe("alert comp runtime smoke", () => {
 
     const modalShell = document.querySelector(".alert-requestlog-modal.panel-shell") as HTMLElement | null;
     expect(modalShell).not.toBeNull();
+    expect((document.querySelector(".alert-requestlog-title")?.textContent ?? "").includes("Session Logs")).toBe(true);
+  });
+
+  it("remounts the request logs viewer when switching sources so server logs load immediately", async () => {
+    hoisted.isNodeServer = true;
+    hoisted.getServerLLMLogs.mockImplementation(async () => [
+      {
+        timestamp: "2026-03-12T08:00:00.000Z",
+        requestId: "req-server-switch",
+        path: "/data/llm/execute",
+        endpoint: "execute",
+        status: 200,
+        ok: true,
+      },
+    ]);
+
+    alertStore.set({
+      type: "requestlogs",
+      msg: "client",
+    });
+
+    const target = document.createElement("div");
+    document.body.appendChild(target);
+    app = mount(AlertComp, { target });
+    await flushUi();
+
+    expect(hoisted.getServerLLMLogs).toHaveBeenCalledTimes(0);
+    expect((document.querySelector(".alert-requestlog-title")?.textContent ?? "").includes("Session Logs")).toBe(true);
+
+    alertStore.set({
+      type: "requestlogs",
+      msg: "server",
+    });
+    await flushUi();
+
+    expect(hoisted.getServerLLMLogs).toHaveBeenCalledTimes(1);
+    expect((document.querySelector(".alert-requestlog-title")?.textContent ?? "").includes("Server LLM Logs")).toBe(true);
+    expect((document.body.textContent ?? "").includes("/data/llm/execute")).toBe(true);
   });
 
   it("renders error stack traces as inert text", async () => {

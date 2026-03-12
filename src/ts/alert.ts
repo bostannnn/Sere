@@ -284,9 +284,9 @@ export function showHypaV2Alert(){
     })
 }
 
-export function alertRequestLogs(){
+export function alertRequestLogs(source: 'client' | 'server' = 'client'){
     alertStoreImported.set({
         'type': 'requestlogs',
-        'msg': ''
+        'msg': source
     })
 }

@@ -179,7 +179,7 @@ export function initHotkey(){
                     return
                 }
                 case 'toggleLog':{
-                    alertRequestLogs()
+                    alertRequestLogs('client')
                     break
                 }
                 case 'quickSettings':{

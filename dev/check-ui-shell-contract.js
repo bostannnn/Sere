@@ -645,7 +645,7 @@ ensureIncludes(promptDiffModalContent, promptDiffModalFile, "title=\"Close promp
 ensureIncludes(promptDiffModalContent, promptDiffModalFile, "aria-label=\"Close prompt diff\"", failures);
 ensureIncludes(promptDiffModalContent, promptDiffModalFile, "<div class=\"ds-prompt-diff-nochange-badge control-chip\">", failures);
 ensureIncludes(alertCompContent, alertCompFile, "import RequestLogsViewer from \"./RequestLogsViewer.svelte\";", failures);
-ensureIncludes(alertCompContent, alertCompFile, "<RequestLogsViewer mode=\"modal\" />", failures);
+ensureIncludes(alertCompContent, alertCompFile, "<RequestLogsViewer mode=\"modal\" source={$alertStore.msg === \"server\" ? \"server\" : \"client\"} />", failures);
 ensureIncludes(requestLogsViewerContent, requestLogsViewerFile, "class=\"request-log-status-badge control-chip\"", failures);
 ensureIncludes(requestLogsViewerContent, requestLogsViewerFile, "class=\"request-log-meta-badge control-chip\">endpoint: {meta.endpoint}</span>", failures);
 ensureIncludes(requestLogsViewerContent, requestLogsViewerFile, "class=\"request-log-meta-badge request-log-meta-badge-model control-chip\" title={meta.model}>model: {meta.model}</span>", failures);

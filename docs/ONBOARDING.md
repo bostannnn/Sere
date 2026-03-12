@@ -60,7 +60,7 @@ The Node.js server owns all LLM execution, prompt assembly, RAG, and memory. The
 │       ├── prompt.cjs          # Prompt assembly
 │       ├── lorebook.cjs        # Lorebook injection
 │       ├── memory.cjs          # Memory runtime
-│       ├── audit.cjs           # Durable JSONL execution log
+│       ├── audit.cjs           # Durable JSON execution log
 │       ├── [provider].cjs      # One file per LLM provider (openai, anthropic, etc.)
 │       └── ...
 │   └── rag/                    # RAG domain logic
@@ -320,7 +320,7 @@ Covers the mandatory server-feature test requirement (Section 4 — unit tests +
 | `server/node/routes/rag_routes.cjs` | `/data/rag/*`, `/data/embeddings`, `/data/transformers/*` endpoints |
 | `server/node/llm/engine.cjs` | LLM provider dispatch |
 | `server/node/llm/prompt.cjs` | Server-side prompt assembly |
-| `server/node/llm/audit.cjs` | Durable LLM execution log (JSONL) |
+| `server/node/llm/audit.cjs` | Durable LLM execution log (`logs/llm-execution/YYYY-MM-DD/*.json`) |
 | `server/node/rag/engine.cjs` | RAG search and chunk management |
 | `server/node/rag/embedding.cjs` | HuggingFace embedding pipeline |
 | `server/node/server_helpers.cjs` | `sendJson`, `sendSSE`, `requireSafeSegment` |

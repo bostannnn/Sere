@@ -7,7 +7,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { appendExecutionLog, readExecutionLogs } from "./audit.cjs";
 
 const originalLogMode = process.env.RISU_LLM_LOG_MODE;
-const originalSplitDaily = process.env.RISU_LLM_LOG_SPLIT_DAILY;
 const cleanupRoots: string[] = [];
 
 beforeEach(() => {
@@ -21,11 +20,6 @@ afterEach(async () => {
         delete process.env.RISU_LLM_LOG_MODE;
     } else {
         process.env.RISU_LLM_LOG_MODE = originalLogMode;
-    }
-    if (originalSplitDaily === undefined) {
-        delete process.env.RISU_LLM_LOG_SPLIT_DAILY;
-    } else {
-        process.env.RISU_LLM_LOG_SPLIT_DAILY = originalSplitDaily;
     }
     while (cleanupRoots.length > 0) {
         const root = cleanupRoots.pop();
@@ -165,29 +159,5 @@ describe("audit compact log shaping", () => {
         expect(
             readdirSpy.mock.calls.some((call) => String(call[0]).includes(`${path.sep}2026-03-10`)),
         ).toBe(false);
-    });
-
-    it("keeps reading legacy jsonl audit files for compatibility", async () => {
-        const dataRoot = await fs.mkdtemp(path.join(os.tmpdir(), "risu-audit-test-"));
-        cleanupRoots.push(dataRoot);
-        process.env.RISU_LLM_LOG_SPLIT_DAILY = "0";
-
-        const legacyPath = path.join(dataRoot, "logs", "llm-execution.jsonl");
-        await fs.mkdir(path.dirname(legacyPath), { recursive: true });
-        await fs.writeFile(
-            legacyPath,
-            `${JSON.stringify({
-                timestamp: "2026-03-10T10:00:00.000Z",
-                requestId: "legacy-1",
-                endpoint: "generate",
-                status: 200,
-            })}\n`,
-            "utf-8",
-        );
-
-        const logs = await readExecutionLogs(dataRoot, { limit: 1 });
-
-        expect(logs).toHaveLength(1);
-        expect(logs[0]?.requestId).toBe("legacy-1");
     });
 });

@@ -218,7 +218,8 @@ const PHASE4_UNCOVERED_MATRIX = [
       "class=\"ds-settings-page\"",
       ">{language.logs}</h2>",
       "class=\"action-rail ds-settings-export-actions\"",
-      "alertRequestLogs();",
+      "alertRequestLogs(\"client\");",
+      "alertRequestLogs(\"server\");",
     ],
   },
   {

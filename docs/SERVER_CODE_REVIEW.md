@@ -125,7 +125,7 @@ The ingest handler (~150 lines inline) does: request parsing → PDF detection �
 
 Logging uses raw `console.log`/`console.error` with ad-hoc prefixes like `[RAG]` and `[LLM]`. There's no structured log format, no severity levels tied to the prefix, and no way to filter by component in production.
 
-The LLM audit trail (`llm/audit.cjs`) is good and writes structured JSONL. The operational logs are not at that standard.
+The LLM audit trail (`llm/audit.cjs`) is good and writes structured JSON files. The operational logs are not at that standard.
 
 **Recommendation:** This is low urgency but when a logging library is introduced (even a thin wrapper), it should replace the ad-hoc prefixes with a consistent `{ level, component, message, ...meta }` shape.
 
@@ -154,7 +154,7 @@ On an ETag mismatch, `sendConflict` reads the file again to return the current s
 - **ETag concurrency is correct** in `storage_routes.cjs` (settings, characters, chats). The pattern is well-established.
 - **Streaming is clean** — NDJSON terminal events (`done`/`error`) are sent consistently in `rag_routes.cjs` and `llm_routes.cjs`.
 - **No `eval`, `new Function`, or shell execution** anywhere in the server codebase.
-- **Audit trail** (`llm/audit.cjs`) writes structured JSONL with sensitive field redaction. Good foundation.
+- **Audit trail** (`llm/audit.cjs`) writes structured JSON files with sensitive field redaction. Good foundation.
 - **Module sizes** are well within limits except for `execute_route_handler.cjs` (465 lines, watch it).
 
 ---

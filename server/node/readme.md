@@ -8,7 +8,7 @@ Last reviewed: 2026-02-15
   - `POST /data/llm/preview`
   - `POST /data/llm/execute`
   - `POST /data/llm/generate` (Phase 2 scaffold: server-side minimal message assembly from `characterId` + `chatId` + `userMessage`)
-  - `GET /data/llm/logs` (durable JSONL execution logs)
+  - `GET /data/llm/logs` (durable JSON execution logs)
 - OpenRouter model catalog endpoint:
   - `GET /data/openrouter/models` (upstream fetch + cache fallback)
 - Server-side local model utilities:
@@ -58,8 +58,6 @@ Set `RISU_DEV_NODE_API=0` before `pnpm dev` to disable this behavior.
   - `RISU_LLM_LOG_MODE=full|compact|metadata` (default: `full`)
   - `RISU_LLM_LOG_RETENTION_DAYS=<N>` to purge old log files
   - `RISU_AUDIT_INCLUDE_FULL_GENERATE_REQUEST=1` to keep full `/data/llm/generate` request payloads in durable logs (default: compact summary only)
-- Backward compatibility:
-  - `GET /data/llm/logs` still reads older legacy `data/logs/llm-execution.jsonl` files if they exist.
 
 ## Current LLM Migration Limits
 - Provider support in server execution is currently OpenRouter + OpenAI + DeepSeek + Anthropic + Google + Ollama + Kobold + NovelAI.

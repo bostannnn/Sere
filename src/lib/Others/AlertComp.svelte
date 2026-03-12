@@ -76,5 +76,8 @@
 {:else if $alertStore.type === "branches"}
     <AlertBranchesOverlay />
 {:else if $alertStore.type === "requestlogs"}
-    <RequestLogsViewer mode="modal" />
+    {@const requestLogsKey = `requestlogs:${$alertStore.msg === "server" ? "server" : "client"}`}
+    {#key requestLogsKey}
+        <RequestLogsViewer mode="modal" source={$alertStore.msg === "server" ? "server" : "client"} />
+    {/key}
 {/if}

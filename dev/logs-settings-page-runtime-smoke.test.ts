@@ -17,7 +17,8 @@ const mocks = vi.hoisted(() => ({
 vi.mock(import("src/lang"), () => ({
   language: {
     logs: "Logs",
-    ShowLog: "Show Logs",
+    showSessionLogs: "Show Session Logs",
+    showServerLLMLogs: "Show Server LLM Logs",
     staticsDisclaimer: "Stats disclaimer",
     settingsExported: "Settings exported",
   },
@@ -90,7 +91,7 @@ describe("logs settings page runtime smoke", () => {
     }
   });
 
-  it("opens request logs via modal flow instead of embedding inline viewer", async () => {
+  it("opens session and server log modals via explicit actions instead of embedding inline viewer", async () => {
     const target = document.createElement("div");
     document.body.appendChild(target);
     app = mount(LogsSettingsPage, { target });
@@ -100,11 +101,19 @@ describe("logs settings page runtime smoke", () => {
     expect((title?.textContent ?? "").trim()).toBe("Logs");
     expect(document.querySelector(".alert-requestlog-shell")).toBeNull();
 
-    const showLogsButton = findButtonByText("Show Logs");
-    expect(showLogsButton).not.toBeUndefined();
-    showLogsButton?.click();
+    const sessionLogsButton = findButtonByText("Show Session Logs");
+    const serverLogsButton = findButtonByText("Show Server LLM Logs");
+    expect(sessionLogsButton).not.toBeUndefined();
+    expect(serverLogsButton).not.toBeUndefined();
+
+    sessionLogsButton?.click();
     await flushUi();
-    expect(mocks.alertRequestLogs).toHaveBeenCalledTimes(1);
+    expect(mocks.alertRequestLogs).toHaveBeenCalledWith("client");
+
+    serverLogsButton?.click();
+    await flushUi();
+    expect(mocks.alertRequestLogs).toHaveBeenLastCalledWith("server");
+    expect(mocks.alertRequestLogs).toHaveBeenCalledTimes(2);
   });
 
   it("keeps statistics action wired", async () => {
@@ -121,4 +130,3 @@ describe("logs settings page runtime smoke", () => {
     expect(mocks.alertMd).toHaveBeenCalledTimes(1);
   });
 });
-

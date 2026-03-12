@@ -4,7 +4,6 @@ const { existsSync } = require('fs');
 
 const LOGS_DIR_NAME = 'logs';
 const LLM_LOG_DIR_NAME = 'llm-execution';
-const LEGACY_LLM_LOG_FILE_NAME = 'llm-execution.jsonl';
 const REDACTED = '[REDACTED]';
 const TRUNCATED = '[TRUNCATED]';
 const MAX_DEPTH = 8;
@@ -127,23 +126,6 @@ function getUniqueLogFilePath(dataRoot, timestampMs = Date.now(), entry = {}) {
     return `${baseWithoutExt}__${String(sequence).padStart(4, '0')}${ext}`;
 }
 
-async function listLegacyLogFiles(dataRoot) {
-    const logsDir = path.join(dataRoot, LOGS_DIR_NAME);
-    if (!existsSync(logsDir)) {
-        return [];
-    }
-    const files = await fs.readdir(logsDir, { withFileTypes: true });
-    return files
-        .filter((entry) => entry.isFile())
-        .map((entry) => entry.name)
-        .filter((name) =>
-            name === LEGACY_LLM_LOG_FILE_NAME ||
-            /^llm-execution-\d{4}-\d{2}-\d{2}\.jsonl$/.test(name)
-        )
-        .sort()
-        .map((name) => path.join(logsDir, name));
-}
-
 function compactEntry(entry) {
     if (!entry || typeof entry !== 'object') {
         return entry;
@@ -238,17 +220,6 @@ async function pruneOldLogsIfNeeded(dataRoot, nowMs = Date.now()) {
             } catch {
                 // Ignore single-file pruning failures.
             }
-        }
-    }
-    const legacyFiles = await listLegacyLogFiles(dataRoot);
-    for (const filePath of legacyFiles) {
-        try {
-            const stat = await fs.stat(filePath);
-            if (stat.mtimeMs < cutoffMs) {
-                await fs.unlink(filePath);
-            }
-        } catch {
-            // Ignore single-file pruning failures.
         }
     }
     if (!existsSync(logsRoot)) {
@@ -411,50 +382,9 @@ async function collectMatchingEntriesFromEntryStore(dataRoot, filters, limit, ou
     }
 }
 
-async function collectMatchingEntriesFromFileEnd(filePath, filters, limit, out) {
-    if (out.length >= limit) return;
-    const handle = await fs.open(filePath, 'r');
-    try {
-        const stat = await handle.stat();
-        let offset = stat.size;
-        let remainder = '';
-        const chunkSize = 64 * 1024;
-
-        while (offset > 0 && out.length < limit) {
-            const readSize = Math.min(chunkSize, offset);
-            offset -= readSize;
-            const buffer = Buffer.allocUnsafe(readSize);
-            await handle.read(buffer, 0, readSize, offset);
-            const text = buffer.toString('utf-8') + remainder;
-            const lines = text.split('\n');
-            remainder = lines.shift() || '';
-
-            for (let i = lines.length - 1; i >= 0; i--) {
-                const entry = parseLine(lines[i]);
-                if (!entry) continue;
-                if (!matchesFilter(entry, filters)) continue;
-                out.push(entry);
-                if (out.length >= limit) {
-                    return;
-                }
-            }
-        }
-
-        if (remainder && out.length < limit) {
-            const entry = parseLine(remainder);
-            if (entry && matchesFilter(entry, filters)) {
-                out.push(entry);
-            }
-        }
-    } finally {
-        await handle.close();
-    }
-}
-
 async function readExecutionLogs(dataRoot, query = {}) {
     const entryDayDirs = await listEntryLogDayDirs(dataRoot);
-    const legacyFiles = await listLegacyLogFiles(dataRoot);
-    if (entryDayDirs.length === 0 && legacyFiles.length === 0) {
+    if (entryDayDirs.length === 0) {
         return [];
     }
     const limit = Math.max(1, Math.min(500, Number(query.limit) || 100));
@@ -469,16 +399,6 @@ async function readExecutionLogs(dataRoot, query = {}) {
 
     const result = [];
     await collectMatchingEntriesFromEntryStore(dataRoot, filters, limit, result);
-    if (result.length >= limit) {
-        return result;
-    }
-    for (let fileIdx = legacyFiles.length - 1; fileIdx >= 0; fileIdx--) {
-        const filePath = legacyFiles[fileIdx];
-        await collectMatchingEntriesFromFileEnd(filePath, filters, limit, result);
-        if (result.length >= limit) {
-            return result;
-        }
-    }
     return result;
 }
 

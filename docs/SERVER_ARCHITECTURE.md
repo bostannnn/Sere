@@ -146,7 +146,7 @@ Core ownership note for Comfy Commander:
 
 | File | LOC | Purpose |
 |------|-----|---------|
-| `audit.cjs` | 304 | Durable JSONL audit log append/read |
+| `audit.cjs` | 304 | Durable JSON audit log append/read |
 | `audit_payloads.cjs` | 207 | Audit request/response payload builders |
 | `trace_audit.cjs` | 145 | Generate/memory trace audit appenders |
 | `helpers.cjs` | 195 | Memory summarization helpers (prompt building, embedding, persistence) |
@@ -231,7 +231,9 @@ data/
 │           └── {rulebookId}.json  # Chunks + embeddings
 ├── models/                    # Cached embedding models
 └── logs/
-    └── llm-audit.jsonl        # Durable LLM execution logs
+    └── llm-execution/
+        └── YYYY-MM-DD/
+            └── *.json         # Durable LLM execution logs
 ```
 
 ## Client-Server Gating
