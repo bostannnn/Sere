@@ -19,6 +19,8 @@ function registerEvolutionRoutes(arg = {}) {
         executeInternalLLMTextCompletion,
         applyStateCommands,
         readStateLastEventId,
+        buildMemoryPromptTrace = require('../llm/audit_payloads.cjs').createAuditPayloadBuilders({}).buildMemoryPromptTrace,
+        truncatePromptMessagesForAudit = require('../llm/prompt.cjs').truncatePromptMessagesForAudit,
         createCharacterEvolutionRepository = require('../services/character_evolution_repository.cjs').createCharacterEvolutionRepository,
         createCharacterEvolutionVersionStore = require('../services/character_evolution_version_store.cjs').createCharacterEvolutionVersionStore,
         buildCharacterEvolutionPromptMessages = require('../llm/character_evolution.cjs').buildCharacterEvolutionPromptMessages,
@@ -84,6 +86,27 @@ function registerEvolutionRoutes(arg = {}) {
         }
     }
 
+    function buildEvolutionAuditRequest(endpoint, requestBody, promptMessages) {
+        const baseRequest = buildExecutionAuditRequest(endpoint, requestBody);
+        const tracedMessages = buildMemoryPromptTrace(promptMessages, 'Character Evolution Prompt');
+        const {
+            promptMessages: promptMessagesForAudit,
+            omittedMessageCount,
+        } = truncatePromptMessagesForAudit(tracedMessages);
+        const auditRequest = (baseRequest && typeof baseRequest === 'object' && !Array.isArray(baseRequest))
+            ? { ...baseRequest }
+            : { requestBody: baseRequest };
+
+        auditRequest.promptMessageCount = tracedMessages.length;
+        auditRequest.promptMessages = promptMessagesForAudit;
+        auditRequest.promptMessagesTruncated = promptMessagesForAudit.length !== tracedMessages.length
+            || omittedMessageCount > 0
+            || promptMessagesForAudit.some((msg) => msg?.contentTruncated === true);
+        auditRequest.omittedPromptMessageCount = omittedMessageCount;
+
+        return auditRequest;
+    }
+
     const withAsyncRoute = (endpoint, handler) => async (req, res) => {
         const startedAt = Date.now();
         const reqId = getReqIdFromResponse(res);
@@ -133,9 +156,10 @@ function registerEvolutionRoutes(arg = {}) {
                     ok: false,
                     durationMs,
                     metadata: (audit.metadata && typeof audit.metadata === 'object') ? audit.metadata : null,
-                    request: buildExecutionAuditRequest(
+                    request: buildEvolutionAuditRequest(
                         endpoint,
                         (audit.requestBody && typeof audit.requestBody === 'object') ? audit.requestBody : req?.body,
+                        audit.promptMessages,
                     ),
                     ...(typeof audit.rawResult === 'string' && audit.rawResult
                         ? {
@@ -174,6 +198,7 @@ function registerEvolutionRoutes(arg = {}) {
             characterId,
             chatId,
             requestBody: body,
+            promptMessages: [],
             metadata: null,
         };
 
@@ -215,6 +240,7 @@ function registerEvolutionRoutes(arg = {}) {
             },
             chat,
         });
+        req._characterEvolutionAudit.promptMessages = promptMessages;
         if (!evolution.extractionProvider || !evolution.extractionModel) {
             throw new LLMHttpError(400, 'EXTRACTION_MODEL_MISSING', 'Configure an extraction provider and model before running handoff.');
         }
@@ -290,7 +316,7 @@ function registerEvolutionRoutes(arg = {}) {
                 maxTokens: evolution.extractionMaxTokens,
                 replayed: forceReplay,
             },
-            request: buildExecutionAuditRequest('character_evolution_handoff', body),
+            request: buildEvolutionAuditRequest('character_evolution_handoff', body, promptMessages),
             response: payload,
         });
         sendJson(res, 200, payload);
