@@ -9,6 +9,8 @@ const wrappedSource = `${sourceText.replace(/^export\s+/gm, "")}
 module.exports = {
     MEMORY_PROMPT_TAG,
     MEMORY_MESSAGE_MEMO,
+    getPromptTemplateFallbackTitle,
+    resolvePromptTemplateBlockTitle,
     hasTemplateRangeConfig,
     normalizeTemplateRange,
     renderPromptMemoryContent,

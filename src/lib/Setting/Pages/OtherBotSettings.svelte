@@ -30,17 +30,17 @@
     import { selectSingleFile } from "src/ts/util";
     import SettingsSubTabs from "src/lib/Setting/SettingsSubTabs.svelte";
     import Button from "src/lib/UI/GUI/Button.svelte";
-    import type { HypaModel } from "src/ts/process/memory/hypamemory";
+    import type { EmbeddingModel } from "src/ts/process/memory/embeddings";
     import { DEFAULT_EMOTION_PROMPT } from "src/ts/process/emotion/defaultPrompt";
     import EvolutionDefaultsSettings from "./EvolutionDefaultsSettings.svelte";
 
     const allowedSubmenus = new Set([0, 1, 2, 3, -1]);
     let submenu = $state(0);
-    let emotionEmbeddingModel = $state<HypaModel>("MiniLM");
+    let emotionEmbeddingModel = $state<EmbeddingModel>("MiniLM");
     let emotionPromptHydrated = $state(false);
     let emotionListCharacterId = $state("");
     let selectedMemoryPresetId = $state(0);
-    let selectedEmbeddingModel = $state<HypaModel>("MiniLM");
+    let selectedEmbeddingModel = $state<EmbeddingModel>("MiniLM");
     let emotionPromptValue = $state("");
     let customEmbeddingUrl = $state("");
     let customEmbeddingKey = $state("");
@@ -130,12 +130,12 @@
     }
 
     function ensureCustomEmbeddingSettings() {
-        DBState.db.hypaCustomSettings ??= {
+        DBState.db.customEmbeddingSettings ??= {
             url: "",
             key: "",
             model: "",
         };
-        return DBState.db.hypaCustomSettings;
+        return DBState.db.customEmbeddingSettings;
     }
 
     function syncLocalCustomEmbeddingSettings() {
@@ -198,7 +198,7 @@
         if (selectedMemoryPresetId !== nextPresetId) {
             selectedMemoryPresetId = nextPresetId;
         }
-        const nextEmbeddingModel = (DBState.db.hypaModel ?? "MiniLM") as HypaModel;
+        const nextEmbeddingModel = (DBState.db.embeddingModel ?? "MiniLM") as EmbeddingModel;
         if (selectedEmbeddingModel !== nextEmbeddingModel) {
             selectedEmbeddingModel = nextEmbeddingModel;
         }
@@ -211,8 +211,8 @@
     });
 
     $effect(() => {
-        if ((DBState.db.hypaModel ?? "MiniLM") !== selectedEmbeddingModel) {
-            DBState.db.hypaModel = selectedEmbeddingModel;
+        if ((DBState.db.embeddingModel ?? "MiniLM") !== selectedEmbeddingModel) {
+            DBState.db.embeddingModel = selectedEmbeddingModel;
         }
     });
 
@@ -248,7 +248,7 @@
         }
     });
 
-    function clampHypaSummarySlot(value: unknown, maxSlots: number, fallback: number): number {
+    function clampMemorySummarySlot(value: unknown, maxSlots: number, fallback: number): number {
         const parsed = Math.floor(Number(value));
         if (!Number.isFinite(parsed)) {
             return fallback;
@@ -284,22 +284,22 @@
             const fallbackSimilarSlots = deriveLegacySimilarSlots(settings, maxSelectedSummaries);
             const fallbackRecentSlots = Math.max(0, maxSelectedSummaries - fallbackSimilarSlots);
 
-            let similarSummarySlots = clampHypaSummarySlot(
+            let similarSummarySlots = clampMemorySummarySlot(
                 settings.similarSummarySlots,
                 maxSelectedSummaries,
                 fallbackSimilarSlots
             );
-            let recentSummarySlots = clampHypaSummarySlot(
+            let recentSummarySlots = clampMemorySummarySlot(
                 settings.recentSummarySlots,
                 maxSelectedSummaries,
                 fallbackRecentSlots
             );
 
             if (reason === 'recent') {
-                recentSummarySlots = clampHypaSummarySlot(recentSummarySlots, maxSelectedSummaries, fallbackRecentSlots);
+                recentSummarySlots = clampMemorySummarySlot(recentSummarySlots, maxSelectedSummaries, fallbackRecentSlots);
                 similarSummarySlots = Math.max(0, maxSelectedSummaries - recentSummarySlots);
             } else {
-                similarSummarySlots = clampHypaSummarySlot(similarSummarySlots, maxSelectedSummaries, fallbackSimilarSlots);
+                similarSummarySlots = clampMemorySummarySlot(similarSummarySlots, maxSelectedSummaries, fallbackSimilarSlots);
                 recentSummarySlots = Math.max(0, maxSelectedSummaries - similarSummarySlots);
             }
 
@@ -418,7 +418,7 @@
         if (value === 'submodel') {
             DBState.db.emotionProcesser = 'submodel';
         } else if (DBState.db.emotionProcesser === 'submodel') {
-            emotionEmbeddingModel = DBState.db.hypaModel || 'MiniLM';
+            emotionEmbeddingModel = DBState.db.embeddingModel || 'MiniLM';
             DBState.db.emotionProcesser = emotionEmbeddingModel;
         }
     }}>
@@ -432,7 +432,7 @@
 
         {#if isOpenAIEmbeddingModel(emotionEmbeddingModel)}
             <span class="ds-settings-label">OpenAI API Key</span>
-            <TextInput size="sm" hideText={DBState.db.hideApiKey} bind:value={DBState.db.supaMemoryKey}/>
+            <TextInput size="sm" hideText={DBState.db.hideApiKey} bind:value={DBState.db.memoryApiKey}/>
         {/if}
 
         {#if isCustomEmbeddingModel(emotionEmbeddingModel)}
@@ -622,7 +622,7 @@
                 <div>
                     <TextAreaInput
                         size="sm"
-                        placeholder={memorySettingsLanguage.supaMemoryPromptPlaceHolder}
+                        placeholder={memorySettingsLanguage.memoryPromptPlaceholder}
                         value={memorySummarizationPrompt}
                         optimaizedInput={false}
                         onValueChange={(value) => {
@@ -736,12 +736,12 @@
         <span class="ds-settings-label">{language.embedding} <Help key="embedding"/></span>
         <EmbeddingModelSelect bind:value={selectedEmbeddingModel} />
 
-        {#if isOpenAIEmbeddingModel(DBState.db.hypaModel)}
+        {#if isOpenAIEmbeddingModel(DBState.db.embeddingModel)}
             <span class="ds-settings-label">OpenAI API Key</span>
-            <TextInput size="sm" bind:value={DBState.db.supaMemoryKey}/>
+            <TextInput size="sm" bind:value={DBState.db.memoryApiKey}/>
         {/if}
 
-        {#if isCustomEmbeddingModel(DBState.db.hypaModel)}
+        {#if isCustomEmbeddingModel(DBState.db.embeddingModel)}
             <span class="ds-settings-label">URL</span>
             <TextInput size="sm" value={customEmbeddingUrl} oninput={(event) => {
                 customEmbeddingUrl = event.currentTarget.value;

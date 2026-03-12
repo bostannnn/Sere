@@ -8,7 +8,7 @@ import type { MemorySettings, MemoryPreset, SerializableMemoryData } from '../pr
 import type { OnnxModelFiles } from '../process/transformers';
 import type { RisuModule } from '../process/modules';
 import type { LLMFlags, LLMFormat, LLMTokenizer } from '../model/modellist';
-import type { HypaModel } from '../process/memory/hypamemory';
+import type { EmbeddingModel } from '../process/memory/embeddings';
 import type { Hotkey } from '../defaulthotkeys';
 import type { OpenAIChat } from '../process/index.svelte';
 
@@ -87,7 +87,7 @@ export interface Database{
     showMemoryLimit:boolean
     roundIcons:boolean
     useStreaming:boolean
-    supaMemoryKey:string
+    memoryApiKey:string
     supaModelType:string
     textScreenColor?:string
     textBorder?:boolean
@@ -139,9 +139,9 @@ export interface Database{
     colorScheme:ColorScheme
     colorSchemeName:string
     promptTemplate:PromptItem[]
-    hypaModel:HypaModel
+    embeddingModel:EmbeddingModel
     saveTime?:number
-    emotionProcesser:'submodel'|HypaModel,
+    emotionProcesser:'submodel'|EmbeddingModel,
     showMenuChatList?:boolean,
     translatorType:'google'|'deepl'|'none'|'llm'|'deeplX'|'bergamot',
     translatorInputLanguage?:string
@@ -293,7 +293,7 @@ export interface Database{
     useExperimentalGoogleTranslator:boolean
     thinkingTokens: number
     antiServerOverloads: boolean
-    hypaCustomSettings: {
+    customEmbeddingSettings: {
         url: string,
         key: string,
         model: string,       
@@ -669,7 +669,7 @@ export interface character{
         normalize:boolean,
 
     }
-    supaMemory?:boolean
+    memoryEnabled?:boolean
     additionalAssets?:[string, string, string][]
     ttsReadOnlyQuoted?:boolean
     replaceGlobalNote:string
@@ -763,7 +763,7 @@ export interface groupChat{
     firstMsgIndex?:number,
     loreSettings?:loreSettings
     ragSettings?: RagSettings
-    supaMemory?:boolean
+    memoryEnabled?:boolean
     ttsMode?:string
     suggestMessages?:string[]
     orderByOrder?:boolean

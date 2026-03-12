@@ -1,4 +1,4 @@
-import { type memoryVector, HypaProcesser, similarity } from "./hypamemory";
+import { type memoryVector, EmbeddingProcessor, similarity } from "./embeddings";
 import type { SummaryChunk } from "./memory.types";
 
 export function simpleCC<T>(
@@ -49,7 +49,7 @@ interface SummaryChunkVector {
   vector: memoryVector;
 }
 
-export class HypaProcesserEx extends HypaProcesser {
+export class EmbeddingProcessorEx extends EmbeddingProcessor {
   summaryChunkVectors: SummaryChunkVector[] = [];
 
   async addSummaryChunks(chunks: SummaryChunk[]): Promise<void> {

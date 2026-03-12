@@ -70,7 +70,7 @@ function createCharacterFile(characterPrompt: string) {
     character: {
       chaId: characterId,
       name: "Character",
-      supaMemory: true,
+      memoryEnabled: true,
       memoryPromptOverride: {
         summarizationPrompt: characterPrompt,
       },

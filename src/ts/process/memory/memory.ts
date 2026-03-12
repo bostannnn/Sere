@@ -18,7 +18,7 @@ import {
 import { cleanOrphanedSummary, toMemoryData, toSerializableMemoryData } from "./memory.serialization";
 import { getCurrentMemoryPreset, createMemoryPreset } from "./memory.preset";
 import { summarize, stripSummaryForPrompt, wrapWithXml } from "./memory.summarizer";
-import { childToParentRRF, HypaProcesserEx, simpleCC } from "./memory.similarity";
+import { childToParentRRF, EmbeddingProcessorEx, simpleCC } from "./memory.similarity";
 import { getChatMemoryData, getDbMemoryDebug, setDbMemoryDebug } from "./storage";
 import * as promptTemplateShared from "../promptTemplateShared";
 
@@ -652,8 +652,8 @@ async function buildMemoryContextMain(
     });
 
     // Initialize embedding processor
-    const processor = new HypaProcesserEx(db.hypaModel);
-    processor.oaikey = db.supaMemoryKey;
+    const processor = new EmbeddingProcessorEx(db.embeddingModel);
+    processor.oaikey = db.memoryApiKey;
 
     // Add summaryChunks to processor for similarity search
     try {

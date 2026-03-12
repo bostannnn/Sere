@@ -27,12 +27,6 @@ vi.mock(import("src/ts/stores.svelte"), async () => {
     msg: "",
     subMsg: "",
   });
-  const hypaV3ProgressStore = writable({
-    open: false,
-    miniMsg: "",
-    msg: "",
-    subMsg: "",
-  });
   const appRouteStore = writable({
     workspace: "home",
     selectedCharacterId: null,
@@ -82,7 +76,6 @@ vi.mock(import("src/ts/stores.svelte"), async () => {
     appRouteStore,
     openRulebookManager,
     memoryProgressStore,
-    hypaV3ProgressStore,
     selIdState,
   };
 });

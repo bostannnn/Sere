@@ -10,16 +10,20 @@ const promptTemplateSharedCjs = require("./promptTemplateShared.cjs");
 const {
   MEMORY_MESSAGE_MEMO,
   MEMORY_PROMPT_TAG,
+  getPromptTemplateFallbackTitle,
   hasTemplateRangeConfig,
   normalizeTemplateRange,
   renderPromptMemoryContent,
+  resolvePromptTemplateBlockTitle,
   resolveMemoryTemplateMessages,
 } = promptTemplateShared as {
   MEMORY_MESSAGE_MEMO: string;
   MEMORY_PROMPT_TAG: string;
+  getPromptTemplateFallbackTitle: (cardType?: string, cardType2?: string) => string;
   hasTemplateRangeConfig: (rangeStart?: number, rangeEnd?: number | "end") => boolean;
   normalizeTemplateRange: <T>(items: T[], rangeStart?: number, rangeEnd?: number | "end") => T[];
   renderPromptMemoryContent: (summaryItems: string[]) => string;
+  resolvePromptTemplateBlockTitle: (card?: { type?: string; type2?: string; name?: string }) => string;
   resolveMemoryTemplateMessages: (
     sourceMessages: Array<Record<string, unknown>>,
     summaryItems?: string[],
@@ -38,6 +42,13 @@ describe("promptTemplateShared", () => {
     expect(hasTemplateRangeConfig()).toBe(false);
     expect(hasTemplateRangeConfig(0, undefined)).toBe(true);
     expect(hasTemplateRangeConfig(undefined, "end")).toBe(true);
+  });
+
+  it("exposes canonical prompt-template block titles", () => {
+    expect(getPromptTemplateFallbackTitle("plain", "main")).toBe("Main Prompt");
+    expect(getPromptTemplateFallbackTitle("memory")).toBe("Memory");
+    expect(resolvePromptTemplateBlockTitle({ type: "description" })).toBe("Description");
+    expect(resolvePromptTemplateBlockTitle({ type: "memory", name: "Selected Memory" })).toBe("Selected Memory");
   });
 
   it("renders canonical memory XML with blank summaries removed", () => {
@@ -79,6 +90,12 @@ describe("promptTemplateShared", () => {
   it("keeps the CJS server wrapper in parity with the browser implementation", () => {
     expect(promptTemplateSharedCjs.MEMORY_MESSAGE_MEMO).toBe(MEMORY_MESSAGE_MEMO);
     expect(promptTemplateSharedCjs.MEMORY_PROMPT_TAG).toBe(MEMORY_PROMPT_TAG);
+    expect(promptTemplateSharedCjs.getPromptTemplateFallbackTitle("memory")).toBe(
+      getPromptTemplateFallbackTitle("memory"),
+    );
+    expect(promptTemplateSharedCjs.resolvePromptTemplateBlockTitle({ type: "plain", type2: "main" })).toBe(
+      resolvePromptTemplateBlockTitle({ type: "plain", type2: "main" }),
+    );
     expect(promptTemplateSharedCjs.normalizeTemplateRange(["a", "b", "c"], -2, "end")).toEqual(
       normalizeTemplateRange(["a", "b", "c"], -2, "end"),
     );

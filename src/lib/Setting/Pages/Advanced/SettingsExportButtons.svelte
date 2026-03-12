@@ -103,7 +103,7 @@
                     if(
                         keyToRemove.includes(key) ||
                         key.toLowerCase().includes('key') || key.toLowerCase().includes('proxy')
-                        || key.toLowerCase().includes('hypa')
+                        || key.toLowerCase().includes('embedding')
                     ) {
                         delete db[key]
                     }

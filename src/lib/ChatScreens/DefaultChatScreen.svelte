@@ -42,6 +42,10 @@
     import { runComfyTemplateById } from 'src/ts/integrations/comfy/execute';
     import ReviewWorkspace from '../Evolution/ReviewWorkspace.svelte';
     import {
+        appendRerollSnapshot,
+        createInitialRerollHistory,
+        readNextRerollSnapshot,
+        readPreviousRerollSnapshot,
         replaceMessageTailWithSnapshot,
         trimMessagesForRerollRequest,
     } from './defaultChatScreen.reroll';
@@ -591,16 +595,17 @@
             }
         }
         if(rerollid < rerolls.length - 1){
-            if(Array.isArray(rerolls[rerollid + 1])){
-                rerollid += 1
-                const rerollData = safeStructuredClone(rerolls[rerollid])
-                activeChat.message = replaceMessageTailWithSnapshot(activeChat.message, rerollData)
+            const nextReroll = readNextRerollSnapshot(rerolls, rerollid)
+            rerollid = nextReroll.index
+            if(nextReroll.snapshot){
+                activeChat.message = replaceMessageTailWithSnapshot(activeChat.message, safeStructuredClone(nextReroll.snapshot))
             }
             return
         }
         if(rerolls.length === 0){
-            rerolls.push(safeStructuredClone([activeChat.message.at(-1)]))
-            rerollid = rerolls.length - 1
+            const initialHistory = createInitialRerollHistory(rerolls, safeStructuredClone(activeChat.message.at(-1)))
+            rerolls = initialHistory.snapshots
+            rerollid = initialHistory.index
         }
         const cha = trimMessagesForRerollRequest(safeStructuredClone(activeChat.message))
         if(cha.length === 0 ){
@@ -635,10 +640,10 @@
         if(rerollid <= 0){
             return
         }
-        if(Array.isArray(rerolls[rerollid - 1])){
-            rerollid -= 1
-            const rerollData = safeStructuredClone(rerolls[rerollid])
-            activeChat.message = replaceMessageTailWithSnapshot(activeChat.message, rerollData)
+        const previousReroll = readPreviousRerollSnapshot(rerolls, rerollid)
+        rerollid = previousReroll.index
+        if(previousReroll.snapshot){
+            activeChat.message = replaceMessageTailWithSnapshot(activeChat.message, safeStructuredClone(previousReroll.snapshot))
         }
     }
 
@@ -661,8 +666,12 @@
             const activeCharacter = DBState.db.characters?.[selectedCharAtStart]
             const activeChat = resolveSelectedChat(activeCharacter)
             if(selectedCharAtStart === $selectedCharID && activeChat && previousLength < activeChat.message.length){
-                rerolls.push(safeStructuredClone(activeChat.message).slice(previousLength))
-                rerollid = rerolls.length - 1
+                const nextRerollState = appendRerollSnapshot(
+                    rerolls,
+                    safeStructuredClone(activeChat.message).slice(previousLength),
+                )
+                rerolls = nextRerollState.snapshots
+                rerollid = nextRerollState.index
             }
             // Guard against occasional scroll drift after long-running generation/RAG.
             await tick()

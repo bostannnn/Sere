@@ -62,7 +62,7 @@ vi.mock(import("src/lang"), () => ({
     chatList: "Chat list",
     autoMode: "Auto mode",
     ttsStop: "Stop TTS",
-    memoryModal: "Hypa memory",
+    memoryModal: "Memory",
   },
 }));
 
@@ -233,7 +233,6 @@ vi.mock(import("src/ts/stores.svelte"), async () => {
         sideMenuDatabankButton: false,
         sideMenuRagSearchButton: false,
         sideMenuScreenshotButton: false,
-        sideMenuHypaMemoryButton: false,
         translator: "enabled",
         sendWithEnter: true,
         playMessage: false,

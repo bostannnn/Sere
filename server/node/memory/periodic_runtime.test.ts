@@ -24,7 +24,7 @@ describe("memory periodic summarization runtime gating", () => {
 
   it("forces periodic summarization enabled for legacy presets", () => {
     const resolved = resolveMemorySettings(baseSettings, {
-      supaMemory: true,
+      memoryEnabled: true,
     });
 
     expect(resolved.periodicSummarizationEnabled).toBe(true);
@@ -34,7 +34,7 @@ describe("memory periodic summarization runtime gating", () => {
   it("runs periodic summarization when interval is reached", () => {
     const plan = planPeriodicMemorySummarization({
       character: {
-        supaMemory: true,
+        memoryEnabled: true,
       },
       settings: baseSettings,
       chat: {
@@ -59,7 +59,7 @@ describe("memory periodic summarization runtime gating", () => {
   it("strips assistant thought blocks before periodic summarization prompt assembly", () => {
     const plan = planPeriodicMemorySummarization({
       character: {
-        supaMemory: true,
+        memoryEnabled: true,
       },
       settings: baseSettings,
       chat: {
@@ -85,7 +85,7 @@ describe("memory periodic summarization runtime gating", () => {
   it("keeps character-level memory toggle as the hard gate", () => {
     const plan = planPeriodicMemorySummarization({
       character: {
-        supaMemory: false,
+        memoryEnabled: false,
       },
       settings: baseSettings,
       chat: {

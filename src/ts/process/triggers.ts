@@ -9,7 +9,7 @@ import { processMultiCommand } from "./command";
 import { parseKeyValue, sleep } from "../util";
 import { alertError, alertInput, alertNormal, alertSelect } from "../alert";
 import type { OpenAIChat } from "./index.svelte";
-import { HypaProcesser } from "./memory/hypamemory";
+import { EmbeddingProcessor } from "./memory/embeddings";
 import { requestChatData } from "./request/request";
 import { runScripted } from "./scriptings";
 import { calcString } from "./infunctions";
@@ -1457,7 +1457,7 @@ export async function runTrigger(char:character,mode:triggerMode, arg:{
                         break
                     }
 
-                    const processer = new HypaProcesser()
+                    const processer = new EmbeddingProcessor()
                     const effectValue = risuChatParser(effect.value,{chara:char})
                     const source = risuChatParser(effect.source,{chara:char})
                     await processer.addText(effectValue.split('§'))
@@ -1808,7 +1808,7 @@ export async function runTrigger(char:character,mode:triggerMode, arg:{
                     }
                     const source = effect.sourceType === 'value' ? risuChatParser(effect.source,{chara:char}) : getVar(risuChatParser(effect.source,{chara:char}))
                     const value = effect.valueType === 'value' ? risuChatParser(effect.value,{chara:char}) : getVar(risuChatParser(effect.value,{chara:char}))
-                    const processer = new HypaProcesser()
+                    const processer = new EmbeddingProcessor()
                     await processer.addText(value.split('§'))
                     const val = await processer.similaritySearch(source)
                     setVar(risuChatParser(effect.outputVar, {chara:char}), val.join('§'))

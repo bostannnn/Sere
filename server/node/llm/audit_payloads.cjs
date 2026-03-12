@@ -15,7 +15,7 @@ function createAuditPayloadBuilders(arg = {}) {
             return value === '1' || value === 'true' || value === 'yes' || value === 'on';
         });
 
-    const HYPAV3_AUDIT_SUMMARY_PREVIEW_CHARS = 1200;
+    const MEMORY_AUDIT_SUMMARY_PREVIEW_CHARS = 1200;
     const includeFullGenerateRequestInAudit = parseBooleanEnv('RISU_AUDIT_INCLUDE_FULL_GENERATE_REQUEST');
 
     function buildMemoryPromptTrace(promptMessages, traceTitle = 'Memory Prompt') {
@@ -97,7 +97,7 @@ function createAuditPayloadBuilders(arg = {}) {
         return requestBody;
     }
 
-    function truncateAuditText(text, maxChars = HYPAV3_AUDIT_SUMMARY_PREVIEW_CHARS) {
+    function truncateAuditText(text, maxChars = MEMORY_AUDIT_SUMMARY_PREVIEW_CHARS) {
         const normalized = toStringOrEmpty(text);
         if (!normalized) return '';
         if (normalized.length <= maxChars) return normalized;

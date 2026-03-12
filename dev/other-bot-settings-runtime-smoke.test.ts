@@ -61,7 +61,7 @@ function createDbState() {
     ],
     emotionProcesser: "submodel",
     emotionPrompt2: "",
-    hypaModel: "MiniLM",
+    embeddingModel: "MiniLM",
     hideApiKey: true,
     ttsAutoSpeech: false,
     elevenLabKey: "",
@@ -70,8 +70,8 @@ function createDbState() {
     novelai: { token: "" },
     huggingfaceKey: "",
     fishSpeechKey: "",
-    supaMemoryKey: "",
-    hypaCustomSettings: {
+    memoryApiKey: "",
+    customEmbeddingSettings: {
       url: "",
       key: "",
       model: "",
@@ -106,7 +106,7 @@ vi.mock(import("src/lang"), () => ({
     successImport: "Imported",
     memorySettings: {
       descriptionLabel: "Description",
-      supaMemoryPromptPlaceHolder: "Prompt placeholder",
+      memoryPromptPlaceholder: "Prompt placeholder",
       maxMemoryTokensRatioLabel: "Max ratio",
       maxMemoryTokensRatioError: "Max ratio error",
       memoryTokensRatioLabel: "Memory ratio",

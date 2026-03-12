@@ -3,7 +3,7 @@ import { selectedCharID } from 'src/ts/stores.svelte';
 import { get } from 'svelte/store';
 import { isDoingChat, sendChat } from '../index.svelte';
 import { downloadFile } from 'src/ts/globalApi.svelte';
-import { HypaProcesser } from '../memory/hypamemory';
+import { EmbeddingProcessor } from '../memory/embeddings';
 import { BufferToText as BufferToText, selectMultipleFile } from 'src/ts/util';
 import { postInlayAsset } from './inlays';
 const multisendLog = (..._args: unknown[]) => {};
@@ -122,9 +122,9 @@ async function sendPDFFile(arg:sendFileArg) {
         }
     }
     multisendLog(texts)
-    const hypa = new HypaProcesser()
-    hypa.addText(texts)
-    const result = await hypa.similaritySearch(arg.query)
+    const embeddingProcessor = new EmbeddingProcessor()
+    embeddingProcessor.addText(texts)
+    const result = await embeddingProcessor.similaritySearch(arg.query)
     let message = ''
     for(let i = 0; i<result.length; i++){
         message += "\n" + result[i]
@@ -140,9 +140,9 @@ async function sendTxtFile(arg:sendFileArg) {
     const lines = arg.file.split('\n').filter((a) => {
         return a !== ''
     })
-    const hypa = new HypaProcesser()
-    hypa.addText(lines)
-    const result = await hypa.similaritySearch(arg.query)
+    const embeddingProcessor = new EmbeddingProcessor()
+    embeddingProcessor.addText(lines)
+    const result = await embeddingProcessor.similaritySearch(arg.query)
     let message = ''
     for(let i = 0; i<result.length; i++){
         message += "\n" + result[i]
@@ -155,7 +155,7 @@ async function sendTxtFile(arg:sendFileArg) {
 }
 
 async function sendXMLFile(arg:sendFileArg) {
-    const hypa = new HypaProcesser()
+    const embeddingProcessor = new EmbeddingProcessor()
     const nodeTexts:string[] = []
     const parser = new DOMParser();
     const xmlDoc = parser.parseFromString(arg.file, "text/xml");
@@ -163,8 +163,8 @@ async function sendXMLFile(arg:sendFileArg) {
     for(const node of nodes){
         nodeTexts.push(node.textContent)
     }
-    hypa.addText(nodeTexts)
-    const result = await hypa.similaritySearch(arg.query)
+    embeddingProcessor.addText(nodeTexts)
+    const result = await embeddingProcessor.similaritySearch(arg.query)
     let message = ''
     for(let i = 0; i<result.length; i++){
         message += "\n" + result[i]

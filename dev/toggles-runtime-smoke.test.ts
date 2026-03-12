@@ -35,7 +35,7 @@ vi.mock(import("src/ts/util"), () => ({
 
 vi.mock(import("src/lang"), () => ({
   language: {
-    ToggleMemory: "Hypa memory",
+    ToggleMemory: "Memory",
   },
 }));
 
@@ -72,7 +72,7 @@ describe("toggles runtime smoke", () => {
       target,
       props: {
         chara: {
-          supaMemory: false,
+          memoryEnabled: false,
         },
       },
     });

@@ -9,7 +9,11 @@
   import TextAreaInput from "src/lib/UI/GUI/TextAreaInput.svelte";
   import SettingsSubTabs from "src/lib/Setting/SettingsSubTabs.svelte";
   import { useMemoryModal } from "./MemoryModal/useMemoryModal.svelte";
-  import { getDbMemoryEnabled } from "src/ts/process/memory/storage";
+  import {
+    getCharacterMemoryEnabled,
+    getDbMemoryEnabled,
+    setCharacterMemoryEnabled,
+  } from "src/ts/process/memory/storage";
   const modal = useMemoryModal();
 
 </script>
@@ -120,10 +124,10 @@
                 {#if modal.currentChar && getDbMemoryEnabled(DBState.db)}
                   <CheckInput
                     name={language.ToggleMemory}
-                    check={modal.currentChar.supaMemory ?? false}
+                    check={getCharacterMemoryEnabled(modal.currentChar)}
                     margin={false}
                     onChange={(check) => {
-                      modal.currentChar.supaMemory = check;
+                      setCharacterMemoryEnabled(modal.currentChar, check);
                     }}
                   />
                 {/if}

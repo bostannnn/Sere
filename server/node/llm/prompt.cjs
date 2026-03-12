@@ -15,7 +15,9 @@ const {
     renderCharacterEvolutionStateForPrompt,
 } = require('./character_evolution.cjs');
 const {
+    getPromptTemplateFallbackTitle,
     normalizeTemplateRange,
+    resolvePromptTemplateBlockTitle,
     resolveMemoryTemplateMessages,
 } = require('../../../src/ts/process/promptTemplateShared.cjs');
 
@@ -122,33 +124,6 @@ function buildServerDescriptionPrompt(character) {
     }
 
     return chunks.join('\n\n').trim();
-}
-
-function resolveTemplateBlockTitle(card, fallback = 'Prompt Block') {
-    const customName = toStringOrEmpty(card?.name);
-    if (customName) return customName;
-    return fallback;
-}
-
-function getTemplateCardFallbackTitle(cardType, cardType2 = '') {
-    if (cardType === 'plain') {
-        if (cardType2 === 'main') return 'Main Prompt';
-        if (cardType2 === 'globalNote') return 'Global Note';
-        return 'Plain Prompt';
-    }
-    if (cardType === 'jailbreak') return 'Jailbreak';
-    if (cardType === 'cot') return 'Chain Of Thought';
-    if (cardType === 'description') return 'Description';
-    if (cardType === 'persona') return 'Persona';
-    if (cardType === 'authornote') return 'Author Note';
-    if (cardType === 'lorebook') return 'Lorebook';
-    if (cardType === 'postEverything') return 'Post Everything';
-    if (cardType === 'chat' || cardType === 'chatML' || cardType === 'chatml') return 'Chat History';
-    if (cardType === 'memory') return 'Memory';
-    if (cardType === 'rulebookRag') return 'Rulebook RAG';
-    if (cardType === 'gameState') return 'Game State';
-    if (cardType === 'characterState') return 'Character State';
-    return 'Prompt Block';
 }
 
 function pushPromptMessagesWithTitle(targetMessages, promptBlocks, newMessages, title, source = 'template') {
@@ -286,7 +261,11 @@ async function buildMessagesFromPromptTemplate(character, chat, settings, arg = 
         if (!card || typeof card !== 'object') continue;
         const cardType = toStringOrEmpty(card.type);
         const cardType2 = toStringOrEmpty(card.type2) || 'normal';
-        const blockTitle = resolveTemplateBlockTitle(card, getTemplateCardFallbackTitle(cardType, cardType2));
+        const blockTitle = resolvePromptTemplateBlockTitle({
+            ...card,
+            type: cardType,
+            type2: cardType2,
+        }) || getPromptTemplateFallbackTitle(cardType, cardType2);
 
         switch (cardType) {
             case 'plain':

@@ -11,6 +11,8 @@ import type {
 
 type MemoryPromptOverride = { summarizationPrompt?: string };
 
+type CharacterMemoryToggle = { memoryEnabled?: boolean };
+
 export function getChatMemoryData(
   chat: Pick<Chat, "memoryData"> | null | undefined,
 ): SerializableMemoryData | undefined {
@@ -72,6 +74,21 @@ export function setCharacterMemoryPromptOverride(
   }
 
   char.memoryPromptOverride = normalizedValue;
+}
+
+export function getCharacterMemoryEnabled(
+  char: CharacterMemoryToggle | null | undefined,
+): boolean {
+  return char?.memoryEnabled === true;
+}
+
+export function setCharacterMemoryEnabled(
+  char: CharacterMemoryToggle | null | undefined,
+  enabled: boolean,
+): void {
+  if (!char) return;
+  if (char.memoryEnabled === enabled) return;
+  char.memoryEnabled = enabled;
 }
 
 export function getDbMemoryEnabled(

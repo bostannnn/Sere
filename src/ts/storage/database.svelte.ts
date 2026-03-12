@@ -8,7 +8,7 @@ import { alertNormal } from '../alert';
 import { prebuiltNAIpresets } from '../process/templates/templates';
 import { defaultColorScheme } from '../gui/colorscheme';
 import { LLMFormat } from '../model/modellist';
-import type { HypaModel } from '../process/memory/hypamemory';
+import type { EmbeddingModel } from '../process/memory/embeddings';
 import { createMemoryPreset } from '../process/memory/memory'
 import {
     setCharacterMemoryPromptOverride,
@@ -72,7 +72,7 @@ export type * from './database.types';
 export const appVer = "2026.1.184" //<APP_VERSION_POINT>
 export const webAppSubVer = ''
 
-const emotionEmbeddingModels: Set<HypaModel> = new Set([
+const emotionEmbeddingModels: Set<EmbeddingModel> = new Set([
     'MiniLM',
     'MiniLMGPU',
     'nomic',
@@ -252,8 +252,8 @@ export function setDatabase(data:Database){
     if(checkNullish(data.showFirstMessagePages)){
         data.showFirstMessagePages = false
     }
-    if(checkNullish(data.supaMemoryKey)){
-        data.supaMemoryKey = ""
+    if(checkNullish(data.memoryApiKey)){
+        data.memoryApiKey = ""
     }
     if(checkNullish(data.supaModelType)){
         data.supaModelType = "none"
@@ -313,7 +313,7 @@ export function setDatabase(data:Database){
     data.colorScheme ??= safeStructuredClone(defaultColorScheme)
     data.colorSchemeName ??= 'default'
     data.NAIsettings.starter ??= ""
-    data.hypaModel ??= 'MiniLM'
+    data.embeddingModel ??= 'MiniLM'
     const rawEmotionProcesser = data.emotionProcesser as string | undefined
     if(checkNullish(rawEmotionProcesser)){
         data.emotionProcesser = 'submodel'
@@ -324,8 +324,8 @@ export function setDatabase(data:Database){
     else if(rawEmotionProcesser === 'submodel'){
         data.emotionProcesser = 'submodel'
     }
-    else if(emotionEmbeddingModels.has(rawEmotionProcesser as HypaModel)){
-        data.emotionProcesser = rawEmotionProcesser as HypaModel
+    else if(emotionEmbeddingModels.has(rawEmotionProcesser as EmbeddingModel)){
+        data.emotionProcesser = rawEmotionProcesser as EmbeddingModel
     }
     else{
         data.emotionProcesser = 'submodel'
@@ -525,10 +525,10 @@ export function setDatabase(data:Database){
         data.antiClaudeOverload = false
         data.antiServerOverloads = true
     }
-    data.hypaCustomSettings = {
-        url: data.hypaCustomSettings?.url ?? "",
-        key: data.hypaCustomSettings?.key ?? "",
-        model: data.hypaCustomSettings?.model ?? ""     
+    data.customEmbeddingSettings = {
+        url: data.customEmbeddingSettings?.url ?? "",
+        key: data.customEmbeddingSettings?.key ?? "",
+        model: data.customEmbeddingSettings?.model ?? ""     
     }
     data.doNotChangeSeperateModels ??= false
     data.modelTools ??= []

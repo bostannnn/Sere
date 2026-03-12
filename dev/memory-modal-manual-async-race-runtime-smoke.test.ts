@@ -121,7 +121,7 @@ describe("memory modal manual async race runtime smoke", () => {
           type: "character",
           chaId: "char-embedded",
           name: "Embedded Character",
-          supaMemory: true,
+          memoryEnabled: true,
           chatPage: 0,
           memoryPromptOverride: {
             summarizationPrompt: "",

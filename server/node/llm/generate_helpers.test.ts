@@ -243,7 +243,7 @@ describe("generate_helpers", () => {
         character: {
           chaId: characterId,
           name: "Character A",
-          supaMemory: true,
+          memoryEnabled: true,
         },
       }),
       "utf-8",
@@ -304,7 +304,7 @@ describe("generate_helpers", () => {
       character: {
         chaId: characterId,
         name: "Character A",
-        supaMemory: true,
+        memoryEnabled: true,
       },
       chat,
       settings: {
@@ -334,7 +334,7 @@ describe("generate_helpers", () => {
     expect(chat.memoryData.summaries).toHaveLength(1);
   });
 
-  it("retries hypa persistence once on STALE_BASE_EVENT and merges latest chat snapshot", async () => {
+  it("retries memory persistence once on STALE_BASE_EVENT and merges latest chat snapshot", async () => {
     const { dataRoot, characterId, chatId } = await createDataRoot();
     cleanup.push(dataRoot);
     const chatPath = path.join(dataRoot, "characters", characterId, "chats", `${chatId}.json`);
@@ -422,10 +422,10 @@ describe("generate_helpers", () => {
     expect(secondPayload?.name).toBe("Latest from other device");
     expect(Array.isArray(secondPayload?.message)).toBe(true);
     expect((secondPayload?.message as Array<Record<string, unknown>>).some((msg) => msg.data === "concurrent write")).toBe(true);
-    const hypa = (secondPayload?.memoryData || {}) as { summaries?: Array<{ text?: string }>; metrics?: unknown };
-    expect(Array.isArray(hypa.summaries)).toBe(true);
-    expect(hypa.summaries?.[0]?.text).toBe("s1");
-    expect(hypa.metrics && typeof hypa.metrics === "object").toBe(true);
+    const memoryData = (secondPayload?.memoryData || {}) as { summaries?: Array<{ text?: string }>; metrics?: unknown };
+    expect(Array.isArray(memoryData.summaries)).toBe(true);
+    expect(memoryData.summaries?.[0]?.text).toBe("s1");
+    expect(memoryData.metrics && typeof memoryData.metrics === "object").toBe(true);
   });
 
   it("fails generate when target chat is missing", async () => {
@@ -582,7 +582,7 @@ describe("generate_helpers", () => {
     expect(appendAttempts).toBe(1);
   });
 
-  it("skips hypa chat.replace when hypa data is unchanged", async () => {
+  it("skips memory chat.replace when memory data is unchanged", async () => {
     const { dataRoot, characterId, chatId } = await createDataRoot();
     cleanup.push(dataRoot);
     const applyStateCommands = vi.fn(async () => ({ ok: true, lastEventId: 15, applied: [], conflicts: [] }));

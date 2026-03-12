@@ -5,7 +5,7 @@ import { appendLastPath } from "src/ts/util";
 import { getDatabase } from "src/ts/storage/database.svelte";
 import { isNodeServer } from "src/ts/platform";
 
-export type HypaModel =
+export type EmbeddingModel =
     | 'custom'
     | 'ada'
     | 'openai3small'
@@ -28,7 +28,7 @@ export type HypaModel =
 // In a typical environment, bge-m3 is a heavy model.
 // If your GPU can't handle this model, you'll see errror below.
 // Failed to execute 'mapAsync' on 'GPUBuffer': [Device] is lost
-export const localModels = {
+export const embeddingModelCatalog = {
     models: {
         'MiniLM':'Xenova/all-MiniLM-L6-v2',
         'MiniLMGPU': "Xenova/all-MiniLM-L6-v2",
@@ -61,22 +61,22 @@ type VectorCacheStore = {
     setItem<T>(key: string, value: T): Promise<T>
 }
 
-const hypaVectorMemoryCache = new Map<string, unknown>()
+const embeddingVectorCache = new Map<string, unknown>()
 
 function createVectorCacheStore(): VectorCacheStore {
     if (isNodeServer) {
         return {
             async getItem<T>(key: string): Promise<T | null> {
-                return hypaVectorMemoryCache.has(key) ? (hypaVectorMemoryCache.get(key) as T) : null
+                return embeddingVectorCache.has(key) ? (embeddingVectorCache.get(key) as T) : null
             },
             async setItem<T>(key: string, value: T): Promise<T> {
-                hypaVectorMemoryCache.set(key, value)
+                embeddingVectorCache.set(key, value)
                 return value
             }
         }
     }
     const forage = localforage.createInstance({
-        name: "hypaVector"
+        name: "embeddingVector"
     })
     return {
         async getItem<T>(key: string): Promise<T | null> {
@@ -90,24 +90,24 @@ function createVectorCacheStore(): VectorCacheStore {
     }
 }
 
-export class HypaProcesser{
+export class EmbeddingProcessor{
     oaikey:string
     vectors:memoryVector[]
     forage:VectorCacheStore
-    model:HypaModel
+    model:EmbeddingModel
     customEmbeddingUrl:string
 
-    constructor(model:HypaModel|'auto' = 'auto',customEmbeddingUrl?:string){
+    constructor(model:EmbeddingModel|'auto' = 'auto',customEmbeddingUrl?:string){
         this.forage = createVectorCacheStore()
         this.vectors = []
         const db = getDatabase()
         if(model === 'auto'){
-            this.model = db.hypaModel || 'MiniLM'
+            this.model = db.embeddingModel || 'MiniLM'
         }
         else{
             this.model = model
         }
-        this.customEmbeddingUrl = customEmbeddingUrl?.trim() || db.hypaCustomSettings?.url?.trim() || ""
+        this.customEmbeddingUrl = customEmbeddingUrl?.trim() || db.customEmbeddingSettings?.url?.trim() || ""
     }
 
     async embedDocuments(texts: string[]): Promise<VectorArray[]> {
@@ -128,7 +128,7 @@ export class HypaProcesser{
     
     
     async getEmbeds(input:string[]|string):Promise<VectorArray[]> {
-        if(Object.keys(localModels.models).includes(this.model)){
+        if(Object.keys(embeddingModelCatalog.models).includes(this.model)){
             const inputs:string[] = Array.isArray(input) ? input : [input]
             if (isNodeServer) {
                 const response = await globalFetch('/data/embeddings', {
@@ -149,8 +149,8 @@ export class HypaProcesser{
             }
             const results:Float32Array[] = await runEmbedding(
                 inputs,
-                (localModels.models as Record<string, string>)[this.model] as Parameters<typeof runEmbedding>[1],
-                localModels.gpuModels.includes(this.model) ? 'webgpu' : 'wasm'
+                (embeddingModelCatalog.models as Record<string, string>)[this.model] as Parameters<typeof runEmbedding>[1],
+                embeddingModelCatalog.gpuModels.includes(this.model) ? 'webgpu' : 'wasm'
             )
             return results
         }
@@ -165,11 +165,11 @@ export class HypaProcesser{
             const db = getDatabase()
             const fetchArgs = {
                 headers: {
-                    ...(db.hypaCustomSettings?.key?.trim() ? {"Authorization": "Bearer " + db.hypaCustomSettings.key.trim()} : {})
+                    ...(db.customEmbeddingSettings?.key?.trim() ? {"Authorization": "Bearer " + db.customEmbeddingSettings.key.trim()} : {})
                 },
                 body: {
                     "input": input,
-                    ...(db.hypaCustomSettings?.model?.trim() ? {"model": db.hypaCustomSettings.model.trim()} : {})
+                    ...(db.customEmbeddingSettings?.model?.trim() ? {"model": db.customEmbeddingSettings.model.trim()} : {})
                 }
             };
  
@@ -185,7 +185,7 @@ export class HypaProcesser{
 
             gf = await globalFetch("https://api.openai.com/v1/embeddings", {
                 headers: {
-                    "Authorization": "Bearer " + (this.oaikey?.trim() || db.supaMemoryKey?.trim())
+                    "Authorization": "Bearer " + (this.oaikey?.trim() || db.memoryApiKey?.trim())
                 },
                 body: {
                     "input": input,
@@ -223,7 +223,7 @@ export class HypaProcesser{
     
     async addText(texts:string[]) {
         const db = getDatabase()
-        const suffix = (this.model === 'custom' && db.hypaCustomSettings?.model?.trim()) ? `-${db.hypaCustomSettings.model.trim()}` : ""
+        const suffix = (this.model === 'custom' && db.customEmbeddingSettings?.model?.trim()) ? `-${db.customEmbeddingSettings.model.trim()}` : ""
 
         for(let i=0;i<texts.length;i++){
             const itm:memoryVector = await this.forage.getItem(texts[i] + '|' + this.model + suffix)

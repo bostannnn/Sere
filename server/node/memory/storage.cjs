@@ -38,6 +38,16 @@ function setMemoryPromptOverride(character, promptOverride) {
     character.memoryPromptOverride = normalizedPromptOverride;
 }
 
+function isCharacterMemoryEnabled(character) {
+    return character?.memoryEnabled === true;
+}
+
+function setCharacterMemoryEnabled(character, enabled) {
+    if (!character || typeof character !== 'object') return;
+    if (character.memoryEnabled === enabled) return;
+    character.memoryEnabled = enabled;
+}
+
 function getMemoryPresets(settings) {
     if (!settings || typeof settings !== 'object') return [];
     return Array.isArray(settings.memoryPresets) ? settings.memoryPresets : [];
@@ -60,6 +70,8 @@ module.exports = {
     setMemoryData,
     getMemoryPromptOverride,
     setMemoryPromptOverride,
+    isCharacterMemoryEnabled,
+    setCharacterMemoryEnabled,
     getMemoryPresets,
     getMemoryPresetId,
     isMemoryEnabled,

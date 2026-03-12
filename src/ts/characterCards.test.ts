@@ -195,7 +195,7 @@ describe("character card memory compatibility", () => {
     shared.alertNormalMock.mockReset();
   });
 
-  it("exports canonical memory prompt override without legacy hypaV3 prompt fields", async () => {
+  it("exports canonical memory prompt override without legacy prompt fields", async () => {
     const { createBaseV3, exportCharacterCard } = await import("src/ts/characterCards");
     const char = createCharacter();
 

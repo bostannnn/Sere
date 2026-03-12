@@ -1,6 +1,38 @@
 export const MEMORY_PROMPT_TAG = "Past Events Summary";
 export const MEMORY_MESSAGE_MEMO = "memory";
 
+export function getPromptTemplateFallbackTitle(cardType, cardType2 = "") {
+  if (cardType === "plain") {
+    if (cardType2 === "main") return "Main Prompt";
+    if (cardType2 === "globalNote") return "Global Note";
+    return "Plain Prompt";
+  }
+  if (cardType === "jailbreak") return "Jailbreak";
+  if (cardType === "cot") return "Chain Of Thought";
+  if (cardType === "description") return "Description";
+  if (cardType === "persona") return "Persona";
+  if (cardType === "authornote") return "Author Note";
+  if (cardType === "lorebook") return "Lorebook";
+  if (cardType === "postEverything") return "Post Everything";
+  if (cardType === "chat" || cardType === "chatML" || cardType === "chatml") return "Chat History";
+  if (cardType === "memory") return "Memory";
+  if (cardType === "rulebookRag") return "Rulebook RAG";
+  if (cardType === "gameState") return "Game State";
+  if (cardType === "characterState") return "Character State";
+  return "Prompt Block";
+}
+
+export function resolvePromptTemplateBlockTitle(card) {
+  const customName = typeof card?.name === "string" ? card.name.trim() : "";
+  if (customName) {
+    return customName;
+  }
+  return getPromptTemplateFallbackTitle(
+    typeof card?.type === "string" ? card.type : "",
+    typeof card?.type2 === "string" ? card.type2 : "",
+  );
+}
+
 export function normalizeTemplateRange(items, rangeStart, rangeEnd) {
   const source = Array.isArray(items) ? items : [];
   let start = Number.isFinite(Number(rangeStart)) ? Number(rangeStart) : 0;

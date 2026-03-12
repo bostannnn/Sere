@@ -916,7 +916,6 @@ export const languageEnglish = {
     promptTemplate: "Prompt Template",
     customInnerFormat: "Custom Inner Format",
     innerFormat: "Inner Format",
-    HypaMemory: "Memory",
     ToggleMemory: "Toggle Memory",
     resetPromptTemplateConfirm: "Do you really want to reset prompt template?",
     emotionMethod: "Emotion Method",
@@ -1223,7 +1222,7 @@ export const languageEnglish = {
     triggerEffRunAxLLM: "Run Auxiliary Model",
     memorySettings: {
         descriptionLabel: "Memory is a long-term memory system that uses both summarization and vector search.",
-        supaMemoryPromptPlaceHolder: "Leave it blank to use default",
+        memoryPromptPlaceholder: "Leave it blank to use default",
         maxMemoryTokensRatioLabel: "Max Memory Tokens Ratio (Estimated)",
         maxMemoryTokensRatioError: "Unable to calculate Max Memory Tokens Ratio",
         memoryTokensRatioLabel: "Memory Tokens Ratio",

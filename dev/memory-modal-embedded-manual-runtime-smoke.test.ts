@@ -124,7 +124,7 @@ describe("memory modal embedded manual summarize runtime smoke", () => {
           type: "character",
           chaId: "char-embedded",
           name: "Embedded Character",
-          supaMemory: true,
+          memoryEnabled: true,
           chatPage: 0,
           memoryPromptOverride: {
             summarizationPrompt: "",

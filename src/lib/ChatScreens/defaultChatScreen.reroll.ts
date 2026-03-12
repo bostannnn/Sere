@@ -41,3 +41,55 @@ export function trimMessagesForRerollRequest(messages: Message[]): Message[] {
 
   return nextMessages;
 }
+
+export function createInitialRerollHistory(
+  existingSnapshots: Message[][],
+  lastMessage: Message | undefined,
+): { snapshots: Message[][]; index: number } {
+  if (!lastMessage || existingSnapshots.length > 0) {
+    return {
+      snapshots: existingSnapshots,
+      index: existingSnapshots.length > 0 ? existingSnapshots.length - 1 : -1,
+    };
+  }
+
+  return {
+    snapshots: [[lastMessage]],
+    index: 0,
+  };
+}
+
+export function appendRerollSnapshot(
+  snapshots: Message[][],
+  snapshot: Message[],
+): { snapshots: Message[][]; index: number } {
+  const nextSnapshots = [...snapshots, snapshot];
+  return {
+    snapshots: nextSnapshots,
+    index: nextSnapshots.length - 1,
+  };
+}
+
+export function readNextRerollSnapshot(
+  snapshots: Message[][],
+  index: number,
+): { snapshot: Message[] | null; index: number } {
+  const nextIndex = index + 1;
+  const snapshot = Array.isArray(snapshots[nextIndex]) ? snapshots[nextIndex] : null;
+  return {
+    snapshot,
+    index: snapshot ? nextIndex : index,
+  };
+}
+
+export function readPreviousRerollSnapshot(
+  snapshots: Message[][],
+  index: number,
+): { snapshot: Message[] | null; index: number } {
+  const nextIndex = index - 1;
+  const snapshot = Array.isArray(snapshots[nextIndex]) ? snapshots[nextIndex] : null;
+  return {
+    snapshot,
+    index: snapshot ? nextIndex : index,
+  };
+}

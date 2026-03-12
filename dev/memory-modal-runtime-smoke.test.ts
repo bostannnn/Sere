@@ -5,7 +5,7 @@ import { mount, tick, unmount } from "svelte";
 vi.mock(import("src/lang"), () => ({
   language: {
     memoryModal: {
-      titleLabel: "Hypa V3",
+      titleLabel: "Memory",
     },
   },
 }));

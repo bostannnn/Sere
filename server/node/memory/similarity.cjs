@@ -45,7 +45,7 @@ function buildSimilarityQueryFromChat(chat, convertStoredMessageToOpenAI) {
 async function generateSummaryEmbedding(summaryText, settings, stripSummaryForPrompt) {
     const text = stripSummaryForPrompt(summaryText);
     if (!text) return null;
-    const modelKey = toStringOrEmpty(settings?.hypaModel) || 'MiniLM';
+    const modelKey = toStringOrEmpty(settings?.embeddingModel) || 'MiniLM';
     const vectors = await generateEmbeddings([text], modelKey);
     const vector = Array.isArray(vectors) ? vectors[0] : null;
     if (!Array.isArray(vector) || vector.length === 0) return null;
@@ -62,7 +62,7 @@ async function getSimilaritySortedIndices(summaries, queryText, settings) {
     }
     if (withEmbeddings.length === 0) return [];
 
-    const modelKey = toStringOrEmpty(settings?.hypaModel) || 'MiniLM';
+    const modelKey = toStringOrEmpty(settings?.embeddingModel) || 'MiniLM';
     const queryVectors = await generateEmbeddings([queryText], modelKey);
     const queryEmbedding = Array.isArray(queryVectors) ? queryVectors[0] : null;
     if (!Array.isArray(queryEmbedding) || queryEmbedding.length === 0) return [];
@@ -80,9 +80,9 @@ function buildCategoryIndexPools(summaries) {
     return { recent };
 }
 
-function resolveLegacySummarySlotAllocation(hypaSettings, totalSlots) {
-    const recentRatioRaw = Number(hypaSettings?.recentMemoryRatio || 0);
-    const similarRatioRaw = Number(hypaSettings?.similarMemoryRatio || 0);
+function resolveLegacySummarySlotAllocation(memorySettings, totalSlots) {
+    const recentRatioRaw = Number(memorySettings?.recentMemoryRatio || 0);
+    const similarRatioRaw = Number(memorySettings?.similarMemoryRatio || 0);
     const recentRatio = Number.isFinite(recentRatioRaw) ? Math.max(0, Math.min(1, recentRatioRaw)) : 0;
     const similarRatio = Number.isFinite(similarRatioRaw) ? Math.max(0, Math.min(1, similarRatioRaw)) : 0;
     const ratioSum = recentRatio + similarRatio;
@@ -92,7 +92,7 @@ function resolveLegacySummarySlotAllocation(hypaSettings, totalSlots) {
     return { recentSlots, similarSlots };
 }
 
-function resolveSummarySlotAllocation(hypaSettings, totalSlots) {
+function resolveSummarySlotAllocation(memorySettings, totalSlots) {
     if (totalSlots <= 0) {
         return {
             recentSlots: 0,
@@ -100,14 +100,14 @@ function resolveSummarySlotAllocation(hypaSettings, totalSlots) {
         };
     }
 
-    const legacy = resolveLegacySummarySlotAllocation(hypaSettings, totalSlots);
+    const legacy = resolveLegacySummarySlotAllocation(memorySettings, totalSlots);
     const similarSlots = clampInt(
-        hypaSettings?.similarSummarySlots,
+        memorySettings?.similarSummarySlots,
         0,
         totalSlots,
         legacy.similarSlots
     );
-    const recentSlotsRaw = Number(hypaSettings?.recentSummarySlots);
+    const recentSlotsRaw = Number(memorySettings?.recentSummarySlots);
     let recentSlots = Number.isFinite(recentSlotsRaw)
         ? clampInt(recentSlotsRaw, 0, totalSlots, legacy.recentSlots)
         : legacy.recentSlots;

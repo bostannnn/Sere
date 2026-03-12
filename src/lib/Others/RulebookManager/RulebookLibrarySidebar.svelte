@@ -3,7 +3,7 @@
     import { DBState } from "src/ts/stores.svelte";
     import NumberInput from "../../UI/GUI/NumberInput.svelte";
     import EmbeddingModelSelect from "../../UI/GUI/EmbeddingModelSelect.svelte";
-    import type { HypaModel } from "src/ts/process/memory/hypamemory";
+    import type { EmbeddingModel } from "src/ts/process/memory/embeddings";
     import { DEFAULT_GLOBAL_RAG_SETTINGS } from "src/ts/storage/database.svelte";
 
     interface Props {
@@ -32,7 +32,7 @@
         onClearFilters = () => {},
     }: Props = $props();
 
-    let ragModel = $state((DBState.db.globalRagSettings.model ?? DEFAULT_GLOBAL_RAG_SETTINGS.model) as HypaModel);
+    let ragModel = $state((DBState.db.globalRagSettings.model ?? DEFAULT_GLOBAL_RAG_SETTINGS.model) as EmbeddingModel);
     let ragTopK = $state(Number(DBState.db.globalRagSettings.topK ?? DEFAULT_GLOBAL_RAG_SETTINGS.topK));
     let ragMinScore = $state(Number(DBState.db.globalRagSettings.minScore ?? DEFAULT_GLOBAL_RAG_SETTINGS.minScore));
     let ragBudget = $state(Number(DBState.db.globalRagSettings.budget ?? DEFAULT_GLOBAL_RAG_SETTINGS.budget));

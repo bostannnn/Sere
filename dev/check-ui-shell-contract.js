@@ -93,11 +93,11 @@ const alertCompFile = "/Users/andrewbostan/Documents/RisuAII/src/lib/Others/Aler
 const alertChoicePanelsFile = "/Users/andrewbostan/Documents/RisuAII/src/lib/Others/AlertComp/AlertChoicePanels.svelte";
 const alertCardExportModalFile = "/Users/andrewbostan/Documents/RisuAII/src/lib/Others/AlertComp/AlertCardExportModal.svelte";
 const requestLogsViewerFile = "/Users/andrewbostan/Documents/RisuAII/src/lib/Others/RequestLogsViewer.svelte";
-const hypaModalFile = "/Users/andrewbostan/Documents/RisuAII/src/lib/Others/MemoryPanel.svelte";
-const hypaModalHeaderFile = "/Users/andrewbostan/Documents/RisuAII/src/lib/Others/MemoryModal/modal-header.svelte";
-const hypaBulkEditActionsFile = "/Users/andrewbostan/Documents/RisuAII/src/lib/Others/MemoryModal/bulk-edit-actions.svelte";
-const hypaTagManagerFile = "/Users/andrewbostan/Documents/RisuAII/src/lib/Others/MemoryModal/tag-manager-modal.svelte";
-const hypaSummaryItemFile = "/Users/andrewbostan/Documents/RisuAII/src/lib/Others/MemoryModal/modal-summary-item.svelte";
+const memoryModalFile = "/Users/andrewbostan/Documents/RisuAII/src/lib/Others/MemoryPanel.svelte";
+const memoryModalHeaderFile = "/Users/andrewbostan/Documents/RisuAII/src/lib/Others/MemoryModal/modal-header.svelte";
+const memoryBulkEditActionsFile = "/Users/andrewbostan/Documents/RisuAII/src/lib/Others/MemoryModal/bulk-edit-actions.svelte";
+const memoryTagManagerFile = "/Users/andrewbostan/Documents/RisuAII/src/lib/Others/MemoryModal/tag-manager-modal.svelte";
+const memorySummaryItemFile = "/Users/andrewbostan/Documents/RisuAII/src/lib/Others/MemoryModal/modal-summary-item.svelte";
 
 const appContent = readFile(appFile);
 const appShellContent = readFile(appShellFile);
@@ -155,11 +155,11 @@ const alertCompContent = readFile(alertCompFile);
 const alertChoicePanelsContent = readFile(alertChoicePanelsFile);
 const alertCardExportModalContent = readFile(alertCardExportModalFile);
 const requestLogsViewerContent = readFile(requestLogsViewerFile);
-const hypaModalContent = readFile(hypaModalFile);
-const hypaModalHeaderContent = readFile(hypaModalHeaderFile);
-const hypaBulkEditActionsContent = readFile(hypaBulkEditActionsFile);
-const hypaTagManagerContent = readFile(hypaTagManagerFile);
-const hypaSummaryItemContent = readFile(hypaSummaryItemFile);
+const memoryModalContent = readFile(memoryModalFile);
+const memoryModalHeaderContent = readFile(memoryModalHeaderFile);
+const memoryBulkEditActionsContent = readFile(memoryBulkEditActionsFile);
+const memoryTagManagerContent = readFile(memoryTagManagerFile);
+const memorySummaryItemContent = readFile(memorySummaryItemFile);
 
 ensureIncludes(
   appShellContent,
@@ -661,84 +661,84 @@ ensureIncludes(requestLogsViewerContent, requestLogsViewerFile, ".request-log-co
 ensureIncludes(requestLogsViewerContent, requestLogsViewerFile, ".alert-requestlog-empty.empty-state {", failures);
 ensureIncludes(requestLogsViewerContent, requestLogsViewerFile, ".alert-requestlog-list.list-shell {", failures);
 ensureIncludes(requestLogsViewerContent, requestLogsViewerFile, ".alert-requestlog-card.panel-shell {", failures);
-ensureIncludes(hypaModalContent, hypaModalFile, "class=\"ds-memory-sidebar-root\"", failures);
-ensureIncludes(hypaModalContent, hypaModalFile, "class=\"ds-memory-sidebar-wrap\"", failures);
-ensureIncludes(hypaModalContent, hypaModalFile, "class=\"ds-memory-modal-convert-card panel-shell\"", failures);
-ensureIncludes(hypaModalContent, hypaModalFile, "class=\"ds-memory-modal-convert-button control-chip\"", failures);
-ensureIncludes(hypaModalContent, hypaModalFile, "class=\"ds-memory-modal-empty-note empty-state\"", failures);
-ensureIncludes(hypaModalContent, hypaModalFile, "class=\"ds-memory-modal-search-input control-field\"", failures);
-ensureIncludes(hypaModalContent, hypaModalFile, "class=\"ds-memory-modal-search-nav-button icon-btn icon-btn--sm\"", failures);
-ensureIncludes(hypaModalContent, hypaModalFile, "class=\"ds-memory-modal-manual-input control-field\"", failures);
-ensureIncludes(hypaModalContent, hypaModalFile, "class=\"ds-memory-modal-manual-submit ds-ui-button ds-ui-button-size-md ds-ui-button--primary\"", failures);
-ensureIncludes(hypaModalContent, hypaModalFile, "class=\"ds-memory-modal-debug-textarea control-field\"", failures);
-ensureIncludes(hypaModalContent, hypaModalFile, "import SettingsSubTabs from \"src/lib/Setting/SettingsSubTabs.svelte\";", failures);
-ensureIncludes(hypaModalContent, hypaModalFile, "className=\"ds-memory-tabs\"", failures);
-ensureNotIncludes(hypaModalContent, hypaModalFile, "embedded?:", failures);
-ensureNotIncludes(hypaModalContent, hypaModalFile, "embedded =", failures);
-ensureNotIncludes(hypaModalContent, hypaModalFile, "{embedded}", failures);
-ensureNotIncludes(hypaModalContent, hypaModalFile, "ds-memory-modal-chat-select", failures);
+ensureIncludes(memoryModalContent, memoryModalFile, "class=\"ds-memory-sidebar-root\"", failures);
+ensureIncludes(memoryModalContent, memoryModalFile, "class=\"ds-memory-sidebar-wrap\"", failures);
+ensureIncludes(memoryModalContent, memoryModalFile, "class=\"ds-memory-modal-convert-card panel-shell\"", failures);
+ensureIncludes(memoryModalContent, memoryModalFile, "class=\"ds-memory-modal-convert-button control-chip\"", failures);
+ensureIncludes(memoryModalContent, memoryModalFile, "class=\"ds-memory-modal-empty-note empty-state\"", failures);
+ensureIncludes(memoryModalContent, memoryModalFile, "class=\"ds-memory-modal-search-input control-field\"", failures);
+ensureIncludes(memoryModalContent, memoryModalFile, "class=\"ds-memory-modal-search-nav-button icon-btn icon-btn--sm\"", failures);
+ensureIncludes(memoryModalContent, memoryModalFile, "class=\"ds-memory-modal-manual-input control-field\"", failures);
+ensureIncludes(memoryModalContent, memoryModalFile, "class=\"ds-memory-modal-manual-submit ds-ui-button ds-ui-button-size-md ds-ui-button--primary\"", failures);
+ensureIncludes(memoryModalContent, memoryModalFile, "class=\"ds-memory-modal-debug-textarea control-field\"", failures);
+ensureIncludes(memoryModalContent, memoryModalFile, "import SettingsSubTabs from \"src/lib/Setting/SettingsSubTabs.svelte\";", failures);
+ensureIncludes(memoryModalContent, memoryModalFile, "className=\"ds-memory-tabs\"", failures);
+ensureNotIncludes(memoryModalContent, memoryModalFile, "embedded?:", failures);
+ensureNotIncludes(memoryModalContent, memoryModalFile, "embedded =", failures);
+ensureNotIncludes(memoryModalContent, memoryModalFile, "{embedded}", failures);
+ensureNotIncludes(memoryModalContent, memoryModalFile, "ds-memory-modal-chat-select", failures);
 ensureNotRegex(
-  hypaModalContent,
-  hypaModalFile,
+  memoryModalContent,
+  memoryModalFile,
   /class="ds-memory-modal-convert-button control-chip"[\s\S]{0,120}tabindex="-1"/,
   failures,
   "convert button must remain keyboard reachable",
 );
 ensureNotRegex(
-  hypaModalContent,
-  hypaModalFile,
+  memoryModalContent,
+  memoryModalFile,
   /class="ds-memory-modal-search-nav-button icon-btn icon-btn--sm"[\s\S]{0,140}tabindex="-1"/,
   failures,
   "search nav buttons must remain keyboard reachable",
 );
-ensureIncludes(hypaModalHeaderContent, hypaModalHeaderFile, "<div class=\"memory-header-actions action-rail\">", failures);
-ensureIncludes(hypaModalHeaderContent, hypaModalHeaderFile, "class=\"memory-header-icon-btn icon-btn icon-btn--md\"", failures);
-ensureIncludes(hypaModalHeaderContent, hypaModalHeaderFile, "class=\"memory-header-menu-panel panel-shell\"", failures);
-ensureIncludes(hypaModalHeaderContent, hypaModalHeaderFile, "<div class=\"memory-header-menu-actions action-rail\">", failures);
-ensureIncludes(hypaModalHeaderContent, hypaModalHeaderFile, ".memory-header-actions.action-rail {", failures);
-ensureIncludes(hypaModalHeaderContent, hypaModalHeaderFile, ".memory-header-icon-btn.icon-btn.icon-btn--md {", failures);
-ensureIncludes(hypaModalHeaderContent, hypaModalHeaderFile, ".memory-header-menu-panel.panel-shell {", failures);
-ensureIncludes(hypaModalHeaderContent, hypaModalHeaderFile, ".memory-header-menu-actions.action-rail {", failures);
-ensureIncludes(hypaBulkEditActionsContent, hypaBulkEditActionsFile, "class=\"memory-bulk-shell panel-shell\"", failures);
-ensureIncludes(hypaBulkEditActionsContent, hypaBulkEditActionsFile, "class=\"memory-bulk-row action-rail\"", failures);
-ensureIncludes(hypaBulkEditActionsContent, hypaBulkEditActionsFile, "class=\"memory-bulk-right action-rail\"", failures);
-ensureIncludes(hypaBulkEditActionsContent, hypaBulkEditActionsFile, "class=\"memory-bulk-input-row action-rail\"", failures);
-ensureIncludes(hypaBulkEditActionsContent, hypaBulkEditActionsFile, "class=\"memory-bulk-select control-field\"", failures);
-ensureIncludes(hypaBulkEditActionsContent, hypaBulkEditActionsFile, "class=\"memory-bulk-input control-field\"", failures);
-ensureIncludes(hypaBulkEditActionsContent, hypaBulkEditActionsFile, ".memory-bulk-shell.panel-shell {", failures);
-ensureIncludes(hypaBulkEditActionsContent, hypaBulkEditActionsFile, ".memory-bulk-row.action-rail {", failures);
-ensureIncludes(hypaBulkEditActionsContent, hypaBulkEditActionsFile, ".memory-bulk-right.action-rail,", failures);
-ensureIncludes(hypaBulkEditActionsContent, hypaBulkEditActionsFile, ".memory-bulk-select.control-field {", failures);
-ensureIncludes(hypaBulkEditActionsContent, hypaBulkEditActionsFile, ".memory-bulk-input.control-field {", failures);
-ensureNotIncludes(hypaModalContent, hypaModalFile, "<ModalFooter", failures);
-ensureIncludes(hypaTagManagerContent, hypaTagManagerFile, "class=\"ds-memory-tag-modal panel-shell\"", failures);
-ensureIncludes(hypaTagManagerContent, hypaTagManagerFile, "class=\"ds-memory-tag-close icon-btn icon-btn--sm\"", failures);
-ensureIncludes(hypaTagManagerContent, hypaTagManagerFile, "class=\"ds-memory-tag-add-row action-rail\"", failures);
-ensureIncludes(hypaTagManagerContent, hypaTagManagerFile, "class=\"ds-memory-tag-input control-field\"", failures);
-ensureIncludes(hypaTagManagerContent, hypaTagManagerFile, "class=\"ds-memory-tag-list list-shell\"", failures);
-ensureIncludes(hypaTagManagerContent, hypaTagManagerFile, "class=\"ds-memory-tag-edit-input control-field\"", failures);
-ensureIncludes(hypaTagManagerContent, hypaTagManagerFile, "class=\"ds-memory-tag-icon-btn ds-memory-tag-icon-btn-save icon-btn icon-btn--sm\"", failures);
-ensureIncludes(hypaTagManagerContent, hypaTagManagerFile, "class=\"ds-memory-tag-icon-btn ds-memory-tag-icon-btn-cancel icon-btn icon-btn--sm\"", failures);
-ensureIncludes(hypaTagManagerContent, hypaTagManagerFile, "class=\"ds-memory-tag-icon-btn ds-memory-tag-icon-btn-edit icon-btn icon-btn--sm\"", failures);
-ensureIncludes(hypaTagManagerContent, hypaTagManagerFile, "class=\"ds-memory-tag-icon-btn ds-memory-tag-icon-btn-delete icon-btn icon-btn--sm\"", failures);
-ensureIncludes(hypaTagManagerContent, hypaTagManagerFile, "class=\"ds-memory-tag-empty empty-state\"", failures);
-ensureIncludes(hypaSummaryItemContent, hypaSummaryItemFile, "class=\"memory-summary-root panel-shell\"", failures);
-ensureIncludes(hypaSummaryItemContent, hypaSummaryItemFile, "class=\"memory-summary-metric-chip control-chip\"", failures);
-ensureIncludes(hypaSummaryItemContent, hypaSummaryItemFile, "class=\"memory-summary-row-inline action-rail\"", failures);
-ensureIncludes(hypaSummaryItemContent, hypaSummaryItemFile, "class=\"memory-summary-icon-button icon-btn icon-btn--sm\"", failures);
-ensureIncludes(hypaSummaryItemContent, hypaSummaryItemFile, "class=\"memory-summary-icon-button memory-summary-danger-hover icon-btn icon-btn--sm\"", failures);
-ensureIncludes(hypaSummaryItemContent, hypaSummaryItemFile, "class=\"memory-summary-icon-button memory-summary-accent-hover icon-btn icon-btn--sm\"", failures);
-ensureIncludes(hypaSummaryItemContent, hypaSummaryItemFile, "class=\"memory-summary-toggle-button control-chip\"", failures);
-ensureIncludes(hypaSummaryItemContent, hypaSummaryItemFile, "class=\"memory-summary-textarea memory-summary-textarea-focus control-field\"", failures);
-ensureIncludes(hypaSummaryItemContent, hypaSummaryItemFile, "class=\"memory-summary-textarea control-field\"", failures);
-ensureIncludes(hypaSummaryItemContent, hypaSummaryItemFile, "class=\"memory-summary-chatmemo-button control-chip\"", failures);
-ensureIncludes(hypaSummaryItemContent, hypaSummaryItemFile, ".memory-summary-root.panel-shell {", failures);
-ensureIncludes(hypaSummaryItemContent, hypaSummaryItemFile, ".memory-summary-metric-chip.control-chip {", failures);
-ensureIncludes(hypaSummaryItemContent, hypaSummaryItemFile, ".memory-summary-icon-button.icon-btn.icon-btn--sm {", failures);
-ensureIncludes(hypaSummaryItemContent, hypaSummaryItemFile, ".memory-summary-toggle-button.control-chip {", failures);
-ensureIncludes(hypaSummaryItemContent, hypaSummaryItemFile, ".memory-summary-textarea.control-field {", failures);
-ensureIncludes(hypaSummaryItemContent, hypaSummaryItemFile, ".memory-summary-textarea-focus.control-field:focus {", failures);
-ensureIncludes(hypaSummaryItemContent, hypaSummaryItemFile, ".memory-summary-chatmemo-button.control-chip {", failures);
+ensureIncludes(memoryModalHeaderContent, memoryModalHeaderFile, "<div class=\"memory-header-actions action-rail\">", failures);
+ensureIncludes(memoryModalHeaderContent, memoryModalHeaderFile, "class=\"memory-header-icon-btn icon-btn icon-btn--md\"", failures);
+ensureIncludes(memoryModalHeaderContent, memoryModalHeaderFile, "class=\"memory-header-menu-panel panel-shell\"", failures);
+ensureIncludes(memoryModalHeaderContent, memoryModalHeaderFile, "<div class=\"memory-header-menu-actions action-rail\">", failures);
+ensureIncludes(memoryModalHeaderContent, memoryModalHeaderFile, ".memory-header-actions.action-rail {", failures);
+ensureIncludes(memoryModalHeaderContent, memoryModalHeaderFile, ".memory-header-icon-btn.icon-btn.icon-btn--md {", failures);
+ensureIncludes(memoryModalHeaderContent, memoryModalHeaderFile, ".memory-header-menu-panel.panel-shell {", failures);
+ensureIncludes(memoryModalHeaderContent, memoryModalHeaderFile, ".memory-header-menu-actions.action-rail {", failures);
+ensureIncludes(memoryBulkEditActionsContent, memoryBulkEditActionsFile, "class=\"memory-bulk-shell panel-shell\"", failures);
+ensureIncludes(memoryBulkEditActionsContent, memoryBulkEditActionsFile, "class=\"memory-bulk-row action-rail\"", failures);
+ensureIncludes(memoryBulkEditActionsContent, memoryBulkEditActionsFile, "class=\"memory-bulk-right action-rail\"", failures);
+ensureIncludes(memoryBulkEditActionsContent, memoryBulkEditActionsFile, "class=\"memory-bulk-input-row action-rail\"", failures);
+ensureIncludes(memoryBulkEditActionsContent, memoryBulkEditActionsFile, "class=\"memory-bulk-select control-field\"", failures);
+ensureIncludes(memoryBulkEditActionsContent, memoryBulkEditActionsFile, "class=\"memory-bulk-input control-field\"", failures);
+ensureIncludes(memoryBulkEditActionsContent, memoryBulkEditActionsFile, ".memory-bulk-shell.panel-shell {", failures);
+ensureIncludes(memoryBulkEditActionsContent, memoryBulkEditActionsFile, ".memory-bulk-row.action-rail {", failures);
+ensureIncludes(memoryBulkEditActionsContent, memoryBulkEditActionsFile, ".memory-bulk-right.action-rail,", failures);
+ensureIncludes(memoryBulkEditActionsContent, memoryBulkEditActionsFile, ".memory-bulk-select.control-field {", failures);
+ensureIncludes(memoryBulkEditActionsContent, memoryBulkEditActionsFile, ".memory-bulk-input.control-field {", failures);
+ensureNotIncludes(memoryModalContent, memoryModalFile, "<ModalFooter", failures);
+ensureIncludes(memoryTagManagerContent, memoryTagManagerFile, "class=\"ds-memory-tag-modal panel-shell\"", failures);
+ensureIncludes(memoryTagManagerContent, memoryTagManagerFile, "class=\"ds-memory-tag-close icon-btn icon-btn--sm\"", failures);
+ensureIncludes(memoryTagManagerContent, memoryTagManagerFile, "class=\"ds-memory-tag-add-row action-rail\"", failures);
+ensureIncludes(memoryTagManagerContent, memoryTagManagerFile, "class=\"ds-memory-tag-input control-field\"", failures);
+ensureIncludes(memoryTagManagerContent, memoryTagManagerFile, "class=\"ds-memory-tag-list list-shell\"", failures);
+ensureIncludes(memoryTagManagerContent, memoryTagManagerFile, "class=\"ds-memory-tag-edit-input control-field\"", failures);
+ensureIncludes(memoryTagManagerContent, memoryTagManagerFile, "class=\"ds-memory-tag-icon-btn ds-memory-tag-icon-btn-save icon-btn icon-btn--sm\"", failures);
+ensureIncludes(memoryTagManagerContent, memoryTagManagerFile, "class=\"ds-memory-tag-icon-btn ds-memory-tag-icon-btn-cancel icon-btn icon-btn--sm\"", failures);
+ensureIncludes(memoryTagManagerContent, memoryTagManagerFile, "class=\"ds-memory-tag-icon-btn ds-memory-tag-icon-btn-edit icon-btn icon-btn--sm\"", failures);
+ensureIncludes(memoryTagManagerContent, memoryTagManagerFile, "class=\"ds-memory-tag-icon-btn ds-memory-tag-icon-btn-delete icon-btn icon-btn--sm\"", failures);
+ensureIncludes(memoryTagManagerContent, memoryTagManagerFile, "class=\"ds-memory-tag-empty empty-state\"", failures);
+ensureIncludes(memorySummaryItemContent, memorySummaryItemFile, "class=\"memory-summary-root panel-shell\"", failures);
+ensureIncludes(memorySummaryItemContent, memorySummaryItemFile, "class=\"memory-summary-metric-chip control-chip\"", failures);
+ensureIncludes(memorySummaryItemContent, memorySummaryItemFile, "class=\"memory-summary-row-inline action-rail\"", failures);
+ensureIncludes(memorySummaryItemContent, memorySummaryItemFile, "class=\"memory-summary-icon-button icon-btn icon-btn--sm\"", failures);
+ensureIncludes(memorySummaryItemContent, memorySummaryItemFile, "class=\"memory-summary-icon-button memory-summary-danger-hover icon-btn icon-btn--sm\"", failures);
+ensureIncludes(memorySummaryItemContent, memorySummaryItemFile, "class=\"memory-summary-icon-button memory-summary-accent-hover icon-btn icon-btn--sm\"", failures);
+ensureIncludes(memorySummaryItemContent, memorySummaryItemFile, "class=\"memory-summary-toggle-button control-chip\"", failures);
+ensureIncludes(memorySummaryItemContent, memorySummaryItemFile, "class=\"memory-summary-textarea memory-summary-textarea-focus control-field\"", failures);
+ensureIncludes(memorySummaryItemContent, memorySummaryItemFile, "class=\"memory-summary-textarea control-field\"", failures);
+ensureIncludes(memorySummaryItemContent, memorySummaryItemFile, "class=\"memory-summary-chatmemo-button control-chip\"", failures);
+ensureIncludes(memorySummaryItemContent, memorySummaryItemFile, ".memory-summary-root.panel-shell {", failures);
+ensureIncludes(memorySummaryItemContent, memorySummaryItemFile, ".memory-summary-metric-chip.control-chip {", failures);
+ensureIncludes(memorySummaryItemContent, memorySummaryItemFile, ".memory-summary-icon-button.icon-btn.icon-btn--sm {", failures);
+ensureIncludes(memorySummaryItemContent, memorySummaryItemFile, ".memory-summary-toggle-button.control-chip {", failures);
+ensureIncludes(memorySummaryItemContent, memorySummaryItemFile, ".memory-summary-textarea.control-field {", failures);
+ensureIncludes(memorySummaryItemContent, memorySummaryItemFile, ".memory-summary-textarea-focus.control-field:focus {", failures);
+ensureIncludes(memorySummaryItemContent, memorySummaryItemFile, ".memory-summary-chatmemo-button.control-chip {", failures);
 ensureIncludes(stylesContent, stylesFile, ".ds-memory-tag-modal.panel-shell {", failures);
 ensureIncludes(stylesContent, stylesFile, ".ds-memory-tag-close.icon-btn.icon-btn--sm {", failures);
 ensureIncludes(stylesContent, stylesFile, ".ds-memory-tag-add-row.action-rail {", failures);

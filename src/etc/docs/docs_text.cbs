@@ -50,7 +50,7 @@ Risuai has a few screens that are used to interact with the software.
     - Stop TTS button: A button that you can click to stop the TTS. only appears if TTS is playing.
     - Continue Response button: If pressed, it will continue generating the response.
     - Chat list button: If pressed, it will open the chat list.
-    - Hypamemory Modal: If pressed, it will open the hypamemory modal.
+    - Memory Modal: If pressed, it will open the memory modal.
     - Auto Translate Input: It is togglable button that you can click to enable or disable the auto translate input. If enabled, it will automatically translate the message into user's preferred language. only appears if translation config has been set.
     - Screenshot button: If pressed, it will take a screenshot of the chat screen. note: it might be buggy in current version, and might not work properly.
     - Post file button: If pressed, it will open a file picker to select a file to send. Note: only supports files that current model can accept.
@@ -94,7 +94,7 @@ Miscellaneous sidebar, when chatting with a character, shortly called "chat misc
             - low level access: A checkbox that you can check to enable or disable the low level access. If enabled, it will allow the character's trigger script to access low level features, such as ai, network, and other low level features. however, on import, it will show a warning message.
             - Hide Chat Icon: A checkbox that you can check to enable or disable the hide chat icon. If enabled, it will hide the chat icon of the character.
             - Utility bot: A checkbox that you can check to enable or disable the utility bot. If enabled, it will allow the character to act as a utility bot, which means all roleplaying prompts and features will be disabled.
-            - Hypamemory modal button: A button that you can click to open the hypamemory modal.
+            - Memory modal button: A button that you can click to open the memory modal.
             - Apply module button: A button that merges the selected module to the character. Note: this is NOT enabling the module for the character, it is just merging the module to the character, which means all module features will be copied to the character, rather than enabling.
         - Share Tab (Share icon):
             - Upload to Risurealm: A button that you can click to upload the character to Risurealm, if the character is already uploaded, it will show Update to Risurealm button instead.

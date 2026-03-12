@@ -10,7 +10,6 @@
         ensureCharacterEvolution,
         getEffectiveCharacterEvolutionSettings,
         hasCharacterStateTemplateBlock,
-        normalizeCharacterEvolutionPrivacy,
         normalizeCharacterEvolutionSectionConfigs,
         normalizeCharacterEvolutionState,
     } from "src/ts/characterEvolution"
@@ -55,18 +54,13 @@
         EVOLUTION_TAB_LABELS,
         type EvolutionWorkspaceTabId,
     } from "./evolutionSettingsTabs"
-
-    function isSingleCharacter(value: character | groupChat | null | undefined): value is character {
-        return !!value && value.type !== "group"
-    }
-
-    function clonePrivacy(value: CharacterEvolutionPrivacySettings | null | undefined): CharacterEvolutionPrivacySettings {
-        return structuredClone(normalizeCharacterEvolutionPrivacy(value))
-    }
-
-    function jsonEqual(a: unknown, b: unknown): boolean {
-        return JSON.stringify(a) === JSON.stringify(b)
-    }
+    import {
+        clonePrivacy,
+        deriveSelectedVersionPrivacy,
+        deriveSelectedVersionSectionConfigs,
+        isSingleCharacter,
+        jsonEqual,
+    } from "./evolutionSettings.helpers"
 
     let loadingVersions = $state(false)
     let accepting = $state(false)
@@ -153,7 +147,7 @@
 
         if (!baseCharacter.characterEvolution.useGlobalDefaults) {
             const normalizedSections = normalizeCharacterEvolutionSectionConfigs(sectionConfigDraft)
-            const normalizedPrivacy = normalizeCharacterEvolutionPrivacy(privacyDraft)
+            const normalizedPrivacy = clonePrivacy(privacyDraft)
             if (!jsonEqual(baseCharacter.characterEvolution.sectionConfigs, normalizedSections)) {
                 nextEvolution.sectionConfigs = structuredClone(normalizedSections)
                 changed = true
@@ -459,59 +453,19 @@
     })
 
     const selectedVersionState = $derived(selectedVersionFile?.state ?? null)
-    function versionSectionHasData(state: CharacterEvolutionState | null, key: string): boolean {
-        if (!state) {
-            return false
-        }
-        if (key === "relationship") {
-            return Boolean(state.relationship.trustLevel || state.relationship.dynamic)
-        }
-        if (key === "lastChatEnded") {
-            return Boolean(state.lastChatEnded.state || state.lastChatEnded.residue)
-        }
-        const value = state[key as keyof CharacterEvolutionState]
-        return Array.isArray(value) ? value.length > 0 : false
-    }
     const selectedVersionSectionConfigs = $derived(
-        (() => {
-            if (selectedVersionFile?.sectionConfigs) {
-                return selectedVersionFile.sectionConfigs as CharacterEvolutionSectionConfig[]
-            }
-
-            const defaults = createDefaultCharacterEvolutionSectionConfigs()
-            const currentMap = new Map(
-                (evolutionSettings?.sectionConfigs ?? []).map((section) => [section.key, section] as const)
-            )
-
-            return defaults.map((section) => {
-                const current = currentMap.get(section.key)
-                const shouldShowFromSnapshot = versionSectionHasData(selectedVersionState, section.key)
-                return {
-                    ...section,
-                    enabled: Boolean(current?.enabled || shouldShowFromSnapshot),
-                    includeInPrompt: current?.includeInPrompt ?? section.includeInPrompt,
-                    label: current?.label ?? section.label,
-                    instruction: current?.instruction ?? section.instruction,
-                    kind: current?.kind ?? section.kind,
-                    sensitive: current?.sensitive ?? section.sensitive,
-                }
-            })
-        })()
+        deriveSelectedVersionSectionConfigs({
+            selectedVersionFile,
+            selectedVersionState,
+            evolutionSettings,
+        })
     )
     const selectedVersionPrivacy = $derived(
-        (() => {
-            if (selectedVersionFile?.privacy) {
-                return selectedVersionFile.privacy as CharacterEvolutionPrivacySettings
-            }
-            return {
-                allowCharacterIntimatePreferences:
-                    (selectedVersionState?.characterIntimatePreferences?.length ?? 0) > 0
-                    || (evolutionSettings?.privacy.allowCharacterIntimatePreferences ?? false),
-                allowUserIntimatePreferences:
-                    (selectedVersionState?.userIntimatePreferences?.length ?? 0) > 0
-                    || (evolutionSettings?.privacy.allowUserIntimatePreferences ?? false),
-            }
-        })()
+        deriveSelectedVersionPrivacy({
+            selectedVersionFile,
+            selectedVersionState,
+            evolutionSettings,
+        })
     )
 </script>
 

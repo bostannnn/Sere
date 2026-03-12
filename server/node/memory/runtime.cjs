@@ -9,7 +9,11 @@ const {
     resolveMemorySettings,
     isMemoryEnabled,
 } = require('./settings.cjs');
-const { getMemoryData, setMemoryData } = require('./storage.cjs');
+const {
+    getMemoryData,
+    isCharacterMemoryEnabled,
+    setMemoryData,
+} = require('./storage.cjs');
 const {
     normalizeMemoryData,
     selectSummaryIndices,
@@ -153,7 +157,7 @@ function planPeriodicMemorySummarization(arg = {}) {
     const settings = arg.settings || {};
     const messages = Array.isArray(chat.message) ? chat.message : [];
 
-    if (character?.supaMemory !== true) {
+    if (!isCharacterMemoryEnabled(character)) {
         return { shouldRun: false, reason: 'memory_disabled_on_character' };
     }
     if (!isMemoryEnabled(settings)) {
@@ -289,7 +293,7 @@ async function buildServerMemoryMessages(arg = {}) {
     const chat = arg.chat || {};
     const settings = arg.settings || {};
 
-    if (character?.supaMemory !== true) return [];
+    if (!isCharacterMemoryEnabled(character)) return [];
     if (!isMemoryEnabled(settings)) return [];
 
     const parsed = normalizeMemoryData(getMemoryData(chat));

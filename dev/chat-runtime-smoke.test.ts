@@ -62,7 +62,7 @@ vi.mock(import("src/lang"), () => ({
     errors: { onlyOneChat: "Only one chat" },
     removeConfirm: "Remove ",
     orderByOrder: "Order by order",
-    ToggleMemory: "Toggle HypaMemory",
+    ToggleMemory: "Toggle Memory",
     changeFolderColor: "Change folder color",
     cancel: "Cancel",
     doYouWantToUnbindCurrentPersona: "Unbind persona?",

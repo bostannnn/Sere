@@ -79,7 +79,7 @@ function createBaseDb() {
         type: "character",
         chaId: "char-a",
         name: "Character A",
-        supaMemory: true,
+        memoryEnabled: true,
         chatPage: 0,
         memoryPromptOverride: {
           summarizationPrompt: "",

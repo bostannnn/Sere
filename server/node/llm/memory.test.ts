@@ -51,7 +51,7 @@ describe("server memory controls", () => {
     });
 
     const plan = planPeriodicMemorySummarization({
-      character: { supaMemory: true },
+      character: { memoryEnabled: true },
       settings,
       chat: {
         message: [
@@ -104,7 +104,7 @@ describe("server memory controls", () => {
     };
 
     const memory = await buildServerMemoryMessages({
-      character: { supaMemory: true },
+      character: { memoryEnabled: true },
       settings,
       chat,
       maxMemoryTokens: 1000,
@@ -149,7 +149,7 @@ describe("server memory controls", () => {
     };
 
     const memory = await buildServerMemoryMessages({
-      character: { supaMemory: true },
+      character: { memoryEnabled: true },
       settings,
       chat,
       maxMemoryTokens: 1000,
@@ -195,7 +195,7 @@ describe("server memory controls", () => {
     };
 
     const memory = await buildServerMemoryMessages({
-      character: { supaMemory: true },
+      character: { memoryEnabled: true },
       settings,
       chat,
       maxMemoryTokens: 60,
@@ -247,7 +247,7 @@ describe("server memory controls", () => {
     };
 
     await buildServerMemoryMessages({
-      character: { supaMemory: true },
+      character: { memoryEnabled: true },
       settings,
       chat,
       maxMemoryTokens: 1000,
@@ -288,7 +288,7 @@ describe("server memory controls", () => {
     };
 
     const memory = await buildServerMemoryMessages({
-      character: { supaMemory: true },
+      character: { memoryEnabled: true },
       settings,
       chat,
       maxMemoryTokens: 1000,
@@ -313,7 +313,7 @@ describe("server memory controls", () => {
       similarSummarySlots: 1,
     });
 
-    const resolved = resolveMemorySettings(settings, { supaMemory: true });
+    const resolved = resolveMemorySettings(settings, { memoryEnabled: true });
 
     expect(resolved.periodicSummarizationInterval).toBe(24);
     expect(resolved.maxChatsPerSummary).toBe(24);
@@ -350,7 +350,7 @@ describe("server memory controls", () => {
     };
 
     await buildServerMemoryMessages({
-      character: { supaMemory: true },
+      character: { memoryEnabled: true },
       settings,
       chat,
       maxMemoryTokens: 1000,

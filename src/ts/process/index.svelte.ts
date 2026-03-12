@@ -16,7 +16,7 @@ import { sayTTS } from "./tts";
 import { v4 } from "uuid";
 import { groupOrder } from "./group";
 import { runTrigger } from "./triggers";
-import { HypaProcesser } from "./memory/hypamemory";
+import { EmbeddingProcessor } from "./memory/embeddings";
 import { additionalInformations } from "./embedding/addinfo";
 import { getInlayAsset } from "./files/inlays";
 import { getGenerationModelString } from "./models/modelString";
@@ -32,8 +32,12 @@ import { addRerolls } from "./prereroll";
 import { runImageEmbedding } from "./transformers";
 import { runLuaEditTrigger } from "./scriptings";
 import { getModelInfo, LLMFlags } from "../model/modellist";
-import { buildMemoryContext } from "./memory/memory";
-import { getChatMemoryData, getDbMemoryEnabled, setChatMemoryData } from "./memory/storage";
+import {
+    getCharacterMemoryEnabled,
+    getChatMemoryData,
+    getDbMemoryEnabled,
+    setChatMemoryData,
+} from "./memory/storage";
 import { getModuleAssets, getModuleToggles } from "./modules";
 import { addFetchLog, readImage } from "../globalApi.svelte";
 import { rulebookRag } from "./rag/rag";
@@ -47,16 +51,20 @@ import {
     systemizePromptChats,
     trimPromptChats,
 } from "./promptPostProcess";
+import {
+    applyPromptMemoryContext,
+} from "./promptMemoryContext";
+import { splitPromptMessagesForMemoryTemplate } from "./promptMemoryFormatting";
 import * as promptTemplateShared from "./promptTemplateShared";
 import type { RagResult, RulebookMetadata } from "./rag/types";
 const processLog = (..._args: unknown[]) => {};
 const {
-    MEMORY_MESSAGE_MEMO,
     normalizeTemplateRange,
+    resolvePromptTemplateBlockTitle,
     resolveMemoryTemplateMessages,
 } = promptTemplateShared as {
-    MEMORY_MESSAGE_MEMO: string
     normalizeTemplateRange: <T>(items: T[], rangeStart?: number, rangeEnd?: number | 'end') => T[]
+    resolvePromptTemplateBlockTitle: (card?: { type?: string; type2?: string; name?: string }) => string
     resolveMemoryTemplateMessages: (
         sourceMessages: OpenAIChat[],
         summaryItems?: string[],
@@ -319,7 +327,7 @@ export async function sendChat(chatProcessIndex = -1,arg:{
         if (
             !attemptedServerMemoryMerge
             && getDbMemoryEnabled(DBState.db) === true
-            && activeChar?.supaMemory === true
+            && getCharacterMemoryEnabled(activeChar)
         ) {
             const mergeResult = await tryServerMemoryMerge({
                 attempted: attemptedServerMemoryMerge,
@@ -689,7 +697,7 @@ export async function sendChat(chatProcessIndex = -1,arg:{
 
     //await tokenize currernt
     let currentTokens = DBState.db.maxResponse
-    let supaMemoryCardUsed = false
+    let hasMemoryTemplateCard = false
     
     //for unexpected error
     currentTokens += 50
@@ -845,7 +853,7 @@ export async function sendChat(chatProcessIndex = -1,arg:{
                     break
                 }
                 case 'memory':{
-                    supaMemoryCardUsed = true
+                    hasMemoryTemplateCard = true
                     break
                 }
                 case 'characterState':{
@@ -1113,29 +1121,39 @@ export async function sendChat(chatProcessIndex = -1,arg:{
         currentTokens += await tokenizer.tokenizeChat(chat)
     }
     
-    if(!isNodeServer && nowChatroom.supaMemory && getDbMemoryEnabled(DBState.db)){
+    const shouldApplyMemoryContext = !isNodeServer
+        && getDbMemoryEnabled(DBState.db)
+        && getCharacterMemoryEnabled(nowChatroom)
+    if(shouldApplyMemoryContext){
         stageTimings.stage1Duration = Date.now() - stageTimings.stage1Start
         chatProcessStage.set(2)
         stageTimings.stage2Start = Date.now()
         processLog("Current chat's memory data: ", $state.snapshot(getChatMemoryData(currentChat)))
-        const sp = await buildMemoryContext(chats, currentTokens, maxContextTokens, currentChat, nowChatroom, tokenizer)
-        if(sp.error){
+        const memoryContextResult = await applyPromptMemoryContext({
+            isNodeServer,
+            database: DBState.db,
+            room: currentChat,
+            character: nowChatroom,
+            promptChats: chats,
+            currentTokens,
+            maxContextTokens,
+            tokenizer,
+        })
+        if(memoryContextResult.error){
             // Save new summary
-            if (sp.memory) {
-                setChatMemoryData(currentChat, sp.memory)
-                setChatMemoryData(DBState.db.characters[selectedChar].chats[selectedChatIndex()], sp.memory)
+            if (memoryContextResult.memory) {
+                setChatMemoryData(currentChat, memoryContextResult.memory)
+                setChatMemoryData(DBState.db.characters[selectedChar].chats[selectedChatIndex()], memoryContextResult.memory)
                 DBState.db.characters[selectedChar].chats = [...DBState.db.characters[selectedChar].chats]
             }
-            processLog(sp)
-            throwError(sp.error)
+            processLog(memoryContextResult)
+            throwError(memoryContextResult.error)
             return false
         }
-        chats = sp.chats
-        currentTokens = sp.currentTokens
-        selectedMemorySummaryTexts = Array.isArray(sp.selectedSummaryTexts)
-            ? sp.selectedSummaryTexts.filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
-            : []
-        setChatMemoryData(currentChat, sp.memory ?? getChatMemoryData(currentChat))
+        chats = memoryContextResult.chats
+        currentTokens = memoryContextResult.currentTokens
+        selectedMemorySummaryTexts = memoryContextResult.selectedSummaryTexts
+        setChatMemoryData(currentChat, memoryContextResult.memory ?? getChatMemoryData(currentChat))
         setChatMemoryData(
             DBState.db.characters[selectedChar].chats[selectedChatIndex()],
             getChatMemoryData(currentChat)
@@ -1166,28 +1184,11 @@ export async function sendChat(chatProcessIndex = -1,arg:{
         return [risuChatParser(v[0].replaceAll("\\n","\n").replaceAll("\\r","\r").replaceAll("\\\\","\\"), {chara: currentChar}),v[1]]
     })
 
-    const memories:OpenAIChat[] = []
-
-
-
-    unformated.chats = chats.map((v) => {
-        if(v.memo !== MEMORY_MESSAGE_MEMO){
-            v.removable = true
-        }
-        else if(supaMemoryCardUsed){
-            memories.push(v)
-            return {
-                role: 'system',
-                content: '',
-            } as OpenAIChat
-        }
-        else{
-            v.content = `<Previous Conversation>${v.content}</Previous Conversation>`
-        }
-        return v
-    }).filter((v) => {
-        return v.content.trim() !== '' || (v.multimodals && v.multimodals.length > 0)
-    })
+    const {
+        chatMessages: promptChatMessages,
+        memoryMessages,
+    } = splitPromptMessagesForMemoryTemplate(chats, hasMemoryTemplateCard)
+    unformated.chats = promptChatMessages
 
     for(const depthPrompt of depthPrompts){
         const chat:OpenAIChat = {
@@ -1390,7 +1391,7 @@ export async function sendChat(chatProcessIndex = -1,arg:{
                     }
 
                     for(const item of pmt){
-                        addPromptBlock('Persona Prompt', item.role, item.content)
+                        addPromptBlock(resolvePromptTemplateBlockTitle(card), item.role, item.content)
                     }
                     pushPrompts(pmt)
                     break
@@ -1408,7 +1409,7 @@ export async function sendChat(chatProcessIndex = -1,arg:{
                     }
 
                     for(const item of pmt){
-                        addPromptBlock('Character Description', item.role, item.content)
+                        addPromptBlock(resolvePromptTemplateBlockTitle(card), item.role, item.content)
                     }
                     pushPrompts(pmt)
                     break
@@ -1426,14 +1427,14 @@ export async function sendChat(chatProcessIndex = -1,arg:{
                     }
 
                     for(const item of pmt){
-                        addPromptBlock('Author Note', item.role, item.content)
+                        addPromptBlock(resolvePromptTemplateBlockTitle(card), item.role, item.content)
                     }
                     pushPrompts(pmt)
                     break
                 }
                 case 'lorebook':{
                     for(const item of unformated.lorebook){
-                        addPromptBlock('Lorebook', item.role, item.content)
+                        addPromptBlock(resolvePromptTemplateBlockTitle(card), item.role, item.content)
                     }
                     pushPrompts(unformated.lorebook)
                     break
@@ -1448,14 +1449,14 @@ export async function sendChat(chatProcessIndex = -1,arg:{
                         }
                     }
                     for(const item of pmt){
-                        addPromptBlock('Rulebook RAG', item.role, item.content)
+                        addPromptBlock(resolvePromptTemplateBlockTitle(card), item.role, item.content)
                     }
                     pushPrompts(pmt)
                     break
                 }
                 case 'postEverything':{
                     for(const item of unformated.postEverything){
-                        addPromptBlock('Post Everything', item.role, item.content)
+                        addPromptBlock(resolvePromptTemplateBlockTitle(card), item.role, item.content)
                     }
                     pushPrompts(unformated.postEverything)
                     if(usingPromptTemplate && DBState.db.promptSettings.postEndInnerFormat){
@@ -1516,7 +1517,7 @@ export async function sendChat(chatProcessIndex = -1,arg:{
                 case 'chatML':{
                     const prompts = parseChatML(card.text)
                     for(const item of prompts){
-                        addPromptBlock('ChatML', item.role, item.content)
+                        addPromptBlock(resolvePromptTemplateBlockTitle(card), item.role, item.content)
                     }
                     pushPrompts(prompts)
                     break
@@ -1541,7 +1542,7 @@ export async function sendChat(chatProcessIndex = -1,arg:{
                 }
                 case 'memory':{
                     const resolvedMemoryTemplate = resolveMemoryTemplateMessages(
-                        safeStructuredClone(memories),
+                        safeStructuredClone(memoryMessages),
                         selectedMemorySummaryTexts,
                         card.rangeStart,
                         card.rangeEnd,
@@ -1561,7 +1562,7 @@ export async function sendChat(chatProcessIndex = -1,arg:{
                     }
 
                     for(const item of pmt){
-                        addPromptBlock('Memory', item.role, item.content)
+                        addPromptBlock(resolvePromptTemplateBlockTitle(card), item.role, item.content)
                     }
                     pushPrompts(pmt)
                     break
@@ -1574,7 +1575,7 @@ export async function sendChat(chatProcessIndex = -1,arg:{
                         }
                     }
                     for(const item of pmt){
-                        addPromptBlock('Character State', item.role, item.content)
+                        addPromptBlock(resolvePromptTemplateBlockTitle(card), item.role, item.content)
                     }
                     pushPrompts(pmt)
                     break
@@ -2146,9 +2147,9 @@ export async function sendChat(chatProcessIndex = -1,arg:{
             }
 
             if(DBState.db.emotionProcesser !== 'submodel'){
-                const hypaProcesser = new HypaProcesser(DBState.db.emotionProcesser)
-                await hypaProcesser.addText(emotionList.map((v) => 'emotion:' + v))
-                const searched = (await hypaProcesser.similaritySearchScored(result)).map((v) => {
+                const embeddingProcessor = new EmbeddingProcessor(DBState.db.emotionProcesser)
+                await embeddingProcessor.addText(emotionList.map((v) => 'emotion:' + v))
+                const searched = (await embeddingProcessor.similaritySearchScored(result)).map((v) => {
                     v[0] = v[0].replace("emotion:",'')
                     return v
                 })
