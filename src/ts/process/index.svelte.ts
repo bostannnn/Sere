@@ -4,11 +4,11 @@ import { get, writable } from "svelte/store";
 import {
     changeToPreset,
     getDatabase,
+    mutateChatByTarget,
     resolveChatStateByTarget,
-    resolveChatStateByCharacterAndChatId,
     resolveGlobalRagSettings,
     resolveSelectedChatState,
-    setChatByCharacterAndChatId,
+    resolveSelectedChatTarget,
     type character,
     type Chat,
     type Message,
@@ -283,9 +283,32 @@ export async function sendChat(chatProcessIndex = -1,arg:{
 
     DBState.db.statics.messages += 1
     const selectedChar = get(selectedCharID)
-    const selectedChatState = arg.target
-        ? resolveChatStateByTarget(DBState.db.characters, arg.target)
-        : resolveSelectedChatState(DBState.db.characters, selectedChar)
+    let stableTarget = arg.target
+        ? {
+            characterId: arg.target.characterId,
+            chatId: arg.target.chatId,
+        }
+        : resolveSelectedChatTarget(DBState.db.characters, selectedChar)
+
+    if(!stableTarget){
+        const selectedChatState = resolveSelectedChatState(DBState.db.characters, selectedChar)
+        const selectedCharacter = selectedChatState.character
+        const selectedChatEntry = selectedChatState.chat
+        if(selectedCharacter && selectedChatEntry && !selectedChatEntry.id){
+            selectedChatEntry.id = v4()
+            stableTarget = {
+                characterId: selectedCharacter.chaId,
+                chatId: selectedChatEntry.id,
+            }
+        }
+    }
+
+    if(!stableTarget?.characterId || !stableTarget.chatId){
+        isDoingChat.set(false)
+        return false
+    }
+
+    const selectedChatState = resolveChatStateByTarget(DBState.db.characters, stableTarget)
     const nowChatroom = selectedChatState.character
     const selectedChatEntry = selectedChatState.chat
     if (!nowChatroom || !selectedChatEntry) {
@@ -293,33 +316,25 @@ export async function sendChat(chatProcessIndex = -1,arg:{
         return false
     }
     nowChatroom.lastInteraction = Date.now()
-    if (selectedChatEntry && !selectedChatEntry.id) {
-        selectedChatEntry.id = v4()
-    }
-    const stableTarget = {
-        characterId: nowChatroom.chaId,
-        chatId: selectedChatEntry.id ?? '',
-    }
     function resolveTargetState() {
-        return resolveChatStateByCharacterAndChatId(
-            DBState.db.characters,
-            stableTarget.characterId,
-            stableTarget.chatId,
-        )
+        return resolveChatStateByTarget(DBState.db.characters, stableTarget)
     }
     function resolveTargetChat() {
         return resolveTargetState().chat
     }
+    function mutateTargetChat(mutate: Parameters<typeof mutateChatByTarget>[2]) {
+        return mutateChatByTarget(DBState.db.characters, stableTarget, mutate)
+    }
     function setTargetChat(chat: Chat) {
-        if(!stableTarget.chatId){
-            return false
+        return mutateTargetChat(() => chat)
+    }
+    function syncCurrentChatFromTarget() {
+        const activeChat = resolveTargetChat()
+        if(!activeChat){
+            return null
         }
-        return setChatByCharacterAndChatId(
-            DBState.db.characters,
-            stableTarget.characterId,
-            stableTarget.chatId,
-            chat,
-        )
+        currentChat = activeChat
+        return activeChat
     }
     function bumpTargetReloadKey() {
         const activeTarget = resolveTargetState()
@@ -519,7 +534,9 @@ export async function sendChat(chatProcessIndex = -1,arg:{
     const chatAdditonalTokens = arg.chatAdditonalTokens ?? caculatedChatTokens
     const tokenizer = new ChatTokenizer(chatAdditonalTokens, DBState.db.aiModel.startsWith('gpt') ? 'noName' : 'name')
     let currentChat = runCurrentChatFunction(selectedChatEntry)
-    setTargetChat(currentChat)
+    if(!setTargetChat(currentChat)){
+        return false
+    }
     const maxContextTokens = DBState.db.maxContext
 
     chatProcessStage.set(1)
@@ -978,7 +995,9 @@ export async function sendChat(chatProcessIndex = -1,arg:{
     const triggerResult = await runTrigger(currentChar, 'start', {chat: currentChat})
     if(triggerResult){
         currentChat = triggerResult.chat
-        setTargetChat(currentChat)
+        if(!setTargetChat(currentChat)){
+            return false
+        }
         ms = makeMs(currentChat)
         currentTokens += triggerResult.tokens
         if(triggerResult.stopSending){
@@ -1149,7 +1168,9 @@ export async function sendChat(chatProcessIndex = -1,arg:{
         index++
     }
     if (chatModified) {
-        setTargetChat(currentChat)
+        if(!setTargetChat(currentChat)){
+            return false
+        }
     }
     processLog(JSON.stringify(chats, null, 2))
 
@@ -1205,7 +1226,9 @@ export async function sendChat(chatProcessIndex = -1,arg:{
             activeTarget.character.chats = [...activeTarget.character.chats]
         }
 
-        currentChat = resolveTargetChat() ?? currentChat
+        if(!syncCurrentChatFromTarget()){
+            return false
+        }
         processLog("[Expected to be updated] chat's memoryData: ", $state.snapshot(getChatMemoryData(currentChat)))
         stageTimings.stage2Duration = Date.now() - stageTimings.stage2Start
         chatProcessStage.set(1)
@@ -1708,7 +1731,7 @@ export async function sendChat(chatProcessIndex = -1,arg:{
         outputTokens = maxContextTokens - inputTokens
     }
     const generationId = v4()
-    const serverChatId = currentChat?.id ?? resolveTargetChat()?.id ?? stableTarget.chatId ?? ''
+    const serverChatId = stableTarget.chatId
     const generationModel = getGenerationModelString()
 
     Object.assign(generationInfo, {
@@ -1818,7 +1841,11 @@ export async function sendChat(chatProcessIndex = -1,arg:{
         let prefix = ''
         if(arg.continue){
             msgIndex -= 1
-            prefix = resolveTargetChat()?.message[msgIndex]?.data ?? ''
+            const continueChat = resolveTargetChat()
+            if(!continueChat || msgIndex < 0){
+                return false
+            }
+            prefix = continueChat.message[msgIndex]?.data ?? ''
         }
         else{
             activeChatAtStreamStart.message.push({
@@ -1921,16 +1948,23 @@ export async function sendChat(chatProcessIndex = -1,arg:{
             return !key.startsWith('__') && typeof value === 'string'
         }).map(([, value]) => value))
 
-        currentChat = runCurrentChatFunction(resolveTargetChat() ?? currentChat)
-        setTargetChat(currentChat)
-        currentChat = resolveTargetChat() ?? currentChat
+        const streamChat = resolveTargetChat()
+        if(!streamChat){
+            return false
+        }
+        currentChat = runCurrentChatFunction(streamChat)
+        if(!setTargetChat(currentChat) || !syncCurrentChatFromTarget()){
+            return false
+        }
         if(!abortSignal.aborted){
             await flushServerChatSnapshot()
         }
         const triggerResult = await runTrigger(currentChar, 'output', {chat:currentChat})
         if(triggerResult && triggerResult.chat){
             currentChat = triggerResult.chat
-            setTargetChat(currentChat)
+            if(!setTargetChat(currentChat)){
+                return false
+            }
         }
         if(triggerResult && triggerResult.sendAIprompt){
             resendChat = true
@@ -1942,11 +1976,15 @@ export async function sendChat(chatProcessIndex = -1,arg:{
         if(targetMsgIndex >= 0){
             const inlayr = runInlayScreen(currentChar, currentChat.message[targetMsgIndex]?.data ?? '')
             currentChat.message[targetMsgIndex].data = inlayr.text
-            setTargetChat(currentChat)
+            if(!setTargetChat(currentChat)){
+                return false
+            }
             if(inlayr.promise){
                 const t = await inlayr.promise
                 currentChat.message[targetMsgIndex].data = t
-                setTargetChat(currentChat)
+                if(!setTargetChat(currentChat)){
+                    return false
+                }
             }
         }
         if(DBState.db.ttsAutoSpeech){
@@ -2024,9 +2062,14 @@ export async function sendChat(chatProcessIndex = -1,arg:{
             addRerolls(generationId, mrerolls)
         }
 
-        currentChat = runCurrentChatFunction(resolveTargetChat() ?? currentChat)
-        setTargetChat(currentChat)
-        currentChat = resolveTargetChat() ?? currentChat
+        const completedChat = resolveTargetChat()
+        if(!completedChat){
+            return false
+        }
+        currentChat = runCurrentChatFunction(completedChat)
+        if(!setTargetChat(currentChat) || !syncCurrentChatFromTarget()){
+            return false
+        }
 
         const targetCharacterIndex = resolveTargetState().characterIndex
         if (isNodeServer && targetCharacterIndex >= 0) {
@@ -2039,7 +2082,9 @@ export async function sendChat(chatProcessIndex = -1,arg:{
         const triggerResult = await runTrigger(currentChar, 'output', {chat:currentChat})
         if(triggerResult && triggerResult.chat){
             currentChat = triggerResult.chat
-            setTargetChat(currentChat)
+            if(!setTargetChat(currentChat)){
+                return false
+            }
         }
         if(triggerResult && triggerResult.sendAIprompt){
             resendChat = true

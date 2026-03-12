@@ -41,6 +41,7 @@ import {
   resolveSelectedChat,
   resolveSelectedChatMessages,
   resolveSelectedChatTarget,
+  mutateChatByTarget,
   setChatByCharacterAndChatId,
   setDatabase,
 } from "./database.svelte";
@@ -471,12 +472,13 @@ describe("selected chat helpers", () => {
 
   it("updates chats by stable character/chat ids", () => {
     const firstChat = makeChat("chat-1");
+    const untouchedChat = makeChat("chat-2");
     const characters = [
       {
         chaId: "alpha",
         name: "Alpha",
         type: "character" as const,
-        chats: [firstChat],
+        chats: [firstChat, untouchedChat],
         chatPage: 0,
       },
     ];
@@ -493,6 +495,50 @@ describe("selected chat helpers", () => {
     expect(
       setChatByCharacterAndChatId(characters as never, "missing", firstChat.id, replacementChat as never),
     ).toBe(false);
+  });
+
+  it("mutates only the targeted chat by stable ids and fails safely when the target disappears", () => {
+    const targetChat = makeChat("chat-1");
+    const untouchedChat = makeChat("chat-2");
+    const characters = [
+      {
+        chaId: "alpha",
+        name: "Alpha",
+        type: "character" as const,
+        chats: [targetChat, untouchedChat],
+        chatPage: 0,
+      },
+    ];
+
+    expect(
+      mutateChatByTarget(
+        characters as never,
+        { characterId: "alpha", chatId: targetChat.id },
+        (chat) => {
+          chat.note = "stable target"
+          chat.message.push({ role: "char" as const, data: "reply" })
+        },
+      ),
+    ).toBe(true);
+    expect(characters[0].chats[0].note).toBe("stable target");
+    expect(characters[0].chats[0].message).toHaveLength(2);
+    expect(characters[0].chats[1]).toBe(untouchedChat);
+    expect(characters[0].chats[1].note).toBe("chat-2 note");
+
+    characters[0].chats.splice(0, 1);
+
+    expect(
+      mutateChatByTarget(
+        characters as never,
+        { characterId: "alpha", chatId: targetChat.id },
+        (chat) => {
+          chat.note = "should not write"
+        },
+      ),
+    ).toBe(false);
+    expect(characters[0].chats).toHaveLength(1);
+    expect(characters[0].chats[0]).toBe(untouchedChat);
+    expect(characters[0].chats[0].note).toBe("chat-2 note");
   });
 });
 

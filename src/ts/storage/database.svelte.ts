@@ -698,6 +698,24 @@ type ChatTargetLookup = {
     chatId?: string | null
 }
 
+export interface ResolvedChatState {
+    character: character | groupChat | null
+    characterIndex: number
+    chat: Chat | null
+    chatIndex: number
+    messages: Message[]
+}
+
+function createEmptyResolvedChatState(): ResolvedChatState {
+    return {
+        character: null,
+        characterIndex: -1,
+        chat: null,
+        chatIndex: -1,
+        messages: [],
+    }
+}
+
 export function resolveCharacterEntryIndexById(
     characters: Array<character | groupChat> | undefined | null,
     characterId: string,
@@ -744,7 +762,7 @@ export function resolveChatStateByCharacterAndChatId(
     characters: Array<character | groupChat> | undefined | null,
     characterId: string,
     chatId: string,
-) {
+): ResolvedChatState {
     const characterIndex = resolveCharacterEntryIndexById(characters, characterId)
     const character = characterIndex >= 0 ? characters?.[characterIndex] ?? null : null
     const chatIndex = resolveChatIndexById(character?.chats, chatId)
@@ -761,15 +779,9 @@ export function resolveChatStateByCharacterAndChatId(
 export function resolveChatStateByTarget(
     characters: Array<character | groupChat> | undefined | null,
     target: ChatTargetLookup | null | undefined,
-) {
+): ResolvedChatState {
     if (!target?.characterId) {
-        return {
-            character: null,
-            characterIndex: -1,
-            chat: null,
-            chatIndex: -1,
-            messages: [],
-        }
+        return createEmptyResolvedChatState()
     }
 
     if (target.chatId) {
@@ -819,6 +831,40 @@ export function setChatByCharacterAndChatId(
     }
     character.chats[chatIndex] = chat
     return true
+}
+
+export function mutateChatByCharacterAndChatId(
+    characters: Array<character | groupChat> | undefined | null,
+    characterId: string,
+    chatId: string,
+    mutate: (chat: Chat, state: ResolvedChatState) => Chat | void,
+): boolean {
+    const state = resolveChatStateByCharacterAndChatId(characters, characterId, chatId)
+    if (!state.character || !state.chat || state.chatIndex < 0) {
+        return false
+    }
+
+    const nextChat = mutate(state.chat, state)
+    if (nextChat && nextChat !== state.chat) {
+        state.character.chats[state.chatIndex] = nextChat
+    }
+    return true
+}
+
+export function mutateChatByTarget(
+    characters: Array<character | groupChat> | undefined | null,
+    target: ChatTargetLookup | null | undefined,
+    mutate: (chat: Chat, state: ResolvedChatState) => Chat | void,
+): boolean {
+    if (!target?.characterId || !target.chatId) {
+        return false
+    }
+    return mutateChatByCharacterAndChatId(
+        characters,
+        target.characterId,
+        target.chatId,
+        mutate,
+    )
 }
 
 export function repairCharacterChatPage(currentCharacter: character | groupChat | null | undefined): number {

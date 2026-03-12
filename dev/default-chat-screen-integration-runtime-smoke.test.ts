@@ -517,4 +517,67 @@ describe("default chat screen integration runtime smoke", () => {
     expect(document.querySelector(".ds-chat-side-menu")).toBeNull();
     expect(menuButton?.getAttribute("aria-expanded")).toBe("false");
   });
+
+  it("keeps the original stable target when selection changes during async send", async () => {
+    DBState.db.characters[0].chats = [
+      {
+        id: "chat-1",
+        name: "Chat One",
+        fmIndex: -1,
+        message: [],
+        localLore: [],
+        modules: [],
+        note: "",
+        bindedPersona: "",
+        bookmarks: [],
+        bookmarkNames: {},
+      },
+      {
+        id: "chat-2",
+        name: "Chat Two",
+        fmIndex: -1,
+        message: [],
+        localLore: [],
+        modules: [],
+        note: "",
+        bindedPersona: "",
+        bookmarks: [],
+        bookmarkNames: {},
+      },
+    ];
+    DBState.db.characters[0].chatPage = 0;
+
+    let resolveSend: (() => void) | null = null;
+    mocks.sendChat.mockImplementationOnce(
+      async () =>
+        await new Promise<void>((resolve) => {
+          resolveSend = resolve;
+        }),
+    );
+
+    await flushUi();
+
+    const composerInput = document.querySelector(
+      ".ds-chat-composer-input.control-field",
+    ) as HTMLTextAreaElement | null;
+    expect(composerInput).not.toBeNull();
+
+    composerInput!.value = "Stable target payload";
+    composerInput!.dispatchEvent(new Event("input", { bubbles: true }));
+    composerInput!.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    await flushUi();
+
+    DBState.db.characters[0].chatPage = 1;
+
+    expect(mocks.sendChat).toHaveBeenCalledTimes(1);
+    expect(mocks.sendChat.mock.calls[0]?.[1]).toMatchObject({
+      target: {
+        characterId: "char-1",
+        chatId: "chat-1",
+      },
+    });
+
+    resolveSend?.();
+    await flushUi();
+  });
 });

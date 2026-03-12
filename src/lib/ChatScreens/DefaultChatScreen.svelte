@@ -8,6 +8,7 @@
     import Chat from "./Chat.svelte";
     import {
         getDatabase,
+        mutateChatByTarget,
         repairCharacterChatPage,
         resolveChatStateByCharacterAndChatId,
         resolveSelectedChat,
@@ -149,6 +150,33 @@
         return !!left && !!right
             && left.characterId === right.characterId
             && left.chatId === right.chatId
+    }
+
+    function resolveStableTargetChatState(target: { characterId: string; chatId: string } | null) {
+        if (!target) {
+            return {
+                character: null,
+                characterIndex: -1,
+                chat: null,
+                chatIndex: -1,
+                messages: [],
+            }
+        }
+        return resolveChatStateByCharacterAndChatId(
+            DBState.db.characters,
+            target.characterId,
+            target.chatId,
+        )
+    }
+
+    function mutateStableTargetChat(
+        target: { characterId: string; chatId: string } | null,
+        mutate: Parameters<typeof mutateChatByTarget>[2],
+    ) {
+        if (!target) {
+            return false
+        }
+        return mutateChatByTarget(DBState.db.characters, target, mutate)
     }
 
     $effect(() => {
@@ -568,11 +596,13 @@
         if($isDoingChat){
             return
         }
-        const activeChat = currentChatEntry
-        if(!activeChat){
+        const stableTarget = resolveStableTargetFromSelection({ ensureChatId: true })
+        const activeState = resolveStableTargetChatState(stableTarget)
+        const activeChat = activeState.chat
+        if(!stableTarget || !activeChat){
             return
         }
-        const activeCharacterId = currentCharacter?.chaId ?? null
+        const activeCharacterId = stableTarget.characterId
         if(lastCharId !== activeCharacterId){
             rerolls = []
             rerollid = -1
@@ -590,7 +620,11 @@
             const nextReroll = readNextRerollSnapshot(rerolls, rerollid)
             rerollid = nextReroll.index
             if(nextReroll.snapshot){
-                activeChat.message = replaceMessageTailWithSnapshot(activeChat.message, safeStructuredClone(nextReroll.snapshot))
+                if(!mutateStableTargetChat(stableTarget, (chat) => {
+                    chat.message = replaceMessageTailWithSnapshot(chat.message, safeStructuredClone(nextReroll.snapshot))
+                })){
+                    return
+                }
             }
             return
         }
@@ -604,25 +638,25 @@
             return
         }
         openMenu = false
-        activeChat.message = cha
-        if (!currentCharacter?.chaId || !activeChat.id) {
+        if (!mutateStableTargetChat(stableTarget, (chat) => {
+            chat.message = cha
+        })) {
             return
         }
-        await sendChatMain(false, {
-            characterId: currentCharacter.chaId,
-            chatId: activeChat.id,
-        })
+        await sendChatMain(false, stableTarget)
     }
 
     async function unReroll() {
         if($isDoingChat){
             return
         }
-        const activeChat = currentChatEntry
-        if(!activeChat){
+        const stableTarget = resolveStableTargetFromSelection({ ensureChatId: true })
+        const activeState = resolveStableTargetChatState(stableTarget)
+        const activeChat = activeState.chat
+        if(!stableTarget || !activeChat){
             return
         }
-        const activeCharacterId = currentCharacter?.chaId ?? null
+        const activeCharacterId = stableTarget.characterId
         if(lastCharId !== activeCharacterId){
             rerolls = []
             rerollid = -1
@@ -642,29 +676,22 @@
         const previousReroll = readPreviousRerollSnapshot(rerolls, rerollid)
         rerollid = previousReroll.index
         if(previousReroll.snapshot){
-            activeChat.message = replaceMessageTailWithSnapshot(activeChat.message, safeStructuredClone(previousReroll.snapshot))
+            if(!mutateStableTargetChat(stableTarget, (chat) => {
+                chat.message = replaceMessageTailWithSnapshot(chat.message, safeStructuredClone(previousReroll.snapshot))
+            })){
+                return
+            }
         }
     }
 
     let abortController:null|AbortController = null
 
     async function sendChatMain(continued:boolean = false, target?: { characterId: string; chatId: string }) {
-        const stableTarget = target ?? (
-            currentCharacter?.chaId && currentChatEntry?.id
-                ? {
-                    characterId: currentCharacter.chaId,
-                    chatId: currentChatEntry.id,
-                }
-                : null
-        )
+        const stableTarget = target ?? resolveStableTargetFromSelection({ ensureChatId: true })
         if(!stableTarget){
             return
         }
-        const activeChatAtStart = resolveChatStateByCharacterAndChatId(
-            DBState.db.characters,
-            stableTarget.characterId,
-            stableTarget.chatId,
-        ).chat
+        const activeChatAtStart = resolveStableTargetChatState(stableTarget).chat
         if(!activeChatAtStart){
             return
         }
