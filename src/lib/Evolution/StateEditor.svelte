@@ -65,7 +65,7 @@
     }
 
     function isObjectSection(key: string) {
-        return key === "relationship" || key === "lastChatEnded";
+        return key === "relationship" || key === "lastInteractionEnded";
     }
 
     function stringItemsForSection(key: keyof CharacterEvolutionState): string[] {
@@ -88,11 +88,11 @@
         };
     }
 
-    function updateLastChatEnded(field: "state" | "residue", next: string) {
+    function updateLastInteractionEnded(field: "state" | "residue", next: string) {
         value = {
             ...value,
-            lastChatEnded: {
-                ...value.lastChatEnded,
+            lastInteractionEnded: {
+                ...value.lastInteractionEnded,
                 [field]: next,
             },
         };
@@ -166,10 +166,10 @@
                             <TextInput value={value.relationship.trustLevel} disabled={readonly} placeholder="Trust level" oninput={(event) => updateRelationship("trustLevel", event.currentTarget.value)} />
                             <TextAreaInput value={value.relationship.dynamic} disabled={readonly} height="20" placeholder="Dynamic" onValueChange={(next) => updateRelationship("dynamic", next)} />
                         </div>
-                    {:else if section.key === "lastChatEnded"}
+                    {:else if section.key === "lastInteractionEnded"}
                         <div class="evolution-state-fields">
-                            <TextAreaInput value={value.lastChatEnded.state} disabled={readonly} height="20" placeholder="State" onValueChange={(next) => updateLastChatEnded("state", next)} />
-                            <TextAreaInput value={value.lastChatEnded.residue} disabled={readonly} height="20" placeholder="Residue" onValueChange={(next) => updateLastChatEnded("residue", next)} />
+                            <TextAreaInput value={value.lastInteractionEnded.state} disabled={readonly} height="20" placeholder="State" onValueChange={(next) => updateLastInteractionEnded("state", next)} />
+                            <TextAreaInput value={value.lastInteractionEnded.residue} disabled={readonly} height="20" placeholder="Residue" onValueChange={(next) => updateLastInteractionEnded("residue", next)} />
                         </div>
                     {:else if isStringListSection(section.key)}
                         {#if stringItemsForSection(section.key as keyof CharacterEvolutionState).length === 0}

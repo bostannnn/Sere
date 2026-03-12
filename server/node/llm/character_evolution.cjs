@@ -19,6 +19,14 @@ const {
     safeParseEvolutionJson,
     sanitizeStateForEvolution,
 } = require('./character_evolution/proposal.cjs');
+const {
+    getCharacterEvolutionProcessedRanges,
+    getChatLastMessageIndex,
+    getLastProcessedMessageIndexForChat,
+    isRangeFullyCoveredByProcessedRanges,
+    normalizeCharacterEvolutionRangeRef,
+    rangesOverlap,
+} = require('./character_evolution/range.cjs');
 
 module.exports = {
     buildCharacterEvolutionPromptMessages,
@@ -30,10 +38,16 @@ module.exports = {
     normalizeCharacterEvolutionDefaults,
     normalizeCharacterEvolutionPrivacy,
     normalizeCharacterEvolutionProposal,
+    normalizeCharacterEvolutionRangeRef,
     normalizeCharacterEvolutionSectionConfigs,
     normalizeCharacterEvolutionSettings,
     normalizeCharacterEvolutionState,
     renderCharacterEvolutionStateForPrompt,
     safeParseEvolutionJson,
     sanitizeStateForEvolution,
+    getCharacterEvolutionProcessedRanges,
+    getChatLastMessageIndex,
+    getLastProcessedMessageIndexForChat,
+    isRangeFullyCoveredByProcessedRanges,
+    rangesOverlap,
 };

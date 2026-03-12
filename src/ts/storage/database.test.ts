@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { LLMFormat } from "../model/modellist";
+import { DEFAULT_EXTRACTION_PROMPT } from "../characterEvolution";
 
 const { changeLanguageMock } = vi.hoisted(() => ({
   changeLanguageMock: vi.fn(),
@@ -270,6 +271,56 @@ describe("character evolution model normalization", () => {
 
     expect((db.characterEvolutionDefaults as { extractionModel?: string }).extractionModel).toBe("gpt-4.1-mini");
     expect(((db.characters[0] as { characterEvolution?: { extractionModel?: string } }).characterEvolution?.extractionModel)).toBe("claude-3-5-haiku-latest");
+  });
+
+  it("preserves legacy lastChatEnded section config overrides under lastInteractionEnded", () => {
+    const db = applySetDatabase({
+      characters: [
+        {
+          characterEvolution: {
+            enabled: true,
+            useGlobalDefaults: false,
+            extractionProvider: "openrouter",
+            extractionModel: "anthropic/claude-3.5-haiku",
+            extractionMaxTokens: 1200,
+            extractionPrompt: "prompt",
+            sectionConfigs: [
+              {
+                key: "lastChatEnded",
+                label: "Legacy Last Chat Ended",
+                enabled: false,
+                includeInPrompt: false,
+                instruction: "Legacy instruction",
+                kind: "object",
+                sensitive: false,
+              },
+            ],
+            currentStateVersion: 0,
+            currentState: {},
+            stateVersions: [],
+          },
+        },
+      ],
+    });
+
+    const normalizedSection = (db.characters[0] as { characterEvolution?: { sectionConfigs?: Array<{ key: string; label: string; enabled: boolean; includeInPrompt: boolean; instruction: string }> } })
+      .characterEvolution?.sectionConfigs?.find((section) => section.key === "lastInteractionEnded");
+
+    expect(normalizedSection).toEqual(expect.objectContaining({
+      key: "lastInteractionEnded",
+      label: "Legacy Last Chat Ended",
+      enabled: false,
+      includeInPrompt: false,
+      instruction: "Legacy instruction",
+    }));
+  });
+
+  it("keeps the client and server default evolution prompts aligned to range semantics", () => {
+    const { DEFAULT_EXTRACTION_PROMPT: serverDefaultExtractionPrompt } = require("../../../server/node/llm/character_evolution/schema.cjs");
+
+    expect(DEFAULT_EXTRACTION_PROMPT).toContain("current processed roleplay transcript range");
+    expect(DEFAULT_EXTRACTION_PROMPT).not.toContain("completed roleplay chat");
+    expect(serverDefaultExtractionPrompt).toBe(DEFAULT_EXTRACTION_PROMPT);
   });
 });
 

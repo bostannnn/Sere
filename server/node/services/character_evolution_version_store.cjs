@@ -1,4 +1,5 @@
 const path = require('path');
+const { normalizeCharacterEvolutionRangeRef } = require('../llm/character_evolution/range.cjs');
 
 function createCharacterEvolutionVersionStore(arg = {}) {
     const { fs, existsSync } = arg;
@@ -90,10 +91,12 @@ function createCharacterEvolutionVersionStore(arg = {}) {
         for (const entry of versionFiles.values()) {
             try {
                 const payload = JSON.parse(await fs.readFile(path.join(statesDir, entry.fileName), 'utf-8'));
+                const range = normalizeCharacterEvolutionRangeRef(payload?.range);
                 versions.push({
                     version: Math.max(0, Math.floor(entry.version)),
                     chatId: typeof payload?.chatId === 'string' ? payload.chatId : null,
                     acceptedAt: Number.isFinite(Number(payload?.acceptedAt)) ? Number(payload.acceptedAt) : 0,
+                    ...(range ? { range } : {}),
                 });
             } catch {}
         }
@@ -130,6 +133,7 @@ function createCharacterEvolutionVersionStore(arg = {}) {
                 version: Math.max(0, Math.floor(Number(entry.version))),
                 chatId: typeof entry.chatId === 'string' ? entry.chatId : null,
                 acceptedAt: Number.isFinite(Number(entry.acceptedAt)) ? Number(entry.acceptedAt) : 0,
+                ...(normalizeCharacterEvolutionRangeRef(entry.range) ? { range: normalizeCharacterEvolutionRangeRef(entry.range) } : {}),
             });
         }
         for (const entry of Array.isArray(preferred) ? preferred : []) {
@@ -138,6 +142,7 @@ function createCharacterEvolutionVersionStore(arg = {}) {
                 version: Math.max(0, Math.floor(Number(entry.version))),
                 chatId: typeof entry.chatId === 'string' ? entry.chatId : null,
                 acceptedAt: Number.isFinite(Number(entry.acceptedAt)) ? Number(entry.acceptedAt) : 0,
+                ...(normalizeCharacterEvolutionRangeRef(entry.range) ? { range: normalizeCharacterEvolutionRangeRef(entry.range) } : {}),
             });
         }
         return [...merged.values()].sort((left, right) => left.version - right.version);

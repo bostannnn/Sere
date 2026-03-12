@@ -25,6 +25,13 @@ export {
 } from "./character-evolution/normalizers"
 
 export {
+    getCharacterEvolutionProcessedRanges,
+    getLastProcessedMessageIndexForChat,
+    hasAcceptedEvolutionForChat,
+    normalizeCharacterEvolutionRangeRef,
+} from "./character-evolution/ranges"
+
+export {
     getEffectiveCharacterEvolutionSettings,
     hasCharacterStateTemplateBlock,
 } from "./character-evolution/selectors"

@@ -38,8 +38,8 @@ export function versionSectionHasData(
   if (key === "relationship") {
     return Boolean(state.relationship.trustLevel || state.relationship.dynamic);
   }
-  if (key === "lastChatEnded") {
-    return Boolean(state.lastChatEnded.state || state.lastChatEnded.residue);
+  if (key === "lastInteractionEnded") {
+    return Boolean(state.lastInteractionEnded.state || state.lastInteractionEnded.residue);
   }
   const value = state[key as keyof CharacterEvolutionState];
   return Array.isArray(value) ? value.length > 0 : false;

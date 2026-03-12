@@ -1,5 +1,6 @@
 import type {
   CharacterEvolutionPendingProposal,
+  CharacterEvolutionRangeRef,
   CharacterEvolutionState,
   character,
 } from "../storage/database.types";
@@ -40,6 +41,7 @@ export function syncEvolutionProposalDraft(args: {
 export async function runEvolutionHandoffFlow(args: {
   characterEntry: character;
   chatId: string | null | undefined;
+  chatMessageCount?: number | null;
   forceReplay?: boolean;
   resolveCharacterById?: ResolveCharacterById;
   confirmReplay?: () => boolean;
@@ -53,12 +55,13 @@ export async function runEvolutionHandoffFlow(args: {
   const {
     characterEntry,
     chatId,
+    chatMessageCount,
     resolveCharacterById,
     confirmReplay,
   } = args;
   let forceReplay = args.forceReplay === true;
 
-  const alreadyAccepted = hasAcceptedEvolutionForChat(characterEntry, chatId);
+  const alreadyAccepted = hasAcceptedEvolutionForChat(characterEntry, chatId, chatMessageCount);
   if (alreadyAccepted && !forceReplay) {
     if (confirmReplay && !confirmReplay()) {
       return {
@@ -95,7 +98,7 @@ export async function acceptEvolutionReviewFlow(args: {
   characterEntry: character;
   proposedState: CharacterEvolutionState;
   createNextChat?: boolean;
-  sourceChatId: string | null;
+  sourceRange: CharacterEvolutionRangeRef | null;
   resolveCharacterById?: ResolveCharacterById;
 }): Promise<{
   nextCharacter: character;

@@ -52,15 +52,15 @@ export function renderCharacterEvolutionStateForPrompt(
             case "userRead":
                 pushSection(section.label, (state[section.key] as string[]).map((item) => `- ${item}`))
                 break
-            case "lastChatEnded":
+            case "lastInteractionEnded":
                 pushSection(section.label, [
-                    state.lastChatEnded.state ? `State: ${state.lastChatEnded.state}` : "",
-                    state.lastChatEnded.residue ? `Residue: ${state.lastChatEnded.residue}` : "",
+                    state.lastInteractionEnded.state ? `State: ${state.lastInteractionEnded.state}` : "",
+                    state.lastInteractionEnded.residue ? `Residue: ${state.lastInteractionEnded.residue}` : "",
                 ])
                 break
             default:
                 pushSection(section.label, (state[section.key] as CharacterEvolutionItem[])
-                    .filter((item) => item.status !== "archived")
+                    .filter((item) => item.status === "active")
                     .map((item) => itemToLine(item)))
                 break
         }

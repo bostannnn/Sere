@@ -466,7 +466,7 @@ export type CharacterEvolutionSectionKey =
     | 'userRead'
     | 'userLikes'
     | 'userDislikes'
-    | 'lastChatEnded'
+    | 'lastInteractionEnded'
     | 'keyMoments'
     | 'characterIntimatePreferences'
     | 'userIntimatePreferences'
@@ -485,9 +485,21 @@ export interface CharacterEvolutionRelationshipState {
     dynamic: string
 }
 
-export interface CharacterEvolutionLastChatEndedState {
+export interface CharacterEvolutionLastInteractionEndedState {
     state: string
     residue: string
+}
+
+export interface CharacterEvolutionRangeRef {
+    chatId: string
+    startMessageIndex: number
+    endMessageIndex: number
+}
+
+export interface CharacterEvolutionProcessedRange {
+    version: number
+    acceptedAt: number
+    range: CharacterEvolutionRangeRef
 }
 
 export interface CharacterEvolutionState {
@@ -502,7 +514,7 @@ export interface CharacterEvolutionState {
     userRead: string[]
     userLikes: CharacterEvolutionItem[]
     userDislikes: CharacterEvolutionItem[]
-    lastChatEnded: CharacterEvolutionLastChatEndedState
+    lastInteractionEnded: CharacterEvolutionLastInteractionEndedState
     keyMoments: string[]
     characterIntimatePreferences: CharacterEvolutionItem[]
     userIntimatePreferences: CharacterEvolutionItem[]
@@ -533,11 +545,13 @@ export interface CharacterEvolutionVersionMeta {
     version: number
     chatId: string | null
     acceptedAt: number
+    range?: CharacterEvolutionRangeRef
 }
 
 export interface CharacterEvolutionPendingProposal {
     proposalId: string
     sourceChatId: string
+    sourceRange?: CharacterEvolutionRangeRef
     proposedState: CharacterEvolutionState
     changes: CharacterEvolutionChange[]
     createdAt: number
@@ -547,6 +561,7 @@ export interface CharacterEvolutionVersionFile {
     version: number
     chatId: string | null
     acceptedAt: number
+    range?: CharacterEvolutionRangeRef
     state: CharacterEvolutionState
     sectionConfigs?: CharacterEvolutionSectionConfig[]
     privacy?: CharacterEvolutionPrivacySettings
@@ -565,6 +580,8 @@ export interface CharacterEvolutionSettings {
     currentState: CharacterEvolutionState
     pendingProposal?: CharacterEvolutionPendingProposal | null
     lastProcessedChatId?: string | null
+    lastProcessedMessageIndexByChat?: Record<string, number>
+    processedRanges?: CharacterEvolutionProcessedRange[]
     stateVersions: CharacterEvolutionVersionMeta[]
 }
 

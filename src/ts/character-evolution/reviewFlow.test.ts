@@ -20,8 +20,11 @@ vi.mock("./reviewActions", async () => {
     hasAcceptedEvolutionForChat: (
       characterEntry: character | null | undefined,
       chatId: string | null | undefined,
+      messageCount?: number | null,
     ) => {
-      return !!characterEntry?.chaId && !!chatId && characterEntry.characterEvolution.lastProcessedChatId === chatId;
+      return !!characterEntry?.chaId && !!chatId
+        && !!Number.isFinite(Number(messageCount))
+        && (characterEntry.characterEvolution.lastProcessedMessageIndexByChat?.[chatId] ?? -1) >= Number(messageCount) - 1;
     },
     rejectEvolutionProposalReview: mocks.rejectEvolutionProposalReview,
     requestEvolutionProposal: mocks.requestEvolutionProposal,
@@ -91,7 +94,7 @@ function createCharacter(): character {
         userRead: [],
         userLikes: [],
         userDislikes: [],
-        lastChatEnded: { state: "", residue: "" },
+        lastInteractionEnded: { state: "", residue: "" },
         keyMoments: [],
         characterIntimatePreferences: [],
         userIntimatePreferences: [],
@@ -99,15 +102,23 @@ function createCharacter(): character {
       currentStateVersion: 2,
       pendingProposal: null,
       lastProcessedChatId: "chat-1",
+      lastProcessedMessageIndexByChat: {
+        "chat-1": 3,
+      },
       stateVersions: [],
     },
-  } as character;
+  } as unknown as character;
 }
 
 function createProposal(): CharacterEvolutionPendingProposal {
   return {
     proposalId: "proposal-1",
     sourceChatId: "chat-2",
+    sourceRange: {
+      chatId: "chat-2",
+      startMessageIndex: 0,
+      endMessageIndex: 1,
+    },
     createdAt: 20,
     changes: [],
     proposedState: createCharacter().characterEvolution.currentState,
@@ -131,6 +142,7 @@ describe("character evolution review flow", () => {
     const result = await runEvolutionHandoffFlow({
       characterEntry: createCharacter(),
       chatId: "chat-1",
+      chatMessageCount: 4,
       confirmReplay: () => false,
     });
 
@@ -152,7 +164,11 @@ describe("character evolution review flow", () => {
     const result = await acceptEvolutionReviewFlow({
       characterEntry: createCharacter(),
       proposedState: createCharacter().characterEvolution.currentState,
-      sourceChatId: "chat-2",
+      sourceRange: {
+        chatId: "chat-2",
+        startMessageIndex: 4,
+        endMessageIndex: 7,
+      },
     });
 
     expect(result.chatCreationError).toBe("failed to create chat");

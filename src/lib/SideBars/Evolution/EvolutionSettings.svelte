@@ -37,6 +37,7 @@
         runEvolutionHandoffFlow,
         syncEvolutionProposalDraft,
     } from "src/ts/character-evolution/reviewFlow"
+    import { getPendingProposalSourceRange } from "src/ts/character-evolution/pendingProposal"
     import { findSingleCharacterById, replaceCharacterById } from "src/ts/storage/characterList"
     import {
         loadEvolutionVersionState,
@@ -112,12 +113,13 @@
     const selectedWorkspaceTitle = $derived(EVOLUTION_TAB_LABELS[selectedWorkspaceTab])
     const currentPendingProposal = $derived(currentCharacter?.characterEvolution.pendingProposal ?? null)
     const activeChatId = $derived(currentCharacter?.chats?.[currentCharacter.chatPage]?.id ?? null)
+    const activeChatMessageCount = $derived(currentCharacter?.chats?.[currentCharacter.chatPage]?.message?.length ?? 0)
     const replayCurrentChatAvailable = $derived(
         Boolean(
             currentCharacter?.chaId
             && activeChatId
             && !currentPendingProposal
-            && currentCharacter.characterEvolution.lastProcessedChatId === activeChatId
+            && hasAcceptedEvolutionForChat(currentCharacter, activeChatId, activeChatMessageCount)
         )
     )
 
@@ -341,12 +343,11 @@
 
         accepting = true
         try {
-            const acceptedSourceChatId = characterEntry.characterEvolution.pendingProposal?.sourceChatId ?? null
             const { nextCharacter, chatCreationError } = await acceptEvolutionReviewFlow({
                 characterEntry,
                 proposedState: proposalDraft,
                 createNextChat,
-                sourceChatId: acceptedSourceChatId,
+                sourceRange: getPendingProposalSourceRange(characterEntry.characterEvolution.pendingProposal),
                 resolveCharacterById: findCharacterById,
             })
             commitCharacter(nextCharacter)
@@ -395,6 +396,7 @@
             const result = await runEvolutionHandoffFlow({
                 characterEntry,
                 chatId,
+                chatMessageCount: activeChatMessageCount,
                 forceReplay: true,
                 resolveCharacterById: findCharacterById,
             })
