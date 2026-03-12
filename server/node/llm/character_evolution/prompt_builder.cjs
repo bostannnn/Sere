@@ -35,23 +35,11 @@ function buildCharacterEvolutionPromptMessages(arg = {}) {
         .join('\n');
 
     const state = JSON.stringify(normalizeCharacterEvolutionState(evolution.currentState), null, 2);
-    const identity = [
-        `Name: ${toTrimmedString(character.name)}`,
-        'Description:',
-        toTrimmedString(character.desc) || '[empty]',
-        '',
-        'Personality:',
-        toTrimmedString(character.personality) || '[empty]',
-    ].join('\n');
-
     const prompt = [
         applyPromptVars(evolution.extractionPrompt, character, settings),
         '',
         'Enabled sections:',
         sections || '[none]',
-        '',
-        'Identity context:',
-        identity,
         '',
         'Current state JSON:',
         state,

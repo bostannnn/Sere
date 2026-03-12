@@ -242,4 +242,23 @@ describe("evolution handoff audit", () => {
       }),
     }));
   });
+
+  it("does not include character card description or personality in the extractor prompt", async () => {
+    const appendLLMAudit = vi.fn(async () => {});
+    const handler = buildHandler(appendLLMAudit);
+    const res = createRes();
+
+    await handler(createReq({ characterId, chatId }), res);
+
+    expect(res.statusCode).toBe(200);
+    const audit = appendLLMAudit.mock.calls[0]?.[0] as { request?: { promptMessages?: Array<{ content?: string }> } };
+    const userPrompt = audit.request?.promptMessages?.[1]?.content ?? "";
+    expect(userPrompt).toContain("Facts about Andrew as seen by Eva.");
+    expect(userPrompt).toContain("Enabled sections:");
+    expect(userPrompt).not.toContain("Identity context:");
+    expect(userPrompt).not.toContain("Description:");
+    expect(userPrompt).not.toContain("Personality:");
+    expect(userPrompt).not.toContain("Desc text");
+    expect(userPrompt).not.toContain("Personality text");
+  });
 });
