@@ -261,4 +261,174 @@ describe("evolution handoff audit", () => {
     expect(userPrompt).not.toContain("Desc text");
     expect(userPrompt).not.toContain("Personality text");
   });
+
+  it("audits raw model output when handoff parse fails", async () => {
+    const appendLLMAudit = vi.fn(async () => {});
+    const logLLMExecutionEnd = vi.fn();
+    const postHandlers = new Map<string, RegisteredHandler>();
+    registerEvolutionRoutes({
+      app: {
+        post(route: string, handler: RegisteredHandler) {
+          postHandlers.set(route, handler);
+        },
+        get() {},
+      },
+      fs,
+      dataDirs,
+      existsSync,
+      LLMHttpError: MockLLMHttpError,
+      isSafePathSegment: (value: string) => /^[a-zA-Z0-9._-]+$/.test(value),
+      requirePasswordAuth: () => true,
+      safeResolve: (baseDir: string, relPath: string) => {
+        const resolved = path.resolve(baseDir, relPath);
+        if (!resolved.startsWith(path.resolve(baseDir) + path.sep)) {
+          throw new Error("Invalid path");
+        }
+        return resolved;
+      },
+      getReqIdFromResponse: () => "req-evo-audit",
+      toStringOrEmpty,
+      sendJson: (res: MockRes, status: number, payload: unknown) => {
+        res.statusCode = status;
+        res.payload = payload;
+      },
+      toLLMErrorResponse,
+      logLLMExecutionStart: () => {},
+      logLLMExecutionEnd,
+      appendLLMAudit,
+      buildExecutionAuditRequest: (_endpoint: string, body: unknown) => body,
+      executeInternalLLMTextCompletion: async () => "```json\n{ invalid }\n```",
+      applyStateCommands: async () => ({ ok: true, lastEventId: 1, applied: [], conflicts: [] }),
+      readStateLastEventId: async () => 1,
+    });
+
+    const handler = postHandlers.get("/data/character-evolution/handoff");
+    expect(handler).toBeTruthy();
+
+    const res = createRes();
+    await handler!(createReq({ characterId, chatId }), res);
+
+    expect(res.statusCode).toBe(502);
+    expect(appendLLMAudit).toHaveBeenCalledTimes(1);
+    expect(appendLLMAudit).toHaveBeenCalledWith(expect.objectContaining({
+      endpoint: "character_evolution_handoff",
+      status: 502,
+      ok: false,
+      metadata: expect.objectContaining({
+        model: "anthropic/claude-3.5-haiku",
+        maxTokens: 2400,
+        reason: "parse_failed",
+      }),
+      response: {
+        type: "raw_text",
+        result: "```json\n{ invalid }\n```",
+      },
+      error: expect.objectContaining({
+        error: "EVOLUTION_PARSE_FAILED",
+      }),
+    }));
+    expect(logLLMExecutionEnd).toHaveBeenCalledWith(expect.objectContaining({
+      endpoint: "character_evolution_handoff",
+      status: 502,
+      code: "EVOLUTION_PARSE_FAILED",
+      provider: "openrouter",
+      characterId,
+      chatId,
+    }));
+  });
+
+  it("renders extractor prompt variables before the LLM call", async () => {
+    writeJson(path.join(dataDirs.root, "settings.json"), {
+      data: {
+        username: "Andrew",
+        characterEvolutionDefaults: {
+          extractionProvider: "openrouter",
+          extractionModel: "anthropic/claude-3.5-haiku",
+          extractionMaxTokens: 2400,
+          extractionPrompt: "Facts about {{user}} as seen by {{char}}.",
+          sectionConfigs: [
+            {
+              key: "userRead",
+              label: "User Read",
+              enabled: true,
+              includeInPrompt: true,
+              instruction: "{{char}} reads {{user}} in a durable way.",
+              kind: "list",
+              sensitive: false,
+            },
+          ],
+          privacy: {
+            allowCharacterIntimatePreferences: false,
+            allowUserIntimatePreferences: false,
+          },
+        },
+      },
+    });
+
+    const messagesSpy = vi.fn(async ({ messages }: { messages: Array<{ content: string }> }) => {
+      const combined = messages.map((m) => m.content).join("\n");
+      expect(combined).toContain("Facts about Andrew as seen by Eva.");
+      expect(combined).toContain("Eva reads Andrew in a durable way.");
+      expect(combined).not.toContain("{{char}}");
+      expect(combined).not.toContain("{{user}}");
+      return JSON.stringify({
+        proposedState: {},
+        changes: [],
+      });
+    });
+
+    const postHandlers = new Map<string, RegisteredHandler>();
+    registerEvolutionRoutes({
+      app: {
+        post(route: string, handler: RegisteredHandler) {
+          postHandlers.set(route, handler);
+        },
+        get() {},
+      },
+      fs,
+      dataDirs,
+      existsSync,
+      LLMHttpError: MockLLMHttpError,
+      isSafePathSegment: (value: string) => /^[a-zA-Z0-9._-]+$/.test(value),
+      requirePasswordAuth: () => true,
+      safeResolve: (baseDir: string, relPath: string) => {
+        const resolved = path.resolve(baseDir, relPath);
+        if (!resolved.startsWith(path.resolve(baseDir) + path.sep)) {
+          throw new Error("Invalid path");
+        }
+        return resolved;
+      },
+      getReqIdFromResponse: () => "req-evo-audit",
+      toStringOrEmpty,
+      sendJson: (res: MockRes, status: number, payload: unknown) => {
+        res.statusCode = status;
+        res.payload = payload;
+      },
+      toLLMErrorResponse,
+      logLLMExecutionStart: () => {},
+      logLLMExecutionEnd: () => {},
+      appendLLMAudit: async () => {},
+      buildExecutionAuditRequest: (_endpoint: string, body: unknown) => body,
+      executeInternalLLMTextCompletion: messagesSpy,
+      applyStateCommands: async (commands: Array<Record<string, unknown>>) => {
+        const command = commands[0];
+        if (command?.type === "character.replace") {
+          writeJson(path.join(dataDirs.characters, characterId, "character.json"), {
+            character: command.character,
+          });
+        }
+        return { ok: true, lastEventId: 1, applied: [], conflicts: [] };
+      },
+      readStateLastEventId: async () => 1,
+    });
+
+    const handler = postHandlers.get("/data/character-evolution/handoff");
+    expect(handler).toBeTruthy();
+
+    const res = createRes();
+    await handler!(createReq({ characterId, chatId }), res);
+
+    expect(res.statusCode).toBe(200);
+    expect(messagesSpy).toHaveBeenCalledTimes(1);
+  });
 });

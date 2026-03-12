@@ -265,6 +265,14 @@ function registerEvolutionRoutes(arg = {}) {
             };
             throw new LLMHttpError(502, 'EVOLUTION_PARSE_FAILED', 'Extraction model returned invalid JSON.');
         }
+        const { character: latestCharacter } = await loadCharacterAndSettings(characterId);
+        const latestEvolution = normalizeCharacterEvolutionSettings(latestCharacter.characterEvolution);
+        if (latestEvolution.pendingProposal) {
+            throw new LLMHttpError(409, 'PENDING_PROPOSAL_EXISTS', 'Another evolution handoff finished first. Review the current proposal before running another handoff.');
+        }
+        if (!forceReplay && latestEvolution.lastProcessedChatId && latestEvolution.lastProcessedChatId === chatId) {
+            throw new LLMHttpError(409, 'CHAT_ALREADY_PROCESSED', 'This chat finished evolution handoff while the current request was running.');
+        }
         const proposalPayload = normalizeCharacterEvolutionProposal(parsed, evolution);
         const pendingProposal = {
             proposalId: makeProposalId(),
@@ -274,9 +282,9 @@ function registerEvolutionRoutes(arg = {}) {
             createdAt: Date.now(),
         };
 
-        const nextCharacter = clone(character, character);
+        const nextCharacter = clone(latestCharacter, latestCharacter);
         nextCharacter.characterEvolution = {
-            ...character.characterEvolution,
+            ...latestEvolution,
             pendingProposal,
         };
         await replaceCharacterWithRetry(characterId, nextCharacter, 'character-evolution.handoff');
@@ -487,7 +495,4 @@ function registerEvolutionRoutes(arg = {}) {
         });
     }));
 }
-
-module.exports = {
-    registerEvolutionRoutes,
-};
+module.exports = { registerEvolutionRoutes };
