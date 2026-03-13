@@ -7,40 +7,62 @@
         CharacterEvolutionSectionConfig,
         CharacterEvolutionState,
     } from "src/ts/storage/database.types";
+    import {
+        buildIndexedRowKey,
+        buildProposalSectionScopeKey,
+        countHiddenUnchangedRows,
+        getProposalRowBadgeVariant,
+        getProposalRowContainerVariant,
+        getProposalRowStatusLabel,
+        mergeProposalDisplayRows,
+        shouldResetProposalSectionTransientState,
+        upsertDismissedAddedRow,
+    } from "./proposalSectionCompare.helpers";
+    import type { ProposalDiffStatus } from "./proposalSectionCompare.helpers";
+    import Button from "../UI/GUI/Button.svelte";
     import OptionInput from "../UI/GUI/OptionInput.svelte";
     import SelectInput from "../UI/GUI/SelectInput.svelte";
     import TextAreaInput from "../UI/GUI/TextAreaInput.svelte";
     import TextInput from "../UI/GUI/TextInput.svelte";
 
-    type DiffStatus = "unchanged" | "changed" | "added" | "removed";
+    type DiffStatus = ProposalDiffStatus;
 
     interface StringDiffRow {
+        cacheKey: string;
         status: DiffStatus;
         currentIndex: number | null;
         proposedIndex: number | null;
         currentValue: string;
         proposedValue: string;
+        forceVisible?: boolean;
+        dismissed?: boolean;
     }
 
     interface FactDiffRow {
+        cacheKey: string;
         status: DiffStatus;
         currentIndex: number | null;
         proposedIndex: number | null;
         currentItem: CharacterEvolutionItem | null;
         proposedItem: CharacterEvolutionItem | null;
         changedFields: string[];
+        forceVisible?: boolean;
+        dismissed?: boolean;
     }
 
     interface FieldDiffRow {
+        cacheKey: string;
         key: "trustLevel" | "dynamic" | "state" | "residue";
         label: string;
         status: DiffStatus;
         currentValue: string;
         proposedValue: string;
         multiline?: boolean;
+        forceVisible?: boolean;
     }
 
     interface Props {
+        proposalId?: string | null;
         section: CharacterEvolutionSectionConfig;
         currentState: CharacterEvolutionState;
         proposedState: CharacterEvolutionState;
@@ -49,6 +71,7 @@
     }
 
     let {
+        proposalId = null,
         section,
         currentState,
         proposedState = $bindable(),
@@ -60,6 +83,10 @@
     }: Props = $props();
 
     let showUnchangedRows = $state(false);
+    let transientScopeKey = $state<string | null>(null);
+    let forceVisibleRowKeys = $state<Record<string, true>>({});
+    let dismissedStringRows = $state<StringDiffRow[]>([]);
+    let dismissedFactRows = $state<FactDiffRow[]>([]);
 
     function isStringListSection(key: string) {
         return key === "activeThreads" || key === "runningJokes" || key === "userRead" || key === "keyMoments";
@@ -202,13 +229,34 @@
         };
     }
 
+    function markRowVisible(cacheKey: string) {
+        forceVisibleRowKeys = {
+            ...forceVisibleRowKeys,
+            [cacheKey]: true,
+        };
+    }
+
+    function rememberDiscardedStringRow(row: StringDiffRow) {
+        dismissedStringRows = upsertDismissedAddedRow(dismissedStringRows, row, {
+            proposedValue: "",
+        });
+    }
+
+    function rememberDiscardedFactRow(row: FactDiffRow) {
+        dismissedFactRows = upsertDismissedAddedRow(dismissedFactRows, row, {
+            proposedItem: null,
+        });
+    }
+
     function rejectObjectRow(row: FieldDiffRow) {
         if (row.key === "trustLevel" || row.key === "dynamic") {
             updateRelationship(row.key, row.currentValue);
+            markRowVisible(row.cacheKey);
             return;
         }
 
         updateLastInteractionEnded(row.key, row.currentValue);
+        markRowVisible(row.cacheKey);
     }
 
     function updateStringItem(key: keyof CharacterEvolutionState, index: number, next: string) {
@@ -224,17 +272,20 @@
         if (row.status === "added") {
             if (row.proposedIndex !== null) {
                 removeListItem(key, row.proposedIndex);
+                rememberDiscardedStringRow(row);
             }
             return;
         }
 
         if (row.status === "removed") {
             restoreStringRow(key, row);
+            markRowVisible(row.cacheKey);
             return;
         }
 
         if (row.proposedIndex !== null) {
             updateStringItem(key, row.proposedIndex, row.currentValue);
+            markRowVisible(row.cacheKey);
         }
     }
 
@@ -271,17 +322,20 @@
         if (row.status === "added") {
             if (row.proposedIndex !== null) {
                 removeListItem(key, row.proposedIndex);
+                rememberDiscardedFactRow(row);
             }
             return;
         }
 
         if (row.status === "removed") {
             restoreFactRow(key, row);
+            markRowVisible(row.cacheKey);
             return;
         }
 
         if (row.proposedIndex !== null && row.currentItem) {
             replaceFactItem(key, row.proposedIndex, row.currentItem);
+            markRowVisible(row.cacheKey);
         }
     }
 
@@ -294,35 +348,46 @@
         for (let index = 0; index < totalRows; index += 1) {
             const currentValue = currentItems[index];
             const proposedValue = proposedItems[index];
+            const cacheKey = buildIndexedRowKey(
+                "string",
+                currentValue !== undefined ? index : null,
+                proposedValue !== undefined ? index : null,
+            );
 
             if (currentValue !== undefined && proposedValue !== undefined) {
                 rows.push({
+                    cacheKey,
                     status: areStringItemsEqual(currentValue, proposedValue) ? "unchanged" : "changed",
                     currentIndex: index,
                     proposedIndex: index,
                     currentValue,
                     proposedValue,
+                    forceVisible: forceVisibleRowKeys[cacheKey] === true,
                 });
                 continue;
             }
 
             if (currentValue !== undefined) {
                 rows.push({
+                    cacheKey,
                     status: "removed",
                     currentIndex: index,
                     proposedIndex: null,
                     currentValue,
                     proposedValue: "",
+                    forceVisible: forceVisibleRowKeys[cacheKey] === true,
                 });
                 continue;
             }
 
             rows.push({
+                cacheKey,
                 status: "added",
                 currentIndex: null,
                 proposedIndex: index,
                 currentValue: "",
                 proposedValue: proposedValue ?? "",
+                forceVisible: forceVisibleRowKeys[cacheKey] === true,
             });
         }
 
@@ -338,48 +403,60 @@
         for (let index = 0; index < totalRows; index += 1) {
             const currentItem = currentItems[index];
             const proposedItem = proposedItems[index];
+            const cacheKey = buildIndexedRowKey(
+                "fact",
+                currentItem ? index : null,
+                proposedItem ? index : null,
+            );
 
             if (currentItem && proposedItem) {
                 rows.push({
+                    cacheKey,
                     status: areFactItemsEqual(currentItem, proposedItem) ? "unchanged" : "changed",
                     currentIndex: index,
                     proposedIndex: index,
                     currentItem,
                     proposedItem,
                     changedFields: changedFactFields(currentItem, proposedItem),
+                    forceVisible: forceVisibleRowKeys[cacheKey] === true,
                 });
                 continue;
             }
 
             if (currentItem) {
                 rows.push({
+                    cacheKey,
                     status: "removed",
                     currentIndex: index,
                     proposedIndex: null,
                     currentItem,
                     proposedItem: null,
                     changedFields: [],
+                    forceVisible: forceVisibleRowKeys[cacheKey] === true,
                 });
                 continue;
             }
 
             rows.push({
+                cacheKey,
                 status: "added",
                 currentIndex: null,
                 proposedIndex: index,
                 currentItem: null,
                 proposedItem: proposedItem ?? null,
                 changedFields: [],
+                forceVisible: forceVisibleRowKeys[cacheKey] === true,
             });
         }
 
         return rows;
     }
 
-    function buildObjectRows() {
+    function buildObjectRows(): FieldDiffRow[] {
         if (section.key === "relationship") {
             return [
                 {
+                    cacheKey: "object:relationship:trustLevel",
                     key: "trustLevel",
                     label: "Trust level",
                     status: areStringItemsEqual(currentState.relationship.trustLevel, proposedState.relationship.trustLevel)
@@ -391,8 +468,10 @@
                                 : "removed",
                     currentValue: currentState.relationship.trustLevel,
                     proposedValue: proposedState.relationship.trustLevel,
+                    forceVisible: forceVisibleRowKeys["object:relationship:trustLevel"] === true,
                 },
                 {
+                    cacheKey: "object:relationship:dynamic",
                     key: "dynamic",
                     label: "Dynamic",
                     multiline: true,
@@ -405,12 +484,14 @@
                                 : "removed",
                     currentValue: currentState.relationship.dynamic,
                     proposedValue: proposedState.relationship.dynamic,
+                    forceVisible: forceVisibleRowKeys["object:relationship:dynamic"] === true,
                 },
             ] satisfies FieldDiffRow[];
         }
 
         return [
             {
+                cacheKey: "object:lastInteractionEnded:state",
                 key: "state",
                 label: "State",
                 multiline: true,
@@ -423,8 +504,10 @@
                             : "removed",
                 currentValue: currentState.lastInteractionEnded.state,
                 proposedValue: proposedState.lastInteractionEnded.state,
+                forceVisible: forceVisibleRowKeys["object:lastInteractionEnded:state"] === true,
             },
             {
+                cacheKey: "object:lastInteractionEnded:residue",
                 key: "residue",
                 label: "Residue",
                 multiline: true,
@@ -437,6 +520,7 @@
                             : "removed",
                 currentValue: currentState.lastInteractionEnded.residue,
                 proposedValue: proposedState.lastInteractionEnded.residue,
+                forceVisible: forceVisibleRowKeys["object:lastInteractionEnded:residue"] === true,
             },
         ] satisfies FieldDiffRow[];
     }
@@ -456,54 +540,47 @@
         return row.status === "added" ? `New item${ordinal}` : `Item${ordinal}`;
     }
 
-    function diffRowHint(status: DiffStatus) {
-        if (status === "added") {
-            return "Will be added to the accepted state.";
-        }
-        if (status === "removed") {
-            return "Exists today, but will be removed if you accept.";
-        }
-        if (status === "changed") {
-            return "Current value on the left will be replaced by the proposed value on the right.";
-        }
-        return "No change.";
-    }
-
-    function statusLabel(status: DiffStatus) {
-        if (status === "added") return "Added";
-        if (status === "removed") return "Removed";
-        if (status === "changed") return "Changed";
-        return "Unchanged";
-    }
-
     function rowDiscardLabel(status: DiffStatus) {
         if (status === "added") {
             return "Discard addition";
         }
 
-        return "Keep current";
+        return "Revert change";
     }
 
-    function factMeta(item: CharacterEvolutionItem | null) {
-        if (!item) {
+    function sectionChangeSummary() {
+        const summary: string[] = [];
+
+        if (changedCount > 0) summary.push(`${changedCount} changed`);
+        if (addedCount > 0) summary.push(`${addedCount} added`);
+        if (removedCount > 0) summary.push(`${removedCount} removed`);
+
+        return summary.join(" · ");
+    }
+
+    function changedFieldSummary(fields: string[]) {
+        if (fields.length === 0) {
             return "";
         }
 
-        return [item.confidence ?? "suspected", item.status ?? "active"].filter(Boolean).join(" · ");
+        return `Edited: ${fields.join(", ")}`;
     }
 
     const sectionKey = $derived(section.key as keyof CharacterEvolutionState);
+    const proposalScopeKey = $derived(buildProposalSectionScopeKey(proposalId, section.key));
     const objectRows = $derived.by(() => isObjectSection(section.key) ? buildObjectRows() : []);
     const stringRows = $derived.by(() => isStringListSection(section.key) ? buildStringDiffRows(sectionKey) : []);
     const factRows = $derived.by(() => !isObjectSection(section.key) && !isStringListSection(section.key) ? buildFactDiffRows(sectionKey) : []);
+    const displayStringRows = $derived.by(() => mergeProposalDisplayRows(stringRows, dismissedStringRows));
+    const displayFactRows = $derived.by(() => mergeProposalDisplayRows(factRows, dismissedFactRows));
     const hiddenUnchangedCount = $derived.by(() => {
         if (isObjectSection(section.key)) {
-            return countRowsWithStatus(objectRows, "unchanged");
+            return countHiddenUnchangedRows(objectRows);
         }
         if (isStringListSection(section.key)) {
-            return countRowsWithStatus(stringRows, "unchanged");
+            return countHiddenUnchangedRows(stringRows);
         }
-        return countRowsWithStatus(factRows, "unchanged");
+        return countHiddenUnchangedRows(factRows);
     });
     const changedCount = $derived.by(() => {
         if (isObjectSection(section.key)) {
@@ -532,6 +609,18 @@
         }
         return countRowsWithStatus(factRows, "removed");
     });
+
+    $effect(() => {
+        if (!shouldResetProposalSectionTransientState(transientScopeKey, proposalScopeKey)) {
+            return;
+        }
+
+        transientScopeKey = proposalScopeKey;
+        showUnchangedRows = false;
+        forceVisibleRowKeys = {};
+        dismissedStringRows = [];
+        dismissedFactRows = [];
+    });
 </script>
 
 <section class="proposal-section-compare">
@@ -544,14 +633,8 @@
         </div>
 
         <div class="proposal-section-compare-meta">
-            {#if changedCount > 0}
-                <span class="proposal-change-badge proposal-change-badge--changed">{changedCount} changed</span>
-            {/if}
-            {#if addedCount > 0}
-                <span class="proposal-change-badge proposal-change-badge--added">{addedCount} added</span>
-            {/if}
-            {#if removedCount > 0}
-                <span class="proposal-change-badge proposal-change-badge--removed">{removedCount} removed</span>
+            {#if sectionChangeSummary()}
+                <span class="proposal-section-compare-counts">{sectionChangeSummary()}</span>
             {/if}
             {#if hiddenUnchangedCount > 0}
                 <button
@@ -569,7 +652,7 @@
 
     {#if change?.evidence && change.evidence.length > 0}
         <details class="proposal-section-evidence">
-            <summary>Why this changed</summary>
+            <summary>Evidence</summary>
             <ul>
                 {#each change.evidence as evidence (evidence)}
                     <li>{evidence}</li>
@@ -581,41 +664,68 @@
     {#if isObjectSection(section.key)}
         <div class="proposal-diff-list">
             {#each objectRows as row (row.key)}
-                {#if showUnchangedRows || row.status !== "unchanged"}
+                {#if showUnchangedRows || row.status !== "unchanged" || row.forceVisible}
                     <article class={`proposal-diff-row proposal-diff-row--${row.status}`}>
                         <div class="proposal-diff-row-head">
                             <div class="proposal-diff-row-copy">
                                 <span class="proposal-diff-row-title">{row.label}</span>
-                                <span class="proposal-diff-row-hint">{diffRowHint(row.status)}</span>
                             </div>
-                            <span class={`proposal-change-badge proposal-change-badge--${row.status}`}>{statusLabel(row.status)}</span>
+                            <div class="proposal-diff-row-actions">
+                                <span class={`proposal-change-badge proposal-change-badge--${row.status}`}>{getProposalRowStatusLabel(row.status)}</span>
+                                {#if row.status !== "unchanged"}
+                                    <button
+                                        type="button"
+                                        class="proposal-text-button"
+                                        onclick={() => rejectObjectRow(row)}
+                                    >
+                                        {rowDiscardLabel(row.status)}
+                                    </button>
+                                {/if}
+                            </div>
                         </div>
 
                         <div class="proposal-diff-grid">
                             <div class="proposal-diff-side">
                                 <span class="proposal-diff-side-label">Current</span>
-                                <div class="proposal-diff-surface">
-                                    <span class:proposal-diff-placeholder={!normalizeText(row.currentValue)}>
-                                        {displayText(row.currentValue)}
-                                    </span>
+                                <div class="proposal-diff-surface proposal-diff-surface--editor">
+                                    {#if row.key === "trustLevel"}
+                                        <TextInput
+                                            value={row.currentValue}
+                                            placeholder="Trust level"
+                                            disabled={true}
+                                        />
+                                    {:else if row.key === "dynamic"}
+                                        <TextAreaInput
+                                            value={row.currentValue}
+                                            className="proposal-diff-textarea-shell"
+                                            height="full"
+                                            placeholder="Dynamic"
+                                            disabled={true}
+                                        />
+                                    {:else if row.key === "state"}
+                                        <TextAreaInput
+                                            value={row.currentValue}
+                                            className="proposal-diff-textarea-shell"
+                                            height="full"
+                                            placeholder="State"
+                                            disabled={true}
+                                        />
+                                    {:else}
+                                        <TextAreaInput
+                                            value={row.currentValue}
+                                            className="proposal-diff-textarea-shell"
+                                            height="full"
+                                            placeholder="Residue"
+                                            disabled={true}
+                                        />
+                                    {/if}
                                 </div>
                             </div>
 
                             <div class="proposal-diff-arrow" aria-hidden="true">-></div>
 
                             <div class="proposal-diff-side">
-                                <div class="proposal-diff-side-bar">
-                                    <span class="proposal-diff-side-label">Proposed</span>
-                                    {#if row.status !== "unchanged"}
-                                        <button
-                                            type="button"
-                                            class="proposal-inline-action"
-                                            onclick={() => rejectObjectRow(row)}
-                                        >
-                                            {rowDiscardLabel(row.status)}
-                                        </button>
-                                    {/if}
-                                </div>
+                                <span class="proposal-diff-side-label">Proposed</span>
                                 <div class="proposal-diff-surface proposal-diff-surface--editable proposal-diff-surface--editor">
                                     {#if row.key === "trustLevel"}
                                         <TextInput
@@ -657,17 +767,14 @@
         </div>
     {:else if isStringListSection(section.key)}
         <div class="proposal-section-toolbar">
-            <span class="proposal-section-toolbar-note">Each row maps one current line to its proposed result.</span>
-            <button
-                type="button"
-                class="proposal-inline-action proposal-inline-action--primary"
-                aria-label={`Add ${section.label}`}
-                title={`Add ${section.label}`}
+            <Button
+                size="sm"
+                styled="outlined"
                 onclick={() => addStringItem(sectionKey)}
             >
                 <PlusIcon size={16} />
                 Add line
-            </button>
+            </Button>
         </div>
 
         {#if !sectionHasItems(proposedState, sectionKey) && !sectionHasItems(currentState, sectionKey)}
@@ -675,25 +782,40 @@
         {/if}
 
         <div class="proposal-diff-list">
-            {#each stringRows as row, rowIndex (`${row.currentIndex ?? "c"}-${row.proposedIndex ?? "p"}-${rowIndex}`)}
-                {#if showUnchangedRows || row.status !== "unchanged"}
+            {#each displayStringRows as row (row.cacheKey)}
+                {#if showUnchangedRows || row.status !== "unchanged" || row.forceVisible}
                     <article class={`proposal-diff-row proposal-diff-row--${row.status}`}>
                         <div class="proposal-diff-row-head">
                             <div class="proposal-diff-row-copy">
                                 <span class="proposal-diff-row-title">{diffRowLabel(row)}</span>
-                                <span class="proposal-diff-row-hint">{diffRowHint(row.status)}</span>
                             </div>
-                            <span class={`proposal-change-badge proposal-change-badge--${row.status}`}>{statusLabel(row.status)}</span>
+                            <div class="proposal-diff-row-actions">
+                                <span class={`proposal-change-badge proposal-change-badge--${getProposalRowBadgeVariant(row.status, row.dismissed)}`}>{getProposalRowStatusLabel(row.status, row.dismissed)}</span>
+                                {#if row.status !== "unchanged" && !row.dismissed}
+                                    <button
+                                        type="button"
+                                        class="proposal-text-button"
+                                        onclick={() => rejectStringRow(sectionKey, row)}
+                                    >
+                                        {rowDiscardLabel(row.status)}
+                                    </button>
+                                {/if}
+                            </div>
                         </div>
 
                         <div class="proposal-diff-grid">
                             <div class="proposal-diff-side">
                                 <span class="proposal-diff-side-label">Current</span>
-                                <div class="proposal-diff-surface">
-                                    {#if row.status === "added"}
+                                <div class="proposal-diff-surface proposal-diff-surface--editor">
+                                    {#if row.status === "added" || row.dismissed}
                                         <span class="proposal-diff-placeholder">No current line</span>
                                     {:else}
-                                        <span>{displayText(row.currentValue)}</span>
+                                        <TextAreaInput
+                                            value={row.currentValue}
+                                            className="proposal-diff-textarea-shell"
+                                            height="full"
+                                            disabled={true}
+                                        />
                                     {/if}
                                 </div>
                             </div>
@@ -701,21 +823,11 @@
                             <div class="proposal-diff-arrow" aria-hidden="true">-></div>
 
                             <div class="proposal-diff-side">
-                                <div class="proposal-diff-side-bar">
-                                    <span class="proposal-diff-side-label">Proposed</span>
-                                    {#if row.status !== "unchanged"}
-                                        <button
-                                            type="button"
-                                            class="proposal-inline-action"
-                                            onclick={() => rejectStringRow(sectionKey, row)}
-                                        >
-                                            {rowDiscardLabel(row.status)}
-                                        </button>
-                                    {/if}
-                                </div>
-
+                                <span class="proposal-diff-side-label">Proposed</span>
                                 <div class="proposal-diff-surface proposal-diff-surface--editable proposal-diff-surface--editor">
-                                    {#if row.status === "removed"}
+                                    {#if row.dismissed}
+                                        <span class="proposal-diff-placeholder">Addition discarded.</span>
+                                    {:else if row.status === "removed"}
                                         <span class="proposal-diff-placeholder">This line will be removed if you accept.</span>
                                     {:else}
                                         <TextAreaInput
@@ -734,17 +846,14 @@
         </div>
     {:else}
         <div class="proposal-section-toolbar">
-            <span class="proposal-section-toolbar-note">Each row maps one current item to its proposed result.</span>
-            <button
-                type="button"
-                class="proposal-inline-action proposal-inline-action--primary"
-                aria-label={`Add ${section.label}`}
-                title={`Add ${section.label}`}
+            <Button
+                size="sm"
+                styled="outlined"
                 onclick={() => addFactItem(sectionKey)}
             >
                 <PlusIcon size={16} />
                 Add item
-            </button>
+            </Button>
         </div>
 
         {#if !sectionHasItems(proposedState, sectionKey) && !sectionHasItems(currentState, sectionKey)}
@@ -752,20 +861,26 @@
         {/if}
 
         <div class="proposal-diff-list">
-            {#each factRows as row, rowIndex (`${row.currentIndex ?? "c"}-${row.proposedIndex ?? "p"}-${rowIndex}`)}
-                {#if showUnchangedRows || row.status !== "unchanged"}
-                    <article class={`proposal-diff-row proposal-diff-row--${row.status}`}>
+            {#each displayFactRows as row (row.cacheKey)}
+                {#if showUnchangedRows || row.status !== "unchanged" || row.forceVisible}
+                    <article class={`proposal-diff-row proposal-diff-row--${getProposalRowContainerVariant(row.status, row.dismissed)}`}>
                         <div class="proposal-diff-row-head">
                             <div class="proposal-diff-row-copy">
                                 <span class="proposal-diff-row-title">{diffRowLabel(row)}</span>
-                                <span class="proposal-diff-row-hint">{diffRowHint(row.status)}</span>
-                            </div>
-                            <div class="proposal-diff-row-badges">
-                                <span class={`proposal-change-badge proposal-change-badge--${row.status}`}>{statusLabel(row.status)}</span>
                                 {#if row.status === "changed"}
-                                    {#each row.changedFields as field (field)}
-                                        <span class="proposal-field-badge">{field}</span>
-                                    {/each}
+                                    <span class="proposal-diff-row-meta">{changedFieldSummary(row.changedFields)}</span>
+                                {/if}
+                            </div>
+                            <div class="proposal-diff-row-actions">
+                                <span class={`proposal-change-badge proposal-change-badge--${getProposalRowBadgeVariant(row.status, row.dismissed)}`}>{getProposalRowStatusLabel(row.status, row.dismissed)}</span>
+                                {#if row.status !== "unchanged" && !row.dismissed}
+                                    <button
+                                        type="button"
+                                        class="proposal-text-button"
+                                        onclick={() => rejectFactRow(sectionKey, row)}
+                                    >
+                                        {rowDiscardLabel(row.status)}
+                                    </button>
                                 {/if}
                             </div>
                         </div>
@@ -773,16 +888,40 @@
                         <div class="proposal-diff-grid">
                             <div class="proposal-diff-side">
                                 <span class="proposal-diff-side-label">Current</span>
-                                <div class="proposal-diff-surface">
+                                <div class="proposal-diff-surface proposal-diff-surface--form">
                                     {#if row.status === "added" || !row.currentItem}
                                         <span class="proposal-diff-placeholder">No current item</span>
                                     {:else}
-                                        <div class="proposal-fact-summary">
-                                            <span>{displayText(row.currentItem.value)}</span>
-                                            <span class="proposal-fact-meta">{factMeta(row.currentItem)}</span>
-                                            {#if row.currentItem.note}
-                                                <span class="proposal-fact-note">{row.currentItem.note}</span>
-                                            {/if}
+                                        <div class="proposal-fact-editor">
+                                            <TextInput
+                                                value={row.currentItem.value ?? ""}
+                                                placeholder="Value"
+                                                disabled={true}
+                                            />
+                                            <div class="proposal-select-grid">
+                                                <SelectInput
+                                                    value={row.currentItem.confidence ?? "suspected"}
+                                                    disabled={true}
+                                                >
+                                                    <OptionInput value="suspected">suspected</OptionInput>
+                                                    <OptionInput value="likely">likely</OptionInput>
+                                                    <OptionInput value="confirmed">confirmed</OptionInput>
+                                                </SelectInput>
+                                                <SelectInput
+                                                    value={row.currentItem.status ?? "active"}
+                                                    disabled={true}
+                                                >
+                                                    <OptionInput value="active">active</OptionInput>
+                                                    <OptionInput value="archived">archived</OptionInput>
+                                                    <OptionInput value="corrected">corrected</OptionInput>
+                                                </SelectInput>
+                                            </div>
+                                            <TextAreaInput
+                                                value={row.currentItem.note ?? ""}
+                                                height="20"
+                                                placeholder="Note"
+                                                disabled={true}
+                                            />
                                         </div>
                                     {/if}
                                 </div>
@@ -791,21 +930,11 @@
                             <div class="proposal-diff-arrow" aria-hidden="true">-></div>
 
                             <div class="proposal-diff-side">
-                                <div class="proposal-diff-side-bar">
-                                    <span class="proposal-diff-side-label">Proposed</span>
-                                    {#if row.status !== "unchanged"}
-                                        <button
-                                            type="button"
-                                            class="proposal-inline-action"
-                                            onclick={() => rejectFactRow(sectionKey, row)}
-                                        >
-                                            {rowDiscardLabel(row.status)}
-                                        </button>
-                                    {/if}
-                                </div>
-
+                                <span class="proposal-diff-side-label">Proposed</span>
                                 <div class="proposal-diff-surface proposal-diff-surface--editable proposal-diff-surface--form">
-                                    {#if row.status === "removed" || !row.proposedItem}
+                                    {#if row.dismissed}
+                                        <span class="proposal-diff-placeholder">Addition discarded.</span>
+                                    {:else if row.status === "removed" || !row.proposedItem}
                                         <span class="proposal-diff-placeholder">This item will be removed if you accept.</span>
                                     {:else}
                                         <div class="proposal-fact-editor">
@@ -869,7 +998,7 @@
     .proposal-section-compare-copy {
         display: flex;
         flex-direction: column;
-        gap: 6px;
+        gap: 4px;
         min-width: 0;
     }
 
@@ -885,53 +1014,53 @@
     }
 
     .proposal-section-compare-meta,
-    .proposal-diff-row-badges {
+    .proposal-diff-row-actions {
         display: flex;
         align-items: center;
         gap: 8px;
         flex-wrap: wrap;
     }
 
-    .proposal-change-badge,
-    .proposal-field-badge {
+    .proposal-section-compare-counts,
+    .proposal-diff-row-meta {
+        color: var(--ds-text-secondary);
+        font-size: var(--ds-font-size-sm);
+    }
+
+    .proposal-change-badge {
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        min-height: 1.75rem;
-        padding: 0.15rem 0.65rem;
+        min-height: 1.5rem;
+        padding: 0.1rem 0.55rem;
         border-radius: var(--ds-radius-pill);
         font-size: var(--ds-font-size-xs);
         font-weight: var(--ds-font-weight-medium);
-        letter-spacing: 0.02em;
+        border: 1px solid color-mix(in srgb, var(--ds-border-subtle) 72%, transparent);
+        background: color-mix(in srgb, var(--ds-surface-3) 76%, transparent);
     }
 
     .proposal-change-badge--changed {
-        background: color-mix(in srgb, oklch(0.77 0.12 80) 18%, var(--ds-surface-3));
-        color: color-mix(in srgb, oklch(0.77 0.12 80) 82%, white);
-        border: 1px solid color-mix(in srgb, oklch(0.77 0.12 80) 36%, transparent);
+        color: color-mix(in srgb, oklch(0.77 0.12 80) 72%, white);
     }
 
     .proposal-change-badge--added {
-        background: color-mix(in srgb, oklch(0.73 0.14 150) 16%, var(--ds-surface-3));
-        color: color-mix(in srgb, oklch(0.73 0.14 150) 82%, white);
-        border: 1px solid color-mix(in srgb, oklch(0.73 0.14 150) 34%, transparent);
+        color: color-mix(in srgb, oklch(0.73 0.14 150) 72%, white);
     }
 
     .proposal-change-badge--removed {
-        background: color-mix(in srgb, oklch(0.68 0.18 28) 14%, var(--ds-surface-3));
-        color: color-mix(in srgb, oklch(0.68 0.18 28) 85%, white);
-        border: 1px solid color-mix(in srgb, oklch(0.68 0.18 28) 30%, transparent);
+        color: color-mix(in srgb, oklch(0.68 0.18 28) 78%, white);
     }
 
-    .proposal-change-badge--unchanged,
-    .proposal-field-badge {
-        background: color-mix(in srgb, var(--ds-surface-3) 78%, transparent);
+    .proposal-change-badge--unchanged {
         color: var(--ds-text-secondary);
-        border: 1px solid color-mix(in srgb, var(--ds-border-subtle) 72%, transparent);
     }
 
-    .proposal-text-button,
-    .proposal-inline-action {
+    .proposal-change-badge--dismissed {
+        color: var(--ds-text-secondary);
+    }
+
+    .proposal-text-button {
         border: 0;
         background: transparent;
         color: var(--ds-text-secondary);
@@ -940,34 +1069,14 @@
         padding: 0;
     }
 
-    .proposal-text-button:hover,
-    .proposal-inline-action:hover {
+    .proposal-text-button:hover {
         color: var(--ds-text-primary);
-    }
-
-    .proposal-inline-action {
-        display: inline-flex;
-        align-items: center;
-        gap: 0.45rem;
-        min-height: 2rem;
-        padding: 0 0.8rem;
-        border-radius: var(--ds-radius-pill);
-        border: 1px solid color-mix(in srgb, var(--ds-border-subtle) 78%, transparent);
-        background: color-mix(in srgb, var(--ds-surface-3) 78%, transparent);
-    }
-
-    .proposal-inline-action--primary {
-        color: var(--ds-text-primary);
-    }
-
-    .proposal-inline-icon {
-        flex: 0 0 auto;
     }
 
     .proposal-section-evidence {
         border: 1px solid color-mix(in srgb, var(--ds-border-subtle) 72%, transparent);
         border-radius: var(--ds-radius-lg);
-        background: color-mix(in srgb, var(--ds-surface-2) 78%, transparent);
+        background: color-mix(in srgb, var(--ds-surface-2) 70%, transparent);
         padding: 0.8rem 1rem;
     }
 
@@ -990,14 +1099,9 @@
     .proposal-section-toolbar {
         display: flex;
         align-items: center;
-        justify-content: space-between;
+        justify-content: flex-end;
         gap: var(--ds-space-2);
         flex-wrap: wrap;
-    }
-
-    .proposal-section-toolbar-note {
-        color: var(--ds-text-secondary);
-        font-size: var(--ds-font-size-sm);
     }
 
     .proposal-empty-state {
@@ -1017,27 +1121,27 @@
     .proposal-diff-row {
         display: flex;
         flex-direction: column;
-        gap: var(--ds-space-3);
-        padding: 1rem;
-        border: 1px solid color-mix(in srgb, var(--ds-border-subtle) 78%, transparent);
-        border-radius: calc(var(--ds-radius-lg) + 2px);
-        background: linear-gradient(
-            180deg,
-            color-mix(in srgb, var(--ds-surface-2) 82%, transparent),
-            color-mix(in srgb, var(--ds-surface-1) 92%, transparent)
-        );
+        gap: var(--ds-space-2);
+        padding: 0.9rem 1rem;
+        border: 1px solid color-mix(in srgb, var(--ds-border-subtle) 72%, transparent);
+        border-radius: var(--ds-radius-lg);
+        background: color-mix(in srgb, var(--ds-surface-2) 76%, transparent);
     }
 
     .proposal-diff-row--changed {
-        border-color: color-mix(in srgb, oklch(0.77 0.12 80) 22%, var(--ds-border-subtle));
+        border-color: color-mix(in srgb, oklch(0.77 0.12 80) 18%, var(--ds-border-subtle));
     }
 
     .proposal-diff-row--added {
-        border-color: color-mix(in srgb, oklch(0.73 0.14 150) 22%, var(--ds-border-subtle));
+        border-color: color-mix(in srgb, oklch(0.73 0.14 150) 18%, var(--ds-border-subtle));
     }
 
     .proposal-diff-row--removed {
-        border-color: color-mix(in srgb, oklch(0.68 0.18 28) 22%, var(--ds-border-subtle));
+        border-color: color-mix(in srgb, oklch(0.68 0.18 28) 18%, var(--ds-border-subtle));
+    }
+
+    .proposal-diff-row--dismissed {
+        border-color: color-mix(in srgb, var(--ds-border-subtle) 72%, transparent);
     }
 
     .proposal-diff-row-head {
@@ -1052,17 +1156,13 @@
         display: flex;
         flex-direction: column;
         gap: 4px;
+        min-width: 0;
     }
 
     .proposal-diff-row-title {
         color: var(--ds-text-primary);
         font-size: var(--ds-font-size-md);
         font-weight: var(--ds-font-weight-semibold);
-    }
-
-    .proposal-diff-row-hint {
-        color: var(--ds-text-secondary);
-        font-size: var(--ds-font-size-sm);
     }
 
     .proposal-diff-grid {
@@ -1080,18 +1180,9 @@
         height: 100%;
     }
 
-    .proposal-diff-side-bar {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 0.6rem;
-        min-height: 2rem;
-    }
-
     .proposal-diff-side-label {
         display: inline-flex;
         align-items: center;
-        min-height: 2rem;
         color: var(--ds-text-secondary);
         font-size: var(--ds-font-size-xs);
         font-weight: var(--ds-font-weight-medium);
@@ -1114,9 +1205,9 @@
         flex-direction: column;
         flex: 1 1 auto;
         gap: 0.55rem;
-        min-height: 5rem;
+        min-height: 4.5rem;
         height: 100%;
-        padding: 0.95rem 1rem;
+        padding: 0.85rem 0.95rem;
         border: 1px solid color-mix(in srgb, var(--ds-border-subtle) 74%, transparent);
         border-radius: var(--ds-radius-lg);
         background: color-mix(in srgb, var(--ds-surface-1) 72%, transparent);
@@ -1142,17 +1233,10 @@
         color: var(--ds-text-tertiary);
     }
 
-    .proposal-fact-summary,
     .proposal-fact-editor {
         display: flex;
         flex-direction: column;
         gap: 0.65rem;
-    }
-
-    .proposal-fact-meta,
-    .proposal-fact-note {
-        color: var(--ds-text-secondary);
-        font-size: var(--ds-font-size-sm);
     }
 
     :global(.proposal-diff-textarea-shell) {

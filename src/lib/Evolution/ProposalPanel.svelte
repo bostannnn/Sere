@@ -81,22 +81,33 @@
         return proposal?.changes.find((change) => change.sectionKey === key) ?? null;
     }
 
+    function formatCreatedAt(value: number) {
+        if (!Number.isFinite(value)) {
+            return "";
+        }
+
+        return new Intl.DateTimeFormat(undefined, {
+            dateStyle: "medium",
+            timeStyle: "short",
+        }).format(value);
+    }
+
     const effectiveBindState = $derived(bindState ?? proposal?.proposedState ?? currentState);
     const visibleCompareSections = $derived(compareSections());
+    const proposalCreatedAt = $derived(proposal ? formatCreatedAt(proposal.createdAt) : "");
 </script>
 
 {#if proposal}
     <div class="ds-settings-section proposal-panel">
         <div class="proposal-panel-header">
             <div class="proposal-panel-header-copy">
-                <span class="ds-settings-label">Pending Evolution Proposal</span>
+                <span class="ds-settings-label">Pending Proposal</span>
                 <span class="ds-settings-label-muted-sm">
-                    Each section is broken into concrete edits. Left shows what exists now, right shows what will be saved, and badges mark added, changed, or removed rows.
+                    {visibleCompareSections.length} section{visibleCompareSections.length === 1 ? "" : "s"} with changes
+                    {#if proposalCreatedAt}
+                        · {proposalCreatedAt}
+                    {/if}
                 </span>
-            </div>
-            <div class="proposal-panel-meta">
-                <span class="proposal-panel-meta-value">{visibleCompareSections.length}</span>
-                <span class="ds-settings-label-muted-sm">sections with edits</span>
             </div>
         </div>
 
@@ -112,6 +123,7 @@
             <div class="proposal-panel-sections">
                 {#each visibleCompareSections as section (section.key)}
                     <ProposalSectionCompare
+                        proposalId={proposal.proposalId}
                         {section}
                         {currentState}
                         bind:proposedState={bindState}
@@ -124,11 +136,11 @@
     </div>
 
     <div class="ds-settings-section">
-        <div class="ds-settings-inline-actions action-rail">
-            <Button styled="danger" onclick={onReject} disabled={loading}>Reject</Button>
-            <Button styled="outlined" onclick={onAccept} disabled={loading}>Accept</Button>
+        <div class="ds-settings-inline-actions action-rail proposal-panel-actions">
+            <Button size="sm" styled="danger" onclick={onReject} disabled={loading}>Reject</Button>
+            <Button size="sm" styled="outlined" onclick={onAccept} disabled={loading}>Accept</Button>
             {#if showCreateButton}
-                <Button onclick={onAcceptAndCreate} disabled={loading}>Accept And Create New Chat</Button>
+                <Button size="sm" onclick={onAcceptAndCreate} disabled={loading}>Accept And Create New Chat</Button>
             {/if}
         </div>
     </div>
@@ -142,31 +154,14 @@
     .proposal-panel-header {
         display: flex;
         align-items: flex-start;
-        justify-content: space-between;
-        gap: var(--ds-space-3);
-        flex-wrap: wrap;
+        gap: var(--ds-space-2);
     }
 
     .proposal-panel-header-copy {
         display: flex;
         flex-direction: column;
         gap: 4px;
-        max-width: 42rem;
-    }
-
-    .proposal-panel-meta {
-        display: flex;
-        flex-direction: column;
-        align-items: flex-end;
-        gap: 2px;
-        flex: 0 0 auto;
-    }
-
-    .proposal-panel-meta-value {
-        color: var(--ds-text-primary);
-        font-size: clamp(1.5rem, 1.1rem + 1vw, 2rem);
-        font-weight: var(--ds-font-weight-semibold);
-        line-height: 1;
+        min-width: 0;
     }
 
     .proposal-panel-sections {
@@ -183,9 +178,7 @@
         border-top: 1px solid var(--ds-border-subtle);
     }
 
-    @media (max-width: 640px) {
-        .proposal-panel-meta {
-            align-items: flex-start;
-        }
+    .proposal-panel-actions {
+        justify-content: flex-end;
     }
 </style>

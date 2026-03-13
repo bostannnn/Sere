@@ -19,7 +19,6 @@
         onReject?: () => void;
         onClose?: () => void;
         loading?: boolean;
-        sourceLabel?: string;
     }
 
     let {
@@ -36,19 +35,16 @@
         onReject = () => {},
         onClose = () => {},
         loading = false,
-        sourceLabel = "Review the exact edits before accepting them. Each row shows the current value, the proposed result, and whether that row is being added, changed, or removed.",
     }: Props = $props();
 </script>
 
 <section class="evolution-review-workspace">
     <header class="evolution-review-header">
         <div class="evolution-review-header-copy">
-            <span class="evolution-review-kicker">Character Evolution Review</span>
-            <h2 class="evolution-review-title">Review exact edits before accepting</h2>
-            <p class="evolution-review-note">{sourceLabel}</p>
+            <h2 class="evolution-review-title">Evolution Review</h2>
         </div>
         <div class="evolution-review-actions">
-            <Button styled="outlined" onclick={onClose}>Back To Chat</Button>
+            <Button size="sm" styled="outlined" onclick={onClose}>Back To Chat</Button>
         </div>
     </header>
 
@@ -78,10 +74,10 @@
 
     .evolution-review-header {
         display: flex;
-        align-items: flex-start;
+        align-items: center;
         justify-content: space-between;
-        gap: var(--ds-space-3);
-        padding: var(--ds-space-4);
+        gap: var(--ds-space-2);
+        padding: var(--ds-space-3) var(--ds-space-4);
         border-bottom: 1px solid var(--ds-border-subtle);
         background: var(--ds-surface-1);
     }
@@ -89,30 +85,15 @@
     .evolution-review-header-copy {
         display: flex;
         flex-direction: column;
-        gap: var(--ds-space-1);
         min-width: 0;
-    }
-
-    .evolution-review-kicker {
-        color: var(--ds-text-secondary);
-        font-size: var(--ds-font-size-xs);
-        font-weight: var(--ds-font-weight-medium);
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
     }
 
     .evolution-review-title {
         margin: 0;
         color: var(--ds-text-primary);
-        font-size: clamp(1.375rem, 1.05rem + 1vw, 2rem);
+        font-size: clamp(1.25rem, 1.02rem + 0.7vw, 1.75rem);
         font-weight: var(--ds-font-weight-semibold);
         line-height: 1.1;
-    }
-
-    .evolution-review-note {
-        margin: 0;
-        max-width: 52rem;
-        color: var(--ds-text-secondary);
     }
 
     .evolution-review-actions {
@@ -131,6 +112,7 @@
 
     @media (max-width: 720px) {
         .evolution-review-header {
+            align-items: flex-start;
             flex-direction: column;
         }
 

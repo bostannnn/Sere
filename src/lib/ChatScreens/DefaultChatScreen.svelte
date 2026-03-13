@@ -3,7 +3,7 @@
 
     import Suggestion from './Suggestion.svelte';
     import { CameraIcon, DatabaseIcon, DicesIcon, GlobeIcon, ImagePlusIcon, LanguagesIcon, Laugh, MenuIcon, MicOffIcon, PackageIcon, RefreshCcwIcon, ReplyIcon, Send, StepForwardIcon, XIcon, ArrowDown, GitBranch } from "@lucide/svelte";
-    import { selectedCharID, createSimpleCharacter, ScrollToMessageStore, comfyProgressStore } from "../../ts/stores.svelte";
+    import { selectedCharID, createSimpleCharacter, ScrollToMessageStore, comfyProgressStore, evolutionReviewOpenRequest } from "../../ts/stores.svelte";
     import { tick } from 'svelte';
     import Chat from "./Chat.svelte";
     import {
@@ -440,6 +440,19 @@
         if (showEvolutionProposal && !currentEvolutionSettings?.pendingProposal) {
             showEvolutionProposal = false
         }
+    })
+
+    $effect(() => {
+        const requestedCharacterId = $evolutionReviewOpenRequest
+        if (!requestedCharacterId || requestedCharacterId !== currentCharacter?.chaId) {
+            return
+        }
+
+        if (currentEvolutionSettings?.pendingProposal) {
+            showEvolutionProposal = true
+        }
+
+        evolutionReviewOpenRequest.set(null)
     })
 
     $effect(() => {
@@ -1037,7 +1050,6 @@
                         onReject={rejectEvolutionProposal}
                         onClose={() => { showEvolutionProposal = false }}
                         loading={evolutionBusy}
-                        sourceLabel="Review the exact edits before accepting them. Each row shows what exists now, what will be saved, and whether that row is being added, changed, or removed."
                     />
                 </div>
             {:else}

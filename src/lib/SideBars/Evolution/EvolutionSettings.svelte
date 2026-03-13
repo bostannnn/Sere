@@ -1,7 +1,7 @@
 <script lang="ts">
-    import ProposalPanel from "src/lib/Evolution/ProposalPanel.svelte"
     import SectionConfigEditor from "src/lib/Evolution/SectionConfigEditor.svelte"
     import StateEditor from "src/lib/Evolution/StateEditor.svelte"
+    import EvolutionProposalSummary from "src/lib/SideBars/Evolution/EvolutionProposalSummary.svelte"
     import Button from "src/lib/UI/GUI/Button.svelte"
     import CheckInput from "src/lib/UI/GUI/CheckInput.svelte"
     import { alertError, alertNormal } from "src/ts/alert"
@@ -16,7 +16,7 @@
     import {
         getCharacterEvolutionErrorMessage,
     } from "src/ts/evolution"
-    import { DBState, selectedCharID } from "src/ts/stores.svelte"
+    import { DBState, evolutionReviewOpenRequest, selectedCharID } from "src/ts/stores.svelte"
     import type {
         CharacterEvolutionSectionConfig,
         CharacterEvolutionPrivacySettings,
@@ -31,13 +31,10 @@
         cloneEvolutionState,
     } from "src/ts/character-evolution/workflow"
     import {
-        acceptEvolutionReviewFlow,
         hasAcceptedEvolutionForChat,
         rejectEvolutionReviewFlow,
         runEvolutionHandoffFlow,
-        syncEvolutionProposalDraft,
     } from "src/ts/character-evolution/reviewFlow"
-    import { getPendingProposalSourceRange } from "src/ts/character-evolution/pendingProposal"
     import { findSingleCharacterById, replaceCharacterById } from "src/ts/storage/characterList"
     import {
         loadEvolutionVersionState,
@@ -51,7 +48,6 @@
         EVOLUTION_SECTIONS_TAB,
         EVOLUTION_SETUP_TAB,
         EVOLUTION_STATE_TAB,
-        EVOLUTION_TAB_LABELS,
         type EvolutionWorkspaceTabId,
     } from "./evolutionSettingsTabs"
     import {
@@ -63,11 +59,10 @@
     } from "./evolutionSettings.helpers"
 
     let loadingVersions = $state(false)
-    let accepting = $state(false)
+    let reviewActionBusy = $state(false)
     let selectedVersion = $state<number | null>(null)
     let selectedVersionFile = $state<CharacterEvolutionVersionFile | null>(null)
-    let proposalDraft = $state<CharacterEvolutionState | null>(null)
-    let proposalDraftKey = $state<string | null>(null)
+    let activeProposalId = $state<string | null>(null)
     let versionCharacterId = $state<string | null>(null)
     let revealCharacterOverrides = $state(false)
     let selectedWorkspaceTab = $state<EvolutionWorkspaceTabId>(EVOLUTION_SETUP_TAB)
@@ -110,7 +105,6 @@
     const usingGlobalDefaults = $derived(currentCharacter?.characterEvolution.useGlobalDefaults ?? true)
     const effectiveProvider = $derived(evolutionSettings?.extractionProvider ?? "")
     const effectiveModel = $derived(evolutionSettings?.extractionModel ?? "")
-    const selectedWorkspaceTitle = $derived(EVOLUTION_TAB_LABELS[selectedWorkspaceTab])
     const currentPendingProposal = $derived(currentCharacter?.characterEvolution.pendingProposal ?? null)
     const activeChatId = $derived(currentCharacter?.chats?.[currentCharacter.chatPage]?.id ?? null)
     const activeChatMessageCount = $derived(currentCharacter?.chats?.[currentCharacter.chatPage]?.message?.length ?? 0)
@@ -320,61 +314,14 @@
             return
         }
 
-        accepting = true
+        reviewActionBusy = true
         try {
             commitCharacter(await rejectEvolutionReviewFlow(characterEntry))
-            if (currentCharacter?.chaId === characterEntry.chaId) {
-                proposalDraft = null
-                proposalDraftKey = null
-            }
             alertNormal("Evolution proposal rejected.")
         } catch (error) {
             alertError(getCharacterEvolutionErrorMessage(error))
         } finally {
-            accepting = false
-        }
-    }
-
-    async function acceptProposal(createNextChat = false) {
-        const characterEntry = currentCharacter
-        if (!characterEntry?.chaId || !proposalDraft) {
-            return
-        }
-
-        accepting = true
-        try {
-            const { nextCharacter, chatCreationError } = await acceptEvolutionReviewFlow({
-                characterEntry,
-                proposedState: proposalDraft,
-                createNextChat,
-                sourceRange: getPendingProposalSourceRange(characterEntry.characterEvolution.pendingProposal),
-                resolveCharacterById: findCharacterById,
-            })
-            commitCharacter(nextCharacter)
-            currentStateDraft = cloneEvolutionState(nextCharacter.characterEvolution.currentState)
-            currentStateDraftKey = `${nextCharacter.chaId}:${nextCharacter.characterEvolution.currentStateVersion}`
-            if (currentCharacter?.chaId === characterEntry.chaId) {
-                proposalDraft = null
-                proposalDraftKey = null
-            }
-            selectedWorkspaceTab = EVOLUTION_STATE_TAB
-
-            await handleRefreshVersions(characterEntry.chaId)
-
-            alertNormal(
-                createNextChat
-                    ? (chatCreationError
-                        ? "Evolution state accepted, but the new chat could not be created."
-                        : "Evolution state accepted and a new chat was created.")
-                    : "Evolution state accepted.",
-            )
-            if (chatCreationError) {
-                alertError(chatCreationError)
-            }
-        } catch (error) {
-            alertError(getCharacterEvolutionErrorMessage(error))
-        } finally {
-            accepting = false
+            reviewActionBusy = false
         }
     }
 
@@ -412,23 +359,28 @@
         }
     }
 
-    $effect(() => {
-        const nextDraftState = syncEvolutionProposalDraft({
-            characterId: currentCharacter?.chaId,
-            proposal: currentPendingProposal,
-        })
-
-        if (nextDraftState.proposalDraftKey) {
-            if (!proposalDraft || proposalDraftKey !== nextDraftState.proposalDraftKey) {
-                proposalDraft = nextDraftState.proposalDraft
-                proposalDraftKey = nextDraftState.proposalDraftKey
-                selectedWorkspaceTab = EVOLUTION_REVIEW_TAB
-            }
+    function openFullscreenReview() {
+        const characterId = currentCharacter?.chaId
+        if (!characterId || !currentPendingProposal) {
             return
         }
 
-        proposalDraft = null
-        proposalDraftKey = null
+        evolutionReviewOpenRequest.set(characterId)
+    }
+
+    $effect(() => {
+        const nextProposalId = currentPendingProposal?.proposalId ?? null
+        if (!nextProposalId) {
+            activeProposalId = null
+            return
+        }
+
+        if (activeProposalId === nextProposalId) {
+            return
+        }
+
+        activeProposalId = nextProposalId
+        selectedWorkspaceTab = EVOLUTION_REVIEW_TAB
     })
 
     $effect(() => {
@@ -476,215 +428,211 @@
         <span class="ds-settings-label">Select a single character to configure evolution.</span>
     </div>
 {:else if evolutionSettings && currentCharacter.characterEvolution}
-    <div class="ds-settings-section">
-        <EvolutionWorkspaceTabs
-            selectedTab={selectedWorkspaceTab}
-            onSelect={(tab) => {
-                selectedWorkspaceTab = tab
-            }}
-        />
-    </div>
-
-    <div class="ds-settings-section">
-        <h2 class="evolution-section-title">{selectedWorkspaceTitle}</h2>
-    </div>
-
-    {#if selectedWorkspaceTab === EVOLUTION_SETUP_TAB}
-        <div
-            class="ds-settings-section"
-            role="tabpanel"
-            id="evolution-panel-setup"
-            aria-labelledby="evolution-subtab-0"
-            tabindex="0"
-        >
-            <EvolutionSetupPanel
-                characterEntry={currentCharacter}
-                {evolutionSettings}
-                {usingGlobalDefaults}
-                {effectiveProvider}
-                {effectiveModel}
-                {hasTemplateSlot}
-                {loadingVersions}
-                {revealCharacterOverrides}
-                onToggleRevealCharacterOverrides={() => {
-                    revealCharacterOverrides = !revealCharacterOverrides
+    <div class="ds-settings-page evolution-settings-page">
+        <div class="ds-settings-section">
+            <EvolutionWorkspaceTabs
+                selectedTab={selectedWorkspaceTab}
+                onSelect={(tab) => {
+                    selectedWorkspaceTab = tab
                 }}
-                onOpenGlobalDefaults={openEvolutionGlobalDefaults}
-                onPersistCharacter={persistCharacter}
-                onRefreshVersions={handleRefreshVersions}
-                {replayCurrentChatAvailable}
-                replayCurrentChatBusy={replayingAcceptedChat}
-                onReplayCurrentChat={replayAcceptedChat}
             />
         </div>
-    {:else if selectedWorkspaceTab === EVOLUTION_SECTIONS_TAB}
-        <div
-            role="tabpanel"
-            id="evolution-panel-sections"
-            aria-labelledby="evolution-subtab-1"
-            tabindex="0"
-        >
-            <div class="ds-settings-section">
-                <div class="ds-settings-card ds-settings-card-stack-start">
-                    <CheckInput
-                        bare={true}
-                        className="evolution-sections-toggle"
-                        check={usingGlobalDefaults}
-                        onChange={setUseGlobalDefaults}
-                        name="Use Global Defaults For Sections And Privacy"
-                    />
-                    <span class="ds-settings-label-muted-sm">
-                        {usingGlobalDefaults
-                            ? "Sections and privacy are inherited from global evolution defaults."
-                            : "These section and privacy settings are specific to this character."}
-                    </span>
-                    <div class="ds-settings-inline-actions action-rail">
-                        <Button styled="outlined" size="sm" onclick={openEvolutionGlobalDefaults}>
-                            Open Global Defaults
-                        </Button>
-                    </div>
-                </div>
-            </div>
 
-            {#if !usingGlobalDefaults}
-                <div class="ds-settings-section">
-                    <div class="ds-settings-card ds-settings-card-stack-start">
-                        <span class="ds-settings-label">Privacy</span>
-                        <div class="ds-settings-grid-two">
-                            <CheckInput
-                                bind:check={privacyDraft.allowCharacterIntimatePreferences}
-                                name="Allow Character Intimate Preferences"
-                            />
-                            <CheckInput
-                                bind:check={privacyDraft.allowUserIntimatePreferences}
-                                name="Allow User Intimate Preferences"
-                            />
-                        </div>
-                    </div>
-                </div>
-            {/if}
-
-            <SectionConfigEditor
-                bind:value={sectionConfigDraft}
-                privacy={privacyDraft}
-                readonly={usingGlobalDefaults}
-                title={usingGlobalDefaults ? "Global Sections" : "Character Section Overrides"}
-            />
-        </div>
-    {:else if selectedWorkspaceTab === EVOLUTION_REVIEW_TAB}
-        <div
-            role="tabpanel"
-            id="evolution-panel-review"
-            aria-labelledby="evolution-subtab-2"
-            tabindex="0"
-        >
-            {#if currentPendingProposal}
-                <ProposalPanel
-                    proposal={currentPendingProposal}
-                    currentState={evolutionSettings.currentState}
-                    sectionConfigs={evolutionSettings.sectionConfigs}
-                    privacy={evolutionSettings.privacy}
-                    bind:bindState={proposalDraft}
-                    onAccept={() => acceptProposal(false)}
-                    onAcceptAndCreate={() => acceptProposal(true)}
-                    onReject={rejectProposal}
-                    loading={accepting}
+        {#if selectedWorkspaceTab === EVOLUTION_SETUP_TAB}
+            <div
+                class="ds-settings-section"
+                role="tabpanel"
+                id="evolution-panel-setup"
+                aria-labelledby="evolution-subtab-0"
+                tabindex="0"
+            >
+                <EvolutionSetupPanel
+                    characterEntry={currentCharacter}
+                    {evolutionSettings}
+                    {usingGlobalDefaults}
+                    {effectiveProvider}
+                    {effectiveModel}
+                    {hasTemplateSlot}
+                    {revealCharacterOverrides}
+                    onToggleRevealCharacterOverrides={() => {
+                        revealCharacterOverrides = !revealCharacterOverrides
+                    }}
+                    onOpenGlobalDefaults={openEvolutionGlobalDefaults}
+                    {replayCurrentChatAvailable}
+                    replayCurrentChatBusy={replayingAcceptedChat}
+                    onReplayCurrentChat={replayAcceptedChat}
                 />
-            {:else}
+            </div>
+        {:else if selectedWorkspaceTab === EVOLUTION_SECTIONS_TAB}
+            <div
+                role="tabpanel"
+                id="evolution-panel-sections"
+                aria-labelledby="evolution-subtab-1"
+                tabindex="0"
+            >
                 <div class="ds-settings-section">
                     <div class="ds-settings-card ds-settings-card-stack-start">
-                        <span class="ds-settings-label">Review</span>
+                        <CheckInput
+                            bare={true}
+                            className="evolution-sections-toggle"
+                            check={usingGlobalDefaults}
+                            onChange={setUseGlobalDefaults}
+                            name="Use Global Defaults For Sections And Privacy"
+                        />
                         <span class="ds-settings-label-muted-sm">
-                            No pending evolution proposal. Run a chat handoff to review a new
-                            state update here.
+                            {usingGlobalDefaults
+                                ? "Sections and privacy are inherited from global evolution defaults."
+                                : "These section and privacy settings are specific to this character."}
                         </span>
-                    </div>
-                </div>
-            {/if}
-        </div>
-    {:else if selectedWorkspaceTab === EVOLUTION_STATE_TAB}
-        <div
-            role="tabpanel"
-            id="evolution-panel-state"
-            aria-labelledby="evolution-subtab-3"
-            tabindex="0"
-        >
-            {#if currentPendingProposal}
-                <div class="ds-settings-section">
-                    <div class="ds-settings-card ds-settings-card-stack-start">
-                        <span class="ds-settings-label">Current State</span>
-                        <span class="ds-settings-label-muted-sm">
-                            Resolve the pending proposal before editing the accepted state directly.
-                        </span>
-                    </div>
-                </div>
-            {:else}
-                {#if currentStateDraft}
-                    <StateEditor
-                        bind:value={currentStateDraft}
-                        sectionConfigs={evolutionSettings.sectionConfigs}
-                        privacy={evolutionSettings.privacy}
-                        title="Current State"
-                    />
-                    <div class="ds-settings-section">
                         <div class="ds-settings-inline-actions action-rail">
-                            <Button styled="outlined" onclick={persistCharacter}>
-                                Save Current State
+                            <Button styled="outlined" size="sm" onclick={openEvolutionGlobalDefaults}>
+                                Open Global Defaults
                             </Button>
                         </div>
                     </div>
-                {/if}
-            {/if}
-        </div>
-    {:else}
-        <div
-            class="ds-settings-section"
-            role="tabpanel"
-            id="evolution-panel-history"
-            aria-labelledby="evolution-subtab-4"
-            tabindex="0"
-        >
-            <span class="ds-settings-label">Version History</span>
-            <div class="ds-settings-card ds-settings-list-shell">
-                {#if currentCharacter.characterEvolution.stateVersions.length === 0}
-                    <span class="ds-settings-label-muted-sm">No accepted versions yet.</span>
-                {/if}
+                </div>
 
-                {#each currentCharacter.characterEvolution.stateVersions as version (version.version)}
-                    <div class="ds-settings-inline-actions action-rail ds-settings-inline-actions-space-between">
-                        <span class="ds-settings-label">
-                            v{version.version} {version.chatId ? `after ${version.chatId}` : ""}
-                        </span>
-                        <Button
-                            size="sm"
-                            styled="outlined"
-                            onclick={() => loadVersion(version.version)}
-                            disabled={loadingVersions}
-                        >
-                            View
-                        </Button>
+                {#if !usingGlobalDefaults}
+                    <div class="ds-settings-section">
+                        <div class="ds-settings-card ds-settings-card-stack-start">
+                            <span class="ds-settings-label">Privacy</span>
+                            <div class="ds-settings-grid-two">
+                                <CheckInput
+                                    bind:check={privacyDraft.allowCharacterIntimatePreferences}
+                                    name="Allow Character Intimate Preferences"
+                                />
+                                <CheckInput
+                                    bind:check={privacyDraft.allowUserIntimatePreferences}
+                                    name="Allow User Intimate Preferences"
+                                />
+                            </div>
+                        </div>
                     </div>
-                {/each}
-            </div>
-        </div>
+                {/if}
 
-        {#if selectedVersion !== null && selectedVersionState}
-            <StateEditor
-                value={selectedVersionState}
-                sectionConfigs={selectedVersionSectionConfigs}
-                privacy={selectedVersionPrivacy}
-                readonly={true}
-                title={`Version v${selectedVersion}`}
-            />
+                <SectionConfigEditor
+                    bind:value={sectionConfigDraft}
+                    privacy={privacyDraft}
+                    readonly={usingGlobalDefaults}
+                    title={usingGlobalDefaults ? "Global Sections" : "Character Section Overrides"}
+                />
+            </div>
+        {:else if selectedWorkspaceTab === EVOLUTION_REVIEW_TAB}
+            <div
+                role="tabpanel"
+                id="evolution-panel-review"
+                aria-labelledby="evolution-subtab-2"
+                tabindex="0"
+            >
+                {#if currentPendingProposal}
+                    <EvolutionProposalSummary
+                        proposal={currentPendingProposal}
+                        onOpen={openFullscreenReview}
+                        onReject={rejectProposal}
+                        openDisabled={reviewActionBusy}
+                        rejectDisabled={reviewActionBusy}
+                    />
+                {:else}
+                    <div class="ds-settings-section">
+                        <div class="ds-settings-card ds-settings-card-stack-start">
+                            <span class="ds-settings-label-muted-sm">
+                                No pending evolution proposal. When a proposal is ready, open fullscreen review from here.
+                            </span>
+                        </div>
+                    </div>
+                {/if}
+            </div>
+        {:else if selectedWorkspaceTab === EVOLUTION_STATE_TAB}
+            <div
+                role="tabpanel"
+                id="evolution-panel-state"
+                aria-labelledby="evolution-subtab-3"
+                tabindex="0"
+            >
+                {#if currentPendingProposal}
+                    <div class="ds-settings-section">
+                        <div class="ds-settings-card ds-settings-card-stack-start">
+                            <span class="ds-settings-label">Current State</span>
+                            <span class="ds-settings-label-muted-sm">
+                                Resolve the pending proposal before editing the accepted state directly.
+                            </span>
+                        </div>
+                    </div>
+                {:else}
+                    {#if currentStateDraft}
+                        <StateEditor
+                            bind:value={currentStateDraft}
+                            sectionConfigs={evolutionSettings.sectionConfigs}
+                            privacy={evolutionSettings.privacy}
+                            title="Current State"
+                        />
+                        <div class="ds-settings-section">
+                            <div class="ds-settings-inline-actions action-rail">
+                                <Button styled="outlined" onclick={persistCharacter}>
+                                    Save Current State
+                                </Button>
+                            </div>
+                        </div>
+                    {/if}
+                {/if}
+            </div>
+        {:else}
+            <div
+                class="ds-settings-section"
+                role="tabpanel"
+                id="evolution-panel-history"
+                aria-labelledby="evolution-subtab-4"
+                tabindex="0"
+            >
+                <div class="ds-settings-inline-actions action-rail">
+                    <span class="ds-settings-label">Version History</span>
+                    <Button
+                        size="sm"
+                        styled="outlined"
+                        onclick={() => handleRefreshVersions()}
+                        disabled={loadingVersions}
+                    >
+                        Refresh
+                    </Button>
+                </div>
+                <div class="ds-settings-card ds-settings-list-shell">
+                    {#if currentCharacter.characterEvolution.stateVersions.length === 0}
+                        <span class="ds-settings-label-muted-sm">No accepted versions yet.</span>
+                    {/if}
+
+                    {#each currentCharacter.characterEvolution.stateVersions as version (version.version)}
+                        <div class="ds-settings-inline-actions action-rail ds-settings-inline-actions-space-between">
+                            <span class="ds-settings-label">
+                                v{version.version} {version.chatId ? `after ${version.chatId}` : ""}
+                            </span>
+                            <Button
+                                size="sm"
+                                styled="outlined"
+                                onclick={() => loadVersion(version.version)}
+                                disabled={loadingVersions}
+                            >
+                                View
+                            </Button>
+                        </div>
+                    {/each}
+                </div>
+            </div>
+
+            {#if selectedVersion !== null && selectedVersionState}
+                <StateEditor
+                    value={selectedVersionState}
+                    sectionConfigs={selectedVersionSectionConfigs}
+                    privacy={selectedVersionPrivacy}
+                    readonly={true}
+                    title={`Version v${selectedVersion}`}
+                />
+            {/if}
         {/if}
-    {/if}
+    </div>
 {/if}
 
 <style>
-    .evolution-section-title {
-        margin: 0;
-        font-size: var(--ds-font-size-xl);
-        font-weight: var(--ds-font-weight-semibold);
-        color: var(--ds-text-primary);
+    .evolution-settings-page {
+        gap: var(--ds-settings-section-gap);
     }
 </style>

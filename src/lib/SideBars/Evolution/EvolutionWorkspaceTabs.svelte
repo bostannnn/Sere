@@ -20,7 +20,6 @@
     }
 
     let { selectedTab, onSelect }: Props = $props()
-
     const iconSize = 18
 
     function focusTab(tab: EvolutionWorkspaceTabId) {

@@ -63,6 +63,7 @@ export const ViewBoxsize = writable({ width: 12 * 16, height: 12 * 16 }); // Def
 export const settingsOpen = writable(false)
 export const BotSettingsSubMenuIndex = writable<number | null>(null)
 export const OtherBotSettingsSubMenuIndex = writable<number | null>(null)
+export const evolutionReviewOpenRequest = writable<string | null>(null)
 export const moduleBackgroundEmbedding = writable('')
 export const openPresetList = writable(false)
 export const openPersonaList = writable(false)

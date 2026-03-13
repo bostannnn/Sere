@@ -19,12 +19,9 @@
         effectiveProvider: string
         effectiveModel: string
         hasTemplateSlot: boolean
-        loadingVersions: boolean
         revealCharacterOverrides: boolean
         onToggleRevealCharacterOverrides: () => void
         onOpenGlobalDefaults: () => void
-        onPersistCharacter: () => void | Promise<void>
-        onRefreshVersions: () => void | Promise<void>
         replayCurrentChatAvailable?: boolean
         replayCurrentChatBusy?: boolean
         onReplayCurrentChat?: () => void | Promise<void>
@@ -37,12 +34,9 @@
         effectiveProvider,
         effectiveModel,
         hasTemplateSlot,
-        loadingVersions,
         revealCharacterOverrides,
         onToggleRevealCharacterOverrides,
         onOpenGlobalDefaults,
-        onPersistCharacter,
-        onRefreshVersions,
         replayCurrentChatAvailable = false,
         replayCurrentChatBusy = false,
         onReplayCurrentChat = () => {},
@@ -113,31 +107,21 @@
             <span class="ds-settings-label">Extraction Runtime</span>
             <span class="evolution-runtime-source">{usingGlobalDefaults ? "Global defaults" : "Character override"}</span>
         </div>
-        <div class="evolution-runtime-grid">
-            <span class="ds-settings-label-muted-sm">Provider</span>
-            <span class="evolution-runtime-value">{effectiveProvider || "Not configured"}</span>
-            <span class="ds-settings-label-muted-sm">Model</span>
-            <span class="evolution-runtime-value">{effectiveModel || "Not configured"}</span>
-            <span class="ds-settings-label-muted-sm">Max response tokens</span>
-            <span class="evolution-runtime-value">{evolutionSettings.extractionMaxTokens || 2400}</span>
-        </div>
-        {#if usingGlobalDefaults}
-            <span class="ds-settings-label-muted-sm">
-                Global defaults are active. Extraction provider, model, prompt, privacy, and tracked sections are inherited from Other Bots -> Evolution.
-            </span>
-        {/if}
-    </div>
-
-    {#if usingGlobalDefaults}
-        <div class="ds-settings-section">
-            <div class="ds-settings-inline-actions action-rail">
-                <Button styled="outlined" onclick={onOpenGlobalDefaults}>Open Global Defaults</Button>
-                <Button styled="outlined" onclick={onToggleRevealCharacterOverrides}>
-                    {revealCharacterOverrides ? "Hide Character Overrides" : "Show Character Overrides"}
-                </Button>
+        <div class="evolution-runtime-list">
+            <div class="ds-settings-list-row evolution-runtime-row">
+                <span class="ds-settings-label-muted-sm">Provider</span>
+                <span class="ds-settings-text-medium evolution-runtime-value">{effectiveProvider || "Not configured"}</span>
+            </div>
+            <div class="ds-settings-list-row evolution-runtime-row">
+                <span class="ds-settings-label-muted-sm">Model</span>
+                <span class="ds-settings-text-medium evolution-runtime-value">{effectiveModel || "Not configured"}</span>
+            </div>
+            <div class="ds-settings-list-row evolution-runtime-row">
+                <span class="ds-settings-label-muted-sm">Tokens</span>
+                <span class="ds-settings-text-medium evolution-runtime-value">{evolutionSettings.extractionMaxTokens || 2400}</span>
             </div>
         </div>
-    {/if}
+    </div>
 
     {#if !usingGlobalDefaults || revealCharacterOverrides}
         <div class="ds-settings-section">
@@ -204,20 +188,21 @@
             </span>
         {/if}
 
-        <div class="ds-settings-inline-actions action-rail evolution-setup-actions">
-            <Button styled="outlined" onclick={onPersistCharacter}>Save Evolution Settings</Button>
-            <Button styled="outlined" onclick={onRefreshVersions} disabled={loadingVersions}>Refresh Versions</Button>
+        <div class="evolution-setup-actions-stack">
+            {#if usingGlobalDefaults}
+                <Button size="sm" styled="outlined" className="ds-ui-fill-width" onclick={onOpenGlobalDefaults}>
+                    Open Global Defaults
+                </Button>
+                <Button size="sm" styled="outlined" className="ds-ui-fill-width" onclick={onToggleRevealCharacterOverrides}>
+                    {revealCharacterOverrides ? "Hide Character Overrides" : "Show Character Overrides"}
+                </Button>
+            {/if}
             {#if replayCurrentChatAvailable}
-                <Button styled="outlined" onclick={onReplayCurrentChat} disabled={replayCurrentChatBusy}>
+                <Button size="sm" styled="outlined" className="ds-ui-fill-width" onclick={onReplayCurrentChat} disabled={replayCurrentChatBusy}>
                     {replayCurrentChatBusy ? "Replaying Accepted Chat" : "Replay Accepted Chat"}
                 </Button>
             {/if}
         </div>
-        {#if replayCurrentChatAvailable}
-            <span class="ds-settings-label-muted-sm">
-                Recovery action. Re-runs handoff for the current accepted chat and creates a new proposal without changing the accepted version yet.
-            </span>
-        {/if}
     </div>
 </div>
 
@@ -264,26 +249,39 @@
         font-size: var(--ds-font-size-sm);
     }
 
-    .evolution-runtime-grid {
-        display: grid;
-        grid-template-columns: auto 1fr;
-        gap: var(--ds-space-2) var(--ds-space-4);
-        align-items: baseline;
+    .evolution-runtime-row {
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: var(--ds-space-3);
+        min-height: 0;
+        padding: 0;
+    }
+
+    .evolution-runtime-row + .evolution-runtime-row {
+        border-top: 1px solid var(--ds-border-subtle);
+        padding-top: var(--ds-space-2);
+        margin-top: var(--ds-space-2);
     }
 
     .evolution-runtime-value {
         color: var(--ds-text-primary);
-        font-size: var(--ds-font-size-md);
+        text-align: right;
+        overflow-wrap: anywhere;
     }
 
-    .evolution-setup-actions {
-        align-items: center;
+    .evolution-setup-actions-stack {
+        display: flex;
+        flex-direction: column;
+        gap: var(--ds-space-2);
     }
 
     @media (max-width: 640px) {
-        .evolution-runtime-grid {
-            grid-template-columns: 1fr;
-            gap: 2px;
+        .evolution-runtime-row {
+            flex-direction: column;
+        }
+
+        .evolution-runtime-value {
+            text-align: left;
         }
     }
 </style>
