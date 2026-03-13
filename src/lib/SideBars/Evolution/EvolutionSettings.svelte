@@ -1,17 +1,9 @@
 <script lang="ts">
-    import SectionConfigEditor from "src/lib/Evolution/SectionConfigEditor.svelte"
-    import StateEditor from "src/lib/Evolution/StateEditor.svelte"
-    import EvolutionProposalSummary from "src/lib/SideBars/Evolution/EvolutionProposalSummary.svelte"
-    import Button from "src/lib/UI/GUI/Button.svelte"
-    import CheckInput from "src/lib/UI/GUI/CheckInput.svelte"
     import { alertError, alertNormal } from "src/ts/alert"
     import {
-        createDefaultCharacterEvolutionSectionConfigs,
         ensureCharacterEvolution,
         getEffectiveCharacterEvolutionSettings,
         hasCharacterStateTemplateBlock,
-        normalizeCharacterEvolutionSectionConfigs,
-        normalizeCharacterEvolutionState,
     } from "src/ts/characterEvolution"
     import {
         getCharacterEvolutionErrorMessage,
@@ -24,12 +16,12 @@
         CharacterEvolutionVersionFile,
         character,
     } from "src/ts/storage/database.types"
+    import EvolutionHistoryPanel from "./EvolutionHistoryPanel.svelte"
+    import EvolutionReviewPanel from "./EvolutionReviewPanel.svelte"
+    import EvolutionSectionsPanel from "./EvolutionSectionsPanel.svelte"
     import EvolutionSetupPanel from "./EvolutionSetupPanel.svelte"
+    import EvolutionStatePanel from "./EvolutionStatePanel.svelte"
     import EvolutionWorkspaceTabs from "./EvolutionWorkspaceTabs.svelte"
-    import {
-        cloneEvolutionSettingsSections,
-        cloneEvolutionState,
-    } from "src/ts/character-evolution/workflow"
     import {
         hasAcceptedEvolutionForChat,
         rejectEvolutionReviewFlow,
@@ -51,11 +43,16 @@
         type EvolutionWorkspaceTabId,
     } from "./evolutionSettingsTabs"
     import {
-        clonePrivacy,
+        buildEvolutionSyncSettings,
+        createCurrentStateDraft,
+        createSectionDraftSnapshot,
+        getCurrentStateDraftHydrationKey,
+        getSectionDraftHydrationKey,
+    } from "./evolutionSettings.drafts"
+    import {
         deriveSelectedVersionPrivacy,
         deriveSelectedVersionSectionConfigs,
         isSingleCharacter,
-        jsonEqual,
     } from "./evolutionSettings.helpers"
 
     let loadingVersions = $state(false)
@@ -127,38 +124,20 @@
 
     function syncCharacterDrafts(characterEntry: character) {
         const baseCharacter = findCharacterById(characterEntry.chaId) ?? characterEntry
-        let changed = false
-        const nextEvolution = {
-            ...baseCharacter.characterEvolution,
+        const nextEvolution = buildEvolutionSyncSettings({
+            baseCharacter,
+            currentStateDraft,
+            sectionConfigDraft,
+            privacyDraft,
+        })
+        if (!nextEvolution) {
+            return
         }
 
-        if (currentStateDraft) {
-            const normalizedState = normalizeCharacterEvolutionState(currentStateDraft)
-            if (!jsonEqual(baseCharacter.characterEvolution.currentState, normalizedState)) {
-                nextEvolution.currentState = structuredClone(normalizedState)
-                changed = true
-            }
-        }
-
-        if (!baseCharacter.characterEvolution.useGlobalDefaults) {
-            const normalizedSections = normalizeCharacterEvolutionSectionConfigs(sectionConfigDraft)
-            const normalizedPrivacy = clonePrivacy(privacyDraft)
-            if (!jsonEqual(baseCharacter.characterEvolution.sectionConfigs, normalizedSections)) {
-                nextEvolution.sectionConfigs = structuredClone(normalizedSections)
-                changed = true
-            }
-            if (!jsonEqual(baseCharacter.characterEvolution.privacy, normalizedPrivacy)) {
-                nextEvolution.privacy = structuredClone(normalizedPrivacy)
-                changed = true
-            }
-        }
-
-        if (changed) {
-            commitCharacter({
-                ...baseCharacter,
-                characterEvolution: nextEvolution,
-            })
-        }
+        commitCharacter({
+            ...baseCharacter,
+            characterEvolution: nextEvolution,
+        })
     }
 
     function setUseGlobalDefaults(nextValue: boolean) {
@@ -185,28 +164,21 @@
 
     $effect(() => {
         const characterEntry = currentCharacter
-        const nextKey = characterEntry?.chaId
-            ? `${characterEntry.chaId}:${characterEntry.characterEvolution.useGlobalDefaults ? `global:${JSON.stringify(evolutionSettings?.sectionConfigs ?? [])}:${JSON.stringify(evolutionSettings?.privacy ?? {})}` : "local"}`
-            : null
+        const nextKey = getSectionDraftHydrationKey({
+            characterEntry,
+            evolutionSettings,
+        })
         if (sectionDraftKey === nextKey) {
             return
         }
 
         sectionDraftKey = nextKey
-        if (!characterEntry) {
-            sectionConfigDraft = []
-            privacyDraft = clonePrivacy(null)
-            return
-        }
-
-        if (characterEntry.characterEvolution.useGlobalDefaults) {
-            sectionConfigDraft = cloneEvolutionSettingsSections(evolutionSettings?.sectionConfigs ?? createDefaultCharacterEvolutionSectionConfigs())
-            privacyDraft = clonePrivacy(evolutionSettings?.privacy)
-            return
-        }
-
-        sectionConfigDraft = cloneEvolutionSettingsSections(characterEntry.characterEvolution.sectionConfigs)
-        privacyDraft = clonePrivacy(characterEntry.characterEvolution.privacy)
+        const nextDrafts = createSectionDraftSnapshot({
+            characterEntry,
+            evolutionSettings,
+        })
+        sectionConfigDraft = nextDrafts.sectionConfigDraft
+        privacyDraft = nextDrafts.privacyDraft
     })
 
     $effect(() => {
@@ -220,15 +192,13 @@
 
     $effect(() => {
         const characterEntry = currentCharacter
-        const nextKey = characterEntry?.chaId
-            ? `${characterEntry.chaId}:${characterEntry.characterEvolution.currentStateVersion}`
-            : null
+        const nextKey = getCurrentStateDraftHydrationKey(characterEntry)
         if (currentStateDraftKey === nextKey) {
             return
         }
 
         currentStateDraftKey = nextKey
-        currentStateDraft = cloneEvolutionState(characterEntry?.characterEvolution.currentState)
+        currentStateDraft = createCurrentStateDraft(characterEntry)
     })
 
     $effect(() => {
@@ -464,169 +434,39 @@
                 />
             </div>
         {:else if selectedWorkspaceTab === EVOLUTION_SECTIONS_TAB}
-            <div
-                role="tabpanel"
-                id="evolution-panel-sections"
-                aria-labelledby="evolution-subtab-1"
-                tabindex="0"
-            >
-                <div class="ds-settings-section">
-                    <div class="ds-settings-card ds-settings-card-stack-start">
-                        <CheckInput
-                            bare={true}
-                            className="evolution-sections-toggle"
-                            check={usingGlobalDefaults}
-                            onChange={setUseGlobalDefaults}
-                            name="Use Global Defaults For Sections And Privacy"
-                        />
-                        <span class="ds-settings-label-muted-sm">
-                            {usingGlobalDefaults
-                                ? "Sections and privacy are inherited from global evolution defaults."
-                                : "These section and privacy settings are specific to this character."}
-                        </span>
-                        <div class="ds-settings-inline-actions action-rail">
-                            <Button styled="outlined" size="sm" onclick={openEvolutionGlobalDefaults}>
-                                Open Global Defaults
-                            </Button>
-                        </div>
-                    </div>
-                </div>
-
-                {#if !usingGlobalDefaults}
-                    <div class="ds-settings-section">
-                        <div class="ds-settings-card ds-settings-card-stack-start">
-                            <span class="ds-settings-label">Privacy</span>
-                            <div class="ds-settings-grid-two">
-                                <CheckInput
-                                    bind:check={privacyDraft.allowCharacterIntimatePreferences}
-                                    name="Allow Character Intimate Preferences"
-                                />
-                                <CheckInput
-                                    bind:check={privacyDraft.allowUserIntimatePreferences}
-                                    name="Allow User Intimate Preferences"
-                                />
-                            </div>
-                        </div>
-                    </div>
-                {/if}
-
-                <SectionConfigEditor
-                    bind:value={sectionConfigDraft}
-                    privacy={privacyDraft}
-                    readonly={usingGlobalDefaults}
-                    title={usingGlobalDefaults ? "Global Sections" : "Character Section Overrides"}
-                />
-            </div>
+            <EvolutionSectionsPanel
+                {usingGlobalDefaults}
+                bind:sectionConfigDraft
+                bind:privacyDraft
+                onUseGlobalDefaultsChange={setUseGlobalDefaults}
+                onOpenGlobalDefaults={openEvolutionGlobalDefaults}
+            />
         {:else if selectedWorkspaceTab === EVOLUTION_REVIEW_TAB}
-            <div
-                role="tabpanel"
-                id="evolution-panel-review"
-                aria-labelledby="evolution-subtab-2"
-                tabindex="0"
-            >
-                {#if currentPendingProposal}
-                    <EvolutionProposalSummary
-                        proposal={currentPendingProposal}
-                        onOpen={openFullscreenReview}
-                        onReject={rejectProposal}
-                        openDisabled={reviewActionBusy}
-                        rejectDisabled={reviewActionBusy}
-                    />
-                {:else}
-                    <div class="ds-settings-section">
-                        <div class="ds-settings-card ds-settings-card-stack-start">
-                            <span class="ds-settings-label-muted-sm">
-                                No pending evolution proposal. When a proposal is ready, open fullscreen review from here.
-                            </span>
-                        </div>
-                    </div>
-                {/if}
-            </div>
+            <EvolutionReviewPanel
+                {currentPendingProposal}
+                {reviewActionBusy}
+                onOpenFullscreenReview={openFullscreenReview}
+                onRejectProposal={rejectProposal}
+            />
         {:else if selectedWorkspaceTab === EVOLUTION_STATE_TAB}
-            <div
-                role="tabpanel"
-                id="evolution-panel-state"
-                aria-labelledby="evolution-subtab-3"
-                tabindex="0"
-            >
-                {#if currentPendingProposal}
-                    <div class="ds-settings-section">
-                        <div class="ds-settings-card ds-settings-card-stack-start">
-                            <span class="ds-settings-label">Current State</span>
-                            <span class="ds-settings-label-muted-sm">
-                                Resolve the pending proposal before editing the accepted state directly.
-                            </span>
-                        </div>
-                    </div>
-                {:else}
-                    {#if currentStateDraft}
-                        <StateEditor
-                            bind:value={currentStateDraft}
-                            sectionConfigs={evolutionSettings.sectionConfigs}
-                            privacy={evolutionSettings.privacy}
-                            title="Current State"
-                        />
-                        <div class="ds-settings-section">
-                            <div class="ds-settings-inline-actions action-rail">
-                                <Button styled="outlined" onclick={persistCharacter}>
-                                    Save Current State
-                                </Button>
-                            </div>
-                        </div>
-                    {/if}
-                {/if}
-            </div>
+            <EvolutionStatePanel
+                hasPendingProposal={Boolean(currentPendingProposal)}
+                bind:currentStateDraft
+                sectionConfigs={evolutionSettings.sectionConfigs}
+                privacy={evolutionSettings.privacy}
+                onPersist={persistCharacter}
+            />
         {:else}
-            <div
-                class="ds-settings-section"
-                role="tabpanel"
-                id="evolution-panel-history"
-                aria-labelledby="evolution-subtab-4"
-                tabindex="0"
-            >
-                <div class="ds-settings-inline-actions action-rail">
-                    <span class="ds-settings-label">Version History</span>
-                    <Button
-                        size="sm"
-                        styled="outlined"
-                        onclick={() => handleRefreshVersions()}
-                        disabled={loadingVersions}
-                    >
-                        Refresh
-                    </Button>
-                </div>
-                <div class="ds-settings-card ds-settings-list-shell">
-                    {#if currentCharacter.characterEvolution.stateVersions.length === 0}
-                        <span class="ds-settings-label-muted-sm">No accepted versions yet.</span>
-                    {/if}
-
-                    {#each currentCharacter.characterEvolution.stateVersions as version (version.version)}
-                        <div class="ds-settings-inline-actions action-rail ds-settings-inline-actions-space-between">
-                            <span class="ds-settings-label">
-                                v{version.version} {version.chatId ? `after ${version.chatId}` : ""}
-                            </span>
-                            <Button
-                                size="sm"
-                                styled="outlined"
-                                onclick={() => loadVersion(version.version)}
-                                disabled={loadingVersions}
-                            >
-                                View
-                            </Button>
-                        </div>
-                    {/each}
-                </div>
-            </div>
-
-            {#if selectedVersion !== null && selectedVersionState}
-                <StateEditor
-                    value={selectedVersionState}
-                    sectionConfigs={selectedVersionSectionConfigs}
-                    privacy={selectedVersionPrivacy}
-                    readonly={true}
-                    title={`Version v${selectedVersion}`}
-                />
-            {/if}
+            <EvolutionHistoryPanel
+                stateVersions={currentCharacter.characterEvolution.stateVersions}
+                {loadingVersions}
+                {selectedVersion}
+                {selectedVersionState}
+                {selectedVersionSectionConfigs}
+                {selectedVersionPrivacy}
+                onRefresh={() => handleRefreshVersions()}
+                onLoadVersion={loadVersion}
+            />
         {/if}
     </div>
 {/if}
