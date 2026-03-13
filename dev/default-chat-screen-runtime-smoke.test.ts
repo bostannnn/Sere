@@ -207,6 +207,7 @@ vi.mock(import("src/ts/stores.svelte"), async () => {
     selectedCharID: writable(0),
     createSimpleCharacter: (character: unknown) => character,
     ScrollToMessageStore: { value: -1 },
+    evolutionReviewOpenRequest: writable<string | null>(null),
     comfyProgressStore: writable({
       active: false,
       label: "",
@@ -368,6 +369,9 @@ vi.mock(import("src/ts/characterEvolution"), () => {
   return {
     ensureCharacterEvolution: (char: Record<string, unknown>) => ensureState(char),
     getEffectiveCharacterEvolutionSettings: (_db: unknown, char: Record<string, unknown>) => ensureState(char),
+    hasAcceptedEvolutionForChat: (char: Record<string, unknown>, chatId: string | null | undefined) => {
+      return (char?.characterEvolution as { lastProcessedChatId?: string | null } | undefined)?.lastProcessedChatId === chatId;
+    },
   };
 });
 
@@ -1132,6 +1136,23 @@ describe("default chat screen runtime smoke", () => {
 
   it("replays handoff for an already accepted chat when confirmed", async () => {
     DBState.db.characters[0].characterEvolution.lastProcessedChatId = "chat-1";
+    DBState.db.characters[0].chats[0].message = [
+      {
+        role: "char",
+        data: "Accepted chat message",
+      },
+    ];
+    DBState.db.characters[0].characterEvolution.stateVersions = [
+      {
+        version: 1,
+        acceptedAt: 1234,
+        range: {
+          chatId: "chat-1",
+          startMessageIndex: 0,
+          endMessageIndex: 0,
+        },
+      },
+    ];
 
     const target = document.createElement("div");
     document.body.appendChild(target);

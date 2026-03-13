@@ -64,6 +64,7 @@ vi.mock(import("src/ts/stores.svelte"), async () => {
     SizeStore: writable({ w: 1280, h: 900 }),
     createSimpleCharacter: (character: unknown) => character,
     ScrollToMessageStore: { value: -1 },
+    evolutionReviewOpenRequest: writable<string | null>(null),
     comfyProgressStore: writable({
       active: false,
       label: "",

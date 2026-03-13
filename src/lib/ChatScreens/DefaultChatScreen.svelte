@@ -2,7 +2,7 @@
      
 
     import Suggestion from './Suggestion.svelte';
-    import { CameraIcon, DatabaseIcon, DicesIcon, GlobeIcon, ImagePlusIcon, LanguagesIcon, Laugh, MenuIcon, MicOffIcon, PackageIcon, RefreshCcwIcon, ReplyIcon, Send, StepForwardIcon, XIcon, ArrowDown, GitBranch } from "@lucide/svelte";
+    import { ArrowDown } from "@lucide/svelte";
     import { selectedCharID, createSimpleCharacter, ScrollToMessageStore, comfyProgressStore, evolutionReviewOpenRequest } from "../../ts/stores.svelte";
     import { tick } from 'svelte';
     import Chat from "./Chat.svelte";
@@ -17,30 +17,25 @@
     } from "../../ts/storage/database.svelte";
     import { DBState } from 'src/ts/stores.svelte';
     import { getCharImage } from "../../ts/characters";
-    import { chatProcessStage, isDoingChat, sendChat } from "../../ts/process/index.svelte";
+    import { isDoingChat, sendChat } from "../../ts/process/index.svelte";
     import { sleep } from "../../ts/util";
     import { language } from "../../lang";
-    import { isExpTranslator, translate } from "../../ts/translator/translator";
     import { alertError, alertNormal, alertWait } from "../../ts/alert";
     import sendSound from '../../etc/send.mp3'
     import { processScript } from "src/ts/process/scripts";
     import CreatorQuote from "./CreatorQuote.svelte";
-    import { stopTTS } from "src/ts/process/tts";
     import MainMenu from '../UI/MainMenu.svelte';
-    import AssetInput from './AssetInput.svelte';
     import { aiLawApplies, chatFoldedState, chatFoldedStateMessageIndex, downloadFile } from 'src/ts/globalApi.svelte';
     import { runTrigger } from 'src/ts/process/triggers';
     import { v4 } from 'uuid';
     import { PreUnreroll, Prereroll } from 'src/ts/process/prereroll';
     import { processMultiCommand } from 'src/ts/process/command';
-    import { postChatFile } from 'src/ts/process/files/multisend';
-    import { getInlayAsset } from 'src/ts/process/files/inlays';
-    import { isMobile, isNodeServer } from "src/ts/platform";
+    import { isNodeServer } from "src/ts/platform";
     import Chats from './Chats.svelte';
     import Button from '../UI/GUI/Button.svelte';
     import GameStateHud from '../SideBars/GameStateHUD.svelte';
     import { runComfyTemplateById } from 'src/ts/integrations/comfy/execute';
-    import ReviewWorkspace from '../Evolution/ReviewWorkspace.svelte';
+    import { stopTTS } from 'src/ts/process/tts';
     import {
         appendRerollSnapshot,
         createInitialRerollHistory,
@@ -72,6 +67,9 @@
         flushUserMessageBeforeGeneration,
         getUserMessagePersistFailureMessage,
     } from './defaultChatScreen.serverSync';
+    import { readChatScrollState, scrollToChatMessage } from './defaultChatScreen.scroll';
+    import DefaultChatComposer from './DefaultChatComposer.svelte';
+    import DefaultChatReviewShell from './DefaultChatReviewShell.svelte';
     const defaultChatScreenLog = (..._args: unknown[]) => {};
     
     interface Props {
@@ -241,67 +239,18 @@
     })
 
     async function scrollToMessage(index: number){
-        // Forces the loading of past messages not rendered on the screen
-        isScrollingToMessage = true
-        try {
-            const totalMessages = currentChat.length
-            const neededLoadPages = totalMessages - index + 5
-
-            if(loadPages < neededLoadPages){
-                loadPages = neededLoadPages
-                await tick()
-            }
-
-            let element: Element | null = null;
-            // Poll for element existence (max 5 seconds)
-            for(let i = 0; i < 50; i++){
-                element = document.querySelector(`[data-chat-index="${index}"]`)
-                if(element) break;
-                await sleep(100)
-            }
-
-            const preIndex = Math.max(0, index - 3)
-            const preElement = document.querySelector(`[data-chat-index="${preIndex}"]`)
-            if(preElement){
-                preElement.scrollIntoView({behavior: "instant", block: "start"})
-            } else {
-                element?.scrollIntoView({behavior: "instant", block: "start"})
-            }
-            await sleep(50)
-
-            if(element){
-                // Wait for images to load to prevent layout shift
-                const chatContainer = document.querySelector('.default-chat-screen');
-                if(chatContainer) {
-                    const images = Array.from(chatContainer.querySelectorAll('img'));
-                    const promises = images.map(img => {
-                        if (img.complete) return Promise.resolve();
-                        return new Promise(resolve => {
-                            img.onload = () => resolve(null);
-                            img.onerror = () => resolve(null);
-                        });
-                    });
-                    // Wait for all images or timeout after 4 seconds
-                    await Promise.race([
-                        Promise.all(promises),
-                        sleep(4000)
-                    ]);
-                }
-
-                element.scrollIntoView({behavior: "instant", block: "start"})
-                
-                // Small delay and scroll again to ensure position is correct after any final layout adjustments
-                await sleep(50)
-                element.scrollIntoView({behavior: "instant", block: "start"})
-
-                element.classList.add('ds-chat-scroll-highlight')
-                setTimeout(() => {
-                    element.classList.remove('ds-chat-scroll-highlight')
-                }, 2000)
-            }
-        } finally {
-            isScrollingToMessage = false
-        }
+        await scrollToChatMessage({
+            index,
+            currentChatLength: currentChat.length,
+            loadPages,
+            setLoadPages: (nextLoadPages) => {
+                loadPages = nextLoadPages
+            },
+            setScrollingToMessage: (active) => {
+                isScrollingToMessage = active
+            },
+            sleep,
+        })
     }
 
     async function send(){
@@ -470,41 +419,6 @@
         return getEvolutionBusyLabel(evolutionAction)
     })
 
-    function shouldSendOnEnter(e: KeyboardEvent){
-        if(e.key.toLocaleLowerCase() !== "enter" || e.isComposing){
-            return false
-        }
-        if(isMobile){
-            return false
-        }
-        if(DBState.db.sendWithEnter){
-            return !e.shiftKey
-        }
-        return e.shiftKey
-    }
-
-    function shouldSendTranslateOnEnter(e: KeyboardEvent){
-        if(e.key.toLocaleLowerCase() !== "enter" || e.isComposing){
-            return false
-        }
-        if(isMobile){
-            return false
-        }
-        return DBState.db.sendWithEnter && !e.shiftKey
-    }
-
-    function handleComposerKeydown(e: KeyboardEvent, canSend:(event: KeyboardEvent) => boolean = shouldSendOnEnter){
-        if(canSend(e)){
-            void send()
-            e.preventDefault()
-            return
-        }
-        if(e.key.toLocaleLowerCase() === "m" && e.ctrlKey){
-            reroll()
-            e.preventDefault()
-        }
-    }
-
     async function sendMain(continueResponse:boolean) {
         const stableTarget = resolveStableTargetFromSelection({ ensureChatId: true })
         if(!stableTarget){
@@ -603,7 +517,6 @@
                 activeChat.message = beforeSendMessages
                 messageInput = pendingInput
                 messageInputTranslate = ''
-                updateInputSizeAll()
                 const message = getUserMessagePersistFailureMessage(error)
                 defaultChatScreenLog('[Sync] User message save failed. Blocking generation.', error)
                 alertError(message)
@@ -612,7 +525,6 @@
         }
         rerolls = []
         await sleep(10)
-        updateInputSizeAll()
         await sendChatMain(continueResponse, stableTarget)
 
     }
@@ -799,83 +711,6 @@
         }
     })
 
-    let inputHeight = $state("44px")
-    let inputEle:HTMLTextAreaElement = $state()
-    let inputTranslateHeight = $state("44px")
-    let inputTranslateEle:HTMLTextAreaElement = $state()
-
-    function updateInputSizeAll() {
-        updateInputSize()
-        updateInputTranslateSize()
-    }
-
-    function updateInputTranslateSize() {
-        if(inputTranslateEle) {
-            inputTranslateEle.style.height = "0";
-            const nextHeight = (inputTranslateEle.scrollHeight) + "px";
-            inputTranslateHeight = nextHeight;
-            inputTranslateEle.style.height = nextHeight
-        }
-    }
-    function updateInputSize() {
-        if(inputEle){
-            inputEle.style.height = "0";
-            const nextHeight = (inputEle.scrollHeight) + "px";
-            inputHeight = nextHeight;
-            inputEle.style.height = nextHeight
-        }
-    }
-
-    $effect(() => {
-        updateInputSizeAll()
-    });
-
-    async function updateInputTransateMessage(reverse: boolean) {
-        if(!DBState.db.useAutoTranslateInput){
-            return
-        }
-        if(isExpTranslator()){
-            if(!reverse){
-                messageInputTranslate = ''
-                return
-            }
-            if(messageInputTranslate === '') {
-                messageInput = ''
-                return
-            }
-            const lastMessageInputTranslate = messageInputTranslate
-            await sleep(1500)
-            if(lastMessageInputTranslate === messageInputTranslate){
-                translate(reverse ? messageInputTranslate : messageInput, reverse).then((translatedMessage) => {
-                    if(translatedMessage){
-                        if(reverse)
-                            messageInput = translatedMessage
-                        else
-                            messageInputTranslate = translatedMessage
-                    }
-                })
-            }
-            return
-
-        }
-        if(reverse && messageInputTranslate === '') {
-            messageInput = ''
-            return
-        }
-        if(!reverse && messageInput === '') {
-            messageInputTranslate = ''
-            return
-        }
-        translate(reverse ? messageInputTranslate : messageInput, reverse).then((translatedMessage) => {
-            if(translatedMessage){
-                if(reverse)
-                    messageInput = translatedMessage
-                else
-                    messageInputTranslate = translatedMessage
-            }
-        })
-    }
-
     async function screenShot(){
         try {
             loadPages = Infinity
@@ -1038,34 +873,26 @@
     {:else}
         <div class="ds-chat-main-shell">
             {#if isEvolutionReviewVisible && currentEvolutionSettings?.pendingProposal}
-                <div class="ds-chat-review-mode">
-                    <ReviewWorkspace
-                        proposal={currentEvolutionSettings.pendingProposal}
-                        currentState={currentEvolutionSettings.currentState}
-                        sectionConfigs={currentEvolutionSettings.sectionConfigs}
-                        privacy={currentEvolutionSettings.privacy}
-                        bind:bindState={evolutionProposalDraft}
-                        onAccept={() => acceptEvolutionProposal(false)}
-                        onAcceptAndCreate={() => acceptEvolutionProposal(true)}
-                        onReject={rejectEvolutionProposal}
-                        onClose={() => { showEvolutionProposal = false }}
-                        loading={evolutionBusy}
-                    />
-                </div>
+                <DefaultChatReviewShell
+                    evolutionSettings={currentEvolutionSettings}
+                    bind:evolutionProposalDraft
+                    {evolutionBusy}
+                    onAccept={() => acceptEvolutionProposal(false)}
+                    onAcceptAndCreate={() => acceptEvolutionProposal(true)}
+                    onReject={rejectEvolutionProposal}
+                    onClose={() => { showEvolutionProposal = false }}
+                />
             {:else}
             <div class="ds-chat-scroll-shell default-chat-screen"
                 onscroll={(e) => {
-            //@ts-expect-error scrollHeight/clientHeight/scrollTop don't exist on EventTarget, but target is HTMLElement here
-            const scrolled = (e.target.scrollHeight - e.target.clientHeight + e.target.scrollTop)
-            if(scrolled < 100 && currentChat.length > loadPages){
-                loadPages += 15
-            }
-            const chatTarget = e.target as HTMLElement;
-            const chatsContainer = chatTarget.querySelector('.ds-chat-list-stack');
-            const lastEl = chatsContainer?.firstElementChild;
-            const isAtBottom = lastEl ? lastEl.getBoundingClientRect().top <= chatTarget.getBoundingClientRect().bottom + 100 : true;
-            if(isAtBottom){
-                showNewMessageButton = false;
+            const nextScrollState = readChatScrollState({
+                event: e,
+                currentChatLength: currentChat.length,
+                loadPages,
+            })
+            loadPages = nextScrollState.nextLoadPages
+            if(nextScrollState.shouldHideNewMessageButton){
+                showNewMessageButton = false
             }
         }}>
             <GameStateHud />
@@ -1081,79 +908,6 @@
                     {/if}
                 </div>
             {/if}
-            {#if DBState.db.useAutoTranslateInput}
-                <div class="ds-chat-translate-shell">
-                    <label for='messageInputTranslate' class="ds-chat-translate-label">
-                        <LanguagesIcon />
-                    </label>
-                    <textarea id = 'messageInputTranslate' class="ds-chat-translate-input control-field"
-                              bind:value={messageInputTranslate}
-                              bind:this={inputTranslateEle}
-                              enterkeyhint={isMobile || !DBState.db.sendWithEnter ? "enter" : "send"}
-                              onkeydown={(e) => handleComposerKeydown(e, shouldSendTranslateOnEnter)}
-                              oninput={()=>{updateInputSizeAll();updateInputTransateMessage(true)}}
-                              placeholder={language.enterMessageForTranslateToEnglish}
-                              style:height={inputTranslateHeight}
-                    ></textarea>
-                </div>
-            {/if}
-
-            {#if fileInput.length > 0}
-                <div class="ds-chat-inlay-list">
-                    {#each fileInput as file, i (i)}
-                        {#await getInlayAsset(file) then inlayAsset}
-                            <div class="ds-chat-inlay-item">
-                                {#if inlayAsset.type === 'image'}
-                                    <img src={inlayAsset.data} alt="Inlay" class="ds-chat-inlay-preview">
-                                {:else if inlayAsset.type === 'video'}
-                                    <video controls class="ds-chat-inlay-preview">
-                                        <source src={inlayAsset.data} type="video/mp4" />
-                                        <track kind="captions" />
-                                        Your browser does not support the video tag.
-                                    </video>
-                                {:else if inlayAsset.type === 'audio'}
-                                    <audio controls class="ds-chat-inlay-preview ds-chat-inlay-preview-audio">
-                                        <source src={inlayAsset.data} type="audio/mpeg" />
-                                        Your browser does not support the audio tag.
-                                    </audio>
-                                {:else}
-                                    <div class="ds-chat-inlay-fallback">{file}</div>
-                                {/if}
-                                <button
-                                    type="button"
-                                    class="ds-chat-inlay-remove icon-btn icon-btn--sm"
-                                    title="Remove inlay asset"
-                                    aria-label="Remove inlay asset"
-                                    onclick={() => {
-                                    fileInput.splice(i, 1)
-                                    updateInputSizeAll()
-                                }}>
-                                    <XIcon size={18} />
-                                </button>
-                            </div>
-                        {/await}
-                    {/each}
-                </div>
-
-            {/if}
-
-            {#if toggleStickers}
-                <div class="ds-chat-sticker-strip">
-                    <AssetInput currentCharacter={currentCharacter} onSelect={(additionalAsset)=>{
-                        let fileType = 'img'
-                        if(additionalAsset.length > 2 && additionalAsset[2]) {
-                            const fileExtension = additionalAsset[2]
-                            if(fileExtension === 'mp4' || fileExtension === 'webm')
-                                fileType = 'video'
-                            else if(fileExtension === 'mp3' || fileExtension === 'wav')
-                                fileType = 'audio'
-                        }
-                        messageInput += `<span class='notranslate' translate='no'>{{${fileType}::${additionalAsset[0]}}}</span> *${additionalAsset[0]} added*`
-                        updateInputSizeAll()
-                    }}/>
-                </div>
-            {/if}
-
             {#if DBState.db.useAutoSuggestions}
                 <Suggestion messageInput={(msg)=>messageInput=(
                     (DBState.db.subModel === "textgen_webui" || DBState.db.subModel === "mancer" || DBState.db.subModel.startsWith('local_')) && DBState.db.autoSuggestClean
@@ -1240,454 +994,46 @@
 
             </div>
 
-            <div class="ds-chat-composer-stack">
-                {#if currentEvolutionSettings?.pendingProposal}
-                    <button
-                        type="button"
-                        class="ds-chat-evolution-review-prompt"
-                        onclick={() => { showEvolutionProposal = true }}
-                    >
-                        <span class="ds-settings-label-muted-sm">Pending evolution proposal</span>
-                        <span class="ds-chat-evolution-review-prompt-action">Review</span>
-                    </button>
-                {/if}
-
-                {#if evolutionBusy}
-                    <div class="ds-chat-evolution-status-inline" role="status" aria-live="polite">
-                        <div class="ds-chat-inline-status">
-                            <div class="ds-chat-spinner ds-chat-spinner-aux"></div>
-                            <span>{evolutionBusyLabel}</span>
-                        </div>
-                        <div class="ds-chat-evolution-status-bar" aria-hidden="true"></div>
-                    </div>
-                {/if}
-
-                <div class="ds-chat-composer-shell"
-                    class:ds-chat-composer-shell-fixed={DBState.db.fixedChatTextarea}
-                    class:ds-chat-composer-shell-flow={!DBState.db.fixedChatTextarea}
-                >
-                {#if DBState.db.useChatSticker && currentCharacter.type !== 'group'}
-                    <button
-                        type="button"
-                        title="Toggle stickers"
-                        aria-label="Toggle stickers"
-                        onclick={()=>{toggleStickers = !toggleStickers}}
-                        class="ds-chat-composer-icon-toggle icon-btn icon-btn--md"
-                        class:is-active={toggleStickers}
-                    >
-                        <Laugh/>
-                    </button>
-                {/if}
-
-                <textarea class="ds-chat-composer-input control-field"
-                          bind:value={messageInput}
-                          bind:this={inputEle}
-                          enterkeyhint={isMobile || !DBState.db.sendWithEnter ? "enter" : "send"}
-                          onkeydown={handleComposerKeydown}
-                          onpaste={(e) => {
-                        const items = e.clipboardData?.items
-                        if(!items){
-                            return
-                        }
-                        let canceled = false
-
-                        for(const item of items){
-                            if(item.kind === 'file' && item.type.startsWith('image')){
-                                if(!canceled){
-                                    e.preventDefault()
-                                    canceled = true
-                                }
-                                const file = item.getAsFile()
-                                if(file){
-                                    const reader = new FileReader()
-                                    reader.onload = async (e) => {
-                                        const buf = e.target?.result as ArrayBuffer
-                                        const uint8 = new Uint8Array(buf)
-                                        const results = await postChatFile({
-                                            name: file.name,
-                                            data: uint8
-                                        })
-                                        if(!results) return
-                                        for(const res of results){
-                                            if(res?.type === 'asset'){
-                                                fileInput.push(res.data)
-                                            }
-                                            if(res?.type === 'text'){
-                                                messageInput += `{{file::${res.name}::${res.data}}}`
-                                            }
-                                        }
-                                        updateInputSizeAll()
-                                    }
-                                    reader.readAsArrayBuffer(file)
-                                }
-                            }
-                        }
-                    }}
-                          oninput={()=>{updateInputSizeAll();updateInputTransateMessage(false)}}
-                          style:height={inputHeight}
-                ></textarea>
-
-
-                {#if $isDoingChat || isDoingChatInputTranslate}
-                    <button
-                            type="button"
-                            title="Abort generation"
-                            aria-label="Abort generation"
-                            class="ds-chat-composer-action icon-btn icon-btn--sm" onclick={abortChat}
-                            style:height={inputHeight}
-                    >
-                        <div
-                            class="ds-chat-spinner"
-                            class:ds-chat-process-stage-1={$chatProcessStage === 1}
-                            class:ds-chat-process-stage-2={$chatProcessStage === 2}
-                            class:ds-chat-process-stage-3={$chatProcessStage === 3}
-                            class:ds-chat-process-stage-4={$chatProcessStage === 4}
-                            class:ds-chat-process-autoload={autoMode}
-                        ></div>
-                    </button>
-                {:else}
-                    <button
-                            type="button"
-                            title="Send message"
-                            aria-label="Send message"
-                            onclick={send}
-                            class="ds-chat-composer-action icon-btn icon-btn--sm"
-                            style:height={inputHeight}
-                    >
-                        <Send />
-                    </button>
-                {/if}
-                {#if $comfyProgressStore.active}
-                    <div class="ds-chat-task-spinner-inline">
-                        <div class="ds-chat-spinner ds-chat-spinner-aux"
-                            style:--ds-chat-spinner-color={$comfyProgressStore.color}
-                        ></div>
-                    </div>
-                {/if}
-                <div
-                    class="ds-chat-floating-actions action-rail"
-                    class:ds-chat-composer-menu-anchor={true}
-                >
-                    <button
-                            type="button"
-                            title="Open chat actions"
-                            aria-label="Open chat actions"
-                            aria-haspopup="menu"
-                            aria-expanded={openMenu}
-                            aria-controls="ds-chat-side-menu"
-                            onclick={(e) => {
-                            openMenu = !openMenu
-                            e.stopPropagation()
-                        }}
-                            class="ds-chat-floating-action-btn icon-btn icon-btn--sm"
-                            class:ds-chat-composer-action={true}
-                            class:ds-chat-composer-action-end={true}
-                            class:is-active={openMenu}
-                            style:height={inputHeight}
-                    >
-                        <MenuIcon />
-                    </button>
-
-                    {#if !isEvolutionReviewVisible && openMenu}
-                        <div
-                            class="ds-chat-side-menu panel-shell ds-ui-menu"
-                            class:ds-chat-side-menu-composer={true}
-                            id="ds-chat-side-menu"
-                            role="menu"
-                            aria-label="Chat actions"
-                            tabindex="-1"
-                            onclick={(e) => {
-                                e.stopPropagation()
-                            }}
-                        >
-                            {#if currentCharacter.type === 'group'}
-                                <button
-                                    type="button"
-                                    class="ds-chat-side-menu-item ds-ui-menu-item"
-                                    title={language.autoMode}
-                                    aria-label={language.autoMode}
-                                    onclick={runAutoMode}
-                                >
-                                    <DicesIcon />
-                                    <span class="ds-chat-side-menu-label">{language.autoMode}</span>
-                                </button>
-                            {/if}
-
-                            {#if currentCharacter.ttsMode === 'webspeech' || currentCharacter.ttsMode === 'elevenlab'}
-                                <button
-                                    type="button"
-                                    class="ds-chat-side-menu-item ds-ui-menu-item"
-                                    title={language.ttsStop}
-                                    aria-label={language.ttsStop}
-                                    onclick={() => {
-                                        stopTTS()
-                                    }}
-                                >
-                                    <MicOffIcon />
-                                    <span class="ds-chat-side-menu-label">{language.ttsStop}</span>
-                                </button>
-                            {/if}
-
-                            <button
-                                type="button"
-                                class="ds-chat-side-menu-item ds-ui-menu-item"
-                                class:ds-chat-side-menu-item-disabled={!canContinueResponse}
-                                title={language.continueResponse}
-                                aria-label={language.continueResponse}
-                                aria-disabled={!canContinueResponse}
-                                onclick={() => {
-                                    if(!canContinueResponse){
-                                        return
-                                    }
-                                    sendContinue();
-                                }}
-                            >
-                                <StepForwardIcon />
-                                <span class="ds-chat-side-menu-label">{language.continueResponse}</span>
-                            </button>
-
-                            {#if DBState.db.showMenuChatList}
-                                <button
-                                    type="button"
-                                    class="ds-chat-side-menu-item ds-ui-menu-item"
-                                    title={language.chatList}
-                                    aria-label={language.chatList}
-                                    onclick={() => {
-                                        onOpenChatList()
-                                        openMenu = false
-                                    }}
-                                >
-                                    <DatabaseIcon />
-                                    <span class="ds-chat-side-menu-label">{language.chatList}</span>
-                                </button>
-                            {/if}
-
-                            {#each comfyMenuTemplates as template (`comfy-template-${template.id}`)}
-                                <div class="ds-chat-side-menu-divider"></div>
-                                <button
-                                    type="button"
-                                    class="ds-chat-side-menu-item ds-ui-menu-item"
-                                    title={template.buttonName || template.trigger}
-                                    aria-label={template.buttonName || template.trigger}
-                                    onclick={() => {
-                                        void runComfyTemplateById(template.id)
-                                        openMenu = false
-                                    }}
-                                >
-                                    <ImagePlusIcon />
-                                    <span class="ds-chat-side-menu-label">{template.buttonName || template.trigger}</span>
-                                </button>
-                            {/each}
-
-                            {#if DBState.db.translator !== ''}
-                                <button
-                                    type="button"
-                                    class="ds-chat-side-menu-item ds-ui-menu-item"
-                                    class:ds-chat-side-menu-item-active={DBState.db.useAutoTranslateInput}
-                                    title={language.autoTranslateInput}
-                                    aria-label={language.autoTranslateInput}
-                                    aria-pressed={DBState.db.useAutoTranslateInput}
-                                    onclick={() => {
-                                        DBState.db.useAutoTranslateInput = !DBState.db.useAutoTranslateInput
-                                    }}
-                                >
-                                    <GlobeIcon />
-                                    <span class="ds-chat-side-menu-label">{language.autoTranslateInput}</span>
-                                </button>
-                            {/if}
-
-                            <button
-                                type="button"
-                                class="ds-chat-side-menu-item ds-ui-menu-item"
-                                title={language.screenshot}
-                                aria-label={language.screenshot}
-                                onclick={() => {
-                                    screenShot()
-                                }}
-                            >
-                                <CameraIcon />
-                                <span class="ds-chat-side-menu-label">{language.screenshot}</span>
-                            </button>
-
-                            <button
-                                type="button"
-                                class="ds-chat-side-menu-item ds-ui-menu-item"
-                                title="Character evolution handoff"
-                                aria-label="Character evolution handoff"
-                                onclick={() => {
-                                    void runEvolutionHandoff()
-                                }}
-                                disabled={evolutionBusy || currentCharacter?.type === 'group' || !!currentEvolutionSettings?.pendingProposal}
-                            >
-                                <GitBranch />
-                                <span class="ds-chat-side-menu-label">
-                                    {#if evolutionAction === 'handoff'}
-                                        {#if evolutionHandoffBlockedForCurrentChat}
-                                            Replaying Accepted Chat
-                                        {:else}
-                                            Running Handoff
-                                        {/if}
-                                    {:else if currentEvolutionSettings?.pendingProposal}
-                                        Review Pending Proposal
-                                    {:else if evolutionHandoffBlockedForCurrentChat}
-                                        Replay Accepted Chat
-                                    {:else}
-                                        Handoff
-                                    {/if}
-                                </span>
-                            </button>
-
-                            <button
-                                type="button"
-                                class="ds-chat-side-menu-item ds-ui-menu-item"
-                                title={language.postFile}
-                                aria-label={language.postFile}
-                                onclick={async () => {
-                                    const results = await postChatFile(messageInput)
-                                    if(!results) return
-                                    for(const res of results){
-                                        if(res?.type === 'asset'){
-                                            fileInput.push(res.data)
-                                        }
-                                        if(res?.type === 'text'){
-                                            messageInput += `{{file::${res.name}::${res.data}}}`
-                                        }
-                                    }
-                                    updateInputSizeAll()
-                                }}
-                            >
-                                <ImagePlusIcon />
-                                <span class="ds-chat-side-menu-label">{language.postFile}</span>
-                            </button>
-
-                            <button
-                                type="button"
-                                class="ds-chat-side-menu-item ds-ui-menu-item"
-                                class:ds-chat-side-menu-item-active={DBState.db.useAutoSuggestions}
-                                title={language.autoSuggest}
-                                aria-label={language.autoSuggest}
-                                aria-pressed={DBState.db.useAutoSuggestions}
-                                onclick={async () => {
-                                    DBState.db.useAutoSuggestions = !DBState.db.useAutoSuggestions
-                                }}
-                            >
-                                <ReplyIcon />
-                                <span class="ds-chat-side-menu-label">{language.autoSuggest}</span>
-                            </button>
-
-                            <button
-                                type="button"
-                                class="ds-chat-side-menu-item ds-ui-menu-item"
-                                title={language.modules}
-                                aria-label={language.modules}
-                                onclick={() => {
-                                    if (currentChatEntry) {
-                                        currentChatEntry.modules ??= []
-                                    }
-                                    onOpenModuleList()
-                                    openMenu = false
-                                }}
-                            >
-                                <PackageIcon />
-                                <span class="ds-chat-side-menu-label">{language.modules}</span>
-                            </button>
-
-                            {#if DBState.db.sideMenuRerollButton}
-                                <button
-                                    type="button"
-                                    class="ds-chat-side-menu-item ds-ui-menu-item"
-                                    title={language.reroll}
-                                    aria-label={language.reroll}
-                                    onclick={reroll}
-                                >
-                                    <RefreshCcwIcon />
-                                    <span class="ds-chat-side-menu-label">{language.reroll}</span>
-                                </button>
-                            {/if}
-                        </div>
-                    {/if}
-                </div>
-                </div>
-            </div>
+            <DefaultChatComposer
+                {currentCharacter}
+                {currentEvolutionSettings}
+                {evolutionBusy}
+                {evolutionBusyLabel}
+                {evolutionAction}
+                {evolutionHandoffBlockedForCurrentChat}
+                bind:messageInput
+                bind:messageInputTranslate
+                bind:fileInput
+                bind:openMenu
+                bind:toggleStickers
+                {autoMode}
+                isDoingChat={$isDoingChat}
+                {isDoingChatInputTranslate}
+                {canContinueResponse}
+                {comfyMenuTemplates}
+                onOpenEvolutionReview={() => { showEvolutionProposal = true }}
+                onSend={() => { void send() }}
+                onAbort={abortChat}
+                onReroll={() => { void reroll() }}
+                onRunAutoMode={() => { void runAutoMode() }}
+                onStopTTS={stopTTS}
+                onSendContinue={() => { void sendContinue() }}
+                onOpenChatList={onOpenChatList}
+                onRunComfyTemplate={(templateId) => {
+                    void runComfyTemplateById(templateId)
+                }}
+                onScreenshot={() => { void screenShot() }}
+                onRunEvolutionHandoff={() => {
+                    void runEvolutionHandoff()
+                }}
+                onOpenModuleList={() => {
+                    if (currentChatEntry) {
+                        currentChatEntry.modules ??= []
+                    }
+                    onOpenModuleList()
+                }}
+            />
             {/if}
         </div>
     {/if}
 </div>
-
-<style>
-    .ds-chat-review-mode {
-        display: flex;
-        flex: 1 1 auto;
-        min-height: 0;
-        width: 100%;
-        background: var(--ds-surface-1);
-    }
-
-    .ds-chat-composer-stack {
-        display: flex;
-        flex-direction: column;
-        align-items: stretch;
-        gap: var(--ds-space-2);
-        width: min(calc(100% - var(--ds-space-5)), 68rem);
-        margin-inline: auto;
-    }
-
-    .ds-chat-evolution-review-prompt {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: var(--ds-space-3);
-        width: 100%;
-        padding: var(--ds-space-2) var(--ds-space-3);
-        border: 1px solid var(--ds-border-subtle);
-        border-radius: var(--ds-radius-md);
-        background: color-mix(in srgb, var(--ds-surface-2) 92%, transparent);
-        color: inherit;
-        cursor: pointer;
-    }
-
-    .ds-chat-evolution-review-prompt-action {
-        color: var(--ds-text-primary);
-        font-weight: var(--ds-font-weight-medium);
-    }
-
-    .ds-chat-evolution-status-inline {
-        width: 100%;
-        display: flex;
-        flex-direction: column;
-        gap: var(--ds-space-2);
-        padding: var(--ds-space-2) var(--ds-space-3);
-        border: 1px solid var(--ds-border-subtle);
-        border-radius: var(--ds-radius-md);
-        background: var(--ds-surface-2);
-    }
-
-    .ds-chat-composer-menu-anchor {
-        position: relative;
-        display: inline-flex;
-        align-items: stretch;
-    }
-
-    .ds-chat-side-menu-composer {
-        position: absolute;
-        right: 0;
-        bottom: calc(100% + var(--ds-space-2));
-        min-width: min(20rem, calc(100vw - (var(--ds-space-4) * 2)));
-        z-index: 35;
-    }
-
-    @media (max-width: 720px) {
-        .ds-chat-composer-stack,
-        .ds-chat-evolution-status-inline,
-        .ds-chat-side-menu-composer,
-        .ds-chat-evolution-review-prompt {
-            width: 100%;
-            min-width: 0;
-        }
-
-        .ds-chat-evolution-review-prompt {
-            align-items: flex-start;
-            flex-direction: column;
-        }
-    }
-</style>
