@@ -37,6 +37,8 @@ COPY package.json .
 COPY --from=deps /app/node_modules /app/node_modules
 COPY --from=builder /app/server ./server
 COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/src/ts/process/promptTemplateShared.cjs ./src/ts/process/promptTemplateShared.cjs
+COPY --from=builder /app/src/ts/process/promptTemplateShared.ts ./src/ts/process/promptTemplateShared.ts
 
 ENV NODE_ENV=production
 ENV SERE_DATA_ROOT=/app/data
