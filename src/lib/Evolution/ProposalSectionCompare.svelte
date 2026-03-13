@@ -784,7 +784,7 @@
         <div class="proposal-diff-list">
             {#each displayStringRows as row (row.cacheKey)}
                 {#if showUnchangedRows || row.status !== "unchanged" || row.forceVisible}
-                    <article class={`proposal-diff-row proposal-diff-row--${row.status}`}>
+                    <article class={`proposal-diff-row proposal-diff-row--${getProposalRowContainerVariant(row.status, row.dismissed)}`}>
                         <div class="proposal-diff-row-head">
                             <div class="proposal-diff-row-copy">
                                 <span class="proposal-diff-row-title">{diffRowLabel(row)}</span>
