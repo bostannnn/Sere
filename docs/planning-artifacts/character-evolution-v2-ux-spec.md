@@ -400,6 +400,12 @@ Preferred UX:
 
 This makes history available without polluting the active-state workflow.
 
+Storage expectation behind the UX:
+
+- archived/corrected memory still exists in the accepted canonical state
+- it is hidden from the default State tab for focus, not removed from storage
+- later accepts must not silently delete archived/corrected items just because normal review focuses on active memory
+
 ## Automatic Handoff UX
 
 When auto-handoff is added, it should be largely invisible in the main flow.
@@ -591,6 +597,28 @@ Use this spec to integrate:
 
 without falling back into ad hoc sidebar overload.
 
+### Phase 2.5
+
+Use the normalized current UI to add archival retention semantics without redesigning the feature.
+
+Required UX behavior:
+
+- main State tab continues to show active memory by default
+- History/details remains the place to inspect archived/corrected memory
+- review may summarize archived/corrected rows as removed from active memory
+- accept must still preserve archived/corrected items in canonical stored state
+
+This is a backend/state-model correction with only minimal UI implications.
+It should not introduce a new archive-management surface or a parallel review flow.
+
+Example review behavior:
+
+- current accepted state contains an archived `Dead Man` item in `characterLikes`
+- the active-only proposal does not mention `Dead Man`
+- review should not frame that as deleting the archived record
+- normal review may hide that row entirely or treat it as unchanged historical context
+- History/details remains the place to inspect that archived item directly
+
 ## Signed-Off Product Decisions
 
 - pending proposals should use a strong callout in chat
@@ -599,6 +627,7 @@ without falling back into ad hoc sidebar overload.
 - history/version browsing lives inside the sidebar
 - archived/corrected memory is not shown by default
 - archived/corrected memory may use a separate nested modal/subview
+- archived/corrected memory remains stored in canonical accepted state even when hidden from the default State tab
 - auto-handoff controls live in global defaults settings
 - sidebar keeps tabs
 - default accept action is `Accept`

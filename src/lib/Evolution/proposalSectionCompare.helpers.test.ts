@@ -8,6 +8,7 @@ import {
     getProposalRowBadgeVariant,
     getProposalRowContainerVariant,
     getProposalRowStatusLabel,
+    matchFactItemsByValue,
     mergeProposalDisplayRows,
     shouldResetProposalSectionTransientState,
     upsertDismissedAddedRow,
@@ -135,6 +136,61 @@ describe("proposal section compare helpers", () => {
             "dismissed-1",
             "live-1",
             "live-2",
+        ]);
+    });
+
+    it("matches fact rows by normalized value instead of array position", () => {
+        const rows = matchFactItemsByValue(
+            [
+                { value: "Stalker", confidence: "confirmed", status: "active", note: "" },
+                { value: "Dead Man", confidence: "confirmed", status: "archived", note: "" },
+                { value: "Texas Chain Saw", confidence: "confirmed", status: "active", note: "" },
+            ],
+            [
+                { value: "Stalker", confidence: "confirmed", status: "active", note: "" },
+                { value: "Texas Chain Saw", confidence: "confirmed", status: "active", note: "updated" },
+            ],
+        );
+
+        expect(rows).toEqual([
+            {
+                currentIndex: 0,
+                proposedIndex: 0,
+                currentItem: { value: "Stalker", confidence: "confirmed", status: "active", note: "" },
+                proposedItem: { value: "Stalker", confidence: "confirmed", status: "active", note: "" },
+            },
+            {
+                currentIndex: 1,
+                proposedIndex: null,
+                currentItem: { value: "Dead Man", confidence: "confirmed", status: "archived", note: "" },
+                proposedItem: null,
+            },
+            {
+                currentIndex: 2,
+                proposedIndex: 1,
+                currentItem: { value: "Texas Chain Saw", confidence: "confirmed", status: "active", note: "" },
+                proposedItem: { value: "Texas Chain Saw", confidence: "confirmed", status: "active", note: "updated" },
+            },
+        ]);
+    });
+
+    it("falls back to positional pairing for unmatched fact rows so value edits stay editable", () => {
+        const rows = matchFactItemsByValue(
+            [
+                { value: "Coffee", confidence: "likely", status: "active", note: "old note" },
+            ],
+            [
+                { value: "Dark coffee", confidence: "likely", status: "active", note: "new note" },
+            ],
+        );
+
+        expect(rows).toEqual([
+            {
+                currentIndex: 0,
+                proposedIndex: 0,
+                currentItem: { value: "Coffee", confidence: "likely", status: "active", note: "old note" },
+                proposedItem: { value: "Dark coffee", confidence: "likely", status: "active", note: "new note" },
+            },
         ]);
     });
 });

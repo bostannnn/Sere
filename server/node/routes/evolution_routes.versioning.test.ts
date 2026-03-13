@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { existsSync, mkdirSync, readFileSync, readdirSync } from "node:fs";
 import * as path from "node:path";
 
@@ -306,6 +306,841 @@ describe("evolution routes versioning", () => {
         ],
       }),
     }));
+  });
+
+  it("stamps canonical item metadata when accepting Phase 2 item-object sections", async () => {
+    const dataDirs = getDataDirs();
+    writeJson(path.join(dataDirs.characters, characterId, "character.json"), {
+      character: {
+        chaId: characterId,
+        type: "character",
+        name: "Eva",
+        desc: "desc",
+        personality: "personality",
+        characterEvolution: {
+          enabled: true,
+          useGlobalDefaults: false,
+          extractionProvider: "openrouter",
+          extractionModel: "anthropic/claude-3.5-haiku",
+          extractionMaxTokens: 2400,
+          extractionPrompt: "prompt",
+          currentStateVersion: 0,
+          currentState: {
+            activeThreads: [],
+            runningJokes: [],
+            characterLikes: [],
+            characterDislikes: [],
+            characterHabits: [],
+            characterBoundariesPreferences: [],
+            userFacts: [],
+            userRead: [],
+            userLikes: [],
+            userDislikes: [],
+            keyMoments: [],
+            characterIntimatePreferences: [],
+            userIntimatePreferences: [],
+          },
+          pendingProposal: {
+            proposalId: "proposal-1",
+            sourceChatId: chatId,
+            sourceRange: {
+              chatId,
+              startMessageIndex: 2,
+              endMessageIndex: 5,
+            },
+            proposedState: {
+              activeThreads: [
+                {
+                  value: "keep the ferry plan alive",
+                  confidence: "likely",
+                  note: "they explicitly said to revisit it next time",
+                  status: "active",
+                },
+              ],
+            },
+            changes: [
+              {
+                sectionKey: "activeThreads",
+                summary: "A carry-forward thread was identified.",
+                evidence: ["They agreed to revisit the ferry plan soon."],
+              },
+            ],
+            createdAt: 1,
+          },
+          stateVersions: [],
+          lastProcessedChatId: null,
+        },
+      },
+    });
+
+    const { postHandlers } = buildHandlers();
+    const accept = postHandlers.get("/data/character-evolution/:charId/proposal/accept");
+    expect(accept).toBeTruthy();
+
+    const acceptRes = createRes();
+    await accept!(createReq({}, { charId: characterId }), acceptRes);
+
+    expect(acceptRes.statusCode).toBe(200);
+    expect(acceptRes.payload).toEqual(expect.objectContaining({
+      state: expect.objectContaining({
+        activeThreads: [
+          expect.objectContaining({
+            value: "keep the ferry plan alive",
+            confidence: "likely",
+            status: "active",
+            sourceChatId: chatId,
+            sourceRange: {
+              startMessageIndex: 2,
+              endMessageIndex: 5,
+            },
+            timesSeen: 1,
+          }),
+        ],
+      }),
+    }));
+    expect(typeof acceptRes.payload.acceptedAt).toBe("number");
+    expect(acceptRes.payload.state.activeThreads[0].updatedAt).toBe(acceptRes.payload.acceptedAt);
+    expect(acceptRes.payload.state.activeThreads[0].lastSeenAt).toBe(acceptRes.payload.acceptedAt);
+  });
+
+  it("uses acceptance time instead of proposal creation time for newly accepted items", async () => {
+    const nowSpy = vi.spyOn(Date, "now");
+    const nowValues = [1000, 2000, 3000, 4000, 5000];
+    nowSpy.mockImplementation(() => nowValues.shift() ?? 5000);
+
+    const { postHandlers } = buildHandlers({
+      executeInternalLLMTextCompletion: async () => JSON.stringify({
+        proposedState: {
+          activeThreads: [
+            {
+              value: "meet again at the station",
+              confidence: "likely",
+              status: "active",
+            },
+          ],
+        },
+        changes: [
+          {
+            sectionKey: "activeThreads",
+            summary: "A new carry-forward thread was identified.",
+            evidence: ["They agreed to meet again at the station."],
+          },
+        ],
+      }),
+    });
+    const handoff = postHandlers.get("/data/character-evolution/handoff");
+    const accept = postHandlers.get("/data/character-evolution/:charId/proposal/accept");
+    expect(handoff).toBeTruthy();
+    expect(accept).toBeTruthy();
+
+    const handoffRes = createRes();
+    await handoff!(createReq({ characterId, chatId }), handoffRes);
+    expect(handoffRes.statusCode).toBe(200);
+    const proposalCreatedAt = handoffRes.payload.proposal.createdAt;
+    expect(typeof proposalCreatedAt).toBe("number");
+    expect(handoffRes.payload.proposal.proposedState.activeThreads[0]).toEqual(expect.objectContaining({
+      updatedAt: proposalCreatedAt,
+      lastSeenAt: proposalCreatedAt,
+    }));
+
+    const acceptRes = createRes();
+    await accept!(createReq({}, { charId: characterId }), acceptRes);
+
+    expect(acceptRes.statusCode).toBe(200);
+    expect(acceptRes.payload.acceptedAt).toBeGreaterThan(proposalCreatedAt);
+    expect(acceptRes.payload.state.activeThreads[0]).toEqual(expect.objectContaining({
+      value: "meet again at the station",
+      updatedAt: acceptRes.payload.acceptedAt,
+      lastSeenAt: acceptRes.payload.acceptedAt,
+    }));
+
+    nowSpy.mockRestore();
+  });
+
+  it("normalizes legacy string-array snapshots when loading a saved version", async () => {
+    const dataDirs = getDataDirs();
+    const statesDir = path.join(dataDirs.characters, characterId, "states");
+    mkdirSync(statesDir, { recursive: true });
+    writeJson(path.join(dataDirs.characters, characterId, "character.json"), {
+      character: {
+        chaId: characterId,
+        type: "character",
+        name: "Eva",
+        desc: "desc",
+        personality: "personality",
+        characterEvolution: {
+          enabled: true,
+          useGlobalDefaults: true,
+          currentStateVersion: 1,
+          currentState: {},
+          stateVersions: [
+            {
+              version: 1,
+              chatId,
+              acceptedAt: 123,
+            },
+          ],
+        },
+      },
+    });
+    writeJson(path.join(statesDir, "v1.json"), {
+      version: 1,
+      chatId,
+      acceptedAt: 123,
+      state: {
+        activeThreads: ["legacy station promise"],
+        userRead: ["still thinks the user is testing her"],
+        relationship: {
+          trustLevel: "warming",
+          dynamic: "careful but affectionate",
+        },
+      },
+    });
+
+    const { getHandlers } = buildHandlers();
+    const getVersion = getHandlers.get("/data/character-evolution/:charId/versions/:version");
+    expect(getVersion).toBeTruthy();
+
+    const getRes = createRes();
+    await getVersion!({
+      method: "GET",
+      originalUrl: "/data/character-evolution/test",
+      body: {},
+      params: { charId: characterId, version: "1" },
+    }, getRes);
+
+    expect(getRes.statusCode).toBe(200);
+    expect(getRes.payload).toEqual(expect.objectContaining({
+      version: expect.objectContaining({
+        state: expect.objectContaining({
+          activeThreads: [{ value: "legacy station promise", status: "active" }],
+          userRead: [{ value: "still thinks the user is testing her", status: "active" }],
+        }),
+      }),
+    }));
+  });
+
+  it("preserves provenance metadata when accepting a lifecycle status transition on an existing item", async () => {
+    const dataDirs = getDataDirs();
+    writeJson(path.join(dataDirs.characters, characterId, "character.json"), {
+      character: {
+        chaId: characterId,
+        type: "character",
+        name: "Eva",
+        desc: "desc",
+        personality: "personality",
+        characterEvolution: {
+          enabled: true,
+          useGlobalDefaults: false,
+          extractionProvider: "openrouter",
+          extractionModel: "anthropic/claude-3.5-haiku",
+          extractionMaxTokens: 2400,
+          extractionPrompt: "prompt",
+          currentStateVersion: 1,
+          currentState: {
+            relationship: {
+              trustLevel: "steady",
+              dynamic: "warm",
+            },
+            activeThreads: [
+              {
+                value: "keep the ferry plan alive",
+                status: "active",
+                confidence: "likely",
+                note: "Still unresolved before this accept",
+                sourceChatId: "chat-old",
+                sourceRange: {
+                  startMessageIndex: 1,
+                  endMessageIndex: 3,
+                },
+                updatedAt: 100,
+                lastSeenAt: 120,
+                timesSeen: 2,
+              },
+            ],
+          },
+          pendingProposal: {
+            proposalId: "proposal-archive-1",
+            sourceChatId: chatId,
+            sourceRange: {
+              chatId,
+              startMessageIndex: 0,
+              endMessageIndex: 1,
+            },
+            proposedState: {
+              relationship: {
+                trustLevel: "steady",
+                dynamic: "warm",
+              },
+              activeThreads: [
+                {
+                  value: "keep the ferry plan alive",
+                  status: "archived",
+                  confidence: "likely",
+                  note: "Resolved in the latest chat",
+                },
+              ],
+            },
+            changes: [
+              {
+                sectionKey: "activeThreads",
+                summary: "The ferry plan is now resolved.",
+                evidence: ["They agreed it was finished and no longer pending."],
+              },
+            ],
+            createdAt: 1,
+          },
+          stateVersions: [
+            {
+              version: 1,
+              chatId: "chat-old",
+              acceptedAt: 120,
+            },
+          ],
+          lastProcessedChatId: "chat-old",
+          lastProcessedMessageIndexByChat: {
+            "chat-old": 3,
+          },
+          processedRanges: [],
+        },
+      },
+    });
+
+    const { postHandlers } = buildHandlers();
+    const accept = postHandlers.get("/data/character-evolution/:charId/proposal/accept");
+    expect(accept).toBeTruthy();
+
+    const acceptRes = createRes();
+    await accept!(createReq({}, { charId: characterId }), acceptRes);
+
+    expect(acceptRes.statusCode).toBe(200);
+    expect(acceptRes.payload).toEqual(expect.objectContaining({
+      state: expect.objectContaining({
+        activeThreads: [
+          expect.objectContaining({
+            value: "keep the ferry plan alive",
+            status: "archived",
+            note: "Resolved in the latest chat",
+            sourceChatId: "chat-old",
+            sourceRange: {
+              startMessageIndex: 1,
+              endMessageIndex: 3,
+            },
+            updatedAt: 100,
+            lastSeenAt: 120,
+            timesSeen: 2,
+          }),
+        ],
+      }),
+    }));
+  });
+
+  it("preserves provenance metadata when accepting an active-to-corrected transition on an existing item", async () => {
+    const dataDirs = getDataDirs();
+    writeJson(path.join(dataDirs.characters, characterId, "character.json"), {
+      character: {
+        chaId: characterId,
+        type: "character",
+        name: "Eva",
+        desc: "desc",
+        personality: "personality",
+        characterEvolution: {
+          enabled: true,
+          useGlobalDefaults: false,
+          extractionProvider: "openrouter",
+          extractionModel: "anthropic/claude-3.5-haiku",
+          extractionMaxTokens: 2400,
+          extractionPrompt: "prompt",
+          currentStateVersion: 1,
+          currentState: {
+            relationship: {
+              trustLevel: "steady",
+              dynamic: "warm",
+            },
+            activeThreads: [
+              {
+                value: "user hates ferries",
+                status: "active",
+                confidence: "suspected",
+                note: "Earlier rough interpretation",
+                sourceChatId: "chat-old",
+                sourceRange: {
+                  startMessageIndex: 2,
+                  endMessageIndex: 4,
+                },
+                updatedAt: 150,
+                lastSeenAt: 170,
+                timesSeen: 3,
+              },
+            ],
+          },
+          pendingProposal: {
+            proposalId: "proposal-correct-1",
+            sourceChatId: chatId,
+            sourceRange: {
+              chatId,
+              startMessageIndex: 0,
+              endMessageIndex: 1,
+            },
+            proposedState: {
+              relationship: {
+                trustLevel: "steady",
+                dynamic: "warm",
+              },
+              activeThreads: [
+                {
+                  value: "user hates ferries",
+                  status: "corrected",
+                  confidence: "confirmed",
+                  note: "They clarified they only hate crowded ferry terminals",
+                },
+              ],
+            },
+            changes: [
+              {
+                sectionKey: "activeThreads",
+                summary: "The earlier ferry read was corrected.",
+                evidence: ["They said ferries are fine, but crowded terminals stress them out."],
+              },
+            ],
+            createdAt: 1,
+          },
+          stateVersions: [
+            {
+              version: 1,
+              chatId: "chat-old",
+              acceptedAt: 170,
+            },
+          ],
+          lastProcessedChatId: "chat-old",
+          lastProcessedMessageIndexByChat: {
+            "chat-old": 4,
+          },
+          processedRanges: [],
+        },
+      },
+    });
+
+    const { postHandlers } = buildHandlers();
+    const accept = postHandlers.get("/data/character-evolution/:charId/proposal/accept");
+    expect(accept).toBeTruthy();
+
+    const acceptRes = createRes();
+    await accept!(createReq({}, { charId: characterId }), acceptRes);
+
+    expect(acceptRes.statusCode).toBe(200);
+    expect(acceptRes.payload).toEqual(expect.objectContaining({
+      state: expect.objectContaining({
+        activeThreads: [
+          expect.objectContaining({
+            value: "user hates ferries",
+            status: "corrected",
+            confidence: "confirmed",
+            note: "They clarified they only hate crowded ferry terminals",
+            sourceChatId: "chat-old",
+            sourceRange: {
+              startMessageIndex: 2,
+              endMessageIndex: 4,
+            },
+            updatedAt: 150,
+            lastSeenAt: 170,
+            timesSeen: 3,
+          }),
+        ],
+      }),
+    }));
+  });
+
+  it("keeps archived items in canonical state when a later active-only proposal omits them", async () => {
+    const dataDirs = getDataDirs();
+    writeJson(path.join(dataDirs.characters, characterId, "character.json"), {
+      character: {
+        chaId: characterId,
+        type: "character",
+        name: "Eva",
+        desc: "desc",
+        personality: "personality",
+        characterEvolution: {
+          enabled: true,
+          useGlobalDefaults: false,
+          extractionProvider: "openrouter",
+          extractionModel: "anthropic/claude-3.5-haiku",
+          extractionMaxTokens: 2400,
+          extractionPrompt: "prompt",
+          currentStateVersion: 1,
+          currentState: {
+            characterLikes: [
+              {
+                value: "Stalker",
+                status: "active",
+                confidence: "confirmed",
+              },
+              {
+                value: "Dead Man",
+                status: "archived",
+                confidence: "confirmed",
+                sourceChatId: "chat-old",
+              },
+              {
+                value: "Texas Chain Saw",
+                status: "active",
+                confidence: "confirmed",
+              },
+            ],
+          },
+          pendingProposal: {
+            proposalId: "proposal-retain-archived",
+            sourceChatId: chatId,
+            sourceRange: {
+              chatId,
+              startMessageIndex: 0,
+              endMessageIndex: 1,
+            },
+            proposedState: {
+              characterLikes: [
+                {
+                  value: "Stalker",
+                  status: "active",
+                  confidence: "confirmed",
+                },
+                {
+                  value: "Texas Chain Saw",
+                  status: "active",
+                  confidence: "confirmed",
+                },
+              ],
+            },
+            changes: [
+              {
+                sectionKey: "characterLikes",
+                summary: "No new like changes.",
+                evidence: ["The scene focused on current movie plans."],
+              },
+            ],
+            createdAt: 1,
+          },
+          stateVersions: [],
+          lastProcessedChatId: null,
+        },
+      },
+    });
+
+    const { postHandlers } = buildHandlers();
+    const accept = postHandlers.get("/data/character-evolution/:charId/proposal/accept");
+    expect(accept).toBeTruthy();
+
+    const acceptRes = createRes();
+    await accept!(createReq({}, { charId: characterId }), acceptRes);
+
+    expect(acceptRes.statusCode).toBe(200);
+    expect(acceptRes.payload.state.characterLikes).toEqual([
+      expect.objectContaining({
+        value: "Stalker",
+        status: "active",
+      }),
+      expect.objectContaining({
+        value: "Dead Man",
+        status: "archived",
+        sourceChatId: "chat-old",
+      }),
+      expect.objectContaining({
+        value: "Texas Chain Saw",
+        status: "active",
+      }),
+    ]);
+  });
+
+  it("keeps corrected items in canonical state when a later active-only proposal omits them", async () => {
+    const dataDirs = getDataDirs();
+    writeJson(path.join(dataDirs.characters, characterId, "character.json"), {
+      character: {
+        chaId: characterId,
+        type: "character",
+        name: "Eva",
+        desc: "desc",
+        personality: "personality",
+        characterEvolution: {
+          enabled: true,
+          useGlobalDefaults: false,
+          extractionProvider: "openrouter",
+          extractionModel: "anthropic/claude-3.5-haiku",
+          extractionMaxTokens: 2400,
+          extractionPrompt: "prompt",
+          currentStateVersion: 1,
+          currentState: {
+            activeThreads: [
+              {
+                value: "user hates ferries",
+                status: "corrected",
+                confidence: "confirmed",
+                sourceChatId: "chat-old",
+              },
+              {
+                value: "user dislikes ferry terminals",
+                status: "active",
+                confidence: "confirmed",
+              },
+            ],
+          },
+          pendingProposal: {
+            proposalId: "proposal-retain-corrected",
+            sourceChatId: chatId,
+            sourceRange: {
+              chatId,
+              startMessageIndex: 0,
+              endMessageIndex: 1,
+            },
+            proposedState: {
+              activeThreads: [
+                {
+                  value: "user dislikes ferry terminals",
+                  status: "active",
+                  confidence: "confirmed",
+                },
+              ],
+            },
+            changes: [
+              {
+                sectionKey: "activeThreads",
+                summary: "No corrected-thread deletion should occur.",
+                evidence: ["The clarified ferry-terminal preference remains current."],
+              },
+            ],
+            createdAt: 1,
+          },
+          stateVersions: [],
+          lastProcessedChatId: null,
+        },
+      },
+    });
+
+    const { postHandlers } = buildHandlers();
+    const accept = postHandlers.get("/data/character-evolution/:charId/proposal/accept");
+    expect(accept).toBeTruthy();
+
+    const acceptRes = createRes();
+    await accept!(createReq({}, { charId: characterId }), acceptRes);
+
+    expect(acceptRes.statusCode).toBe(200);
+    expect(acceptRes.payload.state.activeThreads).toEqual([
+      expect.objectContaining({
+        value: "user hates ferries",
+        status: "corrected",
+        sourceChatId: "chat-old",
+      }),
+      expect.objectContaining({
+        value: "user dislikes ferry terminals",
+        status: "active",
+      }),
+    ]);
+  });
+
+  it("preserves same-value archived history when a matching active item remains in canonical state", async () => {
+    const dataDirs = getDataDirs();
+    writeJson(path.join(dataDirs.characters, characterId, "character.json"), {
+      character: {
+        chaId: characterId,
+        type: "character",
+        name: "Eva",
+        desc: "desc",
+        personality: "personality",
+        characterEvolution: {
+          enabled: true,
+          useGlobalDefaults: false,
+          extractionProvider: "openrouter",
+          extractionModel: "anthropic/claude-3.5-haiku",
+          extractionMaxTokens: 2400,
+          extractionPrompt: "prompt",
+          currentStateVersion: 1,
+          currentState: {
+            characterLikes: [
+              {
+                value: "Dead Man",
+                status: "archived",
+                confidence: "confirmed",
+                note: "older archived formulation",
+                sourceChatId: "chat-old",
+                sourceRange: {
+                  startMessageIndex: 2,
+                  endMessageIndex: 4,
+                },
+                updatedAt: 150,
+                lastSeenAt: 170,
+                timesSeen: 3,
+              },
+              {
+                value: "Dead Man",
+                status: "active",
+                confidence: "confirmed",
+                note: "current live formulation",
+              },
+            ],
+          },
+          pendingProposal: {
+            proposalId: "proposal-preserve-same-value-archive",
+            sourceChatId: chatId,
+            sourceRange: {
+              chatId,
+              startMessageIndex: 0,
+              endMessageIndex: 1,
+            },
+            proposedState: {
+              characterLikes: [
+                {
+                  value: "Dead Man",
+                  status: "active",
+                  confidence: "confirmed",
+                  note: "current live formulation updated",
+                },
+              ],
+            },
+            changes: [
+              {
+                sectionKey: "characterLikes",
+                summary: "Current live formulation was refined.",
+                evidence: ["The same favorite film came up again with clearer wording."],
+              },
+            ],
+            createdAt: 1,
+          },
+          stateVersions: [],
+          lastProcessedChatId: null,
+        },
+      },
+    });
+
+    const { postHandlers } = buildHandlers();
+    const accept = postHandlers.get("/data/character-evolution/:charId/proposal/accept");
+    expect(accept).toBeTruthy();
+
+    const acceptRes = createRes();
+    await accept!(createReq({}, { charId: characterId }), acceptRes);
+
+    expect(acceptRes.statusCode).toBe(200);
+    expect(acceptRes.payload.state.characterLikes).toEqual([
+      expect.objectContaining({
+        value: "Dead Man",
+        status: "archived",
+        note: "older archived formulation",
+        sourceChatId: "chat-old",
+        sourceRange: {
+          startMessageIndex: 2,
+          endMessageIndex: 4,
+        },
+        updatedAt: 150,
+        lastSeenAt: 170,
+        timesSeen: 3,
+      }),
+      expect.objectContaining({
+        value: "Dead Man",
+        status: "active",
+        note: "current live formulation updated",
+      }),
+    ]);
+  });
+
+  it("preserves same-value corrected history when a matching active item remains in canonical state", async () => {
+    const dataDirs = getDataDirs();
+    writeJson(path.join(dataDirs.characters, characterId, "character.json"), {
+      character: {
+        chaId: characterId,
+        type: "character",
+        name: "Eva",
+        desc: "desc",
+        personality: "personality",
+        characterEvolution: {
+          enabled: true,
+          useGlobalDefaults: false,
+          extractionProvider: "openrouter",
+          extractionModel: "anthropic/claude-3.5-haiku",
+          extractionMaxTokens: 2400,
+          extractionPrompt: "prompt",
+          currentStateVersion: 1,
+          currentState: {
+            activeThreads: [
+              {
+                value: "user hates ferries",
+                status: "corrected",
+                confidence: "confirmed",
+                note: "older corrected formulation",
+                sourceChatId: "chat-old",
+                sourceRange: {
+                  startMessageIndex: 3,
+                  endMessageIndex: 5,
+                },
+                updatedAt: 210,
+                lastSeenAt: 230,
+                timesSeen: 4,
+              },
+              {
+                value: "user hates ferries",
+                status: "active",
+                confidence: "confirmed",
+                note: "current live formulation",
+              },
+            ],
+          },
+          pendingProposal: {
+            proposalId: "proposal-preserve-same-value-corrected",
+            sourceChatId: chatId,
+            sourceRange: {
+              chatId,
+              startMessageIndex: 0,
+              endMessageIndex: 1,
+            },
+            proposedState: {
+              activeThreads: [
+                {
+                  value: "user hates ferries",
+                  status: "active",
+                  confidence: "confirmed",
+                  note: "current live formulation updated",
+                },
+              ],
+            },
+            changes: [
+              {
+                sectionKey: "activeThreads",
+                summary: "Current live formulation was refined.",
+                evidence: ["The same ferry read came up again with clearer wording."],
+              },
+            ],
+            createdAt: 1,
+          },
+          stateVersions: [],
+          lastProcessedChatId: null,
+        },
+      },
+    });
+
+    const { postHandlers } = buildHandlers();
+    const accept = postHandlers.get("/data/character-evolution/:charId/proposal/accept");
+    expect(accept).toBeTruthy();
+
+    const acceptRes = createRes();
+    await accept!(createReq({}, { charId: characterId }), acceptRes);
+
+    expect(acceptRes.statusCode).toBe(200);
+    expect(acceptRes.payload.state.activeThreads).toEqual([
+      expect.objectContaining({
+        value: "user hates ferries",
+        status: "corrected",
+        note: "older corrected formulation",
+        sourceChatId: "chat-old",
+        sourceRange: {
+          startMessageIndex: 3,
+          endMessageIndex: 5,
+        },
+        updatedAt: 210,
+        lastSeenAt: 230,
+        timesSeen: 4,
+      }),
+      expect.objectContaining({
+        value: "user hates ferries",
+        status: "active",
+        note: "current live formulation updated",
+      }),
+    ]);
   });
 
   it("does not fabricate a cursor range when accepting a legacy pending proposal without sourceRange", async () => {

@@ -7,6 +7,7 @@
         CharacterEvolutionSectionConfig,
         CharacterEvolutionState,
     } from "src/ts/storage/database.types";
+    import { isCharacterEvolutionObjectSection } from "src/ts/character-evolution/items";
     import {
         buildIndexedRowKey,
         buildProposalSectionScopeKey,
@@ -14,6 +15,7 @@
         getProposalRowBadgeVariant,
         getProposalRowContainerVariant,
         getProposalRowStatusLabel,
+        matchFactItemsByValue,
         mergeProposalDisplayRows,
         shouldResetProposalSectionTransientState,
         upsertDismissedAddedRow,
@@ -89,11 +91,11 @@
     let dismissedFactRows = $state<FactDiffRow[]>([]);
 
     function isStringListSection(key: string) {
-        return key === "activeThreads" || key === "runningJokes" || key === "userRead" || key === "keyMoments";
+        return false;
     }
 
     function isObjectSection(key: string) {
-        return key === "relationship" || key === "lastInteractionEnded";
+        return isCharacterEvolutionObjectSection(key);
     }
 
     function stringItemsForState(state: CharacterEvolutionState, key: keyof CharacterEvolutionState): string[] {
@@ -104,6 +106,42 @@
     function factItemsForState(state: CharacterEvolutionState, key: keyof CharacterEvolutionState): CharacterEvolutionItem[] {
         const sectionValue = state[key];
         return Array.isArray(sectionValue) ? [...sectionValue as CharacterEvolutionItem[]] : [];
+    }
+
+    function factItemValueKeys(items: CharacterEvolutionItem[]) {
+        return new Set(
+            items
+                .map((item) => normalizeText(item?.value))
+                .filter((value) => value.length > 0)
+                .map((value) => value.toLowerCase()),
+        );
+    }
+
+    function reviewCurrentFactItems(
+        currentItems: CharacterEvolutionItem[],
+        proposedItems: CharacterEvolutionItem[],
+    ): CharacterEvolutionItem[] {
+        const proposedValueKeys = factItemValueKeys(proposedItems);
+        const activeCurrentValueKeys = factItemValueKeys(
+            currentItems.filter((item) => (item?.status ?? "active") === "active"),
+        );
+
+        return currentItems.filter((item) => {
+            const status = item?.status ?? "active";
+            if (status === "active") {
+                return true;
+            }
+
+            const valueKey = normalizeText(item?.value).toLowerCase();
+            if (valueKey.length === 0) {
+                return false;
+            }
+            if (activeCurrentValueKeys.has(valueKey)) {
+                return false;
+            }
+
+            return proposedValueKeys.has(valueKey);
+        });
     }
 
     function normalizeText(value: string | null | undefined) {
@@ -395,26 +433,26 @@
     }
 
     function buildFactDiffRows(key: keyof CharacterEvolutionState) {
-        const currentItems = factItemsForState(currentState, key);
         const proposedItems = factItemsForState(proposedState, key);
+        const currentItems = reviewCurrentFactItems(factItemsForState(currentState, key), proposedItems);
         const rows: FactDiffRow[] = [];
-        const totalRows = Math.max(currentItems.length, proposedItems.length);
+        const matchedPairs = matchFactItemsByValue(currentItems, proposedItems);
 
-        for (let index = 0; index < totalRows; index += 1) {
-            const currentItem = currentItems[index];
-            const proposedItem = proposedItems[index];
+        for (const pair of matchedPairs) {
+            const currentItem = pair.currentItem;
+            const proposedItem = pair.proposedItem;
             const cacheKey = buildIndexedRowKey(
                 "fact",
-                currentItem ? index : null,
-                proposedItem ? index : null,
+                pair.currentIndex,
+                pair.proposedIndex,
             );
 
             if (currentItem && proposedItem) {
                 rows.push({
                     cacheKey,
                     status: areFactItemsEqual(currentItem, proposedItem) ? "unchanged" : "changed",
-                    currentIndex: index,
-                    proposedIndex: index,
+                    currentIndex: pair.currentIndex,
+                    proposedIndex: pair.proposedIndex,
                     currentItem,
                     proposedItem,
                     changedFields: changedFactFields(currentItem, proposedItem),
@@ -427,7 +465,7 @@
                 rows.push({
                     cacheKey,
                     status: "removed",
-                    currentIndex: index,
+                    currentIndex: pair.currentIndex,
                     proposedIndex: null,
                     currentItem,
                     proposedItem: null,
@@ -441,7 +479,7 @@
                 cacheKey,
                 status: "added",
                 currentIndex: null,
-                proposedIndex: index,
+                proposedIndex: pair.proposedIndex,
                 currentItem: null,
                 proposedItem: proposedItem ?? null,
                 changedFields: [],
@@ -530,14 +568,27 @@
     }
 
     function diffRowLabel(row: StringDiffRow | FactDiffRow) {
-        const index = row.proposedIndex ?? row.currentIndex;
-        const ordinal = index === null ? "" : ` ${index + 1}`;
+        const currentOrdinal = row.currentIndex === null ? null : row.currentIndex + 1;
+        const proposedOrdinal = row.proposedIndex === null ? null : row.proposedIndex + 1;
 
         if (isStringListSection(section.key)) {
-            return row.status === "added" ? `New line${ordinal}` : `Line${ordinal}`;
+            const ordinal = row.proposedIndex ?? row.currentIndex;
+            return row.status === "added" ? `New line${ordinal === null ? "" : ` ${ordinal + 1}`}` : `Line${ordinal === null ? "" : ` ${ordinal + 1}`}`;
         }
 
-        return row.status === "added" ? `New item${ordinal}` : `Item${ordinal}`;
+        if (row.status === "added") {
+            return `New item${proposedOrdinal === null ? "" : ` ${proposedOrdinal}`}`;
+        }
+
+        if (row.status === "removed") {
+            return `Item${currentOrdinal === null ? "" : ` ${currentOrdinal}`}`;
+        }
+
+        if (currentOrdinal !== null && proposedOrdinal !== null && currentOrdinal !== proposedOrdinal) {
+            return `Item ${currentOrdinal} -> ${proposedOrdinal}`;
+        }
+
+        return `Item${currentOrdinal === null ? proposedOrdinal === null ? "" : ` ${proposedOrdinal}` : ` ${currentOrdinal}`}`;
     }
 
     function rowDiscardLabel(status: DiffStatus) {

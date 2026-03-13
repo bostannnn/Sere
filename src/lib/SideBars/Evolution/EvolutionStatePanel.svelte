@@ -45,6 +45,7 @@
             {sectionConfigs}
             {privacy}
             title="Current State"
+            itemFilter="active-only"
         />
         <div class="ds-settings-section">
             <div class="ds-settings-inline-actions action-rail">

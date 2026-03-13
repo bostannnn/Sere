@@ -6,6 +6,7 @@
         CharacterEvolutionSectionConfig,
         CharacterEvolutionState,
     } from "src/ts/storage/database.types";
+    import { isCharacterEvolutionObjectSection } from "src/ts/character-evolution/items";
     import SelectInput from "../UI/GUI/SelectInput.svelte";
     import OptionInput from "../UI/GUI/OptionInput.svelte";
     import TextAreaInput from "../UI/GUI/TextAreaInput.svelte";
@@ -17,6 +18,7 @@
         privacy?: CharacterEvolutionPrivacySettings;
         readonly?: boolean;
         title?: string;
+        itemFilter?: "all" | "active-only";
     }
 
     let {
@@ -28,6 +30,7 @@
         },
         readonly = false,
         title = "Current State",
+        itemFilter = "all",
     }: Props = $props();
 
     function canRenderSection(key: string) {
@@ -38,11 +41,6 @@
             return false;
         }
         return true;
-    }
-
-    function addStringItem(key: keyof CharacterEvolutionState) {
-        (value[key] as string[]).push("");
-        value = { ...value };
     }
 
     function addFactItem(key: keyof CharacterEvolutionState) {
@@ -60,22 +58,19 @@
         value = { ...value };
     }
 
-    function isStringListSection(key: string) {
-        return key === "activeThreads" || key === "runningJokes" || key === "userRead" || key === "keyMoments";
-    }
-
     function isObjectSection(key: string) {
-        return key === "relationship" || key === "lastInteractionEnded";
-    }
-
-    function stringItemsForSection(key: keyof CharacterEvolutionState): string[] {
-        const section = value[key];
-        return Array.isArray(section) ? [...section as string[]] : [];
+        return isCharacterEvolutionObjectSection(key);
     }
 
     function factItemsForSection(key: keyof CharacterEvolutionState): CharacterEvolutionItem[] {
         const section = value[key];
         return Array.isArray(section) ? [...section as CharacterEvolutionItem[]] : [];
+    }
+
+    function visibleFactItemsForSection(key: keyof CharacterEvolutionState): Array<{ item: CharacterEvolutionItem; index: number }> {
+        return factItemsForSection(key)
+            .map((item, index) => ({ item, index }))
+            .filter((entry) => itemFilter !== "active-only" || (entry.item.status ?? "active") === "active");
     }
 
     function updateRelationship(field: "trustLevel" | "dynamic", next: string) {
@@ -95,15 +90,6 @@
                 ...value.lastInteractionEnded,
                 [field]: next,
             },
-        };
-    }
-
-    function updateStringItem(key: keyof CharacterEvolutionState, index: number, next: string) {
-        const items = stringItemsForSection(key);
-        items[index] = next;
-        value = {
-            ...value,
-            [key]: items,
         };
     }
 
@@ -148,13 +134,7 @@
                                     class="evolution-state-icon-action icon-btn icon-btn--sm"
                                     aria-label={`Add ${section.label}`}
                                     title={`Add ${section.label}`}
-                                    onclick={() => {
-                                    if (isStringListSection(section.key)) {
-                                        addStringItem(section.key as keyof CharacterEvolutionState)
-                                        return
-                                    }
-                                    addFactItem(section.key as keyof CharacterEvolutionState)
-                                }}>
+                                    onclick={() => addFactItem(section.key as keyof CharacterEvolutionState)}>
                                     <PlusIcon size={16}/>
                                 </button>
                             {/if}
@@ -171,61 +151,41 @@
                             <TextAreaInput value={value.lastInteractionEnded.state} disabled={readonly} height="20" placeholder="State" onValueChange={(next) => updateLastInteractionEnded("state", next)} />
                             <TextAreaInput value={value.lastInteractionEnded.residue} disabled={readonly} height="20" placeholder="Residue" onValueChange={(next) => updateLastInteractionEnded("residue", next)} />
                         </div>
-                    {:else if isStringListSection(section.key)}
-                        {#if stringItemsForSection(section.key as keyof CharacterEvolutionState).length === 0}
-                            <span class="ds-settings-label-muted-sm">No items</span>
-                        {/if}
-                        {#each stringItemsForSection(section.key as keyof CharacterEvolutionState) as item, index (index)}
-                            <div class="ds-settings-inline-actions action-rail ds-settings-inline-actions-nowrap evolution-state-inline-row">
-                                <TextAreaInput value={item} disabled={readonly} height="20" onValueChange={(next) => updateStringItem(section.key as keyof CharacterEvolutionState, index, next)} />
-                                {#if !readonly}
-                                    <button
-                                        type="button"
-                                        class="evolution-state-icon-action icon-btn icon-btn--sm"
-                                        aria-label={`Remove ${section.label} item ${index + 1}`}
-                                        title={`Remove ${section.label} item ${index + 1}`}
-                                        onclick={() => removeListItem(section.key as keyof CharacterEvolutionState, index)}
-                                    >
-                                        <TrashIcon size={16}/>
-                                    </button>
-                                {/if}
-                            </div>
-                        {/each}
                     {:else}
-                        {#if factItemsForSection(section.key as keyof CharacterEvolutionState).length === 0}
+                        {#if visibleFactItemsForSection(section.key as keyof CharacterEvolutionState).length === 0}
                             <span class="ds-settings-label-muted-sm">No items</span>
                         {/if}
-                        {#each factItemsForSection(section.key as keyof CharacterEvolutionState) as item, index (index)}
+                        {#each visibleFactItemsForSection(section.key as keyof CharacterEvolutionState) as entry (entry.index)}
                             <div class="evolution-state-fact-row">
                                 <div class="ds-settings-inline-actions action-rail ds-settings-inline-actions-space-between evolution-state-fact-head">
-                                    <span class="ds-settings-label-muted-sm">Item {index + 1}</span>
+                                    <span class="ds-settings-label-muted-sm">Item {entry.index + 1}</span>
                                     {#if !readonly}
                                         <button
                                             type="button"
                                             class="evolution-state-icon-action icon-btn icon-btn--sm"
-                                            aria-label={`Remove ${section.label} item ${index + 1}`}
-                                            title={`Remove ${section.label} item ${index + 1}`}
-                                            onclick={() => removeListItem(section.key as keyof CharacterEvolutionState, index)}
+                                            aria-label={`Remove ${section.label} item ${entry.index + 1}`}
+                                            title={`Remove ${section.label} item ${entry.index + 1}`}
+                                            onclick={() => removeListItem(section.key as keyof CharacterEvolutionState, entry.index)}
                                         >
                                             <TrashIcon size={16}/>
                                         </button>
                                     {/if}
                                 </div>
                                 <div class="evolution-state-fields">
-                                    <TextInput value={item.value} disabled={readonly} placeholder="Value" oninput={(event) => updateFactItemField(section.key as keyof CharacterEvolutionState, index, "value", event.currentTarget.value)} />
+                                    <TextInput value={entry.item.value} disabled={readonly} placeholder="Value" oninput={(event) => updateFactItemField(section.key as keyof CharacterEvolutionState, entry.index, "value", event.currentTarget.value)} />
                                     <div class="evolution-state-select-row">
-                                        <SelectInput value={item.confidence ?? "suspected"} disabled={readonly} onchange={(event) => updateFactItemField(section.key as keyof CharacterEvolutionState, index, "confidence", event.currentTarget.value)}>
+                                        <SelectInput value={entry.item.confidence ?? "suspected"} disabled={readonly} onchange={(event) => updateFactItemField(section.key as keyof CharacterEvolutionState, entry.index, "confidence", event.currentTarget.value)}>
                                             <OptionInput value="suspected">suspected</OptionInput>
                                             <OptionInput value="likely">likely</OptionInput>
                                             <OptionInput value="confirmed">confirmed</OptionInput>
                                         </SelectInput>
-                                        <SelectInput value={item.status ?? "active"} disabled={readonly} onchange={(event) => updateFactItemField(section.key as keyof CharacterEvolutionState, index, "status", event.currentTarget.value)}>
+                                        <SelectInput value={entry.item.status ?? "active"} disabled={readonly} onchange={(event) => updateFactItemField(section.key as keyof CharacterEvolutionState, entry.index, "status", event.currentTarget.value)}>
                                             <OptionInput value="active">active</OptionInput>
                                             <OptionInput value="archived">archived</OptionInput>
                                             <OptionInput value="corrected">corrected</OptionInput>
                                         </SelectInput>
                                     </div>
-                                    <TextAreaInput value={item.note ?? ""} disabled={readonly} height="20" placeholder="Note" onValueChange={(next) => updateFactItemField(section.key as keyof CharacterEvolutionState, index, "note", next)} />
+                                    <TextAreaInput value={entry.item.note ?? ""} disabled={readonly} height="20" placeholder="Note" onValueChange={(next) => updateFactItemField(section.key as keyof CharacterEvolutionState, entry.index, "note", next)} />
                                 </div>
                             </div>
                         {/each}
@@ -274,10 +234,6 @@
         display: flex;
         flex-direction: column;
         gap: var(--ds-space-2);
-    }
-
-    .evolution-state-inline-row {
-        align-items: flex-start;
     }
 
     .evolution-state-fact-row {

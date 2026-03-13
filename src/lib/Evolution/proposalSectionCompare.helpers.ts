@@ -1,4 +1,13 @@
+import type { CharacterEvolutionItem } from "src/ts/storage/database.types";
+
 export type ProposalDiffStatus = "unchanged" | "changed" | "added" | "removed";
+
+export interface MatchedFactPair {
+    currentIndex: number | null;
+    proposedIndex: number | null;
+    currentItem: CharacterEvolutionItem | null;
+    proposedItem: CharacterEvolutionItem | null;
+}
 
 export function buildIndexedRowKey(
     kind: "string" | "fact",
@@ -116,4 +125,95 @@ export function mergeProposalDisplayRows<
 
         return 0;
     });
+}
+
+function normalizeFactMatchValue(item: CharacterEvolutionItem | null | undefined): string {
+    return String(item?.value ?? "").trim();
+}
+
+export function matchFactItemsByValue(
+    currentItems: CharacterEvolutionItem[],
+    proposedItems: CharacterEvolutionItem[],
+): MatchedFactPair[] {
+    const matchedProposedIndexes = new Set<number>();
+    const matchedCurrentIndexes = new Set<number>();
+    const proposedIndexesByValue = new Map<string, number[]>();
+
+    proposedItems.forEach((item, index) => {
+        const matchValue = normalizeFactMatchValue(item);
+        if (!matchValue) {
+            return;
+        }
+
+        const bucket = proposedIndexesByValue.get(matchValue) ?? [];
+        bucket.push(index);
+        proposedIndexesByValue.set(matchValue, bucket);
+    });
+
+    const rows: MatchedFactPair[] = [];
+
+    currentItems.forEach((currentItem, currentIndex) => {
+        const matchValue = normalizeFactMatchValue(currentItem);
+        const bucket = matchValue ? proposedIndexesByValue.get(matchValue) ?? [] : [];
+        let proposedIndex: number | null = null;
+
+        while (bucket.length > 0) {
+            const candidateIndex = bucket.shift();
+            if (candidateIndex === undefined || matchedProposedIndexes.has(candidateIndex)) {
+                continue;
+            }
+
+            proposedIndex = candidateIndex;
+            matchedProposedIndexes.add(candidateIndex);
+            break;
+        }
+
+        if (proposedIndex !== null) {
+            matchedCurrentIndexes.add(currentIndex);
+        }
+
+        rows.push({
+            currentIndex,
+            proposedIndex,
+            currentItem,
+            proposedItem: proposedIndex === null ? null : proposedItems[proposedIndex] ?? null,
+        });
+    });
+
+    const unmatchedCurrentIndexes = currentItems
+        .map((_, index) => index)
+        .filter((index) => !matchedCurrentIndexes.has(index));
+    const unmatchedProposedIndexes = proposedItems
+        .map((_, index) => index)
+        .filter((index) => !matchedProposedIndexes.has(index));
+    const fallbackPairCount = Math.min(unmatchedCurrentIndexes.length, unmatchedProposedIndexes.length);
+
+    for (let offset = 0; offset < fallbackPairCount; offset += 1) {
+        const currentIndex = unmatchedCurrentIndexes[offset];
+        const proposedIndex = unmatchedProposedIndexes[offset];
+        const row = rows.find((entry) => entry.currentIndex === currentIndex);
+
+        if (!row) {
+            continue;
+        }
+
+        row.proposedIndex = proposedIndex;
+        row.proposedItem = proposedItems[proposedIndex] ?? null;
+        matchedProposedIndexes.add(proposedIndex);
+    }
+
+    proposedItems.forEach((proposedItem, proposedIndex) => {
+        if (matchedProposedIndexes.has(proposedIndex)) {
+            return;
+        }
+
+        rows.push({
+            currentIndex: null,
+            proposedIndex,
+            currentItem: null,
+            proposedItem,
+        });
+    });
+
+    return rows;
 }

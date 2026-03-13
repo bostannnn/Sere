@@ -117,6 +117,12 @@ as the meaning of tentative memory.
 - the item is not treated as current truth
 - the item can later be matched by code during handoff processing if new evidence clearly revives the same idea
 
+Storage rule:
+
+- archived and corrected items remain in the canonical accepted state
+- they do not move to a separate database table or separate state file in V2
+- version history stores snapshots of that same canonical state over time
+
 Archived items are preserved, but silent.
 
 Default rule:
@@ -632,11 +638,20 @@ The extractor should be instructed to:
 1. load current accepted state
 2. re-apply sanitization and privacy rules
 3. merge proposed items against current state using matcher
-4. run conflict rules
-5. run decay pass
-6. save accepted version file with range metadata
-7. update fast cursors and processed range history
-8. clear pending proposal
+4. preserve existing archived and corrected items unless the accepted proposal explicitly revives, replaces, or edits them
+5. save the merged full state as the next accepted canonical state
+6. run conflict rules
+7. run decay pass
+8. save accepted version file with range metadata
+9. update fast cursors and processed range history
+10. clear pending proposal
+
+Important:
+
+- prompt building may use an active-only filtered view
+- pending proposals may omit archived/corrected items from normal review focus
+- accept must not treat omission from the active-only proposal as deletion from canonical state
+- archived/corrected items remain stored in `currentState` for later history, matching, conflict handling, and decay
 
 ## Auto-Handoff Triggers
 
@@ -805,6 +820,44 @@ Deliver:
 Acceptance:
 
 - all durable-ish sections except `relationship` and `lastInteractionEnded` use a consistent item shape
+
+## Phase 2.5: Archived State Retention
+
+Deliver:
+
+- keep archived/corrected items in canonical accepted state even when prompt-building and proposal review operate on active-only slices
+- change accept from full-state replacement to merge-on-accept for item-array sections
+- preserve archived/corrected rows by default unless the accepted proposal explicitly changes or revives them
+- keep route logic thin by extracting merge helpers
+
+Acceptance:
+
+- accepting a proposal that omits archived/corrected items does not delete them from `currentState`
+- normal prompt assembly still injects only active items
+- archived/corrected items remain available for history, later matcher work, conflict handling, and decay
+- no new separate archive store or parallel state model is introduced
+
+Example:
+
+- current accepted `characterLikes` contains:
+  - `Stalker` (`active`)
+  - `Dead Man` (`archived`)
+  - `Texas Chain Saw` (`active`)
+- prompt-building sends only:
+  - `Stalker`
+  - `Texas Chain Saw`
+- accepted proposal returns only:
+  - `Stalker`
+  - `Texas Chain Saw`
+- after accept, canonical `currentState.characterLikes` still contains:
+  - `Stalker` (`active`)
+  - `Dead Man` (`archived`)
+  - `Texas Chain Saw` (`active`)
+
+This omission means:
+
+- `Dead Man` is not part of the active prompt slice
+- not that `Dead Man` should be deleted from canonical stored state
 
 ## Phase 3: Matching and Promotion
 

@@ -161,14 +161,25 @@ describe("evolutionSettings.drafts", () => {
         const nextEvolution = buildEvolutionSyncSettings({
             baseCharacter,
             currentStateDraft: createState({
-                keyMoments: ["met at the station"],
+                keyMoments: [
+                    {
+                        value: "met at the station",
+                        status: "active",
+                    },
+                ],
             }),
             sectionConfigDraft: nextSectionDraft,
             privacyDraft: createPrivacy({ allowCharacterIntimatePreferences: true }),
         })
 
         expect(nextEvolution).not.toBeNull()
-        expect(nextEvolution?.currentState.keyMoments).toEqual(["met at the station"])
+        expect(nextEvolution?.currentState.keyMoments).toEqual([
+            expect.objectContaining({
+                value: "met at the station",
+                status: "active",
+                note: "",
+            }),
+        ])
         expect(nextEvolution?.sectionConfigs[0]).toMatchObject({
             enabled: nextSectionDraft[0].enabled,
             label: "updated section",

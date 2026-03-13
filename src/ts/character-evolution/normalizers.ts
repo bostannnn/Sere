@@ -21,6 +21,7 @@ import {
     createDefaultCharacterEvolutionSectionConfigs,
     createDefaultCharacterEvolutionState,
 } from "./schema"
+import { normalizeCharacterEvolutionItemSourceRange } from "./items"
 import { normalizeCharacterEvolutionRangeRef } from "./ranges"
 
 function jsonEqual(a: unknown, b: unknown): boolean {
@@ -54,7 +55,12 @@ function normalizeItem(raw: unknown): CharacterEvolutionItem | null {
         sourceChatId: typeof item.sourceChatId === "string" && item.sourceChatId.trim()
             ? item.sourceChatId.trim()
             : undefined,
+        sourceRange: normalizeCharacterEvolutionItemSourceRange(item.sourceRange),
         updatedAt: Number.isFinite(Number(item.updatedAt)) ? Number(item.updatedAt) : undefined,
+        lastSeenAt: Number.isFinite(Number(item.lastSeenAt)) ? Number(item.lastSeenAt) : undefined,
+        timesSeen: Number.isFinite(Number(item.timesSeen)) && Number(item.timesSeen) > 0
+            ? Math.max(1, Math.floor(Number(item.timesSeen)))
+            : undefined,
     }
 }
 
@@ -151,14 +157,14 @@ export function normalizeCharacterEvolutionState(raw: unknown): CharacterEvoluti
             ? ((value.relationship as Record<string, unknown>).dynamic as string).trim()
             : "",
     }
-    state.activeThreads = normalizeStringList(value.activeThreads)
-    state.runningJokes = normalizeStringList(value.runningJokes)
+    state.activeThreads = normalizeItemList(value.activeThreads)
+    state.runningJokes = normalizeItemList(value.runningJokes)
     state.characterLikes = normalizeItemList(value.characterLikes)
     state.characterDislikes = normalizeItemList(value.characterDislikes)
     state.characterHabits = normalizeItemList(value.characterHabits)
     state.characterBoundariesPreferences = normalizeItemList(value.characterBoundariesPreferences)
     state.userFacts = normalizeItemList(value.userFacts)
-    state.userRead = normalizeStringList(value.userRead)
+    state.userRead = normalizeItemList(value.userRead)
     state.userLikes = normalizeItemList(value.userLikes)
     state.userDislikes = normalizeItemList(value.userDislikes)
     state.lastInteractionEnded = {
@@ -169,7 +175,7 @@ export function normalizeCharacterEvolutionState(raw: unknown): CharacterEvoluti
             ? ((lastInteractionEndedRaw as Record<string, unknown>).residue as string).trim()
             : "",
     }
-    state.keyMoments = normalizeStringList(value.keyMoments)
+    state.keyMoments = normalizeItemList(value.keyMoments)
     state.characterIntimatePreferences = normalizeItemList(value.characterIntimatePreferences)
     state.userIntimatePreferences = normalizeItemList(value.userIntimatePreferences)
     return state

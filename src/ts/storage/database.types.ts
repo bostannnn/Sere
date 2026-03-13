@@ -477,7 +477,13 @@ export interface CharacterEvolutionItem {
     note?: string
     status?: CharacterEvolutionStatus
     sourceChatId?: string
+    sourceRange?: {
+        startMessageIndex: number
+        endMessageIndex: number
+    }
     updatedAt?: number
+    lastSeenAt?: number
+    timesSeen?: number
 }
 
 export interface CharacterEvolutionRelationshipState {
@@ -504,18 +510,18 @@ export interface CharacterEvolutionProcessedRange {
 
 export interface CharacterEvolutionState {
     relationship: CharacterEvolutionRelationshipState
-    activeThreads: string[]
-    runningJokes: string[]
+    activeThreads: CharacterEvolutionItem[]
+    runningJokes: CharacterEvolutionItem[]
     characterLikes: CharacterEvolutionItem[]
     characterDislikes: CharacterEvolutionItem[]
     characterHabits: CharacterEvolutionItem[]
     characterBoundariesPreferences: CharacterEvolutionItem[]
     userFacts: CharacterEvolutionItem[]
-    userRead: string[]
+    userRead: CharacterEvolutionItem[]
     userLikes: CharacterEvolutionItem[]
     userDislikes: CharacterEvolutionItem[]
     lastInteractionEnded: CharacterEvolutionLastInteractionEndedState
-    keyMoments: string[]
+    keyMoments: CharacterEvolutionItem[]
     characterIntimatePreferences: CharacterEvolutionItem[]
     userIntimatePreferences: CharacterEvolutionItem[]
 }

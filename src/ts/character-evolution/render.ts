@@ -4,6 +4,7 @@ import type {
     CharacterEvolutionSectionConfig,
     CharacterEvolutionState,
 } from "../storage/database.types"
+import { filterActiveCharacterEvolutionState, isCharacterEvolutionObjectSection } from "./items"
 import {
     normalizeCharacterEvolutionPrivacy,
     normalizeCharacterEvolutionSectionConfigs,
@@ -21,7 +22,7 @@ export function renderCharacterEvolutionStateForPrompt(
     sectionConfigsRaw: CharacterEvolutionSectionConfig[],
     privacyRaw?: CharacterEvolutionPrivacySettings,
 ): string {
-    const state = normalizeCharacterEvolutionState(stateRaw)
+    const state = filterActiveCharacterEvolutionState(normalizeCharacterEvolutionState(stateRaw))
     const sectionConfigs = normalizeCharacterEvolutionSectionConfigs(sectionConfigsRaw)
     const privacy = normalizeCharacterEvolutionPrivacy(privacyRaw)
     const lines: string[] = []
@@ -39,31 +40,28 @@ export function renderCharacterEvolutionStateForPrompt(
         if (section.key === "characterIntimatePreferences" && !privacy.allowCharacterIntimatePreferences) continue
         if (section.key === "userIntimatePreferences" && !privacy.allowUserIntimatePreferences) continue
 
-        switch (section.key) {
-            case "relationship":
-                pushSection(section.label, [
-                    state.relationship.trustLevel ? `Trust level: ${state.relationship.trustLevel}` : "",
-                    state.relationship.dynamic ? `Dynamic: ${state.relationship.dynamic}` : "",
-                ])
-                break
-            case "activeThreads":
-            case "runningJokes":
-            case "keyMoments":
-            case "userRead":
-                pushSection(section.label, (state[section.key] as string[]).map((item) => `- ${item}`))
-                break
-            case "lastInteractionEnded":
-                pushSection(section.label, [
-                    state.lastInteractionEnded.state ? `State: ${state.lastInteractionEnded.state}` : "",
-                    state.lastInteractionEnded.residue ? `Residue: ${state.lastInteractionEnded.residue}` : "",
-                ])
-                break
-            default:
-                pushSection(section.label, (state[section.key] as CharacterEvolutionItem[])
-                    .filter((item) => item.status === "active")
-                    .map((item) => itemToLine(item)))
-                break
+        if (section.key === "relationship") {
+            pushSection(section.label, [
+                state.relationship.trustLevel ? `Trust level: ${state.relationship.trustLevel}` : "",
+                state.relationship.dynamic ? `Dynamic: ${state.relationship.dynamic}` : "",
+            ])
+            continue
         }
+
+        if (section.key === "lastInteractionEnded") {
+            pushSection(section.label, [
+                state.lastInteractionEnded.state ? `State: ${state.lastInteractionEnded.state}` : "",
+                state.lastInteractionEnded.residue ? `Residue: ${state.lastInteractionEnded.residue}` : "",
+            ])
+            continue
+        }
+
+        if (isCharacterEvolutionObjectSection(section.key)) {
+            continue
+        }
+
+        pushSection(section.label, (state[section.key] as CharacterEvolutionItem[])
+            .map((item) => itemToLine(item)))
     }
 
     if (lines.length === 0) {

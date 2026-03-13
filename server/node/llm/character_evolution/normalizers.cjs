@@ -4,6 +4,7 @@ const {
     createDefaultCharacterEvolutionState,
     normalizeCharacterEvolutionExtractionModel,
 } = require('./schema.cjs');
+const { normalizeCharacterEvolutionItemSourceRange } = require('./items.cjs');
 const { normalizeCharacterEvolutionRangeRef } = require('./range.cjs');
 const { toTrimmedString } = require('./utils.cjs');
 
@@ -26,7 +27,12 @@ function normalizeItem(raw) {
             ? raw.status
             : 'active',
         sourceChatId: toTrimmedString(raw.sourceChatId) || undefined,
+        sourceRange: normalizeCharacterEvolutionItemSourceRange(raw.sourceRange),
         updatedAt: Number.isFinite(Number(raw.updatedAt)) ? Number(raw.updatedAt) : undefined,
+        lastSeenAt: Number.isFinite(Number(raw.lastSeenAt)) ? Number(raw.lastSeenAt) : undefined,
+        timesSeen: Number.isFinite(Number(raw.timesSeen)) && Number(raw.timesSeen) > 0
+            ? Math.max(1, Math.floor(Number(raw.timesSeen)))
+            : undefined,
     };
 }
 
@@ -55,21 +61,21 @@ function normalizeCharacterEvolutionState(raw) {
         trustLevel: toTrimmedString(value.relationship?.trustLevel),
         dynamic: toTrimmedString(value.relationship?.dynamic),
     };
-    state.activeThreads = normalizeStringList(value.activeThreads);
-    state.runningJokes = normalizeStringList(value.runningJokes);
+    state.activeThreads = normalizeItemList(value.activeThreads);
+    state.runningJokes = normalizeItemList(value.runningJokes);
     state.characterLikes = normalizeItemList(value.characterLikes);
     state.characterDislikes = normalizeItemList(value.characterDislikes);
     state.characterHabits = normalizeItemList(value.characterHabits);
     state.characterBoundariesPreferences = normalizeItemList(value.characterBoundariesPreferences);
     state.userFacts = normalizeItemList(value.userFacts);
-    state.userRead = normalizeStringList(value.userRead);
+    state.userRead = normalizeItemList(value.userRead);
     state.userLikes = normalizeItemList(value.userLikes);
     state.userDislikes = normalizeItemList(value.userDislikes);
     state.lastInteractionEnded = {
         state: toTrimmedString(lastInteractionEndedRaw?.state),
         residue: toTrimmedString(lastInteractionEndedRaw?.residue),
     };
-    state.keyMoments = normalizeStringList(value.keyMoments);
+    state.keyMoments = normalizeItemList(value.keyMoments);
     state.characterIntimatePreferences = normalizeItemList(value.characterIntimatePreferences);
     state.userIntimatePreferences = normalizeItemList(value.userIntimatePreferences);
     return state;

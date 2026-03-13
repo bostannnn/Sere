@@ -1,5 +1,6 @@
 const { applyPromptVars } = require('../scripts.cjs');
 const { getEffectiveCharacterEvolutionSettings, normalizeCharacterEvolutionState } = require('./normalizers.cjs');
+const { filterActiveCharacterEvolutionState } = require('./items.cjs');
 const { toTrimmedString } = require('./utils.cjs');
 
 function chatMessageToTranscriptLine(message, characterName, userName) {
@@ -52,7 +53,11 @@ function buildCharacterEvolutionPromptMessages(arg = {}) {
         ].join('\n'))
         .join('\n');
 
-    const state = JSON.stringify(normalizeCharacterEvolutionState(evolution.currentState), null, 2);
+    const state = JSON.stringify(
+        filterActiveCharacterEvolutionState(normalizeCharacterEvolutionState(evolution.currentState)),
+        null,
+        2
+    );
     const prompt = [
         applyPromptVars(evolution.extractionPrompt, character, settings),
         '',

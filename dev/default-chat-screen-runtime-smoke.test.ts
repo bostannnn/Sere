@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mount, tick, unmount } from "svelte";
+import type { CharacterEvolutionState } from "src/ts/storage/database.types";
 
 const mocks = vi.hoisted(() => ({
   sendChat: vi.fn(async () => {}),
@@ -9,7 +10,7 @@ const mocks = vi.hoisted(() => ({
       sourceChatId: "chat-1",
       proposedState: {
         relationship: { trustLevel: "higher", dynamic: "warmer after the last exchange" },
-        activeThreads: ["new job nerves"],
+        activeThreads: [{ value: "new job nerves", status: "active" }],
         runningJokes: [],
         characterLikes: [],
         characterDislikes: [],
@@ -19,8 +20,8 @@ const mocks = vi.hoisted(() => ({
         userRead: [],
         userLikes: [],
         userDislikes: [],
-        lastChatEnded: { state: "close", residue: "supportive" },
-        keyMoments: ["user opened up about work"],
+        lastInteractionEnded: { state: "close", residue: "supportive" },
+        keyMoments: [{ value: "user opened up about work", status: "active" }],
         characterIntimatePreferences: [],
         userIntimatePreferences: [],
       },
@@ -128,8 +129,8 @@ vi.mock(import("src/ts/stores.svelte"), async () => {
           sensitive: false,
         },
         {
-          key: "lastChatEnded",
-          label: "Last Chat Ended",
+          key: "lastInteractionEnded",
+          label: "Last Interaction Ended",
           enabled: true,
           includeInPrompt: true,
           instruction: "Track ending residue.",
@@ -163,7 +164,7 @@ vi.mock(import("src/ts/stores.svelte"), async () => {
         userRead: [],
         userLikes: [],
         userDislikes: [],
-        lastChatEnded: { state: "", residue: "" },
+        lastInteractionEnded: { state: "", residue: "" },
         keyMoments: [],
         characterIntimatePreferences: [],
         userIntimatePreferences: [],
@@ -174,7 +175,7 @@ vi.mock(import("src/ts/stores.svelte"), async () => {
             sourceChatId: arg.chatId,
             proposedState: {
               relationship: { trustLevel: arg.trustLevel ?? "", dynamic: `${arg.name} dynamic` },
-              activeThreads: [`${arg.name} thread`],
+              activeThreads: [{ value: `${arg.name} thread`, status: "active" }],
               runningJokes: [],
               characterLikes: [],
               characterDislikes: [],
@@ -184,8 +185,8 @@ vi.mock(import("src/ts/stores.svelte"), async () => {
               userRead: [],
               userLikes: [],
               userDislikes: [],
-              lastChatEnded: { state: `${arg.name} close`, residue: `${arg.name} residue` },
-              keyMoments: [`${arg.name} moment`],
+              lastInteractionEnded: { state: `${arg.name} close`, residue: `${arg.name} residue` },
+              keyMoments: [{ value: `${arg.name} moment`, status: "active" }],
               characterIntimatePreferences: [],
               userIntimatePreferences: [],
             },
@@ -606,7 +607,7 @@ describe("default chat screen runtime smoke", () => {
           userRead: [],
           userLikes: [],
           userDislikes: [],
-          lastChatEnded: { state: "", residue: "" },
+          lastInteractionEnded: { state: "", residue: "" },
           keyMoments: [],
           characterIntimatePreferences: [],
           userIntimatePreferences: [],
@@ -648,7 +649,7 @@ describe("default chat screen runtime smoke", () => {
           userRead: [],
           userLikes: [],
           userDislikes: [],
-          lastChatEnded: { state: "", residue: "" },
+          lastInteractionEnded: { state: "", residue: "" },
           keyMoments: [],
           characterIntimatePreferences: [],
           userIntimatePreferences: [],
@@ -1184,7 +1185,7 @@ describe("default chat screen runtime smoke", () => {
       sourceChatId: "chat-1",
       proposedState: {
         relationship: { trustLevel: "char-1", dynamic: "Character One dynamic" },
-        activeThreads: ["Character One thread"],
+        activeThreads: [{ value: "Character One thread", status: "active" }],
         runningJokes: [],
         characterLikes: [],
         characterDislikes: [],
@@ -1194,8 +1195,8 @@ describe("default chat screen runtime smoke", () => {
         userRead: [],
         userLikes: [],
         userDislikes: [],
-        lastChatEnded: { state: "Character One close", residue: "Character One residue" },
-        keyMoments: ["Character One moment"],
+        lastInteractionEnded: { state: "Character One close", residue: "Character One residue" },
+        keyMoments: [{ value: "Character One moment", status: "active" }],
         characterIntimatePreferences: [],
         userIntimatePreferences: [],
       },
@@ -1213,7 +1214,7 @@ describe("default chat screen runtime smoke", () => {
       sourceChatId: "chat-2",
       proposedState: {
         relationship: { trustLevel: "char-2", dynamic: "Character Two dynamic" },
-        activeThreads: ["Character Two thread"],
+        activeThreads: [{ value: "Character Two thread", status: "active" }],
         runningJokes: [],
         characterLikes: [],
         characterDislikes: [],
@@ -1223,8 +1224,8 @@ describe("default chat screen runtime smoke", () => {
         userRead: [],
         userLikes: [],
         userDislikes: [],
-        lastChatEnded: { state: "Character Two close", residue: "Character Two residue" },
-        keyMoments: ["Character Two moment"],
+        lastInteractionEnded: { state: "Character Two close", residue: "Character Two residue" },
+        keyMoments: [{ value: "Character Two moment", status: "active" }],
         characterIntimatePreferences: [],
         userIntimatePreferences: [],
       },
@@ -1264,23 +1265,7 @@ describe("default chat screen runtime smoke", () => {
     let resolveAccept: ((value: {
       version: number;
       acceptedAt: number;
-      state: {
-        relationship: { trustLevel: string; dynamic: string };
-        activeThreads: string[];
-        runningJokes: string[];
-        characterLikes: never[];
-        characterDislikes: never[];
-        characterHabits: never[];
-        characterBoundariesPreferences: never[];
-        userFacts: never[];
-        userRead: string[];
-        userLikes: never[];
-        userDislikes: never[];
-        lastChatEnded: { state: string; residue: string };
-        keyMoments: string[];
-        characterIntimatePreferences: never[];
-        userIntimatePreferences: never[];
-      };
+      state: CharacterEvolutionState;
     }) => void) | null = null;
 
     mocks.acceptEvolutionProposalAction.mockImplementationOnce(async () => {
@@ -1294,7 +1279,7 @@ describe("default chat screen runtime smoke", () => {
       sourceChatId: "chat-1",
       proposedState: {
         relationship: { trustLevel: "char-1", dynamic: "Character One dynamic" },
-        activeThreads: ["Character One thread"],
+        activeThreads: [{ value: "Character One thread", status: "active" }],
         runningJokes: [],
         characterLikes: [],
         characterDislikes: [],
@@ -1304,8 +1289,8 @@ describe("default chat screen runtime smoke", () => {
         userRead: [],
         userLikes: [],
         userDislikes: [],
-        lastChatEnded: { state: "Character One close", residue: "Character One residue" },
-        keyMoments: ["Character One moment"],
+        lastInteractionEnded: { state: "Character One close", residue: "Character One residue" },
+        keyMoments: [{ value: "Character One moment", status: "active" }],
         characterIntimatePreferences: [],
         userIntimatePreferences: [],
       },
@@ -1336,7 +1321,7 @@ describe("default chat screen runtime smoke", () => {
       acceptedAt: 999,
       state: {
         relationship: { trustLevel: "char-1", dynamic: "Character One dynamic" },
-        activeThreads: ["Character One thread"],
+        activeThreads: [{ value: "Character One thread", status: "active" }],
         runningJokes: [],
         characterLikes: [],
         characterDislikes: [],
@@ -1346,8 +1331,8 @@ describe("default chat screen runtime smoke", () => {
         userRead: [],
         userLikes: [],
         userDislikes: [],
-        lastChatEnded: { state: "Character One close", residue: "Character One residue" },
-        keyMoments: ["Character One moment"],
+        lastInteractionEnded: { state: "Character One close", residue: "Character One residue" },
+        keyMoments: [{ value: "Character One moment", status: "active" }],
         characterIntimatePreferences: [],
         userIntimatePreferences: [],
       },
