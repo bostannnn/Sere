@@ -12,6 +12,7 @@ This version must:
 - support conflict handling and decay in code
 - keep settings editable from UI, with global settings owning the full advanced configuration
 - keep implementation modular, with small files and helpers rather than adding more logic into large route files
+- use the normalized current evolution UI as the foundation for future phases rather than building a parallel replacement surface
 
 ## Product Principles
 
@@ -29,6 +30,18 @@ This version must:
 - Building semantic search or embeddings for evolution memory in this phase.
 - Full automatic acceptance of handoff proposals.
 - Fully generic policy authoring language in V1.
+- Throwing away the current evolution UI and replacing it with a separate parallel product surface.
+
+## UX Source Of Truth
+
+UI and interaction behavior for the completed feature is defined in:
+
+- `/Users/andrewbostan/Documents/RisuAII/docs/planning-artifacts/character-evolution-v2-ux-spec.md`
+
+This blueprint defines data model, lifecycle, and backend behavior.
+The UX spec defines how users operate and understand the feature.
+
+Implementation after Phase 1 should follow both documents together.
 
 ## Current Constraints
 
@@ -397,6 +410,9 @@ Global settings should contain:
 - conflict policy
 - matching policy
 - privacy settings
+
+Character-level UI should stay operational and lighter-weight.
+Normalize current UI first, then build future controls on top of that structure.
 
 ## Matching and Promotion
 
