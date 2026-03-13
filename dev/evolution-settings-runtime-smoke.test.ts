@@ -1,8 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mount, tick, unmount } from "svelte";
+import { get } from "svelte/store";
 
 const mocks = vi.hoisted(() => ({
   selectedCharID: undefined as import("svelte/store").Writable<number> | undefined,
+  evolutionReviewOpenRequest: undefined as import("svelte/store").Writable<string | null> | undefined,
   alertError: vi.fn(),
   alertNormal: vi.fn(),
   acceptEvolutionProposalAction: vi.fn(async () => ({ version: 1 })),
@@ -21,8 +23,8 @@ vi.mock(import("src/ts/evolution"), () => ({
   getCharacterEvolutionErrorMessage: vi.fn((error: unknown) => String(error ?? "Unknown error")),
 }));
 
-vi.mock(import("src/lib/Evolution/ProposalPanel.svelte"), async () => ({
-  default: (await import("./test-stubs/EvolutionProposalPanelStub.svelte")).default,
+vi.mock(import("src/lib/SideBars/Evolution/EvolutionReviewPanel.svelte"), async () => ({
+  default: (await import("./test-stubs/EvolutionReviewPanelStub.svelte")).default,
 }));
 
 vi.mock(import("src/lib/SideBars/Evolution/EvolutionSetupPanel.svelte"), async () => ({
@@ -52,7 +54,9 @@ vi.mock(import("src/ts/stores.svelte"), async () => {
   const { writable } = await import("svelte/store");
 
   const selectedCharID = writable(0);
+  const evolutionReviewOpenRequest = writable<string | null>(null);
   mocks.selectedCharID = selectedCharID;
+  mocks.evolutionReviewOpenRequest = evolutionReviewOpenRequest;
   const selIdState = { selId: 0 };
   selectedCharID.subscribe((value) => {
     selIdState.selId = value;
@@ -173,6 +177,7 @@ vi.mock(import("src/ts/stores.svelte"), async () => {
 
   return {
     selectedCharID,
+    evolutionReviewOpenRequest,
     selIdState,
     DBState: {
       db: {
@@ -227,6 +232,7 @@ describe("evolution settings runtime smoke", () => {
       selectedVersionFile: null,
     });
     mocks.selectedCharID?.set(0);
+    mocks.evolutionReviewOpenRequest?.set(null);
     DBState.db.promptTemplate = [
       {
         type: "characterState",
@@ -398,153 +404,39 @@ describe("evolution settings runtime smoke", () => {
     expect(trustLevel()).toBe("guarded");
   });
 
-  it("keeps the accepted state locally even if new-chat creation fails after accept", async () => {
-    mocks.acceptEvolutionProposalAction.mockResolvedValueOnce({
-      version: 1,
-      state: {
-        relationship: { trustLevel: "warmer", dynamic: "accepted" },
-        activeThreads: [],
-        runningJokes: [],
-        characterLikes: [],
-        characterDislikes: [],
-        characterHabits: [],
-        characterBoundariesPreferences: [],
-        userFacts: [],
-        userRead: [],
-        userLikes: [],
-        userDislikes: [],
-        lastChatEnded: { state: "", residue: "" },
-        keyMoments: [],
-        characterIntimatePreferences: [],
-        userIntimatePreferences: [],
-      },
-      chatCreationError: "save failed",
-    });
-
+  it("opens fullscreen review for the selected character", async () => {
     const target = document.createElement("div");
     document.body.appendChild(target);
 
     app = mount(EvolutionSettings, { target });
     await flushUi();
 
-    const acceptAndCreateButton = target.querySelector('[data-testid="proposal-accept-create"]') as HTMLButtonElement | null;
-    expect(acceptAndCreateButton).not.toBeNull();
-    acceptAndCreateButton!.click();
-    await flushUi();
-    await flushUi();
+    const openButton = target.querySelector('[data-testid="proposal-open"]') as HTMLButtonElement | null;
+    expect(openButton).not.toBeNull();
+    openButton!.click();
 
-    expect(mocks.acceptEvolutionProposalAction).toHaveBeenCalledTimes(1);
-    expect(DBState.db.characters[0].characterEvolution.pendingProposal).toBeNull();
-    expect(DBState.db.characters[0].characterEvolution.currentStateVersion).toBe(1);
-    expect(mocks.alertNormal).toHaveBeenCalledWith("Evolution state accepted, but the new chat could not be created.");
-    expect(mocks.alertError).toHaveBeenCalledWith("save failed");
+    expect(get(mocks.evolutionReviewOpenRequest!)).toBe("char-1");
   });
 
-  it("preserves a new local chat created during accept-and-create", async () => {
-    mocks.acceptEvolutionProposalAction.mockImplementationOnce(async () => {
-      DBState.db.characters[0].chats.unshift({
-        id: "new-chat-1",
-        name: "New Chat 1",
-        message: [],
-        note: "",
-        localLore: [],
-        fmIndex: -1,
-      });
-      DBState.db.characters[0].chatPage = 0;
-
-      return {
-        version: 2,
-        acceptedAt: 5678,
-        state: {
-          relationship: { trustLevel: "warmer", dynamic: "accepted" },
-          activeThreads: [],
-          runningJokes: [],
-          characterLikes: [],
-          characterDislikes: [],
-          characterHabits: [],
-          characterBoundariesPreferences: [],
-          userFacts: [],
-          userRead: [],
-          userLikes: [],
-          userDislikes: [],
-          lastChatEnded: { state: "", residue: "" },
-          keyMoments: [],
-          characterIntimatePreferences: [],
-          userIntimatePreferences: [],
-        },
-      };
-    });
-
-    const target = document.createElement("div");
-    document.body.appendChild(target);
-
-    app = mount(EvolutionSettings, { target });
-    await flushUi();
-
-    const acceptAndCreateButton = target.querySelector('[data-testid="proposal-accept-create"]') as HTMLButtonElement | null;
-    expect(acceptAndCreateButton).not.toBeNull();
-    acceptAndCreateButton!.click();
-    await flushUi();
-    await flushUi();
-
-    expect(mocks.acceptEvolutionProposalAction).toHaveBeenCalledTimes(1);
-    expect(DBState.db.characters[0].characterEvolution.currentStateVersion).toBe(2);
-    expect(DBState.db.characters[0].characterEvolution.pendingProposal).toBeNull();
-    expect(DBState.db.characters[0].chats[0]?.id).toBe("new-chat-1");
-    expect(DBState.db.characters[0].chats[0]?.name).toBe("New Chat 1");
-    expect(DBState.db.characters[0].chatPage).toBe(0);
-  });
-
-  it("keeps the accepted version in local history when version refresh fails", async () => {
-    mocks.acceptEvolutionProposalAction.mockResolvedValueOnce({
-      version: 3,
-      acceptedAt: 4567,
-      state: {
-        relationship: { trustLevel: "warmer", dynamic: "accepted" },
-        activeThreads: [],
-        runningJokes: [],
-        characterLikes: [],
-        characterDislikes: [],
-        characterHabits: [],
-        characterBoundariesPreferences: [],
-        userFacts: [],
-        userRead: [],
-        userLikes: [],
-        userDislikes: [],
-        lastChatEnded: { state: "", residue: "" },
-        keyMoments: [],
-        characterIntimatePreferences: [],
-        userIntimatePreferences: [],
-      },
-    });
-    mocks.refreshEvolutionVersions.mockRejectedValueOnce(new Error("refresh failed"));
-
+  it("refreshes version history for the new character selection and reports failures", async () => {
     const target = document.createElement("div");
     document.body.appendChild(target);
 
     app = mount(EvolutionSettings, { target });
     await flushUi();
     await flushUi();
+
+    expect(mocks.refreshEvolutionVersions).toHaveBeenCalledWith("char-1", null);
 
     mocks.refreshEvolutionVersions.mockClear();
     mocks.refreshEvolutionVersions.mockRejectedValueOnce(new Error("refresh failed"));
-
-    const acceptButton = document.body.querySelector('[data-testid="proposal-accept"]') as HTMLButtonElement | null;
-    expect(acceptButton).not.toBeNull();
-    acceptButton!.click();
+    mocks.selectedCharID?.set(1);
     await flushUi();
     await flushUi();
 
-    expect(mocks.acceptEvolutionProposalAction).toHaveBeenCalledTimes(1);
     expect(mocks.refreshEvolutionVersions).toHaveBeenCalledTimes(1);
+    expect(mocks.refreshEvolutionVersions).toHaveBeenCalledWith("char-2", null);
     expect(mocks.alertError).toHaveBeenCalledWith("Error: refresh failed");
-    expect(DBState.db.characters[0].characterEvolution.stateVersions).toEqual([
-      {
-        version: 3,
-        chatId: "char-1-chat",
-        acceptedAt: 4567,
-      },
-    ]);
   });
 
   it("shows effective global sections in the sections tab and exposes a local override toggle", async () => {

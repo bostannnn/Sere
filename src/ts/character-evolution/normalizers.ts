@@ -64,13 +64,6 @@ function normalizeItem(raw: unknown): CharacterEvolutionItem | null {
     }
 }
 
-function normalizeStringList(raw: unknown): string[] {
-    if (!Array.isArray(raw)) return []
-    return raw
-        .map((value) => typeof value === "string" ? value.trim() : "")
-        .filter(Boolean)
-}
-
 function normalizeItemList(raw: unknown): CharacterEvolutionItem[] {
     if (!Array.isArray(raw)) return []
     return raw

@@ -89,9 +89,10 @@
     let forceVisibleRowKeys = $state<Record<string, true>>({});
     let dismissedStringRows = $state<StringDiffRow[]>([]);
     let dismissedFactRows = $state<FactDiffRow[]>([]);
+    const CHARACTER_EVOLUTION_STRING_SECTION_KEYS: readonly string[] = [];
 
     function isStringListSection(key: string) {
-        return false;
+        return CHARACTER_EVOLUTION_STRING_SECTION_KEYS.includes(key);
     }
 
     function isObjectSection(key: string) {
@@ -100,7 +101,7 @@
 
     function stringItemsForState(state: CharacterEvolutionState, key: keyof CharacterEvolutionState): string[] {
         const sectionValue = state[key];
-        return Array.isArray(sectionValue) ? [...sectionValue as string[]] : [];
+        return Array.isArray(sectionValue) ? [...sectionValue as unknown as string[]] : [];
     }
 
     function factItemsForState(state: CharacterEvolutionState, key: keyof CharacterEvolutionState): CharacterEvolutionItem[] {
@@ -146,11 +147,6 @@
 
     function normalizeText(value: string | null | undefined) {
         return String(value ?? "").trim();
-    }
-
-    function displayText(value: string | null | undefined) {
-        const normalized = normalizeText(value);
-        return normalized || "Empty";
     }
 
     function areStringItemsEqual(left: string, right: string) {
@@ -205,7 +201,7 @@
     }
 
     function addStringItem(key: keyof CharacterEvolutionState) {
-        (proposedState[key] as string[]).push("");
+        (proposedState[key] as unknown as string[]).push("");
         proposedState = { ...proposedState };
     }
 

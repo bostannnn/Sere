@@ -157,7 +157,7 @@ describe("removeChar persistence runtime smoke", () => {
       expect.objectContaining({
         characters: expect.arrayContaining([expect.objectContaining({ chaId: "char-1" })]),
       }),
-      { character: ["char-1"], chat: [] },
+      { settings: true, character: ["char-1"], chat: [] },
     );
   });
 
@@ -172,7 +172,7 @@ describe("removeChar persistence runtime smoke", () => {
       expect.objectContaining({
         characters: expect.arrayContaining([expect.objectContaining({ chaId: "char-2" })]),
       }),
-      { character: [], chat: [] },
+      { settings: true, character: ["char-1"], chat: [] },
     );
   });
 
