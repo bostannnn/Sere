@@ -2,8 +2,10 @@ import { globalFetch } from "./globalApi.svelte";
 
 let bgmElement:HTMLAudioElement|null = null;
 let domObserveStarted = false;
-let domObserveInterval: ReturnType<typeof setInterval> | null = null;
 let domMutationObserver: MutationObserver | null = null;
+const observedCodeNodes = new WeakSet<HTMLElement>()
+const observedControlNodes = new WeakMap<HTMLElement, string>()
+const domObserveSelector = '[x-hl-lang], [risu-ctrl]'
 
 async function safeCopyToClipboard(text: string) {
     try {
@@ -24,78 +26,114 @@ async function safeCopyToClipboard(text: string) {
     document.body.removeChild(textarea);
 }
 
-function nodeObserve(node:HTMLElement){
-    const hlLang = node.getAttribute('x-hl-lang');
-    const ctrlName = node.getAttribute('risu-ctrl');
-
-    if(hlLang){
-        node.addEventListener('contextmenu', (e)=>{
-            e.preventDefault()
-
-            const prevContextMenu = document.getElementById('code-contextmenu')
-            if(prevContextMenu){
-                prevContextMenu.remove()
-            }
-
-            const menu = document.createElement('div')
-            menu.id = 'code-contextmenu'
-            menu.setAttribute('class', 'fixed z-50 min-w-[160px] py-2 bg-gray-800 rounded-lg border border-gray-700')
-
-            const copyOption = document.createElement('div')
-            copyOption.textContent = 'Copy'
-            copyOption.setAttribute('class', 'px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 cursor-pointer')
-            copyOption.addEventListener('click', async ()=>{
-                await safeCopyToClipboard(node.textContent ?? '')
-                menu.remove()
-            })
-
-            const downloadOption = document.createElement('div');
-            downloadOption.textContent = 'Download';
-            downloadOption.setAttribute('class', 'px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 cursor-pointer')
-            downloadOption.addEventListener('click', ()=>{
-                const a = document.createElement('a')
-                a.href = URL.createObjectURL(new Blob([node.textContent], {type: 'text/plain'}))
-                a.download = 'code.' + hlLang
-                a.click()
-                menu.remove()
-            })
-
-            menu.appendChild(copyOption)
-            menu.appendChild(downloadOption)
-
-            menu.style.left = e.clientX + 'px'
-            menu.style.top = e.clientY + 'px'
-
-            document.body.appendChild(menu)
-            
-            document.addEventListener('click', ()=>{
-                menu?.remove()
-            }, {once: true})
-        })
+function attachCodeContextMenu(node:HTMLElement){
+    if(observedCodeNodes.has(node)){
+        return
     }
+    observedCodeNodes.add(node)
 
-    if(ctrlName){
-        const split = ctrlName.split('___');
+    node.addEventListener('contextmenu', (e)=>{
+        const hlLang = node.getAttribute('x-hl-lang')
+        if(!hlLang){
+            return
+        }
 
-        switch(split[0]){
-            case 'bgm':{
-                const volume = split[1] === 'auto' ? 0.5 : parseFloat(split[1]);
-                if(!bgmElement){
-                    bgmElement = new Audio(split[2]);
-                    bgmElement.volume = volume
-                    bgmElement.addEventListener('ended', (event)=>{
-                        const endedAudio = event.currentTarget as HTMLAudioElement | null
-                        endedAudio?.remove();
-                        if(bgmElement === endedAudio){
-                            bgmElement = null;
-                        }
-                    })
-                    bgmElement.play();
-                }
-                break
+        e.preventDefault()
+
+        const prevContextMenu = document.getElementById('code-contextmenu')
+        if(prevContextMenu){
+            prevContextMenu.remove()
+        }
+
+        const menu = document.createElement('div')
+        menu.id = 'code-contextmenu'
+        menu.setAttribute('class', 'fixed z-50 min-w-[160px] py-2 bg-gray-800 rounded-lg border border-gray-700')
+
+        const copyOption = document.createElement('div')
+        copyOption.textContent = 'Copy'
+        copyOption.setAttribute('class', 'px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 cursor-pointer')
+        copyOption.addEventListener('click', async ()=>{
+            await safeCopyToClipboard(node.textContent ?? '')
+            menu.remove()
+        })
+
+        const downloadOption = document.createElement('div');
+        downloadOption.textContent = 'Download';
+        downloadOption.setAttribute('class', 'px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 cursor-pointer')
+        downloadOption.addEventListener('click', ()=>{
+            const a = document.createElement('a')
+            a.href = URL.createObjectURL(new Blob([node.textContent], {type: 'text/plain'}))
+            a.download = 'code.' + hlLang
+            a.click()
+            menu.remove()
+        })
+
+        menu.appendChild(copyOption)
+        menu.appendChild(downloadOption)
+
+        menu.style.left = e.clientX + 'px'
+        menu.style.top = e.clientY + 'px'
+
+        document.body.appendChild(menu)
+
+        document.addEventListener('click', ()=>{
+            menu?.remove()
+        }, {once: true})
+    })
+}
+
+function runControlAction(node:HTMLElement, ctrlName:string){
+    if(observedControlNodes.get(node) === ctrlName){
+        return
+    }
+    observedControlNodes.set(node, ctrlName)
+
+    const split = ctrlName.split('___');
+
+    switch(split[0]){
+        case 'bgm':{
+            const volume = split[1] === 'auto' ? 0.5 : parseFloat(split[1]);
+            if(!bgmElement){
+                bgmElement = new Audio(split[2]);
+                bgmElement.volume = volume
+                bgmElement.addEventListener('ended', (event)=>{
+                    const endedAudio = event.currentTarget as HTMLAudioElement | null
+                    endedAudio?.remove();
+                    if(bgmElement === endedAudio){
+                        bgmElement = null;
+                    }
+                })
+                bgmElement.play();
             }
+            break
         }
     }
+}
+
+function nodeObserve(node:HTMLElement){
+    if(node.hasAttribute('x-hl-lang')){
+        attachCodeContextMenu(node)
+    }
+
+    const ctrlName = node.getAttribute('risu-ctrl');
+    if(ctrlName){
+        runControlAction(node, ctrlName)
+        return
+    }
+
+    observedControlNodes.delete(node)
+}
+
+function scanNodes(root: ParentNode = document){
+    if(root instanceof HTMLElement){
+        if(root.matches(domObserveSelector)){
+            nodeObserve(root)
+        }
+        root.querySelectorAll<HTMLElement>(domObserveSelector).forEach(nodeObserve)
+        return
+    }
+
+    root.querySelectorAll<HTMLElement>(domObserveSelector).forEach(nodeObserve)
 }
 
 export function startObserveDom(){
@@ -103,25 +141,30 @@ export function startObserveDom(){
         return
     }
     domObserveStarted = true
-
-    const scanNodes = () => {
-        document.querySelectorAll('[x-hl-lang], [risu-ctrl]').forEach(nodeObserve)
-    }
-
-    // For codeblock controls and risu-ctrl nodes, scan incremental insertions plus periodic fallback.
     domMutationObserver = new MutationObserver((mutations) => {
         mutations.forEach((mutation) => {
+            if(mutation.type === 'attributes' && mutation.target instanceof HTMLElement){
+                nodeObserve(mutation.target)
+                return
+            }
+
             mutation.addedNodes.forEach((node) => {
                 if(node instanceof HTMLElement){
-                    nodeObserve(node)
+                    scanNodes(node)
+                } else if(node instanceof DocumentFragment){
+                    scanNodes(node)
                 }
             })
         })
     })
-    domMutationObserver.observe(document.documentElement, { childList: true, subtree: true })
+    domMutationObserver.observe(document.documentElement, {
+        attributeFilter: ['x-hl-lang', 'risu-ctrl'],
+        attributes: true,
+        childList: true,
+        subtree: true
+    })
 
-    scanNodes()
-    domObserveInterval = setInterval(scanNodes, 250)
+    scanNodes(document)
 }
 
 export function stopObserveDom() {
@@ -131,10 +174,6 @@ export function stopObserveDom() {
     domObserveStarted = false
     domMutationObserver?.disconnect()
     domMutationObserver = null
-    if (domObserveInterval) {
-        clearInterval(domObserveInterval)
-        domObserveInterval = null
-    }
 }
 
 
