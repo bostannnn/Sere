@@ -111,7 +111,7 @@ Primary access:
 
 Secondary expansion:
 
-- archived/corrected traits may use a dedicated nested modal or subview
+- archived/corrected traits may use a dedicated History sub-tab, nested modal, or secondary subview
 
 Purpose:
 
@@ -558,7 +558,7 @@ Implementation guidance:
 
 ## Implementation Order
 
-Recommended order after current Phase 1/backend work:
+Recommended order from the original starting point:
 
 1. normalize current sidebar
 2. normalize fullscreen review
@@ -579,14 +579,17 @@ Recommended order after current Phase 1/backend work:
 - bring current screens into the correct shape
 - treat normalized current UI as the foundation for future feature work
 
-### Before Phase 2
+### Current Status
 
-This UX spec must exist and be treated as the screen-structure source of truth.
+- Phase 1 is complete
+- Phase 2 is complete
+- Phase 2.5 is complete
+- future work should continue from the normalized current UI and this UX structure
 
-The normalized current UI should be used as the base structure for Phase 2 and later work.
-Future features should extend it rather than introducing a second competing evolution UI.
+This UX spec should be treated as the screen-structure source of truth for the remaining phases.
+Future features should extend the normalized current UI rather than introducing a second competing evolution UI.
 
-### Phase 2+
+### Phase 3+
 
 Use this spec to integrate:
 

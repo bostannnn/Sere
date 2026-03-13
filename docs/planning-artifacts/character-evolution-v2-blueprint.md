@@ -41,16 +41,18 @@ UI and interaction behavior for the completed feature is defined in:
 This blueprint defines data model, lifecycle, and backend behavior.
 The UX spec defines how users operate and understand the feature.
 
-Implementation after Phase 1 should follow both documents together.
+Implementation after the completed foundation phases should follow both documents together.
 
-## Current Constraints
+## Current Baseline
 
-Today the system:
+The merged baseline now:
 
-- processes full chats, not chat ranges
-- stores some sections as item objects and others as plain string arrays
+- supports ranged handoff with per-chat processed cursors and accepted range history
+- keeps `activeThreads`, `runningJokes`, `userRead`, and `keyMoments` as item-object arrays
 - already has `confidence: suspected | likely | confirmed`
 - already has `status: active | corrected | archived`
+- keeps archived/corrected items in canonical accepted state while excluding them from normal prompt assembly
+- uses `lastInteractionEnded` as the canonical field name, with legacy `lastChatEnded` compatibility
 - still over-promotes scene material even with improved prompt rules
 
 This blueprint assumes we keep the existing base system and evolve it incrementally.
@@ -794,7 +796,20 @@ During migration:
 
 ## Phased Implementation
 
-## Phase 1: Range Handoff Foundation
+Completed phases so far:
+
+- Phase 1
+- Phase 2
+- Phase 2.5
+
+Remaining planned phases:
+
+- Phase 3
+- Phase 4
+- Phase 5
+- Phase 6
+
+## Phase 1: Range Handoff Foundation (Complete)
 
 Deliver:
 
@@ -810,7 +825,7 @@ Acceptance:
 - replay requires explicit flag
 - overlapping accepted range is rejected
 
-## Phase 2: Section Normalization
+## Phase 2: Section Normalization (Complete)
 
 Deliver:
 
@@ -821,7 +836,7 @@ Acceptance:
 
 - all durable-ish sections except `relationship` and `lastInteractionEnded` use a consistent item shape
 
-## Phase 2.5: Archived State Retention
+## Phase 2.5: Archived State Retention (Complete)
 
 Deliver:
 
