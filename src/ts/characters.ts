@@ -871,7 +871,8 @@ export async function removeChar(index:number,name:string, type:'normal'|'perman
 
     if (isNodeServer) {
         const savePayload = {
-            character: type === 'normal' && targetCharId ? [targetCharId] : [],
+            settings: true,
+            character: targetCharId ? [targetCharId] : [],
             chat: [] as [string, string][],
         }
         try {

@@ -17,6 +17,8 @@ declare const safeStructuredClone: <T>(obj: T) => T;
 const serverDbLog = (..._args: unknown[]) => {};
 
 type SaveSelection = {
+    full?: boolean;
+    settings?: boolean;
     character: string[];
     chat: [string, string][];
 };
@@ -194,29 +196,81 @@ async function applySnapshotToDatabase(snapshot: StateSnapshot) {
 }
 
 function buildCommands(db: Database, _selection: SaveSelection): StateCommand[] {
+    const selection = _selection;
     const commands: StateCommand[] = [];
-    const nextSettings = stripCharacters(db);
-    const nextSettingsHash = stableHash(nextSettings);
+    const isFullSave = (
+        selection.full === true
+        || (
+            selection.full !== false
+            && selection.settings !== true
+            && selection.character.length === 0
+            && selection.chat.length === 0
+        )
+    );
+    const includeSettings = isFullSave || selection.settings === true;
 
-    if (nextSettingsHash !== baseline.settingsHash) {
-        commands.push({
-            type: 'settings.replace',
-            settings: nextSettings,
-        });
+    if (includeSettings) {
+        const nextSettings = stripCharacters(db);
+        const nextSettingsHash = stableHash(nextSettings);
+
+        if (nextSettingsHash !== baseline.settingsHash) {
+            commands.push({
+                type: 'settings.replace',
+                settings: nextSettings,
+            });
+        }
     }
 
     const localChars = (db.characters || []).filter((entry): entry is character | groupChat => (
         !!entry && typeof entry === 'object' && typeof entry.chaId === 'string' && entry.chaId.length > 0
     ));
-    const localCharIds = new Set(localChars.map((entry) => entry.chaId));
+    const localCharsById = new Map(localChars.map((entry) => [entry.chaId, entry] as const));
+    const explicitCharacterIds = new Set<string>();
+    const targetCharacterIds = new Set<string>();
+    const targetChatsByCharacter = new Map<string, Set<string>>();
 
-    for (const char of localChars) {
-        const charId = char.chaId;
+    for (const charId of selection.character) {
+        if (charId) {
+            explicitCharacterIds.add(charId);
+            targetCharacterIds.add(charId);
+        }
+    }
+    for (const [charId, chatId] of selection.chat) {
+        if (!charId || !chatId) continue;
+        targetCharacterIds.add(charId);
+        let chats = targetChatsByCharacter.get(charId);
+        if (!chats) {
+            chats = new Set<string>();
+            targetChatsByCharacter.set(charId, chats);
+        }
+        chats.add(chatId);
+    }
+
+    const processedCharacterIds = isFullSave
+        ? new Set<string>([
+            ...localChars.map((entry) => entry.chaId),
+            ...baseline.characterHashes.keys(),
+        ])
+        : targetCharacterIds;
+
+    for (const charId of processedCharacterIds) {
+        const char = localCharsById.get(charId);
+        const currentCharHash = baseline.characterHashes.get(charId);
+        if (!char) {
+            if (currentCharHash) {
+                commands.push({
+                    type: 'character.delete',
+                    charId,
+                });
+            }
+            continue;
+        }
+
         const nextCharPayload = characterWithoutChats(char);
         const nextCharHash = stableHash(nextCharPayload);
-        const currentCharHash = baseline.characterHashes.get(charId);
         const isNewCharacter = !currentCharHash;
         let hasChatStructureChange = false;
+        const processAllChatsForCharacter = isFullSave || explicitCharacterIds.has(charId);
 
         if (isNewCharacter) {
             commands.push({
@@ -230,39 +284,76 @@ function buildCommands(db: Database, _selection: SaveSelection): StateCommand[] 
         const localChats = (char.chats || []).filter((chat): chat is Chat => (
             !!chat && typeof chat === 'object' && typeof chat.id === 'string' && chat.id.length > 0
         ));
-        const localChatIds = new Set(localChats.map((chat) => chat.id));
+        const localChatsById = new Map(localChats.map((chat) => [chat.id, chat] as const));
 
-        for (const chat of localChats) {
-            const chatId = chat.id;
-            const nextChatHash = stableHash(chat);
-            const currentChatHash = serverChats.get(chatId);
+        if (processAllChatsForCharacter) {
+            const localChatIds = new Set(localChats.map((chat) => chat.id));
 
-            if (!currentChatHash) {
+            for (const chat of localChats) {
+                const chatId = chat.id;
+                const nextChatHash = stableHash(chat);
+                const currentChatHash = serverChats.get(chatId);
+
+                if (!currentChatHash) {
+                    hasChatStructureChange = true;
+                    commands.push({
+                        type: 'chat.create',
+                        charId,
+                        chatId,
+                        chat: safeStructuredClone(chat),
+                    });
+                } else if (currentChatHash !== nextChatHash) {
+                    commands.push({
+                        type: 'chat.replace',
+                        charId,
+                        chatId,
+                        chat: safeStructuredClone(chat),
+                    });
+                }
+            }
+
+            for (const serverChatId of serverChats.keys()) {
+                if (localChatIds.has(serverChatId)) continue;
                 hasChatStructureChange = true;
                 commands.push({
-                    type: 'chat.create',
+                    type: 'chat.delete',
                     charId,
-                    chatId,
-                    chat: safeStructuredClone(chat),
-                });
-            } else if (currentChatHash !== nextChatHash) {
-                commands.push({
-                    type: 'chat.replace',
-                    charId,
-                    chatId,
-                    chat: safeStructuredClone(chat),
+                    chatId: serverChatId,
                 });
             }
-        }
-
-        for (const serverChatId of serverChats.keys()) {
-            if (localChatIds.has(serverChatId)) continue;
-            hasChatStructureChange = true;
-            commands.push({
-                type: 'chat.delete',
-                charId,
-                chatId: serverChatId,
-            });
+        } else {
+            for (const chatId of targetChatsByCharacter.get(charId) || []) {
+                const localChat = localChatsById.get(chatId);
+                const currentChatHash = serverChats.get(chatId);
+                if (!localChat) {
+                    if (currentChatHash) {
+                        hasChatStructureChange = true;
+                        commands.push({
+                            type: 'chat.delete',
+                            charId,
+                            chatId,
+                        });
+                    }
+                    continue;
+                }
+                const nextChatHash = stableHash(localChat);
+                if (!currentChatHash) {
+                    hasChatStructureChange = true;
+                    commands.push({
+                        type: 'chat.create',
+                        charId,
+                        chatId,
+                        chat: safeStructuredClone(localChat),
+                    });
+                } else if (currentChatHash !== nextChatHash) {
+                    commands.push({
+                        type: 'chat.replace',
+                        charId,
+                        chatId,
+                        chat: safeStructuredClone(localChat),
+                    });
+                }
+            }
         }
 
         if (!isNewCharacter && (currentCharHash !== nextCharHash || hasChatStructureChange)) {
@@ -274,20 +365,24 @@ function buildCommands(db: Database, _selection: SaveSelection): StateCommand[] 
         }
     }
 
-    for (const serverCharId of baseline.characterHashes.keys()) {
-        if (localCharIds.has(serverCharId)) continue;
-        commands.push({
-            type: 'character.delete',
-            charId: serverCharId,
-        });
-    }
+    if (isFullSave) {
+        const localCharIds = new Set(localChars.map((entry) => entry.chaId));
 
-    const nextOrderSignature = getCharacterOrderSignature(localChars);
-    if (nextOrderSignature !== baseline.characterOrderSignature) {
-        commands.push({
-            type: 'character.order.replace',
-            order: localChars.map((entry) => entry.chaId),
-        });
+        for (const serverCharId of baseline.characterHashes.keys()) {
+            if (localCharIds.has(serverCharId)) continue;
+            commands.push({
+                type: 'character.delete',
+                charId: serverCharId,
+            });
+        }
+
+        const nextOrderSignature = getCharacterOrderSignature(localChars);
+        if (nextOrderSignature !== baseline.characterOrderSignature) {
+            commands.push({
+                type: 'character.order.replace',
+                order: localChars.map((entry) => entry.chaId),
+            });
+        }
     }
 
     return commands;
@@ -444,6 +539,7 @@ export function updateCharacterEtag(_charId: string, _etag: string) {
 export async function exportServerStorage() {
     const db = getDatabase();
     await saveServerDatabase(db, {
+        full: true,
         character: [],
         chat: [],
     });

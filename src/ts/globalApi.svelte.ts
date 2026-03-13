@@ -2,7 +2,7 @@
 
 import { sleep } from "./util"
 import { v4 as uuidv4 } from 'uuid';
-import { setDatabase, type Database, getDatabase, appVer, getCurrentCharacter } from "./storage/database.svelte";
+import { setDatabase, type Database, type Chat, type character, type groupChat, getDatabase, appVer, getCurrentCharacter } from "./storage/database.svelte";
 import { DBState, selIdState, ReloadGUIPointer } from "./stores.svelte";
 import { alertError, alertNormal, alertSelect } from "./alert";
 import { hasher } from "./parser.svelte";
@@ -290,6 +290,163 @@ type SaveDbRuntimeTestHooks = {
     getSaveDbRuntimeStartCountForTests: () => number
 }
 
+type SaveSelection = {
+    full?: boolean
+    settings?: boolean
+    character: string[]
+    chat: [string, string][]
+}
+
+type ServerAutosaveDirtyState = {
+    full: boolean
+    settings: boolean
+    characters: Set<string>
+    chats: Map<string, Set<string>>
+}
+
+const CHAT_AUTOSAVE_TRANSIENT_KEYS = new Set<keyof Chat>(['isStreaming'])
+
+function createServerAutosaveDirtyState(): ServerAutosaveDirtyState {
+    return {
+        full: false,
+        settings: false,
+        characters: new Set<string>(),
+        chats: new Map<string, Set<string>>(),
+    }
+}
+
+function hasPendingServerAutosaveDirtyState(dirtyState: ServerAutosaveDirtyState) {
+    if (dirtyState.full || dirtyState.settings || dirtyState.characters.size > 0) {
+        return true
+    }
+    for (const chats of dirtyState.chats.values()) {
+        if (chats.size > 0) {
+            return true
+        }
+    }
+    return false
+}
+
+function markServerAutosaveSettingsDirty(dirtyState: ServerAutosaveDirtyState) {
+    dirtyState.settings = true
+}
+
+function markServerAutosaveFullDirty(dirtyState: ServerAutosaveDirtyState) {
+    dirtyState.full = true
+}
+
+function markServerAutosaveCharacterDirty(dirtyState: ServerAutosaveDirtyState, charId: string | undefined | null) {
+    if (!charId) {
+        return
+    }
+    dirtyState.characters.add(charId)
+}
+
+function markServerAutosaveChatDirty(
+    dirtyState: ServerAutosaveDirtyState,
+    charId: string | undefined | null,
+    chatId: string | undefined | null,
+) {
+    if (!charId || !chatId) {
+        return
+    }
+    let chats = dirtyState.chats.get(charId)
+    if (!chats) {
+        chats = new Set<string>()
+        dirtyState.chats.set(charId, chats)
+    }
+    chats.add(chatId)
+}
+
+function consumeServerAutosaveSelection(dirtyState: ServerAutosaveDirtyState): SaveSelection {
+    const selection: SaveSelection = {
+        full: dirtyState.full,
+        settings: dirtyState.settings,
+        character: Array.from(dirtyState.characters),
+        chat: [],
+    }
+    for (const [charId, chats] of dirtyState.chats.entries()) {
+        for (const chatId of chats) {
+            selection.chat.push([charId, chatId])
+        }
+    }
+    dirtyState.full = false
+    dirtyState.settings = false
+    dirtyState.characters.clear()
+    dirtyState.chats.clear()
+    return selection
+}
+
+function mergeServerAutosaveSelection(dirtyState: ServerAutosaveDirtyState, selection: SaveSelection) {
+    if (selection.full) {
+        dirtyState.full = true
+    }
+    if (selection.settings) {
+        dirtyState.settings = true
+    }
+    for (const charId of selection.character) {
+        dirtyState.characters.add(charId)
+    }
+    for (const [charId, chatId] of selection.chat) {
+        markServerAutosaveChatDirty(dirtyState, charId, chatId)
+    }
+}
+
+function snapshotServerAutosaveSettings(db: Database) {
+    for (const key in db) {
+        if (key === 'characters' || key === 'saveTime') {
+            continue
+        }
+        $state.snapshot(db[key as keyof Database])
+    }
+}
+
+function snapshotServerAutosaveCharacterStructure(characters: Array<character | groupChat> | undefined | null) {
+    $state.snapshot(characters?.length ?? 0)
+    for (const char of characters ?? []) {
+        if (!char || typeof char !== 'object') {
+            continue
+        }
+        $state.snapshot(char.chaId)
+        $state.snapshot(char.trashTime)
+        $state.snapshot(char.type)
+        const chats = char.chats ?? []
+        $state.snapshot(chats.length)
+        for (const chat of chats) {
+            if (!chat || typeof chat !== 'object') {
+                continue
+            }
+            $state.snapshot(chat.id)
+        }
+    }
+}
+
+function snapshotServerAutosaveCharacterSignature(char: character | groupChat | null | undefined) {
+    if (!char || typeof char !== 'object') {
+        return ''
+    }
+    const signature: Array<[string, unknown]> = []
+    for (const key in char) {
+        if (key === 'chats') {
+            continue
+        }
+        signature.push([key, $state.snapshot(char[key as keyof (character | groupChat)])])
+    }
+    return JSON.stringify(signature)
+}
+
+function snapshotServerAutosaveChat(chat: Chat | null | undefined) {
+    if (!chat || typeof chat !== 'object') {
+        return
+    }
+    for (const key in chat) {
+        if (CHAT_AUTOSAVE_TRANSIENT_KEYS.has(key as keyof Chat)) {
+            continue
+        }
+        $state.snapshot(chat[key as keyof Chat])
+    }
+}
+
 function resetSaveDbRuntimeForTestsInternal() {
     disposeServerSaveRuntime?.()
     serverSaveRuntimeStartCount = 0
@@ -332,8 +489,8 @@ export async function saveDb() {
     let saveTimer: ReturnType<typeof setTimeout> | null = null
     let saveQueued = false
     let saveInFlight = false
-    let initialized = false
     let disposed = false
+    const dirtyState = createServerAutosaveDirtyState()
 
     const getServerSaveRetryDelayMs = (failureCount: number): number => {
         if (failureCount <= 1) return 400
@@ -370,6 +527,9 @@ export async function saveDb() {
 
     const scheduleServerSave = () => {
         if (disposed) return
+        if (!hasPendingServerAutosaveDirtyState(dirtyState)) {
+            return
+        }
         if (saveQueued && saveTimer) {
             return
         }
@@ -385,6 +545,10 @@ export async function saveDb() {
 
     const flushServerSave = async () => {
         if (disposed || saveInFlight || !saveQueued) return
+        if (!hasPendingServerAutosaveDirtyState(dirtyState)) {
+            saveQueued = false
+            return
+        }
         if (isApplyingServerSnapshot()) {
             if (!saveTimer) {
                 saveTimer = setTimeout(() => {
@@ -396,14 +560,13 @@ export async function saveDb() {
         }
         saveInFlight = true
         saveQueued = false
+        const selection = consumeServerAutosaveSelection(dirtyState)
         saving.state = true
         try {
-            await saveServerDatabase(getDatabase(), {
-                character: [],
-                chat: [],
-            })
+            await saveServerDatabase(getDatabase(), selection)
             consecutiveServerSaveFailures = 0
         } catch (error) {
+            mergeServerAutosaveSelection(dirtyState, selection)
             consecutiveServerSaveFailures += 1
             const retryDelay = getServerSaveRetryDelayMs(consecutiveServerSaveFailures)
             if (consecutiveServerSaveFailures >= 5) {
@@ -421,7 +584,8 @@ export async function saveDb() {
             saving.state = false
             saveInFlight = false
         }
-        if (saveQueued && !saveTimer) {
+        if (hasPendingServerAutosaveDirtyState(dirtyState) && !saveTimer) {
+            saveQueued = true
             saveTimer = setTimeout(() => {
                 saveTimer = null
                 void flushServerSave()
@@ -433,35 +597,50 @@ export async function saveDb() {
     queueMicrotask(() => {
         saveTrackingReady = true
     })
+    let previousCharacterSignatures = new Map<string, string>()
 
     const disposeEffects = $effect.root(() => {
         $effect(() => {
-            for (const key in DBState.db) {
-                if (key !== 'characters') {
-                    $state.snapshot(DBState.db[key as keyof typeof DBState.db])
-                }
-            }
-            if (!saveTrackingReady || !initialized) {
-                initialized = true
+            snapshotServerAutosaveSettings(DBState.db)
+            if (!saveTrackingReady) {
                 return
             }
+            markServerAutosaveSettingsDirty(dirtyState)
             scheduleServerSave()
         })
 
         $effect(() => {
             const characters = DBState?.db?.characters ?? []
-            $state.snapshot(characters.length)
+            snapshotServerAutosaveCharacterStructure(characters)
+            if (!saveTrackingReady) {
+                return
+            }
+            markServerAutosaveFullDirty(dirtyState)
+            scheduleServerSave()
+        })
+
+        $effect(() => {
+            const characters = DBState?.db?.characters ?? []
+            let hasDirtyCharacters = false
+            const nextCharacterSignatures = new Map<string, string>()
             for (const char of characters) {
-                if (!char || typeof char !== 'object') continue
-                for (const key in char) {
-                    if (key !== 'chats') {
-                        $state.snapshot(char[key as keyof typeof char])
+                if (!char || typeof char !== 'object' || !char.chaId) {
+                    continue
+                }
+                const nextSignature = snapshotServerAutosaveCharacterSignature(char)
+                nextCharacterSignatures.set(char.chaId, nextSignature)
+                if (previousCharacterSignatures.get(char.chaId) !== nextSignature) {
+                    hasDirtyCharacters = true
+                    if (saveTrackingReady) {
+                        markServerAutosaveCharacterDirty(dirtyState, char.chaId)
                     }
                 }
-                $state.snapshot(char.chats?.length ?? 0)
             }
-            if (!saveTrackingReady || !initialized) {
-                initialized = true
+            previousCharacterSignatures = nextCharacterSignatures
+            if (!saveTrackingReady) {
+                return
+            }
+            if (!hasDirtyCharacters) {
                 return
             }
             scheduleServerSave()
@@ -470,20 +649,17 @@ export async function saveDb() {
         $effect(() => {
             const selectedChar = DBState?.db?.characters?.[selIdState.selId]
             const selectedChat = selectedChar?.chats?.[selectedChar?.chatPage ?? 0]
-            if (selectedChat) {
-                $state.snapshot(selectedChat)
-            } else if (selectedChar?.chats) {
-                $state.snapshot(selectedChar.chats.length)
-            }
-            if (!saveTrackingReady || !initialized) {
-                initialized = true
+            snapshotServerAutosaveChat(selectedChat)
+            if (!saveTrackingReady) {
                 return
             }
+            markServerAutosaveChatDirty(dirtyState, selectedChar?.chaId, selectedChat?.id)
             scheduleServerSave()
         })
     })
 
     // Flush once after startup to persist any boot-time normalization (e.g. id/migration repair).
+    markServerAutosaveFullDirty(dirtyState)
     scheduleServerSave()
 
     disposeServerSaveRuntime = () => {

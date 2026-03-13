@@ -181,6 +181,26 @@ export function createSimpleCharacter(char:character|groupChat){
 
 }
 
+function snapshotStringArray(values: string[] | undefined | null) {
+    $state.snapshot(values?.length ?? 0)
+    for (const value of values ?? []) {
+        $state.snapshot(value)
+    }
+}
+
+function snapshotModuleRuntimeState() {
+    const modules = DBState.db.modules ?? []
+    $state.snapshot(modules.length)
+    for (const module of modules) {
+        if (!module || typeof module !== 'object') {
+            continue
+        }
+        $state.snapshot(module.id)
+        $state.snapshot(module.hideIcon)
+        $state.snapshot(module.backgroundEmbedding)
+    }
+}
+
 if (import.meta.hot) {
     import.meta.hot.dispose(() => {
         disposeStoresRuntime()
@@ -224,15 +244,14 @@ $effect.root(() => {
         selIdState.selId = v
     })
     $effect(() => {
-        $state.snapshot(DBState.db.modules)
-        $state.snapshot({
-            enabledModules: DBState?.db?.enabledModules,
-            enabledModulesLength: DBState?.db?.enabledModules?.length,
-            chatModulesLength: DBState?.db?.characters?.[selIdState.selId]?.chats?.[DBState?.db?.characters?.[selIdState.selId]?.chatPage]?.modules?.length,
-            hideChatIcon: DBState?.db?.characters?.[selIdState.selId]?.hideChatIcon,
-            backgroundHTML: DBState?.db?.characters?.[selIdState.selId]?.backgroundHTML,
-            moduleIntergration: DBState?.db?.moduleIntergration
-        })
+        snapshotModuleRuntimeState()
+        snapshotStringArray(DBState?.db?.enabledModules)
+        const selectedChar = DBState?.db?.characters?.[selIdState.selId]
+        const selectedChat = selectedChar?.chats?.[selectedChar?.chatPage]
+        snapshotStringArray(selectedChat?.modules)
+        $state.snapshot(selectedChar?.hideChatIcon)
+        $state.snapshot(selectedChar?.backgroundHTML)
+        $state.snapshot(DBState?.db?.moduleIntergration)
         void import("./process/modules").then(({ moduleUpdate }) => {
             moduleUpdate()
         })
