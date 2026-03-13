@@ -4,17 +4,16 @@ import type {
     CharacterEvolutionSectionConfig,
     CharacterEvolutionState,
 } from "../storage/database.types"
-import { filterActiveCharacterEvolutionState, isCharacterEvolutionObjectSection } from "./items"
+import { isCharacterEvolutionObjectSection } from "./items"
 import {
     normalizeCharacterEvolutionPrivacy,
     normalizeCharacterEvolutionSectionConfigs,
-    normalizeCharacterEvolutionState,
 } from "./normalizers"
+import { projectCharacterEvolutionStateForPrompt } from "./projection"
 
 function itemToLine(item: CharacterEvolutionItem): string {
-    const note = item.note?.trim() ? ` (${item.note.trim()})` : ""
     const confidence = item.confidence ? ` [${item.confidence}]` : ""
-    return `- ${item.value}${confidence}${note}`
+    return `- ${item.value}${confidence}`
 }
 
 export function renderCharacterEvolutionStateForPrompt(
@@ -22,7 +21,7 @@ export function renderCharacterEvolutionStateForPrompt(
     sectionConfigsRaw: CharacterEvolutionSectionConfig[],
     privacyRaw?: CharacterEvolutionPrivacySettings,
 ): string {
-    const state = filterActiveCharacterEvolutionState(normalizeCharacterEvolutionState(stateRaw))
+    const state = projectCharacterEvolutionStateForPrompt(stateRaw, "generation")
     const sectionConfigs = normalizeCharacterEvolutionSectionConfigs(sectionConfigsRaw)
     const privacy = normalizeCharacterEvolutionPrivacy(privacyRaw)
     const lines: string[] = []

@@ -801,11 +801,12 @@ Completed phases so far:
 - Phase 1
 - Phase 2
 - Phase 2.5
+- Phase 3
+- Phase 4
 
 Remaining planned phases:
 
-- Phase 3
-- Phase 4
+- Phase 4.5
 - Phase 5
 - Phase 6
 
@@ -898,6 +899,29 @@ Acceptance:
 
 - direct contradictions do not remain as two active items in the same section
 
+## Phase 4.5: Prompt Projection and Partial Proposal Contract
+
+Source of truth:
+
+- `/Users/andrewbostan/Documents/RisuAII/docs/planning-artifacts/character-evolution-v2-phase-4-5.md`
+
+Deliver:
+
+- bounded prompt projection for normal generation prompt assembly
+- bounded compact current-state projection for extractor comparison input
+- changed-sections-only `proposedState` contract
+- runtime rejection of obviously inconsistent partial proposal payloads
+- global-only settings for projection ranking and per-section limits
+
+Acceptance:
+
+- prompt growth no longer scales linearly with total active canonical state
+- extractor is no longer instructed to echo the full next state object
+- omitted `proposedState` sections mean no change
+- included `proposedState` sections are full replacements for those sections
+- malformed extractor payloads do not create pending proposals
+- projection policy is editable from global settings and not exposed as a per-character override
+
 ## Phase 5: Decay
 
 Deliver:
@@ -935,6 +959,8 @@ Required test coverage:
 - confidence promotion on repeat
 - archived item revival
 - corrected status on direct replacement
+- prompt projection policy behavior
+- partial proposal validation for changed-sections-only extractor output
 - fast decay for active threads and key moments
 - slow decay behavior for facts and preferences
 - prompt exclusion of corrected and archived items

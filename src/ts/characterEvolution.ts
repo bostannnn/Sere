@@ -37,3 +37,4 @@ export {
 } from "./character-evolution/selectors"
 
 export { renderCharacterEvolutionStateForPrompt } from "./character-evolution/render"
+export { projectCharacterEvolutionStateForPrompt } from "./character-evolution/projection"

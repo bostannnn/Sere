@@ -584,6 +584,8 @@ Recommended order from the original starting point:
 - Phase 1 is complete
 - Phase 2 is complete
 - Phase 2.5 is complete
+- Phase 3 is complete
+- Phase 4 is complete
 - future work should continue from the normalized current UI and this UX structure
 
 This UX spec should be treated as the screen-structure source of truth for the remaining phases.
@@ -597,6 +599,7 @@ Use this spec to integrate:
 - archive/corrected browsing details
 - auto-handoff visibility
 - future lifecycle controls
+- prompt projection controls in global defaults only
 
 without falling back into ad hoc sidebar overload.
 
@@ -632,6 +635,7 @@ Example review behavior:
 - archived/corrected memory may use a separate nested modal/subview
 - archived/corrected memory remains stored in canonical accepted state even when hidden from the default State tab
 - auto-handoff controls live in global defaults settings
+- prompt projection ranking and limits live in global defaults settings only
 - sidebar keeps tabs
 - default accept action is `Accept`
 - `Accept and create new chat` is secondary

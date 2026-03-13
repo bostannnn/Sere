@@ -1,6 +1,6 @@
 const { applyPromptVars } = require('../scripts.cjs');
-const { getEffectiveCharacterEvolutionSettings, normalizeCharacterEvolutionState } = require('./normalizers.cjs');
-const { filterActiveCharacterEvolutionState } = require('./items.cjs');
+const { getEffectiveCharacterEvolutionSettings } = require('./normalizers.cjs');
+const { projectCharacterEvolutionStateForPrompt } = require('./projection.cjs');
 const { toTrimmedString } = require('./utils.cjs');
 
 function chatMessageToTranscriptLine(message, characterName, userName) {
@@ -12,6 +12,47 @@ function chatMessageToTranscriptLine(message, characterName, userName) {
     const content = toTrimmedString(message.data) || toTrimmedString(message.content);
     if (!content) return '';
     return `${label}: ${content}`;
+}
+
+function toCompactPromptItem(item) {
+    const value = toTrimmedString(item?.value);
+    if (!value) {
+        return null;
+    }
+
+    return {
+        value,
+        ...(item?.confidence ? { confidence: item.confidence } : {}),
+        status: 'active',
+    };
+}
+
+function buildCompactCurrentStateForExtraction(stateRaw) {
+    const state = projectCharacterEvolutionStateForPrompt(stateRaw, 'extraction');
+
+    return {
+        relationship: {
+            trustLevel: toTrimmedString(state.relationship?.trustLevel),
+            dynamic: toTrimmedString(state.relationship?.dynamic),
+        },
+        activeThreads: state.activeThreads.map((item) => toCompactPromptItem(item)).filter(Boolean),
+        runningJokes: state.runningJokes.map((item) => toCompactPromptItem(item)).filter(Boolean),
+        characterLikes: state.characterLikes.map((item) => toCompactPromptItem(item)).filter(Boolean),
+        characterDislikes: state.characterDislikes.map((item) => toCompactPromptItem(item)).filter(Boolean),
+        characterHabits: state.characterHabits.map((item) => toCompactPromptItem(item)).filter(Boolean),
+        characterBoundariesPreferences: state.characterBoundariesPreferences.map((item) => toCompactPromptItem(item)).filter(Boolean),
+        userFacts: state.userFacts.map((item) => toCompactPromptItem(item)).filter(Boolean),
+        userRead: state.userRead.map((item) => toCompactPromptItem(item)).filter(Boolean),
+        userLikes: state.userLikes.map((item) => toCompactPromptItem(item)).filter(Boolean),
+        userDislikes: state.userDislikes.map((item) => toCompactPromptItem(item)).filter(Boolean),
+        lastInteractionEnded: {
+            state: toTrimmedString(state.lastInteractionEnded?.state),
+            residue: toTrimmedString(state.lastInteractionEnded?.residue),
+        },
+        keyMoments: state.keyMoments.map((item) => toCompactPromptItem(item)).filter(Boolean),
+        characterIntimatePreferences: state.characterIntimatePreferences.map((item) => toCompactPromptItem(item)).filter(Boolean),
+        userIntimatePreferences: state.userIntimatePreferences.map((item) => toCompactPromptItem(item)).filter(Boolean),
+    };
 }
 
 function buildCharacterEvolutionPromptMessages(arg = {}) {
@@ -53,11 +94,7 @@ function buildCharacterEvolutionPromptMessages(arg = {}) {
         ].join('\n'))
         .join('\n');
 
-    const state = JSON.stringify(
-        filterActiveCharacterEvolutionState(normalizeCharacterEvolutionState(evolution.currentState)),
-        null,
-        2
-    );
+    const state = JSON.stringify(buildCompactCurrentStateForExtraction(evolution.currentState), null, 2);
     const prompt = [
         applyPromptVars(evolution.extractionPrompt, character, settings),
         '',
