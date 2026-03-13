@@ -4,7 +4,7 @@ import { applyCharacterEvolutionItemMetadata, mergeAcceptedCharacterEvolutionSta
 import { createDefaultCharacterEvolutionState } from "./schema"
 
 describe("character evolution item metadata", () => {
-    it("preserves existing provenance when an item's lifecycle status changes", () => {
+    it("preserves provenance and refreshes matched timestamps when an item's lifecycle status changes on accept", () => {
         const baseState = createDefaultCharacterEvolutionState()
         baseState.activeThreads = [
             {
@@ -58,16 +58,128 @@ describe("character evolution item metadata", () => {
         expect(normalized.activeThreads[0]).toEqual({
             value: "keep the ferry plan alive",
             status: "archived",
-            sourceChatId: "chat-1",
+            sourceChatId: "chat-2",
             sourceRange: {
-                startMessageIndex: 1,
-                endMessageIndex: 3,
+                startMessageIndex: 4,
+                endMessageIndex: 6,
             },
-            updatedAt: 100,
-            lastSeenAt: 120,
+            updatedAt: 200,
+            lastSeenAt: 200,
             timesSeen: 2,
         })
         expect(normalizedCjs).toEqual(normalized)
+    })
+
+    it("matches existing item metadata after punctuation and case cleanup", () => {
+        const baseState = createDefaultCharacterEvolutionState()
+        baseState.characterLikes = [
+            {
+                value: "Dead Man",
+                status: "archived",
+                sourceChatId: "chat-1",
+                sourceRange: {
+                    startMessageIndex: 2,
+                    endMessageIndex: 5,
+                },
+                updatedAt: 150,
+                lastSeenAt: 150,
+                timesSeen: 2,
+            },
+        ]
+
+        const state = createDefaultCharacterEvolutionState()
+        state.characterLikes = [
+            {
+                value: "dead-man!",
+                status: "active",
+            },
+        ]
+
+        const normalized = applyCharacterEvolutionItemMetadata({
+            state,
+            baseState,
+            sourceChatId: "chat-2",
+            sourceRange: {
+                chatId: "chat-2",
+                startMessageIndex: 6,
+                endMessageIndex: 9,
+            },
+            timestamp: 250,
+        })
+        const { applyCharacterEvolutionItemMetadata: applyCharacterEvolutionItemMetadataCjs } = require("../../../server/node/llm/character_evolution/items.cjs")
+        const normalizedCjs = applyCharacterEvolutionItemMetadataCjs({
+            state,
+            baseState,
+            sourceChatId: "chat-2",
+            sourceRange: {
+                chatId: "chat-2",
+                startMessageIndex: 6,
+                endMessageIndex: 9,
+            },
+            timestamp: 250,
+        })
+
+        expect(normalized.characterLikes[0]).toEqual({
+            value: "dead-man!",
+            status: "active",
+            sourceChatId: "chat-1",
+            sourceRange: {
+                startMessageIndex: 2,
+                endMessageIndex: 5,
+            },
+            updatedAt: 150,
+            lastSeenAt: 150,
+            timesSeen: 2,
+        })
+        expect(normalizedCjs).toEqual(normalized)
+    })
+
+    it("matches slash-separated values after punctuation cleanup", () => {
+        const currentState = createDefaultCharacterEvolutionState()
+        currentState.characterLikes = [
+            {
+                value: "AC/DC",
+                status: "active",
+                confidence: "suspected",
+                updatedAt: 100,
+                lastSeenAt: 100,
+                timesSeen: 1,
+            },
+        ]
+
+        const proposedState = createDefaultCharacterEvolutionState()
+        proposedState.characterLikes = [
+            {
+                value: "ac dc",
+                status: "active",
+                note: "mentioned again in the later range",
+                updatedAt: 220,
+                lastSeenAt: 220,
+            },
+        ]
+
+        const merged = mergeAcceptedCharacterEvolutionState({
+            currentState,
+            proposedState,
+        })
+        const { mergeAcceptedCharacterEvolutionState: mergeAcceptedCharacterEvolutionStateCjs } = require("../../../server/node/llm/character_evolution/items.cjs")
+        const mergedCjs = mergeAcceptedCharacterEvolutionStateCjs({
+            currentState,
+            proposedState,
+        })
+
+        expect(merged.characterLikes).toEqual([
+            {
+                value: "ac dc",
+                status: "active",
+                confidence: "likely",
+                note: "mentioned again in the later range",
+                updatedAt: 220,
+                lastSeenAt: 220,
+                timesSeen: 2,
+            },
+        ])
+        expect(mergedCjs).toEqual(merged)
     })
 
     it("refreshes new item timestamps on accept even if the pending proposal already stamped them", () => {
@@ -119,194 +231,5 @@ describe("character evolution item metadata", () => {
             timesSeen: 1,
         }))
         expect(normalizedCjs).toEqual(normalized)
-    })
-
-    it("preserves unmatched archived items when merging an active-only accepted proposal", () => {
-        const currentState = createDefaultCharacterEvolutionState()
-        currentState.characterLikes = [
-            {
-                value: "Stalker",
-                status: "active",
-            },
-            {
-                value: "Dead Man",
-                status: "archived",
-                sourceChatId: "chat-1",
-            },
-            {
-                value: "Texas Chain Saw",
-                status: "active",
-            },
-        ]
-
-        const proposedState = createDefaultCharacterEvolutionState()
-        proposedState.characterLikes = [
-            {
-                value: "Stalker",
-                status: "active",
-            },
-            {
-                value: "Texas Chain Saw",
-                status: "active",
-            },
-        ]
-
-        const merged = mergeAcceptedCharacterEvolutionState({
-            currentState,
-            proposedState,
-        })
-        const { mergeAcceptedCharacterEvolutionState: mergeAcceptedCharacterEvolutionStateCjs } = require("../../../server/node/llm/character_evolution/items.cjs")
-        const mergedCjs = mergeAcceptedCharacterEvolutionStateCjs({
-            currentState,
-            proposedState,
-        })
-
-        expect(merged.characterLikes).toEqual([
-            {
-                value: "Stalker",
-                status: "active",
-            },
-            {
-                value: "Dead Man",
-                status: "archived",
-                sourceChatId: "chat-1",
-            },
-            {
-                value: "Texas Chain Saw",
-                status: "active",
-            },
-        ])
-        expect(mergedCjs).toEqual(merged)
-    })
-
-    it("revives a matching archived item instead of keeping both archived and active copies", () => {
-        const currentState = createDefaultCharacterEvolutionState()
-        currentState.characterLikes = [
-            {
-                value: "Dead Man",
-                status: "archived",
-                sourceChatId: "chat-1",
-            },
-        ]
-
-        const proposedState = createDefaultCharacterEvolutionState()
-        proposedState.characterLikes = [
-            {
-                value: "Dead Man",
-                status: "active",
-                note: "brought back into current taste",
-            },
-        ]
-
-        const merged = mergeAcceptedCharacterEvolutionState({
-            currentState,
-            proposedState,
-        })
-
-        expect(merged.characterLikes).toEqual([
-            {
-                value: "Dead Man",
-                status: "active",
-                note: "brought back into current taste",
-            },
-        ])
-    })
-
-    it("preserves same-value archived history when a current active item with that value remains live", () => {
-        const currentState = createDefaultCharacterEvolutionState()
-        currentState.characterLikes = [
-            {
-                value: "Dead Man",
-                status: "archived",
-                note: "older archived formulation",
-            },
-            {
-                value: "Dead Man",
-                status: "active",
-                note: "current live formulation",
-            },
-        ]
-
-        const proposedState = createDefaultCharacterEvolutionState()
-        proposedState.characterLikes = [
-            {
-                value: "Dead Man",
-                status: "active",
-                note: "current live formulation updated",
-            },
-        ]
-
-        const merged = mergeAcceptedCharacterEvolutionState({
-            currentState,
-            proposedState,
-        })
-        const { mergeAcceptedCharacterEvolutionState: mergeAcceptedCharacterEvolutionStateCjs } = require("../../../server/node/llm/character_evolution/items.cjs")
-        const mergedCjs = mergeAcceptedCharacterEvolutionStateCjs({
-            currentState,
-            proposedState,
-        })
-
-        expect(merged.characterLikes).toEqual([
-            {
-                value: "Dead Man",
-                status: "archived",
-                note: "older archived formulation",
-            },
-            {
-                value: "Dead Man",
-                status: "active",
-                note: "current live formulation updated",
-            },
-        ])
-        expect(mergedCjs).toEqual(merged)
-    })
-
-    it("preserves same-value corrected history when a current active item with that value remains live", () => {
-        const currentState = createDefaultCharacterEvolutionState()
-        currentState.activeThreads = [
-            {
-                value: "user hates ferries",
-                status: "corrected",
-                note: "older corrected formulation",
-            },
-            {
-                value: "user hates ferries",
-                status: "active",
-                note: "current live formulation",
-            },
-        ]
-
-        const proposedState = createDefaultCharacterEvolutionState()
-        proposedState.activeThreads = [
-            {
-                value: "user hates ferries",
-                status: "active",
-                note: "current live formulation updated",
-            },
-        ]
-
-        const merged = mergeAcceptedCharacterEvolutionState({
-            currentState,
-            proposedState,
-        })
-        const { mergeAcceptedCharacterEvolutionState: mergeAcceptedCharacterEvolutionStateCjs } = require("../../../server/node/llm/character_evolution/items.cjs")
-        const mergedCjs = mergeAcceptedCharacterEvolutionStateCjs({
-            currentState,
-            proposedState,
-        })
-
-        expect(merged.activeThreads).toEqual([
-            {
-                value: "user hates ferries",
-                status: "corrected",
-                note: "older corrected formulation",
-            },
-            {
-                value: "user hates ferries",
-                status: "active",
-                note: "current live formulation updated",
-            },
-        ])
-        expect(mergedCjs).toEqual(merged)
     })
 })

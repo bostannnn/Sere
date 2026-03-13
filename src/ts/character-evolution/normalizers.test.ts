@@ -58,6 +58,49 @@ describe("character evolution normalizers", () => {
         expect(normalizedCjs).toEqual(normalized)
     })
 
+    it("preserves omitted optional item notes as absent while keeping explicit blank notes", () => {
+        const input = {
+            characterLikes: [
+                {
+                    value: "Tea",
+                    status: "active",
+                },
+                {
+                    value: "Coffee",
+                    status: "active",
+                    note: "  explicit note  ",
+                },
+                {
+                    value: "Juice",
+                    status: "active",
+                    note: "   ",
+                },
+            ],
+        }
+
+        const normalized = normalizeCharacterEvolutionState(input)
+        const { normalizeCharacterEvolutionState: normalizeCharacterEvolutionStateCjs } = require("../../../server/node/llm/character_evolution/normalizers.cjs")
+        const normalizedCjs = normalizeCharacterEvolutionStateCjs(input)
+
+        expect(normalized.characterLikes).toEqual([
+            {
+                value: "Tea",
+                status: "active",
+            },
+            {
+                value: "Coffee",
+                status: "active",
+                note: "explicit note",
+            },
+            {
+                value: "Juice",
+                status: "active",
+                note: "",
+            },
+        ])
+        expect(normalizedCjs).toEqual(normalized)
+    })
+
     it("preserves an explicit unprocessed cursor sentinel of -1", () => {
         const input = {
             enabled: true,

@@ -16,13 +16,16 @@ function normalizeItem(raw) {
         return null;
     }
     const value = toTrimmedString(raw.value);
+    const note = Object.prototype.hasOwnProperty.call(raw, 'note') && typeof raw.note === 'string'
+        ? toTrimmedString(raw.note)
+        : undefined;
     if (!value) return null;
     return {
         value,
         confidence: raw.confidence === 'suspected' || raw.confidence === 'likely' || raw.confidence === 'confirmed'
             ? raw.confidence
             : undefined,
-        note: toTrimmedString(raw.note),
+        ...(note !== undefined ? { note } : {}),
         status: raw.status === 'archived' || raw.status === 'corrected' || raw.status === 'active'
             ? raw.status
             : 'active',

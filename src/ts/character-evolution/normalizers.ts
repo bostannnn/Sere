@@ -42,13 +42,16 @@ function normalizeItem(raw: unknown): CharacterEvolutionItem | null {
     }
     const item = raw as Record<string, unknown>
     const value = typeof item.value === "string" ? item.value.trim() : ""
+    const note = Object.prototype.hasOwnProperty.call(item, "note") && typeof item.note === "string"
+        ? item.note.trim()
+        : undefined
     if (!value) return null
     return {
         value,
         confidence: item.confidence === "suspected" || item.confidence === "likely" || item.confidence === "confirmed"
             ? item.confidence
             : undefined,
-        note: typeof item.note === "string" ? item.note.trim() : "",
+        ...(note !== undefined ? { note } : {}),
         status: item.status === "archived" || item.status === "corrected" || item.status === "active"
             ? item.status
             : "active",
