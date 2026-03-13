@@ -6,6 +6,7 @@
         CharacterEvolutionState,
     } from "src/ts/storage/database.types";
     import Button from "../UI/GUI/Button.svelte";
+    import CheckInput from "../UI/GUI/CheckInput.svelte";
     import ProposalPanel from "./ProposalPanel.svelte";
 
     interface Props {
@@ -36,6 +37,7 @@
         onClose = () => {},
         loading = false,
     }: Props = $props();
+    let showAdvancedInfo = $state(false);
 </script>
 
 <section class="evolution-review-workspace">
@@ -44,6 +46,14 @@
             <h2 class="evolution-review-title">Evolution Review</h2>
         </div>
         <div class="evolution-review-actions">
+            <CheckInput
+                check={showAdvancedInfo}
+                onChange={(next) => showAdvancedInfo = next}
+                name="Show advanced info"
+                margin={false}
+                grayText={true}
+                bare={true}
+            />
             <Button size="sm" styled="outlined" onclick={onClose}>Back To Chat</Button>
         </div>
     </header>
@@ -59,6 +69,7 @@
             {onAcceptAndCreate}
             {onReject}
             {loading}
+            {showAdvancedInfo}
         />
     </div>
 </section>

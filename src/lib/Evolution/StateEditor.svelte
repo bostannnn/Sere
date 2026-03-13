@@ -1,5 +1,6 @@
 <script lang="ts">
     import { PlusIcon, TrashIcon } from "@lucide/svelte";
+    import CheckInput from "../UI/GUI/CheckInput.svelte";
     import type {
         CharacterEvolutionItem,
         CharacterEvolutionPrivacySettings,
@@ -7,6 +8,7 @@
         CharacterEvolutionState,
     } from "src/ts/storage/database.types";
     import { isCharacterEvolutionObjectSection } from "src/ts/character-evolution/items";
+    import EvolutionItemMetadata from "./EvolutionItemMetadata.svelte";
     import SelectInput from "../UI/GUI/SelectInput.svelte";
     import OptionInput from "../UI/GUI/OptionInput.svelte";
     import TextAreaInput from "../UI/GUI/TextAreaInput.svelte";
@@ -32,6 +34,7 @@
         title = "Current State",
         itemFilter = "all",
     }: Props = $props();
+    let showAdvancedInfo = $state(false);
 
     function canRenderSection(key: string) {
         if (key === "characterIntimatePreferences" && !privacy.allowCharacterIntimatePreferences) {
@@ -115,6 +118,14 @@
 <div class="ds-settings-section evolution-state-editor">
     <div class="evolution-state-editor-header">
         <span class="ds-settings-label">{title}</span>
+        <CheckInput
+            check={showAdvancedInfo}
+            onChange={(next) => showAdvancedInfo = next}
+            name="Show advanced info"
+            margin={false}
+            grayText={true}
+            bare={true}
+        />
     </div>
     <div class="ds-settings-list-shell evolution-state-editor-list">
         {#each sectionConfigs as section (section.key)}
@@ -186,6 +197,9 @@
                                         </SelectInput>
                                     </div>
                                     <TextAreaInput value={entry.item.note ?? ""} disabled={readonly} height="20" placeholder="Note" onValueChange={(next) => updateFactItemField(section.key as keyof CharacterEvolutionState, entry.index, "note", next)} />
+                                    {#if showAdvancedInfo}
+                                        <EvolutionItemMetadata item={entry.item} />
+                                    {/if}
                                 </div>
                             </div>
                         {/each}
@@ -199,6 +213,14 @@
 <style>
     .evolution-state-editor {
         gap: var(--ds-space-3);
+    }
+
+    .evolution-state-editor-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--ds-space-2);
+        flex-wrap: wrap;
     }
 
     .evolution-state-editor-list {

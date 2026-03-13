@@ -1,4 +1,5 @@
-import type { CharacterEvolutionItem } from "src/ts/storage/database.types";
+import type { CharacterEvolutionItem, CharacterEvolutionState } from "src/ts/storage/database.types";
+import type { FactDiffRow, FieldDiffRow, StringDiffRow } from "./proposalSectionCompare.types";
 
 export type ProposalDiffStatus = "unchanged" | "changed" | "added" | "removed";
 
@@ -216,4 +217,265 @@ export function matchFactItemsByValue(
     });
 
     return rows;
+}
+
+export function normalizeProposalText(value: string | null | undefined) {
+    return String(value ?? "").trim();
+}
+
+export function areProposalStringItemsEqual(left: string, right: string) {
+    return normalizeProposalText(left) === normalizeProposalText(right);
+}
+
+export function normalizeProposalFactItem(item: CharacterEvolutionItem | null | undefined) {
+    return {
+        value: normalizeProposalText(item?.value),
+        confidence: item?.confidence ?? "suspected",
+        status: item?.status ?? "active",
+        note: normalizeProposalText(item?.note),
+    };
+}
+
+export function areProposalFactItemsEqual(left: CharacterEvolutionItem | null | undefined, right: CharacterEvolutionItem | null | undefined) {
+    return JSON.stringify(normalizeProposalFactItem(left)) === JSON.stringify(normalizeProposalFactItem(right));
+}
+
+export function changedProposalFactFields(left: CharacterEvolutionItem | null | undefined, right: CharacterEvolutionItem | null | undefined) {
+    const normalizedLeft = normalizeProposalFactItem(left);
+    const normalizedRight = normalizeProposalFactItem(right);
+    const fields: string[] = [];
+
+    if (normalizedLeft.value !== normalizedRight.value) fields.push("text");
+    if (normalizedLeft.confidence !== normalizedRight.confidence) fields.push("confidence");
+    if (normalizedLeft.status !== normalizedRight.status) fields.push("status");
+    if (normalizedLeft.note !== normalizedRight.note) fields.push("note");
+
+    return fields;
+}
+
+export function sectionHasProposalItems(state: CharacterEvolutionState, key: keyof CharacterEvolutionState) {
+    if (key === "relationship") {
+        return Boolean(state.relationship.trustLevel || state.relationship.dynamic);
+    }
+    if (key === "lastInteractionEnded") {
+        return Boolean(state.lastInteractionEnded.state || state.lastInteractionEnded.residue);
+    }
+    const sectionValue = state[key];
+    return Array.isArray(sectionValue) ? sectionValue.length > 0 : false;
+}
+
+function factItemValueKeys(items: CharacterEvolutionItem[]) {
+    return new Set(
+        items
+            .map((item) => normalizeProposalText(item?.value))
+            .filter((value) => value.length > 0)
+            .map((value) => value.toLowerCase()),
+    );
+}
+
+export function reviewCurrentProposalFactItems(currentItems: CharacterEvolutionItem[], proposedItems: CharacterEvolutionItem[]) {
+    const proposedValueKeys = factItemValueKeys(proposedItems);
+    const activeCurrentValueKeys = factItemValueKeys(
+        currentItems.filter((item) => (item?.status ?? "active") === "active"),
+    );
+
+    return currentItems.filter((item) => {
+        const status = item?.status ?? "active";
+        if (status === "active") {
+            return true;
+        }
+
+        const valueKey = normalizeProposalText(item?.value).toLowerCase();
+        if (valueKey.length === 0 || activeCurrentValueKeys.has(valueKey)) {
+            return false;
+        }
+
+        return proposedValueKeys.has(valueKey);
+    });
+}
+
+export function buildProposalStringDiffRows(
+    currentItems: string[],
+    proposedItems: string[],
+    forceVisibleRowKeys: Record<string, true>,
+): StringDiffRow[] {
+    const rows: StringDiffRow[] = [];
+    const totalRows = Math.max(currentItems.length, proposedItems.length);
+
+    for (let index = 0; index < totalRows; index += 1) {
+        const currentValue = currentItems[index];
+        const proposedValue = proposedItems[index];
+        const cacheKey = buildIndexedRowKey("string", currentValue !== undefined ? index : null, proposedValue !== undefined ? index : null);
+
+        if (currentValue !== undefined && proposedValue !== undefined) {
+            rows.push({
+                cacheKey,
+                status: areProposalStringItemsEqual(currentValue, proposedValue) ? "unchanged" : "changed",
+                currentIndex: index,
+                proposedIndex: index,
+                currentValue,
+                proposedValue,
+                forceVisible: forceVisibleRowKeys[cacheKey] === true,
+            });
+            continue;
+        }
+
+        if (currentValue !== undefined) {
+            rows.push({
+                cacheKey,
+                status: "removed",
+                currentIndex: index,
+                proposedIndex: null,
+                currentValue,
+                proposedValue: "",
+                forceVisible: forceVisibleRowKeys[cacheKey] === true,
+            });
+            continue;
+        }
+
+        rows.push({
+            cacheKey,
+            status: "added",
+            currentIndex: null,
+            proposedIndex: index,
+            currentValue: "",
+            proposedValue: proposedValue ?? "",
+            forceVisible: forceVisibleRowKeys[cacheKey] === true,
+        });
+    }
+
+    return rows;
+}
+
+export function buildProposalFactDiffRows(
+    currentItems: CharacterEvolutionItem[],
+    proposedItems: CharacterEvolutionItem[],
+    forceVisibleRowKeys: Record<string, true>,
+): FactDiffRow[] {
+    const rows: FactDiffRow[] = [];
+
+    for (const pair of matchFactItemsByValue(currentItems, proposedItems)) {
+        const currentItem = pair.currentItem;
+        const proposedItem = pair.proposedItem;
+        const cacheKey = buildIndexedRowKey("fact", pair.currentIndex, pair.proposedIndex);
+
+        if (currentItem && proposedItem) {
+            rows.push({
+                cacheKey,
+                status: areProposalFactItemsEqual(currentItem, proposedItem) ? "unchanged" : "changed",
+                currentIndex: pair.currentIndex,
+                proposedIndex: pair.proposedIndex,
+                currentItem,
+                proposedItem,
+                changedFields: changedProposalFactFields(currentItem, proposedItem),
+                forceVisible: forceVisibleRowKeys[cacheKey] === true,
+            });
+            continue;
+        }
+
+        if (currentItem) {
+            rows.push({
+                cacheKey,
+                status: "removed",
+                currentIndex: pair.currentIndex,
+                proposedIndex: null,
+                currentItem,
+                proposedItem: null,
+                changedFields: [],
+                forceVisible: forceVisibleRowKeys[cacheKey] === true,
+            });
+            continue;
+        }
+
+        rows.push({
+            cacheKey,
+            status: "added",
+            currentIndex: null,
+            proposedIndex: pair.proposedIndex,
+            currentItem: null,
+            proposedItem: proposedItem ?? null,
+            changedFields: [],
+            forceVisible: forceVisibleRowKeys[cacheKey] === true,
+        });
+    }
+
+    return rows;
+}
+
+export function buildProposalObjectRows(
+    sectionKey: string,
+    currentState: CharacterEvolutionState,
+    proposedState: CharacterEvolutionState,
+    forceVisibleRowKeys: Record<string, true>,
+): FieldDiffRow[] {
+    if (sectionKey === "relationship") {
+        return [
+            {
+                cacheKey: "object:relationship:trustLevel",
+                key: "trustLevel",
+                label: "Trust level",
+                status: areProposalStringItemsEqual(currentState.relationship.trustLevel, proposedState.relationship.trustLevel)
+                    ? "unchanged"
+                    : currentState.relationship.trustLevel && proposedState.relationship.trustLevel
+                        ? "changed"
+                        : proposedState.relationship.trustLevel
+                            ? "added"
+                            : "removed",
+                currentValue: currentState.relationship.trustLevel,
+                proposedValue: proposedState.relationship.trustLevel,
+                forceVisible: forceVisibleRowKeys["object:relationship:trustLevel"] === true,
+            },
+            {
+                cacheKey: "object:relationship:dynamic",
+                key: "dynamic",
+                label: "Dynamic",
+                multiline: true,
+                status: areProposalStringItemsEqual(currentState.relationship.dynamic, proposedState.relationship.dynamic)
+                    ? "unchanged"
+                    : currentState.relationship.dynamic && proposedState.relationship.dynamic
+                        ? "changed"
+                        : proposedState.relationship.dynamic
+                            ? "added"
+                            : "removed",
+                currentValue: currentState.relationship.dynamic,
+                proposedValue: proposedState.relationship.dynamic,
+                forceVisible: forceVisibleRowKeys["object:relationship:dynamic"] === true,
+            },
+        ];
+    }
+
+    return [
+        {
+            cacheKey: "object:lastInteractionEnded:state",
+            key: "state",
+            label: "State",
+            multiline: true,
+            status: areProposalStringItemsEqual(currentState.lastInteractionEnded.state, proposedState.lastInteractionEnded.state)
+                ? "unchanged"
+                : currentState.lastInteractionEnded.state && proposedState.lastInteractionEnded.state
+                    ? "changed"
+                    : proposedState.lastInteractionEnded.state
+                        ? "added"
+                        : "removed",
+            currentValue: currentState.lastInteractionEnded.state,
+            proposedValue: proposedState.lastInteractionEnded.state,
+            forceVisible: forceVisibleRowKeys["object:lastInteractionEnded:state"] === true,
+        },
+        {
+            cacheKey: "object:lastInteractionEnded:residue",
+            key: "residue",
+            label: "Residue",
+            multiline: true,
+            status: areProposalStringItemsEqual(currentState.lastInteractionEnded.residue, proposedState.lastInteractionEnded.residue)
+                ? "unchanged"
+                : currentState.lastInteractionEnded.residue && proposedState.lastInteractionEnded.residue
+                    ? "changed"
+                    : proposedState.lastInteractionEnded.residue
+                        ? "added"
+                        : "removed",
+            currentValue: currentState.lastInteractionEnded.residue,
+            proposedValue: proposedState.lastInteractionEnded.residue,
+            forceVisible: forceVisibleRowKeys["object:lastInteractionEnded:residue"] === true,
+        },
+    ];
 }

@@ -39,20 +39,25 @@
                 </span>
             </div>
         </div>
-    {:else if currentStateDraft}
+    {/if}
+
+    {#if currentStateDraft}
         <StateEditor
             bind:value={currentStateDraft}
             {sectionConfigs}
             {privacy}
             title="Current State"
             itemFilter="active-only"
+            readonly={hasPendingProposal}
         />
-        <div class="ds-settings-section">
-            <div class="ds-settings-inline-actions action-rail">
-                <Button styled="outlined" onclick={onPersist}>
-                    Save Current State
-                </Button>
+        {#if !hasPendingProposal}
+            <div class="ds-settings-section">
+                <div class="ds-settings-inline-actions action-rail">
+                    <Button styled="outlined" onclick={onPersist}>
+                        Save Current State
+                    </Button>
+                </div>
             </div>
-        </div>
+        {/if}
     {/if}
 </div>

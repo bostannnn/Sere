@@ -1,0 +1,288 @@
+.proposal-section-compare {
+    display: flex;
+    flex-direction: column;
+    gap: var(--ds-space-3);
+    padding: var(--ds-space-3) 0;
+}
+
+.proposal-section-compare-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--ds-space-3);
+    flex-wrap: wrap;
+}
+
+.proposal-section-compare-copy {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+}
+
+.proposal-section-compare-title {
+    color: var(--ds-text-primary);
+    font-size: clamp(1.05rem, 0.98rem + 0.25vw, 1.2rem);
+    font-weight: var(--ds-font-weight-semibold);
+}
+
+.proposal-section-compare-summary {
+    color: var(--ds-text-secondary);
+    max-width: 58rem;
+}
+
+.proposal-section-compare-meta,
+.proposal-diff-row-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.proposal-section-compare-counts,
+.proposal-diff-row-meta {
+    color: var(--ds-text-secondary);
+    font-size: var(--ds-font-size-sm);
+}
+
+.proposal-change-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 1.5rem;
+    padding: 0.1rem 0.55rem;
+    border-radius: var(--ds-radius-pill);
+    font-size: var(--ds-font-size-xs);
+    font-weight: var(--ds-font-weight-medium);
+    border: 1px solid color-mix(in srgb, var(--ds-border-subtle) 72%, transparent);
+    background: color-mix(in srgb, var(--ds-surface-3) 76%, transparent);
+}
+
+.proposal-change-badge--changed {
+    color: color-mix(in srgb, oklch(0.77 0.12 80) 72%, white);
+}
+
+.proposal-change-badge--added {
+    color: color-mix(in srgb, oklch(0.73 0.14 150) 72%, white);
+}
+
+.proposal-change-badge--removed {
+    color: color-mix(in srgb, oklch(0.68 0.18 28) 78%, white);
+}
+
+.proposal-change-badge--unchanged,
+.proposal-change-badge--dismissed {
+    color: var(--ds-text-secondary);
+}
+
+.proposal-text-button {
+    border: 0;
+    background: transparent;
+    color: var(--ds-text-secondary);
+    font: inherit;
+    cursor: pointer;
+    padding: 0;
+}
+
+.proposal-text-button:hover {
+    color: var(--ds-text-primary);
+}
+
+.proposal-section-evidence {
+    border: 1px solid color-mix(in srgb, var(--ds-border-subtle) 72%, transparent);
+    border-radius: var(--ds-radius-lg);
+    background: color-mix(in srgb, var(--ds-surface-2) 70%, transparent);
+    padding: 0.8rem 1rem;
+}
+
+.proposal-section-evidence summary {
+    cursor: pointer;
+    color: var(--ds-text-secondary);
+    font-size: var(--ds-font-size-sm);
+    font-weight: var(--ds-font-weight-medium);
+}
+
+.proposal-section-evidence ul {
+    display: flex;
+    flex-direction: column;
+    gap: 0.65rem;
+    margin: 0.9rem 0 0;
+    padding-left: 1.1rem;
+    color: var(--ds-text-secondary);
+}
+
+.proposal-section-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: var(--ds-space-2);
+    flex-wrap: wrap;
+}
+
+.proposal-empty-state {
+    padding: 1rem 1.1rem;
+    border: 1px dashed color-mix(in srgb, var(--ds-border-subtle) 72%, transparent);
+    border-radius: var(--ds-radius-lg);
+    color: var(--ds-text-secondary);
+    background: color-mix(in srgb, var(--ds-surface-2) 76%, transparent);
+}
+
+.proposal-diff-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--ds-space-3);
+}
+
+.proposal-diff-row {
+    display: flex;
+    flex-direction: column;
+    gap: var(--ds-space-2);
+    padding: 0.9rem 1rem;
+    border: 1px solid color-mix(in srgb, var(--ds-border-subtle) 72%, transparent);
+    border-radius: var(--ds-radius-lg);
+    background: color-mix(in srgb, var(--ds-surface-2) 76%, transparent);
+}
+
+.proposal-diff-row--changed {
+    border-color: color-mix(in srgb, oklch(0.77 0.12 80) 18%, var(--ds-border-subtle));
+}
+
+.proposal-diff-row--added {
+    border-color: color-mix(in srgb, oklch(0.73 0.14 150) 18%, var(--ds-border-subtle));
+}
+
+.proposal-diff-row--removed {
+    border-color: color-mix(in srgb, oklch(0.68 0.18 28) 18%, var(--ds-border-subtle));
+}
+
+.proposal-diff-row--dismissed {
+    border-color: color-mix(in srgb, var(--ds-border-subtle) 72%, transparent);
+}
+
+.proposal-diff-row-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--ds-space-2);
+    flex-wrap: wrap;
+}
+
+.proposal-diff-row-copy {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+}
+
+.proposal-diff-row-title {
+    color: var(--ds-text-primary);
+    font-size: var(--ds-font-size-md);
+    font-weight: var(--ds-font-weight-semibold);
+}
+
+.proposal-diff-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    gap: var(--ds-space-2);
+    align-items: stretch;
+}
+
+.proposal-diff-side {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+    min-width: 0;
+    height: 100%;
+}
+
+.proposal-diff-side-label {
+    display: inline-flex;
+    align-items: center;
+    color: var(--ds-text-secondary);
+    font-size: var(--ds-font-size-xs);
+    font-weight: var(--ds-font-weight-medium);
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+}
+
+.proposal-diff-arrow {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100%;
+    color: var(--ds-text-tertiary);
+    font-size: 1rem;
+    padding-top: 2.2rem;
+}
+
+.proposal-diff-surface {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    gap: 0.55rem;
+    min-height: 4.5rem;
+    height: 100%;
+    padding: 0.85rem 0.95rem;
+    border: 1px solid color-mix(in srgb, var(--ds-border-subtle) 74%, transparent);
+    border-radius: var(--ds-radius-lg);
+    background: color-mix(in srgb, var(--ds-surface-1) 72%, transparent);
+}
+
+.proposal-diff-surface--editable {
+    background: color-mix(in srgb, var(--ds-surface-3) 84%, transparent);
+}
+
+.proposal-diff-surface--editor,
+.proposal-diff-surface--form {
+    padding: 0;
+    border-color: transparent;
+    background: transparent;
+    min-height: 0;
+}
+
+.proposal-diff-surface--editor {
+    min-height: 8rem;
+}
+
+.proposal-diff-placeholder {
+    color: var(--ds-text-tertiary);
+}
+
+.proposal-fact-editor {
+    display: flex;
+    flex-direction: column;
+    gap: 0.65rem;
+}
+
+.proposal-diff-textarea-shell {
+    height: 100%;
+    min-height: 8rem;
+    box-shadow: none;
+}
+
+.proposal-diff-textarea-shell .ds-textarea-input-layer,
+.proposal-diff-textarea-shell .ds-textarea-input-layer-highlight {
+    padding: 1rem 1.1rem;
+}
+
+.proposal-select-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--ds-space-2);
+}
+
+@media (max-width: 980px) {
+    .proposal-diff-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .proposal-diff-arrow {
+        display: none;
+    }
+}
+
+@media (max-width: 640px) {
+    .proposal-select-grid {
+        grid-template-columns: 1fr;
+    }
+}

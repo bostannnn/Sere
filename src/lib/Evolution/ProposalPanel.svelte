@@ -20,6 +20,7 @@
         onReject?: () => void;
         loading?: boolean;
         showCreateButton?: boolean;
+        showAdvancedInfo?: boolean;
     }
 
     let {
@@ -36,6 +37,7 @@
         onReject = () => {},
         loading = false,
         showCreateButton = true,
+        showAdvancedInfo = false,
     }: Props = $props();
 
     $effect(() => {
@@ -129,6 +131,7 @@
                         bind:proposedState={bindState}
                         change={changeForSection(section.key)}
                         {privacy}
+                        {showAdvancedInfo}
                     />
                 {/each}
             </div>
