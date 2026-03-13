@@ -220,4 +220,41 @@ describe("evolutionSettings.drafts", () => {
         })).toContain("char-1:global:")
         expect(getCurrentStateDraftHydrationKey(characterEntry)).toBe("char-1:7")
     })
+
+    it("hydrates canonical phase 2 state fields without reintroducing legacy lastChatEnded", () => {
+        const baseCharacter = createCharacter({
+            currentState: createState({
+                lastInteractionEnded: {
+                    state: "close and reflective",
+                    residue: "movie talk should carry forward",
+                },
+                keyMoments: [
+                    {
+                        value: "Eva explicitly named Dead Man as a desert-island film",
+                        confidence: "confirmed",
+                        status: "active",
+                        note: "canonical item-object row",
+                    },
+                ],
+            }),
+        })
+
+        const draft = createCurrentStateDraft(baseCharacter)
+
+        expect(draft).toEqual(createState({
+            lastInteractionEnded: {
+                state: "close and reflective",
+                residue: "movie talk should carry forward",
+            },
+            keyMoments: [
+                {
+                    value: "Eva explicitly named Dead Man as a desert-island film",
+                    confidence: "confirmed",
+                    status: "active",
+                    note: "canonical item-object row",
+                },
+            ],
+        }))
+        expect(Object.prototype.hasOwnProperty.call(draft, "lastChatEnded")).toBe(false)
+    })
 })
