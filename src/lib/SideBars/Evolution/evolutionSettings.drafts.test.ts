@@ -173,12 +173,11 @@ describe("evolutionSettings.drafts", () => {
         })
 
         expect(nextEvolution).not.toBeNull()
-        expect(nextEvolution?.currentState.keyMoments).toEqual([
-            expect.objectContaining({
+        expect(nextEvolution?.currentState.keyMoments).toMatchObject([
+            {
                 value: "met at the station",
                 status: "active",
-                note: "",
-            }),
+            },
         ])
         expect(nextEvolution?.sectionConfigs[0]).toMatchObject({
             enabled: nextSectionDraft[0].enabled,

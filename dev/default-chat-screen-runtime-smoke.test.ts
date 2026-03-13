@@ -1135,7 +1135,7 @@ describe("default chat screen runtime smoke", () => {
     expect(DBState.db.characters[0].characterEvolution.lastProcessedChatId).toBe("chat-1");
   });
 
-  it("replays handoff for an already accepted chat when confirmed", async () => {
+  it("blocks the chat action menu handoff button after the current chat was already accepted", async () => {
     DBState.db.characters[0].characterEvolution.lastProcessedChatId = "chat-1";
     DBState.db.characters[0].chats[0].message = [
       {
@@ -1168,15 +1168,14 @@ describe("default chat screen runtime smoke", () => {
     await flushUi();
 
     const handoffButton = Array.from(document.querySelectorAll(".ds-chat-side-menu-item")).find(
-      (element) => (element as HTMLButtonElement).getAttribute("aria-label") === "Character evolution handoff",
+      (element) => (element as HTMLButtonElement).getAttribute("aria-label") === "No new messages to process for evolution in this chat",
     ) as HTMLButtonElement | undefined;
     expect(handoffButton).toBeDefined();
-    expect(handoffButton?.textContent).toContain("Replay Accepted Chat");
+    expect(handoffButton?.textContent).toContain("No New Messages");
+    expect(handoffButton?.disabled).toBe(false);
     handoffButton!.click();
     await flushUi();
-
-    expect(mocks.createEvolutionProposal).toHaveBeenCalledTimes(1);
-    expect(mocks.createEvolutionProposal).toHaveBeenCalledWith("char-1", "chat-1", { forceReplay: true });
+    expect(mocks.createEvolutionProposal).not.toHaveBeenCalled();
   });
 
   it("re-seeds the review draft when switching to a different character proposal", async () => {
