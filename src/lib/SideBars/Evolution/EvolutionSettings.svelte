@@ -72,6 +72,7 @@
     let currentStateDraft = $state<CharacterEvolutionState | null>(null)
     let currentStateDraftKey = $state<string | null>(null)
     let replayingAcceptedChat = $state(false)
+    let runningManualRangeHandoff = $state(false)
 
     const selectedEntry = $derived.by(() => {
         const selectedIndex = Number($selectedCharID)
@@ -113,6 +114,19 @@
             && hasAcceptedEvolutionForChat(currentCharacter, activeChatId, activeChatMessageCount)
         )
     )
+    const manualRangeBlockedReason = $derived.by(() => {
+        if (!currentCharacter?.chaId || !activeChatId) {
+            return "Open a saved chat before running ranged handoff."
+        }
+        if (currentPendingProposal) {
+            return "Resolve the current proposal before running another handoff."
+        }
+        if (activeChatMessageCount < 1) {
+            return "Add at least one message to the current chat before running ranged handoff."
+        }
+        return ""
+    })
+    const manualRangeAvailable = $derived(manualRangeBlockedReason.length === 0)
 
     function findCharacterById(characterId: string) {
         return findSingleCharacterById(DBState.db.characters, characterId)
@@ -329,6 +343,51 @@
         }
     }
 
+    async function runManualRangeHandoff(startMessageNumber: number, endMessageNumber: number) {
+        const characterEntry = currentCharacter
+        const chatId = activeChatId
+        const maxCount = activeChatMessageCount
+        if (!characterEntry?.chaId || !chatId) {
+            alertError("Cannot run ranged evolution handoff without a saved character and chat.")
+            return
+        }
+
+        if (
+            !Number.isInteger(startMessageNumber)
+            || !Number.isInteger(endMessageNumber)
+            || startMessageNumber < 1
+            || endMessageNumber < startMessageNumber
+            || endMessageNumber > maxCount
+        ) {
+            alertError(`Invalid range. Use values between 1 and ${Math.max(1, maxCount)}, and keep Start less than or equal to End.`)
+            return
+        }
+
+        runningManualRangeHandoff = true
+        try {
+            const result = await runEvolutionHandoffFlow({
+                characterEntry,
+                chatId,
+                chatMessageCount: maxCount,
+                sourceRange: {
+                    chatId,
+                    startMessageIndex: startMessageNumber - 1,
+                    endMessageIndex: endMessageNumber - 1,
+                },
+                resolveCharacterById: findCharacterById,
+            })
+            if (!result.nextCharacter) {
+                return
+            }
+            commitCharacter(result.nextCharacter)
+            alertNormal(`Evolution proposal is ready for review for messages ${startMessageNumber}-${endMessageNumber}.`)
+        } catch (error) {
+            alertError(getCharacterEvolutionErrorMessage(error))
+        } finally {
+            runningManualRangeHandoff = false
+        }
+    }
+
     function openFullscreenReview() {
         const characterId = currentCharacter?.chaId
         if (!characterId || !currentPendingProposal) {
@@ -423,11 +482,17 @@
                     {effectiveProvider}
                     {effectiveModel}
                     {hasTemplateSlot}
+                    activeChatId={activeChatId}
+                    activeChatMessageCount={activeChatMessageCount}
                     {revealCharacterOverrides}
                     onToggleRevealCharacterOverrides={() => {
                         revealCharacterOverrides = !revealCharacterOverrides
                     }}
                     onOpenGlobalDefaults={openEvolutionGlobalDefaults}
+                    {manualRangeAvailable}
+                    manualRangeBlockedReason={manualRangeBlockedReason}
+                    manualRangeBusy={runningManualRangeHandoff}
+                    onRunManualRange={runManualRangeHandoff}
                     {replayCurrentChatAvailable}
                     replayCurrentChatBusy={replayingAcceptedChat}
                     onReplayCurrentChat={replayAcceptedChat}

@@ -7,6 +7,7 @@ import type {
     CharacterEvolutionPrivacySettings,
     CharacterEvolutionState,
 } from "src/ts/storage/database.types";
+import EvolutionSetupPanel from "src/lib/SideBars/Evolution/EvolutionSetupPanel.svelte";
 import EvolutionStatePanel from "src/lib/SideBars/Evolution/EvolutionStatePanel.svelte";
 import ReviewWorkspace from "./ReviewWorkspace.svelte";
 
@@ -81,6 +82,20 @@ function createProposal(
     };
 }
 
+function createSetupCharacter() {
+    return {
+        characterEvolution: {
+            enabled: true,
+            useGlobalDefaults: true,
+            extractionProvider: "openrouter",
+            extractionModel: "mistralai/mistral-large-2512",
+            extractionMaxTokens: 16000,
+            extractionPrompt: "",
+            privacy: createPrivacy(),
+        },
+    } as never;
+}
+
 const mountedComponents: Array<unknown> = [];
 
 function mountIntoBody(component: unknown, props: Record<string, unknown>) {
@@ -106,6 +121,52 @@ afterEach(() => {
 });
 
 describe("evolution panels", () => {
+    it("renders manual range handoff controls in the setup sidebar and forwards the chosen range", async () => {
+        const onRunManualRange = vi.fn();
+        const target = mountIntoBody(EvolutionSetupPanel, {
+            characterEntry: createSetupCharacter(),
+            evolutionSettings: createSetupCharacter().characterEvolution,
+            usingGlobalDefaults: true,
+            effectiveProvider: "openrouter",
+            effectiveModel: "mistralai/mistral-large-2512",
+            hasTemplateSlot: true,
+            activeChatId: "chat-1",
+            activeChatMessageCount: 300,
+            revealCharacterOverrides: false,
+            onToggleRevealCharacterOverrides: vi.fn(),
+            onOpenGlobalDefaults: vi.fn(),
+            manualRangeAvailable: true,
+            manualRangeBlockedReason: "",
+            manualRangeBusy: false,
+            onRunManualRange,
+            replayCurrentChatAvailable: false,
+            replayCurrentChatBusy: false,
+            onReplayCurrentChat: vi.fn(),
+        });
+
+        expect(target.textContent).toContain("Manual Range Handoff");
+        expect(target.textContent).toContain("300 messages in current chat");
+
+        const startInput = target.querySelector('input[placeholder="Start"]') as HTMLInputElement | null;
+        const endInput = target.querySelector('input[placeholder="End"]') as HTMLInputElement | null;
+        const submitButton = Array.from(target.querySelectorAll("button")).find((button) => button.textContent?.includes("Run Handoff on Range")) as HTMLButtonElement | undefined;
+
+        expect(startInput).not.toBeNull();
+        expect(endInput).not.toBeNull();
+        expect(submitButton).toBeDefined();
+
+        startInput!.value = "25";
+        startInput!.dispatchEvent(new Event("input", { bubbles: true }));
+        endInput!.value = "48";
+        endInput!.dispatchEvent(new Event("input", { bubbles: true }));
+        flushSync();
+
+        submitButton!.click();
+        await Promise.resolve();
+
+        expect(onRunManualRange).toHaveBeenCalledWith(25, 48);
+    });
+
     it("shows the accepted state in read-only mode while a pending proposal exists", () => {
         const state = createState({
             characterLikes: [

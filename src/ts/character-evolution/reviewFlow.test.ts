@@ -224,6 +224,35 @@ describe("character evolution review flow", () => {
     }));
   });
 
+  it("passes an explicit source range through to proposal creation", async () => {
+    mocks.requestEvolutionProposal.mockResolvedValue({
+      proposal: createProposal(),
+      nextCharacter: createCharacter(),
+      proposalDraft: createCharacter().characterEvolution.currentState,
+      proposalDraftKey: "char-1:proposal-1",
+    });
+
+    await runEvolutionHandoffFlow({
+      characterEntry: createCharacter(),
+      chatId: "chat-2",
+      chatMessageCount: 24,
+      sourceRange: {
+        chatId: "chat-2",
+        startMessageIndex: 0,
+        endMessageIndex: 23,
+      },
+    });
+
+    expect(mocks.requestEvolutionProposal).toHaveBeenCalledWith(expect.objectContaining({
+      chatId: "chat-2",
+      sourceRange: {
+        chatId: "chat-2",
+        startMessageIndex: 0,
+        endMessageIndex: 23,
+      },
+    }));
+  });
+
   it("normalizes accept payloads into a trimmed UI result", async () => {
     mocks.acceptEvolutionProposalReview.mockResolvedValue({
       nextCharacter: createCharacter(),

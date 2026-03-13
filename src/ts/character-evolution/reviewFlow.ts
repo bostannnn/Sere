@@ -81,6 +81,7 @@ export async function runEvolutionHandoffFlow(args: {
   chatId: string | null | undefined;
   chatMessageCount?: number | null;
   forceReplay?: boolean;
+  sourceRange?: CharacterEvolutionRangeRef;
   resolveCharacterById?: ResolveCharacterById;
   confirmReplay?: () => boolean;
 }): Promise<{
@@ -94,6 +95,7 @@ export async function runEvolutionHandoffFlow(args: {
     characterEntry,
     chatId,
     chatMessageCount,
+    sourceRange,
     resolveCharacterById,
   } = args;
   const forceReplay = args.forceReplay === true;
@@ -107,6 +109,7 @@ export async function runEvolutionHandoffFlow(args: {
     characterEntry,
     chatId,
     forceReplay,
+    sourceRange,
     resolveCharacterById,
   });
 

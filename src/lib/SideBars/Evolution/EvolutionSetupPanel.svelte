@@ -19,9 +19,15 @@
         effectiveProvider: string
         effectiveModel: string
         hasTemplateSlot: boolean
+        activeChatId?: string | null
+        activeChatMessageCount?: number
         revealCharacterOverrides: boolean
         onToggleRevealCharacterOverrides: () => void
         onOpenGlobalDefaults: () => void
+        manualRangeAvailable?: boolean
+        manualRangeBlockedReason?: string
+        manualRangeBusy?: boolean
+        onRunManualRange?: (startMessageNumber: number, endMessageNumber: number) => void | Promise<void>
         replayCurrentChatAvailable?: boolean
         replayCurrentChatBusy?: boolean
         onReplayCurrentChat?: () => void | Promise<void>
@@ -34,13 +40,23 @@
         effectiveProvider,
         effectiveModel,
         hasTemplateSlot,
+        activeChatId = null,
+        activeChatMessageCount = 0,
         revealCharacterOverrides,
         onToggleRevealCharacterOverrides,
         onOpenGlobalDefaults,
+        manualRangeAvailable = false,
+        manualRangeBlockedReason = "",
+        manualRangeBusy = false,
+        onRunManualRange = () => {},
         replayCurrentChatAvailable = false,
         replayCurrentChatBusy = false,
         onReplayCurrentChat = () => {},
     }: Props = $props()
+
+    let manualRangeStart = $state(1)
+    let manualRangeEnd = $state(1)
+    let manualRangeChatKey = $state("")
 
     function usesOpenRouterModelSelector(provider: string) {
         return provider.trim().toLowerCase() === "openrouter"
@@ -72,6 +88,7 @@
     const modelSuggestions = $derived(
         getCharacterEvolutionModelSuggestions(characterEntry.characterEvolution.extractionProvider)
     )
+    const manualRangeMax = $derived(Math.max(1, Number(activeChatMessageCount) || 1))
 
     $effect(() => {
         const normalizedModel = normalizeCharacterEvolutionExtractionModel(
@@ -82,6 +99,33 @@
             characterEntry.characterEvolution.extractionModel = normalizedModel
         }
     })
+
+    $effect(() => {
+        const nextChatKey = activeChatId ?? ""
+        if (manualRangeChatKey !== nextChatKey) {
+            manualRangeChatKey = nextChatKey
+            manualRangeStart = 1
+            manualRangeEnd = manualRangeMax
+            return
+        }
+
+        if (!Number.isInteger(manualRangeStart) || manualRangeStart < 1) {
+            manualRangeStart = 1
+        }
+        if (!Number.isInteger(manualRangeEnd) || manualRangeEnd < 1) {
+            manualRangeEnd = manualRangeMax
+        }
+        if (manualRangeStart > manualRangeMax) {
+            manualRangeStart = manualRangeMax
+        }
+        if (manualRangeEnd > manualRangeMax) {
+            manualRangeEnd = manualRangeMax
+        }
+    })
+
+    async function submitManualRangeHandoff() {
+        await onRunManualRange(manualRangeStart, manualRangeEnd)
+    }
 </script>
 
 <div class="ds-settings-card evolution-setup-panel">
@@ -188,6 +232,49 @@
             </span>
         {/if}
 
+        {#if characterEntry.characterEvolution.enabled}
+            <div class="evolution-manual-range">
+                <div class="evolution-manual-range-header">
+                    <span class="ds-settings-label">Manual Range Handoff</span>
+                    <span class="ds-settings-label-muted-sm">{activeChatMessageCount} messages in current chat</span>
+                </div>
+                <span class="ds-settings-label-muted-sm">
+                    Use 1-based inclusive message numbers. Example: 1 to 24.
+                </span>
+                <div class="evolution-manual-range-row">
+                    <input
+                        class="evolution-manual-range-input control-field"
+                        type="number"
+                        min="1"
+                        max={manualRangeMax}
+                        placeholder="Start"
+                        bind:value={manualRangeStart}
+                    />
+                    <span class="evolution-manual-range-to">to</span>
+                    <input
+                        class="evolution-manual-range-input control-field"
+                        type="number"
+                        min="1"
+                        max={manualRangeMax}
+                        placeholder="End"
+                        bind:value={manualRangeEnd}
+                    />
+                </div>
+                {#if manualRangeBlockedReason}
+                    <span class="ds-settings-label-muted-sm">{manualRangeBlockedReason}</span>
+                {/if}
+                <Button
+                    size="sm"
+                    styled="outlined"
+                    className="ds-ui-fill-width"
+                    onclick={submitManualRangeHandoff}
+                    disabled={!manualRangeAvailable || manualRangeBusy}
+                >
+                    {manualRangeBusy ? "Running Handoff" : "Run Handoff on Range"}
+                </Button>
+            </div>
+        {/if}
+
         <div class="evolution-setup-actions-stack">
             {#if usingGlobalDefaults}
                 <Button size="sm" styled="outlined" className="ds-ui-fill-width" onclick={onOpenGlobalDefaults}>
@@ -273,6 +360,37 @@
         display: flex;
         flex-direction: column;
         gap: var(--ds-space-2);
+    }
+
+    .evolution-manual-range {
+        display: flex;
+        flex-direction: column;
+        gap: var(--ds-space-2);
+        margin-bottom: var(--ds-space-3);
+    }
+
+    .evolution-manual-range-header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: var(--ds-space-2);
+        flex-wrap: wrap;
+    }
+
+    .evolution-manual-range-row {
+        display: flex;
+        align-items: center;
+        gap: var(--ds-space-2);
+    }
+
+    .evolution-manual-range-input {
+        min-width: 0;
+        flex: 1 1 0;
+    }
+
+    .evolution-manual-range-to {
+        color: var(--ds-text-secondary);
+        font-size: var(--ds-font-size-sm);
     }
 
     @media (max-width: 640px) {
