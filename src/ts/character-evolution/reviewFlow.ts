@@ -96,7 +96,7 @@ export async function runEvolutionHandoffFlow(args: {
     chatMessageCount,
     resolveCharacterById,
   } = args;
-  let forceReplay = args.forceReplay === true;
+  const forceReplay = args.forceReplay === true;
 
   const alreadyAccepted = hasAcceptedEvolutionForChat(characterEntry, chatId, chatMessageCount);
   if (alreadyAccepted && !forceReplay) {

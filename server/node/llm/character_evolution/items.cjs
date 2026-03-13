@@ -27,6 +27,64 @@ const CHARACTER_EVOLUTION_CONFIDENCE_RANK = {
     confirmed: 2,
 };
 
+const REINFORCEMENT_MATCH_SECTIONS = new Set([
+    'userFacts',
+    'activeThreads',
+]);
+
+const CHARACTER_EVOLUTION_MATCH_STOPWORDS = new Set([
+    'a',
+    'an',
+    'and',
+    'are',
+    'as',
+    'at',
+    'be',
+    'been',
+    'being',
+    'but',
+    'by',
+    'for',
+    'from',
+    'had',
+    'has',
+    'have',
+    'he',
+    'her',
+    'hers',
+    'him',
+    'his',
+    'i',
+    'in',
+    'into',
+    'is',
+    'it',
+    'its',
+    'me',
+    'my',
+    'of',
+    'on',
+    'or',
+    'our',
+    'ours',
+    'she',
+    'that',
+    'the',
+    'their',
+    'theirs',
+    'them',
+    'they',
+    'this',
+    'to',
+    'up',
+    'us',
+    'we',
+    'with',
+    'you',
+    'your',
+    'yours',
+]);
+
 function isCharacterEvolutionObjectSection(key) {
     return CHARACTER_EVOLUTION_OBJECT_SECTION_KEYS.includes(key);
 }
@@ -104,6 +162,90 @@ function doCharacterEvolutionItemsMatch(left, right) {
     return leftNormalizedKey.length > 0 && leftNormalizedKey === rightNormalizedKey;
 }
 
+function tokenizeCharacterEvolutionItem(item) {
+    return getCharacterEvolutionItemNormalizedMatchKey(item)
+        .split(' ')
+        .map((token) => token.trim())
+        .filter(Boolean);
+}
+
+function getMeaningfulCharacterEvolutionItemTokens(item) {
+    return tokenizeCharacterEvolutionItem(item)
+        .filter((token) => !CHARACTER_EVOLUTION_MATCH_STOPWORDS.has(token));
+}
+
+function countCommonTokenPrefix(left, right) {
+    const max = Math.min(left.length, right.length);
+    let count = 0;
+    for (let index = 0; index < max; index += 1) {
+        if (left[index] !== right[index]) {
+            break;
+        }
+        count += 1;
+    }
+    return count;
+}
+
+function countCommonTokenSuffix(left, right, prefixCount) {
+    const max = Math.min(left.length, right.length) - prefixCount;
+    let count = 0;
+    for (let index = 1; index <= max; index += 1) {
+        if (left[left.length - index] !== right[right.length - index]) {
+            break;
+        }
+        count += 1;
+    }
+    return count;
+}
+
+function isTokenPrefix(shorter, longer) {
+    if (shorter.length === 0 || shorter.length > longer.length) {
+        return false;
+    }
+    return shorter.every((token, index) => token === longer[index]);
+}
+
+function isTokenSuffix(shorter, longer) {
+    if (shorter.length === 0 || shorter.length > longer.length) {
+        return false;
+    }
+    return shorter.every((token, index) => token === longer[longer.length - shorter.length + index]);
+}
+
+function doCharacterEvolutionItemsReinforceSameIdea(sectionKey, left, right) {
+    if (!REINFORCEMENT_MATCH_SECTIONS.has(sectionKey) || doCharacterEvolutionItemsMatch(left, right)) {
+        return false;
+    }
+
+    const leftTokens = tokenizeCharacterEvolutionItem(left);
+    const rightTokens = tokenizeCharacterEvolutionItem(right);
+    if (leftTokens.length === 0 || rightTokens.length === 0) {
+        return false;
+    }
+
+    const commonPrefixCount = countCommonTokenPrefix(leftTokens, rightTokens);
+    const commonSuffixCount = countCommonTokenSuffix(leftTokens, rightTokens, commonPrefixCount);
+    if (commonPrefixCount < 3 && commonSuffixCount < 3) {
+        return false;
+    }
+
+    const leftMeaningfulTokens = getMeaningfulCharacterEvolutionItemTokens(left);
+    const rightMeaningfulTokens = getMeaningfulCharacterEvolutionItemTokens(right);
+    if (leftMeaningfulTokens.length === 0 || rightMeaningfulTokens.length === 0) {
+        return false;
+    }
+
+    const shorterMeaningfulTokens = leftMeaningfulTokens.length <= rightMeaningfulTokens.length
+        ? leftMeaningfulTokens
+        : rightMeaningfulTokens;
+    const longerMeaningfulTokens = leftMeaningfulTokens.length <= rightMeaningfulTokens.length
+        ? rightMeaningfulTokens
+        : leftMeaningfulTokens;
+
+    return isTokenPrefix(shorterMeaningfulTokens, longerMeaningfulTokens)
+        || isTokenSuffix(shorterMeaningfulTokens, longerMeaningfulTokens);
+}
+
 function itemValueKeysForSection(items, matcher) {
     return new Set(
         (Array.isArray(items) ? items : [])
@@ -152,30 +294,55 @@ function buildPreferredStatusOrder(candidateStatus) {
     ].filter((status, index, statuses) => statuses.indexOf(status) === index);
 }
 
-function findMatchingItemIndex(items, candidate, statusOrder) {
-    const candidateExactKey = getCharacterEvolutionItemExactMatchKey(candidate);
-    const candidateNormalizedKey = getCharacterEvolutionItemNormalizedMatchKey(candidate);
-    const matchingStrategies = [
-        (item) => candidateExactKey.length > 0 && getCharacterEvolutionItemExactMatchKey(item) === candidateExactKey,
-        (item) => candidateNormalizedKey.length > 0 && getCharacterEvolutionItemNormalizedMatchKey(item) === candidateNormalizedKey,
-    ];
-
-    for (const doesMatch of matchingStrategies) {
-        for (const preferredStatus of statusOrder) {
-            const matchingIndex = (Array.isArray(items) ? items : []).findIndex(
-                (item) => normalizeCharacterEvolutionItemStatus(item) === preferredStatus && doesMatch(item)
-            );
-            if (matchingIndex >= 0) {
-                return matchingIndex;
-            }
-        }
-    }
-
-    return -1;
+function getMatchingItemIndexes(sectionKey, items, candidate, statusOrder, options = {}) {
+    const allowedStatuses = new Set(statusOrder);
+    return (Array.isArray(items) ? items : [])
+        .map((item, index) => ({ item, index }))
+        .filter(({ item }) => allowedStatuses.has(normalizeCharacterEvolutionItemStatus(item)))
+        .filter(({ item }) => doCharacterEvolutionItemsMatch(item, candidate)
+            || (options.allowReinforcement && doCharacterEvolutionItemsReinforceSameIdea(sectionKey, item, candidate)))
+        .map(({ index }) => index);
 }
 
-function findMatchingBaseItem(items, candidate) {
+function pickPreferredMatchingItemIndex(items, candidateIndexes, statusOrder) {
+    const statusRanks = new Map(statusOrder.map((status, index) => [status, index]));
+    return candidateIndexes.reduce((bestIndex, candidateIndex) => {
+        if (bestIndex < 0) {
+            return candidateIndex;
+        }
+
+        const bestItem = items[bestIndex];
+        const candidateItem = items[candidateIndex];
+        const bestStatusRank = statusRanks.get(normalizeCharacterEvolutionItemStatus(bestItem)) ?? statusOrder.length;
+        const candidateStatusRank = statusRanks.get(normalizeCharacterEvolutionItemStatus(candidateItem)) ?? statusOrder.length;
+        if (bestStatusRank !== candidateStatusRank) {
+            return candidateStatusRank < bestStatusRank ? candidateIndex : bestIndex;
+        }
+
+        const bestConfidenceRank = bestItem?.confidence ? CHARACTER_EVOLUTION_CONFIDENCE_RANK[bestItem.confidence] : -1;
+        const candidateConfidenceRank = candidateItem?.confidence ? CHARACTER_EVOLUTION_CONFIDENCE_RANK[candidateItem.confidence] : -1;
+        if (bestConfidenceRank !== candidateConfidenceRank) {
+            return candidateConfidenceRank > bestConfidenceRank ? candidateIndex : bestIndex;
+        }
+
+        const bestTokenCount = tokenizeCharacterEvolutionItem(bestItem).length;
+        const candidateTokenCount = tokenizeCharacterEvolutionItem(candidateItem).length;
+        if (bestTokenCount !== candidateTokenCount) {
+            return candidateTokenCount > bestTokenCount ? candidateIndex : bestIndex;
+        }
+
+        return candidateIndex;
+    }, -1);
+}
+
+function findMatchingItemIndex(sectionKey, items, candidate, statusOrder, options = {}) {
+    const matchingIndexes = getMatchingItemIndexes(sectionKey, items, candidate, statusOrder, options);
+    return pickPreferredMatchingItemIndex(items, matchingIndexes, statusOrder);
+}
+
+function findMatchingBaseItem(sectionKey, items, candidate) {
     const matchingIndex = findMatchingItemIndex(
+        sectionKey,
         items,
         candidate,
         buildPreferredStatusOrder(normalizeCharacterEvolutionItemStatus(candidate))
@@ -192,7 +359,7 @@ function createMergedMatchedItem(currentItem, proposedItem) {
     const nextProposedConfidence = proposedItem.confidence ?? currentItem.confidence;
     const nextProposedNote = proposedItem.note ?? currentItem.note;
     const hasMeaningfulUpdate = currentItem.confidence !== nextProposedConfidence
-        || normalizeCharacterEvolutionItemNote(currentItem) !== normalizeCharacterEvolutionItemNote({ note: nextProposedNote })
+        || normalizeCharacterEvolutionItemNote(currentItem) !== (typeof nextProposedNote === 'string' ? nextProposedNote : '')
         || currentStatus !== nextStatus;
     const shouldReinforce = !shouldPreserveHistoricalMetadata
         && (currentStatus === 'archived' || hasMeaningfulUpdate);
@@ -236,6 +403,10 @@ function createMergedMatchedItem(currentItem, proposedItem) {
     };
 }
 
+function mergeReinforcedCharacterEvolutionItems(currentItem, proposedItem) {
+    return createMergedMatchedItem(currentItem, proposedItem);
+}
+
 function applyCharacterEvolutionItemMetadata(arg = {}) {
     const nextState = clone(arg.state);
     const sourceChatId = typeof arg.sourceChatId === 'string' && arg.sourceChatId.trim()
@@ -252,7 +423,7 @@ function applyCharacterEvolutionItemMetadata(arg = {}) {
             ...item,
             status: item?.status || 'active',
             ...(() => {
-                const baseMatch = findMatchingBaseItem(baseItems, item);
+                const baseMatch = findMatchingBaseItem(key, baseItems, item);
                 if (baseMatch) {
                     return {
                         ...(sourceChatId && arg.overwriteNewItemTimestamps
@@ -318,7 +489,7 @@ function mergeAcceptedCharacterEvolutionState(arg = {}) {
                 || (currentNormalizedKey.length > 0 && activeCurrentNormalizedMatchKeys.has(currentNormalizedKey))
             );
             const explicitHistoricalMatchIndex = currentStatus !== 'active'
-                ? findMatchingItemIndex(proposedItems, currentItem, [currentStatus])
+                ? findMatchingItemIndex(key, proposedItems, currentItem, [currentStatus])
                 : -1;
 
             if (explicitHistoricalMatchIndex >= 0) {
@@ -337,17 +508,26 @@ function mergeAcceptedCharacterEvolutionState(arg = {}) {
                 continue;
             }
 
-            const matchingProposedItemIndex = currentStatus === 'active' || currentStatus === 'archived'
-                ? findMatchingItemIndex(proposedItems, currentItem, ['active', 'archived', 'corrected'])
-                : -1;
+            const matchingProposedItemIndexes = currentStatus === 'active' || currentStatus === 'archived'
+                ? getMatchingItemIndexes(key, proposedItems, currentItem, ['active', 'archived', 'corrected'], {
+                    allowReinforcement: true,
+                })
+                : [];
 
-            if (matchingProposedItemIndex >= 0) {
+            if (matchingProposedItemIndexes.length > 0) {
+                const matchingProposedItemIndex = pickPreferredMatchingItemIndex(
+                    proposedItems,
+                    matchingProposedItemIndexes,
+                    ['active', 'archived', 'corrected']
+                );
                 mergedItems.push(createMergedMatchedItem(currentItem, proposedItems[matchingProposedItemIndex]));
-                proposedItems.splice(matchingProposedItemIndex, 1);
+                for (const matchedIndex of [...matchingProposedItemIndexes].sort((left, right) => right - left)) {
+                    proposedItems.splice(matchedIndex, 1);
+                }
                 continue;
             }
 
-            if (currentStatus === 'archived' || currentStatus === 'corrected') {
+            if (currentStatus === 'archived') {
                 mergedItems.push(currentItem);
             }
         }
@@ -365,6 +545,7 @@ module.exports = {
     CHARACTER_EVOLUTION_OBJECT_SECTION_KEYS,
     createCharacterEvolutionItemSourceRange,
     doCharacterEvolutionItemsMatch,
+    doCharacterEvolutionItemsReinforceSameIdea,
     filterActiveCharacterEvolutionItems,
     filterActiveCharacterEvolutionState,
     getCharacterEvolutionItemExactMatchKey,
@@ -372,5 +553,6 @@ module.exports = {
     isCharacterEvolutionItemSection,
     isCharacterEvolutionObjectSection,
     mergeAcceptedCharacterEvolutionState,
+    mergeReinforcedCharacterEvolutionItems,
     normalizeCharacterEvolutionItemSourceRange,
 };

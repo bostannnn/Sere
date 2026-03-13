@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { applyCharacterEvolutionItemMetadata, mergeAcceptedCharacterEvolutionState } from "./items"
+import { mergeAcceptedCharacterEvolutionState } from "./items"
 import { createDefaultCharacterEvolutionState } from "./schema"
 
 describe("character evolution item retention", () => {

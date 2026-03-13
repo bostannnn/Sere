@@ -232,4 +232,84 @@ describe("character evolution item metadata", () => {
         }))
         expect(normalizedCjs).toEqual(normalized)
     })
+
+    it("merges stronger-evidence refinements instead of appending a duplicate active row", () => {
+        const currentState = createDefaultCharacterEvolutionState()
+        currentState.userFacts = [
+            {
+                value: "user moved to New York",
+                status: "active",
+                confidence: "likely",
+                note: "older accepted phrasing",
+                sourceChatId: "chat-old",
+                sourceRange: {
+                    startMessageIndex: 1,
+                    endMessageIndex: 3,
+                },
+                updatedAt: 100,
+                lastSeenAt: 100,
+                timesSeen: 2,
+            },
+        ]
+
+        const proposedState = createDefaultCharacterEvolutionState()
+        proposedState.userFacts = [
+            {
+                value: "user moved to New York",
+                status: "active",
+                confidence: "likely",
+                note: "older accepted phrasing",
+                sourceChatId: "chat-old",
+                sourceRange: {
+                    startMessageIndex: 1,
+                    endMessageIndex: 3,
+                },
+                updatedAt: 100,
+                lastSeenAt: 100,
+                timesSeen: 2,
+            },
+            {
+                value: "user moved to New York last year",
+                status: "active",
+                confidence: "confirmed",
+                note: "new stronger timing detail",
+                sourceChatId: "chat-2",
+                sourceRange: {
+                    startMessageIndex: 4,
+                    endMessageIndex: 6,
+                },
+                updatedAt: 200,
+                lastSeenAt: 200,
+                timesSeen: 1,
+            },
+        ]
+
+        const merged = mergeAcceptedCharacterEvolutionState({
+            currentState,
+            proposedState,
+        })
+        const { mergeAcceptedCharacterEvolutionState: mergeAcceptedCharacterEvolutionStateCjs } = require("../../../server/node/llm/character_evolution/items.cjs")
+        const mergedCjs = mergeAcceptedCharacterEvolutionStateCjs({
+            currentState,
+            proposedState,
+        })
+
+        expect(merged.userFacts).toEqual([
+            {
+                value: "user moved to New York last year",
+                status: "active",
+                confidence: "confirmed",
+                note: "new stronger timing detail",
+                sourceChatId: "chat-2",
+                sourceRange: {
+                    startMessageIndex: 4,
+                    endMessageIndex: 6,
+                },
+                updatedAt: 200,
+                lastSeenAt: 200,
+                timesSeen: 3,
+            },
+        ])
+        expect(mergedCjs).toEqual(merged)
+    })
 })

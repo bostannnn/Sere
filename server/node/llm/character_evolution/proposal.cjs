@@ -53,6 +53,31 @@ function safeParseEvolutionJson(text) {
     return null;
 }
 
+function mergeChangedProposalStateWithCurrentState(proposedStateRaw, currentStateRaw) {
+    const currentState = normalizeCharacterEvolutionState(currentStateRaw);
+    if (!proposedStateRaw || typeof proposedStateRaw !== 'object') {
+        return currentState;
+    }
+
+    const mergedState = clone(currentState, currentState);
+    const proposedState = proposedStateRaw;
+
+    for (const key of Object.keys(createDefaultCharacterEvolutionState())) {
+        if (Object.prototype.hasOwnProperty.call(proposedState, key)) {
+            mergedState[key] = proposedState[key];
+        }
+    }
+
+    if (
+        !Object.prototype.hasOwnProperty.call(proposedState, 'lastInteractionEnded')
+        && Object.prototype.hasOwnProperty.call(proposedState, 'lastChatEnded')
+    ) {
+        mergedState.lastInteractionEnded = proposedState.lastChatEnded;
+    }
+
+    return mergedState;
+}
+
 function normalizeCharacterEvolutionProposal(raw, evolutionSettings) {
     const payload = (raw && typeof raw === 'object') ? raw : {};
     const privacy = normalizeCharacterEvolutionPrivacy(evolutionSettings?.privacy);
@@ -63,7 +88,7 @@ function normalizeCharacterEvolutionProposal(raw, evolutionSettings) {
     );
     return {
         proposedState: sanitizeStateForEvolution(
-            payload.proposedState || evolutionSettings.currentState,
+            mergeChangedProposalStateWithCurrentState(payload.proposedState, evolutionSettings.currentState),
             evolutionSettings,
             evolutionSettings.currentState
         ),
@@ -87,6 +112,7 @@ function normalizeCharacterEvolutionProposal(raw, evolutionSettings) {
 }
 
 module.exports = {
+    mergeChangedProposalStateWithCurrentState,
     normalizeCharacterEvolutionProposal,
     safeParseEvolutionJson,
     sanitizeStateForEvolution,

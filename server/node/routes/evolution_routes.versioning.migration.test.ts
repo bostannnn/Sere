@@ -257,6 +257,10 @@ describe("evolution routes versioning migration", () => {
     });
     expect(firstAcceptRes.payload.state.keyMoments).toEqual([
       expect.objectContaining({
+        value: "Eva framed movies as emotional landmarks.",
+        status: "active",
+      }),
+      expect.objectContaining({
         value: "Eva explicitly tied Stalker and Dead Man to how she sees herself.",
         status: "active",
       }),

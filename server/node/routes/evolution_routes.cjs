@@ -21,6 +21,7 @@ function registerEvolutionRoutes(arg = {}) {
         readStateLastEventId,
         applyCharacterEvolutionItemMetadata = require('../llm/character_evolution/items.cjs').applyCharacterEvolutionItemMetadata,
         mergeAcceptedCharacterEvolutionState = require('../llm/character_evolution/items.cjs').mergeAcceptedCharacterEvolutionState,
+        resolveCharacterEvolutionStateConflicts = require('../llm/character_evolution/conflicts.cjs').resolveCharacterEvolutionStateConflicts,
         buildMemoryPromptTrace = require('../llm/audit_payloads.cjs').createAuditPayloadBuilders({}).buildMemoryPromptTrace,
         truncatePromptMessagesForAudit = require('../llm/prompt.cjs').truncatePromptMessagesForAudit,
         createCharacterEvolutionRepository = require('../services/character_evolution_repository.cjs').createCharacterEvolutionRepository,
@@ -356,10 +357,8 @@ function registerEvolutionRoutes(arg = {}) {
         assertHandoffRangeAllowed(latestEvolution, sourceRange, getChatLastMessageIndex(chat), forceReplay);
         const proposalPayload = normalizeCharacterEvolutionProposal(parsed, evolution);
         const pendingProposalCreatedAt = Date.now();
-        const pendingProposal = {
-            proposalId: makeProposalId(),
-            sourceChatId: chatId,
-            sourceRange,
+        const normalizedProposalState = resolveCharacterEvolutionStateConflicts({
+            currentState: latestEvolution.currentState,
             proposedState: applyCharacterEvolutionItemMetadata({
                 state: proposalPayload.proposedState,
                 baseState: latestEvolution.currentState,
@@ -367,6 +366,12 @@ function registerEvolutionRoutes(arg = {}) {
                 sourceRange,
                 timestamp: pendingProposalCreatedAt,
             }),
+        });
+        const pendingProposal = {
+            proposalId: makeProposalId(),
+            sourceChatId: chatId,
+            sourceRange,
+            proposedState: normalizedProposalState,
             changes: proposalPayload.changes,
             createdAt: pendingProposalCreatedAt,
         };
@@ -441,20 +446,24 @@ function registerEvolutionRoutes(arg = {}) {
         const body = (req.body && typeof req.body === 'object') ? req.body : {};
         const acceptedAt = Date.now();
         const sourceRange = normalizeCharacterEvolutionRangeRef(pendingProposal.sourceRange);
-        const proposedState = mergeAcceptedCharacterEvolutionState({
+        const normalizedAcceptedProposalState = resolveCharacterEvolutionStateConflicts({
             currentState: storedEvolution.currentState,
             proposedState: applyCharacterEvolutionItemMetadata({
-            state: sanitizeStateForEvolution(
-                normalizeCharacterEvolutionState(body.proposedState || pendingProposal.proposedState),
-                effectiveEvolution,
-                storedEvolution.currentState
-            ),
-            baseState: storedEvolution.currentState,
-            sourceChatId: pendingProposal.sourceChatId,
-            sourceRange,
-            timestamp: acceptedAt,
-            overwriteNewItemTimestamps: true,
+                state: sanitizeStateForEvolution(
+                    normalizeCharacterEvolutionState(body.proposedState || pendingProposal.proposedState),
+                    effectiveEvolution,
+                    storedEvolution.currentState
+                ),
+                baseState: storedEvolution.currentState,
+                sourceChatId: pendingProposal.sourceChatId,
+                sourceRange,
+                timestamp: acceptedAt,
+                overwriteNewItemTimestamps: true,
             }),
+        });
+        const proposedState = mergeAcceptedCharacterEvolutionState({
+            currentState: storedEvolution.currentState,
+            proposedState: normalizedAcceptedProposalState,
         });
         const recoveredVersions = mergeVersionMetas(
             storedEvolution.stateVersions,

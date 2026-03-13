@@ -83,7 +83,7 @@ function createProposal(
 
 const mountedComponents: Array<unknown> = [];
 
-function mountIntoBody<T extends Record<string, unknown>>(component: T, props: Record<string, unknown>) {
+function mountIntoBody(component: unknown, props: Record<string, unknown>) {
     const target = document.createElement("div");
     document.body.append(target);
     const app = mount(component as never, {

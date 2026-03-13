@@ -24,6 +24,7 @@
     "check:settings-contract": "node dev/check-settings-contract.js",
     "check:settings-shell": "node dev/check-settings-shell.js",
     "check:chat-runtime": "pnpm exec vitest run dev/chat-runtime-smoke.test.ts",
+    "test:character-evolution:phase4:manual": "pnpm exec vitest run src/ts/character-evolution/phase4.workflow.test.ts server/node/routes/evolution_routes.phase4.manual.test.ts",
     "check:ui-shell-contract": "node dev/check-ui-shell-contract.js",
     "check:ui-shell-runtime": "pnpm exec vitest run dev/ui-shell-runtime-smoke.test.ts",
     "check:ui-shell-smoke": "node dev/check-ui-shell-smoke.js",

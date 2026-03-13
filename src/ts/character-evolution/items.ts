@@ -36,6 +36,64 @@ const CHARACTER_EVOLUTION_CONFIDENCE_RANK: Record<CharacterEvolutionConfidence, 
     confirmed: 2,
 }
 
+const REINFORCEMENT_MATCH_SECTIONS = new Set<CharacterEvolutionItemSectionKey>([
+    "userFacts",
+    "activeThreads",
+])
+
+const CHARACTER_EVOLUTION_MATCH_STOPWORDS = new Set([
+    "a",
+    "an",
+    "and",
+    "are",
+    "as",
+    "at",
+    "be",
+    "been",
+    "being",
+    "but",
+    "by",
+    "for",
+    "from",
+    "had",
+    "has",
+    "have",
+    "he",
+    "her",
+    "hers",
+    "him",
+    "his",
+    "i",
+    "in",
+    "into",
+    "is",
+    "it",
+    "its",
+    "me",
+    "my",
+    "of",
+    "on",
+    "or",
+    "our",
+    "ours",
+    "she",
+    "that",
+    "the",
+    "their",
+    "theirs",
+    "them",
+    "they",
+    "this",
+    "to",
+    "up",
+    "us",
+    "we",
+    "with",
+    "you",
+    "your",
+    "yours",
+])
+
 export function isCharacterEvolutionObjectSection(key: string): key is CharacterEvolutionObjectSectionKey {
     return (CHARACTER_EVOLUTION_OBJECT_SECTION_KEYS as readonly string[]).includes(key)
 }
@@ -116,6 +174,91 @@ export function doCharacterEvolutionItemsMatch(left: CharacterEvolutionItem | st
     return leftNormalizedKey.length > 0 && leftNormalizedKey === rightNormalizedKey
 }
 
+function tokenizeCharacterEvolutionItem(item: CharacterEvolutionItem | string): string[] {
+    return getCharacterEvolutionItemNormalizedMatchKey(item)
+        .split(" ")
+        .map((token) => token.trim())
+        .filter(Boolean)
+}
+
+function getMeaningfulCharacterEvolutionItemTokens(item: CharacterEvolutionItem | string): string[] {
+    return tokenizeCharacterEvolutionItem(item)
+        .filter((token) => !CHARACTER_EVOLUTION_MATCH_STOPWORDS.has(token))
+}
+
+function countCommonTokenPrefix(left: string[], right: string[]): number {
+    const max = Math.min(left.length, right.length)
+    let count = 0
+    for (let index = 0; index < max; index += 1) {
+        if (left[index] !== right[index]) {
+            break
+        }
+        count += 1
+    }
+    return count
+}
+
+function countCommonTokenSuffix(left: string[], right: string[], prefixCount: number): number {
+    const max = Math.min(left.length, right.length) - prefixCount
+    let count = 0
+    for (let index = 1; index <= max; index += 1) {
+        if (left[left.length - index] !== right[right.length - index]) {
+            break
+        }
+        count += 1
+    }
+    return count
+}
+
+function isTokenPrefix(shorter: string[], longer: string[]): boolean {
+    if (shorter.length === 0 || shorter.length > longer.length) {
+        return false
+    }
+    return shorter.every((token, index) => token === longer[index])
+}
+
+function isTokenSuffix(shorter: string[], longer: string[]): boolean {
+    if (shorter.length === 0 || shorter.length > longer.length) {
+        return false
+    }
+    return shorter.every((token, index) => token === longer[longer.length - shorter.length + index])
+}
+
+export function doCharacterEvolutionItemsReinforceSameIdea(
+    sectionKey: CharacterEvolutionItemSectionKey,
+    left: CharacterEvolutionItem | string,
+    right: CharacterEvolutionItem | string,
+): boolean {
+    if (!REINFORCEMENT_MATCH_SECTIONS.has(sectionKey) || doCharacterEvolutionItemsMatch(left, right)) {
+        return false
+    }
+
+    const leftTokens = tokenizeCharacterEvolutionItem(left)
+    const rightTokens = tokenizeCharacterEvolutionItem(right)
+    if (leftTokens.length === 0 || rightTokens.length === 0) {
+        return false
+    }
+
+    const commonPrefixCount = countCommonTokenPrefix(leftTokens, rightTokens)
+    const commonSuffixCount = countCommonTokenSuffix(leftTokens, rightTokens, commonPrefixCount)
+    if (commonPrefixCount < 3 && commonSuffixCount < 3) {
+        return false
+    }
+
+    const leftMeaningfulTokens = getMeaningfulCharacterEvolutionItemTokens(left)
+    const rightMeaningfulTokens = getMeaningfulCharacterEvolutionItemTokens(right)
+    if (leftMeaningfulTokens.length === 0 || rightMeaningfulTokens.length === 0) {
+        return false
+    }
+
+    const [shorterMeaningfulTokens, longerMeaningfulTokens] = leftMeaningfulTokens.length <= rightMeaningfulTokens.length
+        ? [leftMeaningfulTokens, rightMeaningfulTokens]
+        : [rightMeaningfulTokens, leftMeaningfulTokens]
+
+    return isTokenPrefix(shorterMeaningfulTokens, longerMeaningfulTokens)
+        || isTokenSuffix(shorterMeaningfulTokens, longerMeaningfulTokens)
+}
+
 function itemValueKeysForSection(
     items: CharacterEvolutionItem[],
     matcher: (item: CharacterEvolutionItem) => string,
@@ -170,37 +313,79 @@ function buildPreferredStatusOrder(candidateStatus: CharacterEvolutionStatus): C
     ].filter((status, index, statuses): status is CharacterEvolutionStatus => statuses.indexOf(status) === index)
 }
 
-function findMatchingItemIndex(
+interface MatchingItemSearchOptions {
+    allowReinforcement?: boolean
+}
+
+function getMatchingItemIndexes(
+    sectionKey: CharacterEvolutionItemSectionKey,
     items: CharacterEvolutionItem[],
     candidate: CharacterEvolutionItem,
     statusOrder: CharacterEvolutionStatus[],
+    options: MatchingItemSearchOptions = {},
+): number[] {
+    const allowedStatuses = new Set(statusOrder)
+    return items
+        .map((item, index) => ({ item, index }))
+        .filter(({ item }) => allowedStatuses.has(normalizeCharacterEvolutionItemStatus(item)))
+        .filter(({ item }) => doCharacterEvolutionItemsMatch(item, candidate)
+            || (options.allowReinforcement && doCharacterEvolutionItemsReinforceSameIdea(sectionKey, item, candidate)))
+        .map(({ index }) => index)
+}
+
+function pickPreferredMatchingItemIndex(
+    items: CharacterEvolutionItem[],
+    candidateIndexes: number[],
+    statusOrder: CharacterEvolutionStatus[],
 ): number {
-    const candidateExactKey = getCharacterEvolutionItemExactMatchKey(candidate)
-    const candidateNormalizedKey = getCharacterEvolutionItemNormalizedMatchKey(candidate)
-    const matchingStrategies = [
-        (item: CharacterEvolutionItem) => candidateExactKey.length > 0 && getCharacterEvolutionItemExactMatchKey(item) === candidateExactKey,
-        (item: CharacterEvolutionItem) => candidateNormalizedKey.length > 0 && getCharacterEvolutionItemNormalizedMatchKey(item) === candidateNormalizedKey,
-    ]
-
-    for (const doesMatch of matchingStrategies) {
-        for (const preferredStatus of statusOrder) {
-            const matchingIndex = items.findIndex(
-                (item) => normalizeCharacterEvolutionItemStatus(item) === preferredStatus && doesMatch(item),
-            )
-            if (matchingIndex >= 0) {
-                return matchingIndex
-            }
+    const statusRanks = new Map(statusOrder.map((status, index) => [status, index]))
+    return candidateIndexes.reduce((bestIndex, candidateIndex) => {
+        if (bestIndex < 0) {
+            return candidateIndex
         }
-    }
 
-    return -1
+        const bestItem = items[bestIndex]
+        const candidateItem = items[candidateIndex]
+        const bestStatusRank = statusRanks.get(normalizeCharacterEvolutionItemStatus(bestItem)) ?? statusOrder.length
+        const candidateStatusRank = statusRanks.get(normalizeCharacterEvolutionItemStatus(candidateItem)) ?? statusOrder.length
+        if (bestStatusRank !== candidateStatusRank) {
+            return candidateStatusRank < bestStatusRank ? candidateIndex : bestIndex
+        }
+
+        const bestConfidenceRank = bestItem.confidence ? CHARACTER_EVOLUTION_CONFIDENCE_RANK[bestItem.confidence] : -1
+        const candidateConfidenceRank = candidateItem.confidence ? CHARACTER_EVOLUTION_CONFIDENCE_RANK[candidateItem.confidence] : -1
+        if (bestConfidenceRank !== candidateConfidenceRank) {
+            return candidateConfidenceRank > bestConfidenceRank ? candidateIndex : bestIndex
+        }
+
+        const bestTokenCount = tokenizeCharacterEvolutionItem(bestItem).length
+        const candidateTokenCount = tokenizeCharacterEvolutionItem(candidateItem).length
+        if (bestTokenCount !== candidateTokenCount) {
+            return candidateTokenCount > bestTokenCount ? candidateIndex : bestIndex
+        }
+
+        return candidateIndex
+    }, -1)
+}
+
+function findMatchingItemIndex(
+    sectionKey: CharacterEvolutionItemSectionKey,
+    items: CharacterEvolutionItem[],
+    candidate: CharacterEvolutionItem,
+    statusOrder: CharacterEvolutionStatus[],
+    options: MatchingItemSearchOptions = {},
+): number {
+    const matchingIndexes = getMatchingItemIndexes(sectionKey, items, candidate, statusOrder, options)
+    return pickPreferredMatchingItemIndex(items, matchingIndexes, statusOrder)
 }
 
 function findMatchingBaseItem(
+    sectionKey: CharacterEvolutionItemSectionKey,
     items: CharacterEvolutionItem[],
     candidate: CharacterEvolutionItem,
 ): CharacterEvolutionItem | undefined {
     const matchingIndex = findMatchingItemIndex(
+        sectionKey,
         items,
         candidate,
         buildPreferredStatusOrder(normalizeCharacterEvolutionItemStatus(candidate)),
@@ -220,7 +405,7 @@ function createMergedMatchedItem(
     const nextProposedConfidence = proposedItem.confidence ?? currentItem.confidence
     const nextProposedNote = proposedItem.note ?? currentItem.note
     const hasMeaningfulUpdate = currentItem.confidence !== nextProposedConfidence
-        || normalizeCharacterEvolutionItemNote(currentItem) !== normalizeCharacterEvolutionItemNote({ note: nextProposedNote })
+        || normalizeCharacterEvolutionItemNote(currentItem) !== (typeof nextProposedNote === "string" ? nextProposedNote : "")
         || currentStatus !== nextStatus
     const shouldReinforce = !shouldPreserveHistoricalMetadata
         && (currentStatus === "archived" || hasMeaningfulUpdate)
@@ -260,6 +445,13 @@ function createMergedMatchedItem(
     }
 }
 
+export function mergeReinforcedCharacterEvolutionItems(
+    currentItem: CharacterEvolutionItem,
+    proposedItem: CharacterEvolutionItem,
+): CharacterEvolutionItem {
+    return createMergedMatchedItem(currentItem, proposedItem)
+}
+
 export function applyCharacterEvolutionItemMetadata(args: {
     state: CharacterEvolutionState
     baseState?: CharacterEvolutionState | null
@@ -286,7 +478,7 @@ export function applyCharacterEvolutionItemMetadata(args: {
             ...item,
             status: item.status ?? "active",
             ...(() => {
-                const baseMatch = findMatchingBaseItem(baseItems, item)
+                const baseMatch = findMatchingBaseItem(key, baseItems, item)
                 if (baseMatch) {
                     return {
                         ...(sourceChatId && args.overwriteNewItemTimestamps
@@ -357,7 +549,7 @@ export function mergeAcceptedCharacterEvolutionState(args: {
                 || (currentNormalizedKey.length > 0 && activeCurrentNormalizedMatchKeys.has(currentNormalizedKey))
             )
             const explicitHistoricalMatchIndex = currentStatus !== "active"
-                ? findMatchingItemIndex(proposedItems, currentItem, [currentStatus])
+                ? findMatchingItemIndex(key, proposedItems, currentItem, [currentStatus])
                 : -1
 
             if (explicitHistoricalMatchIndex >= 0) {
@@ -376,17 +568,26 @@ export function mergeAcceptedCharacterEvolutionState(args: {
                 continue
             }
 
-            const matchingProposedItemIndex = currentStatus === "active" || currentStatus === "archived"
-                ? findMatchingItemIndex(proposedItems, currentItem, ["active", "archived", "corrected"])
-                : -1
+            const matchingProposedItemIndexes = currentStatus === "active" || currentStatus === "archived"
+                ? getMatchingItemIndexes(key, proposedItems, currentItem, ["active", "archived", "corrected"], {
+                    allowReinforcement: true,
+                })
+                : []
 
-            if (matchingProposedItemIndex >= 0) {
+            if (matchingProposedItemIndexes.length > 0) {
+                const matchingProposedItemIndex = pickPreferredMatchingItemIndex(
+                    proposedItems,
+                    matchingProposedItemIndexes,
+                    ["active", "archived", "corrected"],
+                )
                 mergedItems.push(createMergedMatchedItem(currentItem, proposedItems[matchingProposedItemIndex]))
-                proposedItems.splice(matchingProposedItemIndex, 1)
+                for (const matchedIndex of [...matchingProposedItemIndexes].sort((left, right) => right - left)) {
+                    proposedItems.splice(matchedIndex, 1)
+                }
                 continue
             }
 
-            if (currentStatus === "archived" || currentStatus === "corrected") {
+            if (currentStatus === "archived") {
                 mergedItems.push(currentItem)
             }
         }
