@@ -32,8 +32,11 @@ vi.mock("./reviewActions", async () => {
 });
 
 import {
+  ALREADY_ACCEPTED_CHAT_HANDOFF_MESSAGE,
   acceptEvolutionReviewFlow,
+  getEvolutionHandoffButtonA11yLabel,
   getEvolutionBusyLabel,
+  getEvolutionHandoffButtonLabel,
   runEvolutionHandoffFlow,
   syncEvolutionProposalDraft,
 } from "./reviewFlow";
@@ -138,19 +141,87 @@ describe("character evolution review flow", () => {
     expect(getEvolutionBusyLabel("reject")).toBe("Rejecting evolution update");
   });
 
-  it("cancels a replayed handoff when confirmation is denied", async () => {
+  it("maps the chat handoff button label for idle, blocked, pending, and busy states", () => {
+    expect(getEvolutionHandoffButtonLabel({
+      action: null,
+      hasPendingProposal: false,
+      blockedForCurrentChat: false,
+    })).toBe("Handoff");
+
+    expect(getEvolutionHandoffButtonLabel({
+      action: null,
+      hasPendingProposal: false,
+      blockedForCurrentChat: true,
+    })).toBe("No New Messages");
+
+    expect(getEvolutionHandoffButtonLabel({
+      action: null,
+      hasPendingProposal: true,
+      blockedForCurrentChat: true,
+    })).toBe("Review Pending Proposal");
+
+    expect(getEvolutionHandoffButtonLabel({
+      action: "handoff",
+      hasPendingProposal: false,
+      blockedForCurrentChat: true,
+    })).toBe("Running Handoff");
+  });
+
+  it("maps the chat handoff accessibility label for idle, blocked, pending, and busy states", () => {
+    expect(getEvolutionHandoffButtonA11yLabel({
+      action: null,
+      hasPendingProposal: false,
+      blockedForCurrentChat: false,
+    })).toBe("Character evolution handoff");
+
+    expect(getEvolutionHandoffButtonA11yLabel({
+      action: null,
+      hasPendingProposal: false,
+      blockedForCurrentChat: true,
+    })).toBe("No new messages to process for evolution in this chat");
+
+    expect(getEvolutionHandoffButtonA11yLabel({
+      action: null,
+      hasPendingProposal: true,
+      blockedForCurrentChat: true,
+    })).toBe("Review pending evolution proposal");
+
+    expect(getEvolutionHandoffButtonA11yLabel({
+      action: "handoff",
+      hasPendingProposal: false,
+      blockedForCurrentChat: true,
+    })).toBe("Running character evolution handoff");
+  });
+
+  it("blocks a normal handoff when the current chat has no unprocessed messages left", async () => {
+    await expect(runEvolutionHandoffFlow({
+      characterEntry: createCharacter(),
+      chatId: "chat-1",
+      chatMessageCount: 4,
+    })).rejects.toThrow(ALREADY_ACCEPTED_CHAT_HANDOFF_MESSAGE);
+    expect(mocks.requestEvolutionProposal).not.toHaveBeenCalled();
+  });
+
+  it("allows an explicit replay handoff for an already accepted chat", async () => {
+    mocks.requestEvolutionProposal.mockResolvedValue({
+      proposal: createProposal(),
+      nextCharacter: createCharacter(),
+      proposalDraft: createCharacter().characterEvolution.currentState,
+      proposalDraftKey: "char-1:proposal-1",
+    });
+
     const result = await runEvolutionHandoffFlow({
       characterEntry: createCharacter(),
       chatId: "chat-1",
       chatMessageCount: 4,
-      confirmReplay: () => false,
+      forceReplay: true,
     });
 
-    expect(result).toEqual({
-      cancelled: true,
-      replayedAcceptedChat: false,
-    });
-    expect(mocks.requestEvolutionProposal).not.toHaveBeenCalled();
+    expect(result.cancelled).toBe(false);
+    expect(result.replayedAcceptedChat).toBe(true);
+    expect(mocks.requestEvolutionProposal).toHaveBeenCalledWith(expect.objectContaining({
+      forceReplay: true,
+    }));
   });
 
   it("normalizes accept payloads into a trimmed UI result", async () => {

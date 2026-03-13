@@ -1,5 +1,6 @@
 <script lang="ts">
     import { CameraIcon, DatabaseIcon, DicesIcon, GlobeIcon, ImagePlusIcon, GitBranch, MenuIcon, MicOffIcon, PackageIcon, RefreshCcwIcon, ReplyIcon, StepForwardIcon } from "@lucide/svelte";
+    import { getEvolutionHandoffButtonA11yLabel, getEvolutionHandoffButtonLabel } from "src/ts/character-evolution/reviewFlow";
     import type { character, groupChat } from "src/ts/storage/database.svelte";
     import { DBState } from "src/ts/stores.svelte";
     import { language } from "src/lang";
@@ -61,6 +62,12 @@
     function closeMenu() {
         openMenu = false;
     }
+
+    const handoffButtonState = $derived({
+        action: (evolutionAction as "handoff" | "accept" | "reject" | null) ?? null,
+        hasPendingProposal: !!currentEvolutionSettings?.pendingProposal,
+        blockedForCurrentChat: evolutionHandoffBlockedForCurrentChat,
+    });
 </script>
 
 <div
@@ -208,27 +215,13 @@
             <button
                 type="button"
                 class="ds-chat-side-menu-item ds-ui-menu-item"
-                title="Character evolution handoff"
-                aria-label="Character evolution handoff"
+                title={getEvolutionHandoffButtonA11yLabel(handoffButtonState)}
+                aria-label={getEvolutionHandoffButtonA11yLabel(handoffButtonState)}
                 disabled={evolutionBusy || currentCharacter.type === "group" || !!currentEvolutionSettings?.pendingProposal}
                 onclick={onRunEvolutionHandoff}
             >
                 <GitBranch />
-                <span class="ds-chat-side-menu-label">
-                    {#if evolutionAction === "handoff"}
-                        {#if evolutionHandoffBlockedForCurrentChat}
-                            Replaying Accepted Chat
-                        {:else}
-                            Running Handoff
-                        {/if}
-                    {:else if currentEvolutionSettings?.pendingProposal}
-                        Review Pending Proposal
-                    {:else if evolutionHandoffBlockedForCurrentChat}
-                        Replay Accepted Chat
-                    {:else}
-                        Handoff
-                    {/if}
-                </span>
+                <span class="ds-chat-side-menu-label">{getEvolutionHandoffButtonLabel(handoffButtonState)}</span>
             </button>
 
             <button

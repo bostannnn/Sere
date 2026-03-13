@@ -15,6 +15,8 @@ import {
 type ResolveCharacterById = (characterId: string) => character | null;
 export type EvolutionBusyAction = "handoff" | "accept" | "reject" | null;
 
+const ALREADY_ACCEPTED_CHAT_HANDOFF_MESSAGE = "No new messages to process for evolution in this chat. Add a new exchange before running handoff again, or use Evolution History replay if you need recovery.";
+
 export function getEvolutionBusyLabel(action: EvolutionBusyAction): string {
   if (action === "handoff") {
     return "Running evolution handoff";
@@ -26,6 +28,42 @@ export function getEvolutionBusyLabel(action: EvolutionBusyAction): string {
     return "Rejecting evolution update";
   }
   return "Working";
+}
+
+export function getEvolutionHandoffButtonLabel(args: {
+  action: EvolutionBusyAction;
+  hasPendingProposal: boolean;
+  blockedForCurrentChat: boolean;
+}): string {
+  const { action, hasPendingProposal, blockedForCurrentChat } = args;
+  if (action === "handoff") {
+    return "Running Handoff";
+  }
+  if (hasPendingProposal) {
+    return "Review Pending Proposal";
+  }
+  if (blockedForCurrentChat) {
+    return "No New Messages";
+  }
+  return "Handoff";
+}
+
+export function getEvolutionHandoffButtonA11yLabel(args: {
+  action: EvolutionBusyAction;
+  hasPendingProposal: boolean;
+  blockedForCurrentChat: boolean;
+}): string {
+  const { action, hasPendingProposal, blockedForCurrentChat } = args;
+  if (action === "handoff") {
+    return "Running character evolution handoff";
+  }
+  if (hasPendingProposal) {
+    return "Review pending evolution proposal";
+  }
+  if (blockedForCurrentChat) {
+    return "No new messages to process for evolution in this chat";
+  }
+  return "Character evolution handoff";
 }
 
 export function syncEvolutionProposalDraft(args: {
@@ -57,19 +95,12 @@ export async function runEvolutionHandoffFlow(args: {
     chatId,
     chatMessageCount,
     resolveCharacterById,
-    confirmReplay,
   } = args;
   let forceReplay = args.forceReplay === true;
 
   const alreadyAccepted = hasAcceptedEvolutionForChat(characterEntry, chatId, chatMessageCount);
   if (alreadyAccepted && !forceReplay) {
-    if (confirmReplay && !confirmReplay()) {
-      return {
-        cancelled: true,
-        replayedAcceptedChat: false,
-      };
-    }
-    forceReplay = true;
+    throw new Error(ALREADY_ACCEPTED_CHAT_HANDOFF_MESSAGE);
   }
 
   const result = await requestEvolutionProposal({
@@ -117,3 +148,4 @@ export async function acceptEvolutionReviewFlow(args: {
 }
 
 export { hasAcceptedEvolutionForChat };
+export { ALREADY_ACCEPTED_CHAT_HANDOFF_MESSAGE };
