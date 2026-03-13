@@ -317,6 +317,15 @@ function mergeAcceptedCharacterEvolutionState(arg = {}) {
                 (currentExactKey.length > 0 && activeCurrentExactMatchKeys.has(currentExactKey))
                 || (currentNormalizedKey.length > 0 && activeCurrentNormalizedMatchKeys.has(currentNormalizedKey))
             );
+            const explicitHistoricalMatchIndex = currentStatus !== 'active'
+                ? findMatchingItemIndex(proposedItems, currentItem, [currentStatus])
+                : -1;
+
+            if (explicitHistoricalMatchIndex >= 0) {
+                mergedItems.push(createMergedMatchedItem(currentItem, proposedItems[explicitHistoricalMatchIndex]));
+                proposedItems.splice(explicitHistoricalMatchIndex, 1);
+                continue;
+            }
 
             if (currentStatus === 'corrected') {
                 mergedItems.push(currentItem);
