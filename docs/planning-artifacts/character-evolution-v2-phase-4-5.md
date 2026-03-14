@@ -45,6 +45,7 @@ Phase 4.5 must:
 - stop prompt size from growing linearly with accepted active state size
 - stop forcing the extractor to return a full echoed next-state object
 - keep canonical accepted state and history behavior intact
+- keep notes and rich metadata in canonical stored state
 - keep server-side merge as the source of truth
 - expose prompt projection policy in global evolution settings only
 - avoid introducing per-character overrides for this policy
@@ -59,6 +60,42 @@ Phase 4.5 does not:
 - add semantic search or embeddings
 - create a second evolution settings surface
 
+## Working Definitions
+
+### Canonical Stored State
+
+The full accepted evolution state stored locally.
+
+This is the rich source of truth and may include:
+
+- active items
+- corrected items
+- archived items
+- notes
+- source provenance
+- timestamps
+- reinforcement metadata such as `timesSeen`
+
+### Compact Current State
+
+The reduced projected state sent to the extractor model for comparison.
+
+This is not storage.
+It is a prompt-only view of the current accepted state.
+
+It exists to:
+
+- help the extractor avoid duplicates
+- help the extractor update existing memory consistently
+- bound prompt size
+
+### Transcript Slice
+
+The processed message range for the current handoff run.
+
+This is not the full chat transcript.
+It is only the unprocessed or explicitly replayed message range being handed to the extractor in this run.
+
 ## Core Decision 1: Prompt Projection Is A Separate Layer
 
 Canonical accepted state may continue to store more information than prompt-time state projection sends to the model.
@@ -69,6 +106,7 @@ That means:
 - prompt assembly uses a projected subset of active state
 - extraction comparison also uses a projected compact state view
 - history and review continue to use canonical state
+- notes and rich item metadata remain stored locally even when excluded from prompt projection
 
 Prompt projection is not storage pruning.
 It is a bounded model-input view.
@@ -126,17 +164,26 @@ The extractor does not become authoritative for full-state replacement.
 Pipeline meaning:
 
 1. extractor returns only changed sections
-2. server merges omitted sections from current accepted state
-3. server sanitizes by section/privacy rules
-4. server conflict handling and matcher logic remain authoritative
-5. accepted canonical state is still produced server-side
+2. pending proposal remains a partial changed-sections proposal for review
+3. server treats omitted sections as no change
+4. server sanitizes by section/privacy rules
+5. server conflict handling and matcher logic remain authoritative
+6. accepted canonical state is still produced server-side at accept time
 
 This means:
 
 - no schema migration is required for storage
 - no version-file migration is required
-- no major UI contract change is required
-- the main code task is aligning prompt contract and validation with behavior the server already supports
+- fullscreen review remains the primary place where the partial proposal is compared against the full current state
+- the main code task is aligning prompt contract, pending proposal storage, and acceptance merge behavior with the intended partial-proposal model
+
+Important clarification:
+
+- omitted section in `pendingProposal.proposedState` means no change
+- `pendingProposal.proposedState` should remain partial for review
+- the server should not materialize omitted sections into a full next-state object before the user reviews the proposal
+- the full merged next-state object is produced at acceptance time, not staged as the pending proposal itself
+- the partial proposal contract applies consistently to model output, pending proposal storage, review payloads, and accept payloads
 
 ## Core Decision 5: Compact Current State Still Gets Sent
 
@@ -156,6 +203,35 @@ Compact projected current state should:
 - do not include `status`
 
 Archived/corrected items should not be included in the projected extractor input.
+
+This is prompt-budget reduction only.
+
+- notes must still be extracted and stored in canonical local state when the model provides them
+- notes must remain visible/editable in fullscreen review and canonical state/history views
+- notes must not be included in prompt projection for generation or compact extractor comparison input
+
+### Note Expectations
+
+Notes are local canonical memory support, not prompt steering data.
+
+They exist to preserve short evidence/context for humans and future local inspection.
+
+Notes should work like this:
+
+- existing item already has a note and the new proposal matches that item without a replacement note:
+  - preserve the existing note locally
+- new item is added and the model provides a note:
+  - store the note locally
+- existing item is materially updated and the model provides a replacement note:
+  - store the replacement note locally
+- new item is added and the model does not provide a note:
+  - the item may still be valid, but the system should treat this as missing optional support context rather than prompt data
+
+Extractor guidance for notes:
+
+- notes should normally be included for new or materially updated list items when the transcript provides enough support to write a short evidence/context sentence
+- notes remain optional at schema level, but the intended extractor behavior is to provide them whenever there is clear support
+- notes should be brief and local to the item, not mini-summaries of the entire scene
 
 ## Projection Policy Model
 
@@ -275,6 +351,9 @@ Required rules:
 - if `proposedState` is empty and `changes` is non-empty, reject the payload as malformed
 - if a section is intentionally cleared, it must be present explicitly with the intended empty shape
 - if a section appears in `proposedState`, its value is the full intended next value for that section, not an item-level patch
+- if a pending proposal is stored, omitted sections must remain omitted in the stored proposal payload
+- if a pending proposal is edited in fullscreen review, the submitted payload should still follow the same partial changed-sections contract
+- if the user edits only one changed section, acceptance should not require or synthesize unrelated unchanged sections in the review payload
 
 Malformed extractor output must not create a pending proposal.
 
@@ -298,6 +377,14 @@ The settings UI should present:
 - short explanation that these settings bound model input, not stored history
 - a simple advanced global editing UI rather than a preset-first workflow
 
+Fullscreen review behavior in Phase 4.5 should be understood as:
+
+- only changed sections are surfaced as proposal sections
+- unchanged sections should not appear as changed sections
+- within a changed section, unchanged rows/items may still be optionally expandable for context
+- those optionally expanded unchanged rows/items are review context only, not part of the pending proposal contract
+- sidebar remains operational/status-oriented and is not the full editing surface
+
 ## Delivery Shape
 
 Phase 4.5 implementation should touch:
@@ -315,11 +402,13 @@ Phase 4.5 is complete when:
 
 - extractor prompt no longer instructs the model to return full-state echoes
 - omitted `proposedState` sections mean no change
+- stored pending proposals keep omitted sections omitted
 - compact current-state projection is used in extractor input
 - bounded prompt projection is used in normal generation prompt assembly
 - ranking and limits are editable in global evolution settings
 - projection policy is not exposed as a per-character override
 - canonical accepted state and version history behavior remain unchanged
+- notes remain stored locally in canonical state while excluded from prompt projection
 - tests cover partial proposal merge behavior and projection policy behavior
 
 ## Finalized Decisions
@@ -332,3 +421,7 @@ The following decisions are finalized for implementation:
 4. Validation is runtime rejection for obviously inconsistent extractor payloads.
 5. Compact extractor comparison state includes `value` and optional `confidence`, but not `status`.
 6. Global settings should use a simple advanced editing UI, not presets-first.
+7. Fullscreen review should show changed sections only, while allowing optional unchanged context within a changed section.
+8. Notes remain part of canonical stored state and review data, but are excluded from prompt projection.
+9. The partial changed-sections contract applies end to end: extractor output, pending proposal storage, review edits, and acceptance payloads.
+10. Notes should normally be generated for new or materially updated items when transcript support is clear, while remaining excluded from prompt projection.

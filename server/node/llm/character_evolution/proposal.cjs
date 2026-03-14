@@ -2,6 +2,7 @@ const { clone } = require('./utils.cjs');
 const { createDefaultCharacterEvolutionState } = require('./schema.cjs');
 const {
     normalizeCharacterEvolutionPrivacy,
+    normalizeCharacterEvolutionProposalState,
     normalizeCharacterEvolutionSectionConfigs,
     normalizeCharacterEvolutionState,
 } = require('./normalizers.cjs');
@@ -10,6 +11,14 @@ const CHARACTER_EVOLUTION_OBJECT_SECTION_SHAPE_KEYS = {
     relationship: ['trustLevel', 'dynamic'],
     lastInteractionEnded: ['state', 'residue'],
 };
+
+function isPlainObject(value) {
+    return !!value && typeof value === 'object' && !Array.isArray(value);
+}
+
+function normalizeProposalSectionKey(keyRaw) {
+    return keyRaw === 'lastChatEnded' ? 'lastInteractionEnded' : keyRaw;
+}
 
 function isEvolutionSectionAllowed(section, privacy) {
     if (!section || section.enabled !== true) return false;
@@ -28,11 +37,11 @@ function getAllowedEvolutionSections(evolutionSettings) {
 }
 
 function extractNormalizedProposalParts(raw, evolutionSettings) {
-    const payload = (raw && typeof raw === 'object') ? raw : {};
+    const payload = isPlainObject(raw) ? raw : {};
     const allowedSections = getAllowedEvolutionSections(evolutionSettings);
     const defaults = createDefaultCharacterEvolutionState();
     const proposedState = {};
-    const rawProposedState = (payload.proposedState && typeof payload.proposedState === 'object')
+    const rawProposedState = isPlainObject(payload.proposedState)
         ? payload.proposedState
         : {};
 
@@ -55,7 +64,9 @@ function extractNormalizedProposalParts(raw, evolutionSettings) {
         ? payload.changes
             .map((change) => {
                 if (!change || typeof change !== 'object') return null;
-                const sectionKey = typeof change.sectionKey === 'string' ? change.sectionKey.trim() : '';
+                const sectionKey = normalizeProposalSectionKey(
+                    typeof change.sectionKey === 'string' ? change.sectionKey.trim() : ''
+                );
                 if (!sectionKey || !allowedSections.has(sectionKey)) return null;
                 return {
                     sectionKey,
@@ -75,22 +86,39 @@ function extractNormalizedProposalParts(raw, evolutionSettings) {
 }
 
 function getCharacterEvolutionProposalValidationError(raw, evolutionSettings) {
-    const payload = (raw && typeof raw === 'object') ? raw : {};
+    if (!isPlainObject(raw)) {
+        return 'Malformed extractor proposal: root payload must be an object.';
+    }
+
+    const payload = raw;
     const allowedSections = getAllowedEvolutionSections(evolutionSettings);
     const knownSections = new Set(Object.keys(createDefaultCharacterEvolutionState()));
-    const rawProposedState = (payload.proposedState && typeof payload.proposedState === 'object' && !Array.isArray(payload.proposedState))
+    if (Object.prototype.hasOwnProperty.call(payload, 'proposedState') && !isPlainObject(payload.proposedState)) {
+        return 'Malformed extractor proposal: proposedState must be an object.';
+    }
+    if (Object.prototype.hasOwnProperty.call(payload, 'changes') && !Array.isArray(payload.changes)) {
+        return 'Malformed extractor proposal: changes must be an array.';
+    }
+
+    const rawProposedState = isPlainObject(payload.proposedState)
         ? payload.proposedState
         : {};
     const rawProposedKeys = Object.keys(rawProposedState);
     const parts = extractNormalizedProposalParts(raw, evolutionSettings);
     const proposedKeys = Object.keys(parts.proposedState);
     const proposedKeySet = new Set(proposedKeys);
+    const seenRawProposedAliases = new Map();
 
     for (const key of rawProposedKeys) {
-        if (!knownSections.has(key)) {
+        const normalizedKey = normalizeProposalSectionKey(key);
+        if (!normalizedKey || !knownSections.has(normalizedKey)) {
             return `Malformed extractor proposal: unknown proposedState section "${key}".`;
         }
-        if (!allowedSections.has(key)) {
+        if (seenRawProposedAliases.has(normalizedKey)) {
+            return `Malformed extractor proposal: duplicate proposedState section "${normalizedKey}".`;
+        }
+        seenRawProposedAliases.set(normalizedKey, key);
+        if (!allowedSections.has(normalizedKey)) {
             return `Malformed extractor proposal: proposedState section "${key}" is not enabled for evolution.`;
         }
     }
@@ -104,7 +132,9 @@ function getCharacterEvolutionProposalValidationError(raw, evolutionSettings) {
             if (!change || typeof change !== 'object') {
                 return 'Malformed extractor proposal: changes entries must be objects.';
             }
-            const sectionKey = typeof change.sectionKey === 'string' ? change.sectionKey.trim() : '';
+            const sectionKey = normalizeProposalSectionKey(
+                typeof change.sectionKey === 'string' ? change.sectionKey.trim() : ''
+            );
             if (!sectionKey) {
                 return 'Malformed extractor proposal: changes entries require sectionKey.';
             }
@@ -164,6 +194,24 @@ function sanitizeStateForEvolution(stateRaw, evolutionSettings, baseStateRaw = n
     return state;
 }
 
+function sanitizeProposalStateForEvolution(proposedStateRaw, evolutionSettings) {
+    const proposedState = normalizeCharacterEvolutionProposalState(proposedStateRaw);
+    const privacy = normalizeCharacterEvolutionPrivacy(evolutionSettings?.privacy);
+    const allowedKeys = new Set(
+        normalizeCharacterEvolutionSectionConfigs(evolutionSettings?.sectionConfigs)
+            .filter((section) => isEvolutionSectionAllowed(section, privacy))
+            .map((section) => section.key)
+    );
+
+    for (const key of Object.keys(proposedState)) {
+        if (!allowedKeys.has(key)) {
+            delete proposedState[key];
+        }
+    }
+
+    return proposedState;
+}
+
 function safeParseEvolutionJson(text) {
     const source = typeof text === 'string' ? text.trim() : '';
     if (!source) return null;
@@ -214,11 +262,7 @@ function mergeChangedProposalStateWithCurrentState(proposedStateRaw, currentStat
 function normalizeCharacterEvolutionProposal(raw, evolutionSettings) {
     const payload = extractNormalizedProposalParts(raw, evolutionSettings);
     return {
-        proposedState: sanitizeStateForEvolution(
-            mergeChangedProposalStateWithCurrentState(payload.proposedState, evolutionSettings.currentState),
-            evolutionSettings,
-            evolutionSettings.currentState
-        ),
+        proposedState: sanitizeProposalStateForEvolution(payload.proposedState, evolutionSettings),
         changes: payload.changes,
     };
 }
@@ -227,6 +271,8 @@ module.exports = {
     getCharacterEvolutionProposalValidationError,
     mergeChangedProposalStateWithCurrentState,
     normalizeCharacterEvolutionProposal,
+    normalizeCharacterEvolutionProposalState,
     safeParseEvolutionJson,
+    sanitizeProposalStateForEvolution,
     sanitizeStateForEvolution,
 };

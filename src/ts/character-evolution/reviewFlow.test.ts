@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { CharacterEvolutionPendingProposal, character } from "../storage/database.types";
+import { mergeProposalStateWithCurrentState } from "./pendingProposal";
 
 const mocks = vi.hoisted(() => ({
   acceptEvolutionProposalReview: vi.fn(),
@@ -11,9 +12,12 @@ vi.mock("./reviewActions", async () => {
   return {
     createEvolutionProposalDraftState: (
       characterId: string | undefined,
+      currentState: character["characterEvolution"]["currentState"],
       proposal: CharacterEvolutionPendingProposal | null | undefined,
     ) => ({
-      proposalDraft: proposal?.proposedState ? structuredClone(proposal.proposedState) : null,
+      proposalDraft: proposal?.proposedState
+        ? mergeProposalStateWithCurrentState(proposal.proposedState, currentState)
+        : null,
       proposalDraftKey: characterId && proposal?.proposalId ? `${characterId}:${proposal.proposalId}` : null,
     }),
     acceptEvolutionProposalReview: mocks.acceptEvolutionProposalReview,
@@ -275,8 +279,10 @@ describe("character evolution review flow", () => {
   });
 
   it("rebuilds proposal draft state through the shared helper", () => {
+    const characterEntry = createCharacter();
     const result = syncEvolutionProposalDraft({
       characterId: "char-1",
+      currentState: characterEntry.characterEvolution.currentState,
       proposal: createProposal(),
     });
 

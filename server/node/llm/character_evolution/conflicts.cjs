@@ -618,8 +618,12 @@ function resolveCharacterEvolutionSectionConflicts(arg = {}) {
 
 function resolveCharacterEvolutionStateConflicts(arg = {}) {
     const nextState = clone(arg.proposedState || {});
+    const retainOmittedSections = arg.retainOmittedSections !== false;
 
     for (const key of CHARACTER_EVOLUTION_ITEM_SECTION_KEYS) {
+        if (!retainOmittedSections && !Object.prototype.hasOwnProperty.call(nextState, key)) {
+            continue;
+        }
         nextState[key] = resolveCharacterEvolutionSectionConflicts({
             sectionKey: key,
             currentItems: Array.isArray(arg.currentState?.[key]) ? arg.currentState[key] : [],

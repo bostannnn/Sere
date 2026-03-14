@@ -533,6 +533,8 @@ export interface CharacterEvolutionState {
     userIntimatePreferences: CharacterEvolutionItem[]
 }
 
+export type CharacterEvolutionProposalState = Partial<CharacterEvolutionState>
+
 export interface CharacterEvolutionSectionConfig {
     key: CharacterEvolutionSectionKey
     label: string
@@ -565,7 +567,7 @@ export interface CharacterEvolutionPendingProposal {
     proposalId: string
     sourceChatId: string
     sourceRange?: CharacterEvolutionRangeRef
-    proposedState: CharacterEvolutionState
+    proposedState: CharacterEvolutionProposalState
     changes: CharacterEvolutionChange[]
     createdAt: number
 }

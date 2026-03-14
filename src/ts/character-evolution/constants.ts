@@ -87,7 +87,7 @@ export const DEFAULT_EXTRACTION_PROMPT = [
     "For item objects, use:",
     "- value: string",
     "- confidence: suspected | likely | confirmed when applicable",
-    "- note: brief evidence/context when applicable",
+    "- note: brief evidence/context when applicable; for new or materially updated items, normally include a note when transcript support is clear",
     "- status: preserve existing status unless there is a clear reason to change it",
     "- prefer updating an existing matching item over creating a duplicate",
     "- corrected and archived items should not be treated as current truth",

@@ -68,12 +68,13 @@ export function getEvolutionHandoffButtonA11yLabel(args: {
 
 export function syncEvolutionProposalDraft(args: {
   characterId: string | undefined;
+  currentState: CharacterEvolutionState;
   proposal: CharacterEvolutionPendingProposal | null | undefined;
 }): {
   proposalDraft: CharacterEvolutionState | null;
   proposalDraftKey: string | null;
 } {
-  return createEvolutionProposalDraftState(args.characterId, args.proposal);
+  return createEvolutionProposalDraftState(args.characterId, args.currentState, args.proposal);
 }
 
 export async function runEvolutionHandoffFlow(args: {

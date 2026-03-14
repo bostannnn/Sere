@@ -8,6 +8,7 @@ import {
 } from "src/ts/evolution"
 import { DBState } from "src/ts/stores.svelte"
 import type {
+    CharacterEvolutionProposalState,
     CharacterEvolutionRangeRef,
     CharacterEvolutionState,
     CharacterEvolutionVersionFile,
@@ -86,7 +87,7 @@ export async function rejectEvolutionProposalAction(
 
 export async function acceptEvolutionProposalAction(args: {
     characterId: string
-    proposedState: CharacterEvolutionState
+    proposedState: CharacterEvolutionProposalState
     createNextChat?: boolean
 }): Promise<AcceptedEvolutionProposalPayload> {
     const payload = await acceptCharacterEvolutionProposal(

@@ -210,4 +210,5 @@ describe("character evolution normalizers", () => {
         expect(normalized.promptProjection?.limits.extraction.userFacts).toBe(6)
         expect(normalizedCjs).toEqual(normalized)
     })
+
 })

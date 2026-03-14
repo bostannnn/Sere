@@ -85,6 +85,28 @@ function normalizeCharacterEvolutionState(raw) {
     return state;
 }
 
+function normalizeCharacterEvolutionProposalState(raw) {
+    const value = (raw && typeof raw === 'object' && !Array.isArray(raw)) ? raw : {};
+    const defaults = createDefaultCharacterEvolutionState();
+    const proposalState = {};
+
+    for (const key of Object.keys(defaults)) {
+        if (!Object.prototype.hasOwnProperty.call(value, key)) continue;
+        proposalState[key] = normalizeCharacterEvolutionState({ [key]: value[key] })[key];
+    }
+
+    if (
+        !Object.prototype.hasOwnProperty.call(proposalState, 'lastInteractionEnded')
+        && Object.prototype.hasOwnProperty.call(value, 'lastChatEnded')
+    ) {
+        proposalState.lastInteractionEnded = normalizeCharacterEvolutionState({
+            lastChatEnded: value.lastChatEnded,
+        }).lastInteractionEnded;
+    }
+
+    return proposalState;
+}
+
 function normalizeCharacterEvolutionSectionConfigs(raw) {
     const defaults = createDefaultCharacterEvolutionSectionConfigs();
     const rawSections = Array.isArray(raw) ? raw : [];
@@ -149,7 +171,7 @@ function normalizeCharacterEvolutionSettings(raw) {
             ...(normalizeCharacterEvolutionRangeRef(value.pendingProposal.sourceRange)
                 ? { sourceRange: normalizeCharacterEvolutionRangeRef(value.pendingProposal.sourceRange) }
                 : {}),
-            proposedState: normalizeCharacterEvolutionState(value.pendingProposal.proposedState),
+            proposedState: normalizeCharacterEvolutionProposalState(value.pendingProposal.proposedState),
             changes: Array.isArray(value.pendingProposal.changes)
                 ? value.pendingProposal.changes
                     .map((change) => {
@@ -261,6 +283,7 @@ module.exports = {
     getEffectiveCharacterEvolutionSettings,
     normalizeCharacterEvolutionDefaults,
     normalizeCharacterEvolutionPrivacy,
+    normalizeCharacterEvolutionProposalState,
     normalizeCharacterEvolutionSectionConfigs,
     normalizeCharacterEvolutionSettings,
     normalizeCharacterEvolutionState,

@@ -8,6 +8,7 @@
     } from "src/ts/storage/database.types";
     import Button from "../UI/GUI/Button.svelte";
     import ProposalSectionCompare from "./ProposalSectionCompare.svelte";
+    import { mergeProposalStateWithCurrentState } from "src/ts/character-evolution/pendingProposal";
 
     interface Props {
         proposal: CharacterEvolutionPendingProposal | null;
@@ -42,7 +43,7 @@
 
     $effect(() => {
         if (proposal && (!bindState || JSON.stringify(bindState) === "{}")) {
-            bindState = JSON.parse(JSON.stringify(proposal.proposedState));
+            bindState = mergeProposalStateWithCurrentState(proposal.proposedState, currentState);
         }
     });
 
@@ -94,7 +95,9 @@
         }).format(value);
     }
 
-    const effectiveBindState = $derived(bindState ?? proposal?.proposedState ?? currentState);
+    const effectiveBindState = $derived(
+        bindState ?? mergeProposalStateWithCurrentState(proposal?.proposedState, currentState),
+    );
     const visibleCompareSections = $derived(compareSections());
     const proposalCreatedAt = $derived(proposal ? formatCreatedAt(proposal.createdAt) : "");
 </script>

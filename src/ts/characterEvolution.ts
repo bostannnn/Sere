@@ -19,6 +19,7 @@ export {
     normalizeCharacterEvolutionDefaults,
     normalizeCharacterEvolutionExtractionModel,
     normalizeCharacterEvolutionPrivacy,
+    normalizeCharacterEvolutionProposalState,
     normalizeCharacterEvolutionSectionConfigs,
     normalizeCharacterEvolutionSettings,
     normalizeCharacterEvolutionState,

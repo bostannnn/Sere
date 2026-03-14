@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { CharacterEvolutionPendingProposal, character } from "../storage/database.types";
+import { buildChangedProposalState } from "./pendingProposal";
 
 const mocks = vi.hoisted(() => ({
   createCharacterEvolutionProposal: vi.fn(),
@@ -210,7 +211,10 @@ describe("character evolution review actions", () => {
 
     expect(mocks.acceptEvolutionProposalAction).toHaveBeenCalledWith({
       characterId: "char-1",
-      proposedState: characterEntry.characterEvolution.currentState,
+      proposedState: buildChangedProposalState(
+        characterEntry.characterEvolution.currentState,
+        characterEntry.characterEvolution.currentState,
+      ),
       createNextChat: true,
     });
     expect(result.nextCharacter.characterEvolution.currentStateVersion).toBe(5);
@@ -266,7 +270,12 @@ describe("character evolution review actions", () => {
   });
 
   it("creates stable proposal draft metadata", () => {
-    const draftState = createEvolutionProposalDraftState("char-1", createProposal());
+    const characterEntry = createCharacter();
+    const draftState = createEvolutionProposalDraftState(
+      "char-1",
+      characterEntry.characterEvolution.currentState,
+      createProposal(),
+    );
 
     expect(draftState.proposalDraft).not.toBeNull();
     expect(draftState.proposalDraftKey).toContain("proposal-1");

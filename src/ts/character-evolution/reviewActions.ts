@@ -1,6 +1,7 @@
 import { createCharacterEvolutionProposal } from "../evolution";
 import type {
   CharacterEvolutionPendingProposal,
+  CharacterEvolutionProposalState,
   CharacterEvolutionRangeRef,
   CharacterEvolutionState,
   character,
@@ -18,6 +19,10 @@ import {
   withAcceptedEvolutionState,
   withPendingEvolutionProposal,
 } from "./workflow";
+import {
+  buildChangedProposalState,
+  mergeProposalStateWithCurrentState,
+} from "./pendingProposal";
 
 type ResolveCharacterById = (characterId: string) => character | null;
 
@@ -31,13 +36,16 @@ export function hasAcceptedEvolutionForChat(
 
 export function createEvolutionProposalDraftState(
   characterId: string | undefined,
+  currentState: CharacterEvolutionState,
   proposal: CharacterEvolutionPendingProposal | null | undefined,
 ): {
   proposalDraft: CharacterEvolutionState | null;
   proposalDraftKey: string | null;
 } {
   return {
-    proposalDraft: proposal?.proposedState ? structuredClone(proposal.proposedState) : null,
+    proposalDraft: proposal?.proposedState
+      ? mergeProposalStateWithCurrentState(proposal.proposedState, currentState)
+      : null,
     proposalDraftKey: getEvolutionProposalIdentity(characterId, proposal),
   };
 }
@@ -85,7 +93,11 @@ export async function requestEvolutionProposal(args: {
   return {
     proposal,
     nextCharacter: withPendingEvolutionProposal(freshCharacterEntry, proposal),
-    ...createEvolutionProposalDraftState(freshCharacterEntry.chaId, proposal),
+    ...createEvolutionProposalDraftState(
+      freshCharacterEntry.chaId,
+      freshCharacterEntry.characterEvolution.currentState,
+      proposal,
+    ),
   };
 }
 
@@ -113,10 +125,14 @@ export async function acceptEvolutionProposalReview(args: {
     sourceRange,
     resolveCharacterById,
   } = args;
+  const proposedChangeState: CharacterEvolutionProposalState = buildChangedProposalState(
+    characterEntry.characterEvolution.currentState,
+    proposedState,
+  )
 
   const payload = await acceptEvolutionProposalAction({
     characterId: characterEntry.chaId,
-    proposedState,
+    proposedState: proposedChangeState,
     createNextChat,
   });
   const freshCharacterEntry = resolveCharacterById?.(characterEntry.chaId) ?? characterEntry;

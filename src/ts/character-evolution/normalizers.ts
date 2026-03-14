@@ -2,6 +2,7 @@ import type {
     CharacterEvolutionDefaults,
     CharacterEvolutionItem,
     CharacterEvolutionPrivacySettings,
+    CharacterEvolutionProposalState,
     CharacterEvolutionSectionConfig,
     CharacterEvolutionSettings,
     CharacterEvolutionState,
@@ -178,6 +179,32 @@ export function normalizeCharacterEvolutionState(raw: unknown): CharacterEvoluti
     return state
 }
 
+export function normalizeCharacterEvolutionProposalState(raw: unknown): CharacterEvolutionProposalState {
+    const value = (raw && typeof raw === "object" && !Array.isArray(raw)) ? raw as Record<string, unknown> : {}
+    const defaults = createDefaultCharacterEvolutionState()
+    const proposalState: CharacterEvolutionProposalState = {}
+    const assignProposalSection = <K extends keyof CharacterEvolutionState>(key: K, sectionValue: CharacterEvolutionState[K]) => {
+        ;(proposalState as Record<string, unknown>)[key] = sectionValue as unknown
+    }
+
+    for (const key of Object.keys(defaults) as Array<keyof CharacterEvolutionState>) {
+        if (!Object.prototype.hasOwnProperty.call(value, key)) continue
+        const normalizedSection = normalizeCharacterEvolutionState({ [key]: value[key] })[key]
+        assignProposalSection(key, normalizedSection)
+    }
+
+    if (
+        !Object.prototype.hasOwnProperty.call(proposalState, "lastInteractionEnded")
+        && Object.prototype.hasOwnProperty.call(value, "lastChatEnded")
+    ) {
+        proposalState.lastInteractionEnded = normalizeCharacterEvolutionState({
+            lastChatEnded: value.lastChatEnded,
+        }).lastInteractionEnded
+    }
+
+    return proposalState
+}
+
 export function normalizeCharacterEvolutionDefaults(raw: unknown): CharacterEvolutionDefaults {
     const defaults = createDefaultCharacterEvolutionDefaults()
     const value = (raw && typeof raw === "object") ? raw as Record<string, unknown> : {}
@@ -218,7 +245,7 @@ export function normalizeCharacterEvolutionSettings(raw: unknown): CharacterEvol
             ...(normalizeCharacterEvolutionRangeRef((value.pendingProposal as Record<string, unknown>).sourceRange)
                 ? { sourceRange: normalizeCharacterEvolutionRangeRef((value.pendingProposal as Record<string, unknown>).sourceRange)! }
                 : {}),
-            proposedState: normalizeCharacterEvolutionState((value.pendingProposal as Record<string, unknown>).proposedState),
+            proposedState: normalizeCharacterEvolutionProposalState((value.pendingProposal as Record<string, unknown>).proposedState),
             changes: Array.isArray((value.pendingProposal as Record<string, unknown>).changes)
                 ? ((value.pendingProposal as Record<string, unknown>).changes as unknown[])
                     .map((change) => {

@@ -55,6 +55,12 @@ describe("evolution routes handoff", () => {
         endMessageIndex: 1,
       },
     }));
+    expect(characterFile.character.characterEvolution.pendingProposal.proposedState).toEqual({
+      relationship: {
+        trustLevel: "high",
+        dynamic: "closer after the last chat",
+      },
+    });
   });
 
   it("normalizes provider-prefixed extraction models before execution for non-openrouter providers", async () => {
@@ -269,6 +275,30 @@ describe("evolution routes handoff", () => {
     expect(characterFile.character.characterEvolution.pendingProposal ?? null).toBeNull();
   });
 
+  it("rejects malformed top-level proposal shapes before staging a pending proposal", async () => {
+    const { postHandlers } = buildHandlers({
+      executeInternalLLMTextCompletion: async () => JSON.stringify({
+        proposedState: [],
+        changes: [],
+      }),
+    });
+    const handler = postHandlers.get("/data/character-evolution/handoff");
+    expect(handler).toBeTruthy();
+
+    const res = createRes();
+    await handler!(createReq({ characterId, chatId }), res);
+
+    expect(res.statusCode).toBe(502);
+    expect(res.payload).toEqual(expect.objectContaining({
+      error: "EVOLUTION_INVALID_PROPOSAL",
+      message: expect.stringContaining("proposedState must be an object"),
+    }));
+
+    const dataDirs = getDataDirs();
+    const characterFile = JSON.parse(readFileSync(path.join(dataDirs.characters, characterId, "character.json"), "utf-8"));
+    expect(characterFile.character.characterEvolution.pendingProposal ?? null).toBeNull();
+  });
+
   it("re-validates extractor proposals against latest global defaults before staging", async () => {
     const dataDirs = getDataDirs();
     const executeInternalLLMTextCompletion = vi.fn(async () => {
@@ -332,6 +362,188 @@ describe("evolution routes handoff", () => {
     expect(characterFile.character.characterEvolution.pendingProposal ?? null).toBeNull();
   });
 
+  it("accepts legacy lastChatEnded proposal aliases during handoff staging", async () => {
+    const { postHandlers } = buildHandlers({
+      executeInternalLLMTextCompletion: async () => JSON.stringify({
+        proposedState: {
+          lastChatEnded: {
+            state: "ended awkwardly",
+            residue: "both sides still had things unsaid",
+          },
+        },
+        changes: [
+          {
+            sectionKey: "lastChatEnded",
+            summary: "The last interaction ended awkwardly.",
+            evidence: ["The chat cut off with unresolved tension."],
+          },
+        ],
+      }),
+    });
+    const handler = postHandlers.get("/data/character-evolution/handoff");
+    expect(handler).toBeTruthy();
+
+    const res = createRes();
+    await handler!(createReq({ characterId, chatId }), res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.payload).toEqual(expect.objectContaining({
+      ok: true,
+      proposal: expect.objectContaining({
+        proposedState: expect.objectContaining({
+          lastInteractionEnded: {
+            state: "ended awkwardly",
+            residue: "both sides still had things unsaid",
+          },
+        }),
+        changes: [
+          expect.objectContaining({
+            sectionKey: "lastInteractionEnded",
+          }),
+        ],
+      }),
+    }));
+
+    const dataDirs = getDataDirs();
+    const characterFile = JSON.parse(readFileSync(path.join(dataDirs.characters, characterId, "character.json"), "utf-8"));
+    expect(characterFile.character.characterEvolution.pendingProposal).toEqual(expect.objectContaining({
+      proposedState: expect.objectContaining({
+        lastInteractionEnded: {
+          state: "ended awkwardly",
+          residue: "both sides still had things unsaid",
+        },
+      }),
+      changes: [
+        expect.objectContaining({
+          sectionKey: "lastInteractionEnded",
+        }),
+      ],
+    }));
+  });
+
+  it("preserves existing notes in the staged pending proposal when a matched item update omits note", async () => {
+    const dataDirs = getDataDirs();
+    writeJson(path.join(dataDirs.characters, characterId, "character.json"), {
+      character: {
+        chaId: characterId,
+        type: "character",
+        name: "Eva",
+        desc: "desc",
+        personality: "personality",
+        characterEvolution: {
+          enabled: true,
+          useGlobalDefaults: true,
+          currentStateVersion: 0,
+          currentState: {
+            userFacts: [
+              {
+                value: "Lives in Dubai",
+                confidence: "confirmed",
+                status: "active",
+                note: "Eva reacted with surprise and skepticism to Andrew living in Dubai.",
+                sourceChatId: chatId,
+                sourceRange: {
+                  chatId,
+                  startMessageIndex: 0,
+                  endMessageIndex: 1,
+                },
+                updatedAt: 1000,
+                lastSeenAt: 1000,
+                timesSeen: 1,
+              },
+              {
+                value: "Used to live in Berlin",
+                confidence: "confirmed",
+                status: "corrected",
+                note: "Older location fact already superseded.",
+                sourceChatId: chatId,
+                sourceRange: {
+                  chatId,
+                  startMessageIndex: 0,
+                  endMessageIndex: 1,
+                },
+                updatedAt: 900,
+                lastSeenAt: 900,
+                timesSeen: 2,
+              },
+            ],
+          },
+          stateVersions: [],
+        },
+      },
+    });
+    writeJson(path.join(dataDirs.characters, characterId, "chats", `${chatId}.json`), {
+      chat: {
+        id: chatId,
+        message: [
+          { role: "user", data: "I live in Dubai." },
+          { role: "char", data: "That sounds grim." },
+        ],
+      },
+    });
+
+    const { postHandlers } = buildHandlers({
+      executeInternalLLMTextCompletion: async () => JSON.stringify({
+        proposedState: {
+          userFacts: [
+            {
+              value: "Lives in Dubai",
+              confidence: "confirmed",
+            },
+          ],
+        },
+        changes: [
+          {
+            sectionKey: "userFacts",
+            summary: "Confirmed the user's city again.",
+            evidence: ["The user again stated they live in Dubai."],
+          },
+        ],
+      }),
+    });
+    const handler = postHandlers.get("/data/character-evolution/handoff");
+    expect(handler).toBeTruthy();
+
+    const res = createRes();
+    await handler!(createReq({ characterId, chatId }), res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.payload).toEqual(expect.objectContaining({
+      proposal: expect.objectContaining({
+        proposedState: expect.objectContaining({
+          userFacts: [
+            expect.objectContaining({
+              value: "Lives in Dubai",
+              note: "Eva reacted with surprise and skepticism to Andrew living in Dubai.",
+            }),
+          ],
+        }),
+      }),
+    }));
+    expect((res.payload as Record<string, unknown>).proposal).toEqual(expect.not.objectContaining({
+      proposedState: expect.objectContaining({
+        userFacts: expect.arrayContaining([
+          expect.objectContaining({
+            value: "Used to live in Berlin",
+          }),
+        ]),
+      }),
+    }));
+
+    const characterFile = JSON.parse(readFileSync(path.join(dataDirs.characters, characterId, "character.json"), "utf-8"));
+    expect(characterFile.character.characterEvolution.pendingProposal).toEqual(expect.objectContaining({
+      proposedState: expect.objectContaining({
+        userFacts: [
+          expect.objectContaining({
+            value: "Lives in Dubai",
+            note: "Eva reacted with surprise and skepticism to Andrew living in Dubai.",
+          }),
+        ],
+      }),
+    }));
+    expect(characterFile.character.characterEvolution.pendingProposal.proposedState.userFacts).toHaveLength(1);
+  });
+
   it("accepts a pending proposal and writes a version file", async () => {
     const { postHandlers, getHandlers } = buildHandlers();
     const handoff = postHandlers.get("/data/character-evolution/handoff");
@@ -393,6 +605,87 @@ describe("evolution routes handoff", () => {
         }),
       }));
     }
+  });
+
+  it("rejects malformed partial accept payloads instead of silently sanitizing them", async () => {
+    const { postHandlers } = buildHandlers();
+    const handoff = postHandlers.get("/data/character-evolution/handoff");
+    const accept = postHandlers.get("/data/character-evolution/:charId/proposal/accept");
+    expect(handoff).toBeTruthy();
+    expect(accept).toBeTruthy();
+
+    await handoff!(createReq({ characterId, chatId }), createRes());
+
+    const acceptRes = createRes();
+    await accept!(createReq({
+      proposedState: [],
+    }, { charId: characterId }), acceptRes);
+
+    expect(acceptRes.statusCode).toBe(400);
+    expect(acceptRes.payload).toEqual(expect.objectContaining({
+      error: "EVOLUTION_INVALID_PROPOSAL",
+      message: expect.stringContaining("proposedState must be an object"),
+    }));
+
+    const dataDirs = getDataDirs();
+    const characterFile = JSON.parse(readFileSync(path.join(dataDirs.characters, characterId, "character.json"), "utf-8"));
+    expect(characterFile.character.characterEvolution.pendingProposal).toEqual(expect.objectContaining({
+      sourceChatId: chatId,
+    }));
+    expect(existsSync(path.join(dataDirs.characters, characterId, "states", "v1.json"))).toBe(false);
+  });
+
+  it("re-validates pending proposals against latest global defaults on accept", async () => {
+    const dataDirs = getDataDirs();
+    const { postHandlers } = buildHandlers();
+    const handoff = postHandlers.get("/data/character-evolution/handoff");
+    const accept = postHandlers.get("/data/character-evolution/:charId/proposal/accept");
+    expect(handoff).toBeTruthy();
+    expect(accept).toBeTruthy();
+
+    await handoff!(createReq({ characterId, chatId }), createRes());
+
+    writeJson(path.join(dataDirs.root, "settings.json"), {
+      data: {
+        username: "Andrew",
+        characterEvolutionDefaults: {
+          extractionProvider: "openrouter",
+          extractionModel: "anthropic/claude-3.5-haiku",
+          extractionMaxTokens: 2400,
+          extractionPrompt: "Facts about {{user}} as seen by {{char}}.",
+          sectionConfigs: [
+            {
+              key: "relationship",
+              label: "Relationship",
+              enabled: false,
+              includeInPrompt: true,
+              instruction: "Track relationship shifts.",
+              kind: "object",
+              sensitive: false,
+            },
+          ],
+          privacy: {
+            allowCharacterIntimatePreferences: false,
+            allowUserIntimatePreferences: false,
+          },
+        },
+      },
+    });
+
+    const acceptRes = createRes();
+    await accept!(createReq({}, { charId: characterId }), acceptRes);
+
+    expect(acceptRes.statusCode).toBe(400);
+    expect(acceptRes.payload).toEqual(expect.objectContaining({
+      error: "EVOLUTION_INVALID_PROPOSAL",
+      message: expect.stringContaining('proposedState section "relationship" is not enabled for evolution'),
+    }));
+
+    const characterFile = JSON.parse(readFileSync(path.join(dataDirs.characters, characterId, "character.json"), "utf-8"));
+    expect(characterFile.character.characterEvolution.pendingProposal).toEqual(expect.objectContaining({
+      sourceChatId: chatId,
+    }));
+    expect(existsSync(path.join(dataDirs.characters, characterId, "states", "v1.json"))).toBe(false);
   });
 
   it("allows an explicit replay handoff for an already accepted chat", async () => {

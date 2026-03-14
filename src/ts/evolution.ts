@@ -4,8 +4,8 @@ import { getDatabase, setDatabase, type Chat, type character, type groupChat } f
 import { saveServerDatabase } from "./storage/serverDb";
 import type {
     CharacterEvolutionPendingProposal,
+    CharacterEvolutionProposalState,
     CharacterEvolutionRangeRef,
-    CharacterEvolutionState,
     CharacterEvolutionVersionFile,
     CharacterEvolutionVersionMeta,
 } from "./storage/database.types";
@@ -59,7 +59,7 @@ export async function createCharacterEvolutionProposal(
     });
 }
 
-export async function acceptCharacterEvolutionProposal(characterId: string, proposedState: CharacterEvolutionState) {
+export async function acceptCharacterEvolutionProposal(characterId: string, proposedState: CharacterEvolutionProposalState) {
     return await postJson(`/data/character-evolution/${encodeURIComponent(characterId)}/proposal/accept`, {
         proposedState,
     });

@@ -57,6 +57,7 @@
         type EvolutionBusyAction,
     } from 'src/ts/character-evolution/reviewFlow';
     import { getPendingProposalSourceRange } from 'src/ts/character-evolution/pendingProposal';
+    import { createDefaultCharacterEvolutionState } from 'src/ts/characterEvolution';
     import {
         ensureCharacterEvolution,
         getEffectiveCharacterEvolutionSettings,
@@ -365,6 +366,7 @@
     $effect(() => {
         const nextDraftState = syncEvolutionProposalDraft({
             characterId: currentCharacter?.chaId,
+            currentState: currentEvolutionSettings?.currentState ?? createDefaultCharacterEvolutionState(),
             proposal: currentCharacter?.characterEvolution.pendingProposal,
         })
         if (!nextDraftState.proposalDraftKey) {

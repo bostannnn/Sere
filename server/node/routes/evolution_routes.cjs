@@ -35,6 +35,7 @@ function registerEvolutionRoutes(arg = {}) {
         getEffectiveCharacterEvolutionSettings = require('../llm/character_evolution.cjs').getEffectiveCharacterEvolutionSettings,
         getCharacterEvolutionProposalValidationError = require('../llm/character_evolution/proposal.cjs').getCharacterEvolutionProposalValidationError,
         normalizeCharacterEvolutionProposal = require('../llm/character_evolution.cjs').normalizeCharacterEvolutionProposal,
+        normalizeCharacterEvolutionProposalState = require('../llm/character_evolution/proposal.cjs').normalizeCharacterEvolutionProposalState,
         normalizeCharacterEvolutionPrivacy = require('../llm/character_evolution.cjs').normalizeCharacterEvolutionPrivacy,
         normalizeCharacterEvolutionRangeRef = require('../llm/character_evolution.cjs').normalizeCharacterEvolutionRangeRef,
         normalizeCharacterEvolutionSectionConfigs = require('../llm/character_evolution.cjs').normalizeCharacterEvolutionSectionConfigs,
@@ -42,6 +43,7 @@ function registerEvolutionRoutes(arg = {}) {
         normalizeCharacterEvolutionState = require('../llm/character_evolution.cjs').normalizeCharacterEvolutionState,
         rangesOverlap = require('../llm/character_evolution.cjs').rangesOverlap,
         safeParseEvolutionJson = require('../llm/character_evolution.cjs').safeParseEvolutionJson,
+        sanitizeProposalStateForEvolution = require('../llm/character_evolution/proposal.cjs').sanitizeProposalStateForEvolution,
         sanitizeStateForEvolution = require('../llm/character_evolution.cjs').sanitizeStateForEvolution,
     } = arg;
 
@@ -378,13 +380,21 @@ function registerEvolutionRoutes(arg = {}) {
                 sourceChatId: chatId,
                 sourceRange,
                 timestamp: pendingProposalCreatedAt,
+                retainOmittedSections: false,
             }),
+            retainOmittedSections: false,
+        });
+        const stagedProposalState = mergeAcceptedCharacterEvolutionState({
+            currentState: latestEvolution.currentState,
+            proposedState: normalizedProposalState,
+            retainOmittedSections: false,
+            includeUnchangedCurrentItems: false,
         });
         const pendingProposal = {
             proposalId: makeProposalId(),
             sourceChatId: chatId,
             sourceRange,
-            proposedState: normalizedProposalState,
+            proposedState: stagedProposalState,
             changes: proposalPayload.changes,
             createdAt: pendingProposalCreatedAt,
         };
@@ -459,20 +469,32 @@ function registerEvolutionRoutes(arg = {}) {
         const body = (req.body && typeof req.body === 'object') ? req.body : {};
         const acceptedAt = Date.now();
         const sourceRange = normalizeCharacterEvolutionRangeRef(pendingProposal.sourceRange);
+        const proposedStateRaw = Object.prototype.hasOwnProperty.call(body, 'proposedState')
+            ? body.proposedState
+            : pendingProposal.proposedState;
+        const proposalValidationError = getCharacterEvolutionProposalValidationError({
+            proposedState: proposedStateRaw,
+            changes: [],
+        }, effectiveEvolution);
+        if (proposalValidationError) {
+            throw new LLMHttpError(400, 'EVOLUTION_INVALID_PROPOSAL', proposalValidationError);
+        }
+        const proposedStateDraft = sanitizeProposalStateForEvolution(
+            normalizeCharacterEvolutionProposalState(proposedStateRaw),
+            effectiveEvolution
+        );
         const normalizedAcceptedProposalState = resolveCharacterEvolutionStateConflicts({
             currentState: storedEvolution.currentState,
             proposedState: applyCharacterEvolutionItemMetadata({
-                state: sanitizeStateForEvolution(
-                    normalizeCharacterEvolutionState(body.proposedState || pendingProposal.proposedState),
-                    effectiveEvolution,
-                    storedEvolution.currentState
-                ),
+                state: proposedStateDraft,
                 baseState: storedEvolution.currentState,
                 sourceChatId: pendingProposal.sourceChatId,
                 sourceRange,
                 timestamp: acceptedAt,
                 overwriteNewItemTimestamps: true,
+                retainOmittedSections: false,
             }),
+            retainOmittedSections: false,
         });
         const proposedState = mergeAcceptedCharacterEvolutionState({
             currentState: storedEvolution.currentState,

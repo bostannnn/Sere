@@ -416,8 +416,12 @@ function applyCharacterEvolutionItemMetadata(arg = {}) {
             : undefined;
     const sourceRange = createCharacterEvolutionItemSourceRange(arg.sourceRange);
     const timestamp = Number.isFinite(Number(arg.timestamp)) ? Number(arg.timestamp) : undefined;
+    const retainOmittedSections = arg.retainOmittedSections !== false;
 
     for (const key of CHARACTER_EVOLUTION_ITEM_SECTION_KEYS) {
+        if (!retainOmittedSections && !Object.prototype.hasOwnProperty.call(nextState, key)) {
+            continue;
+        }
         const baseItems = Array.isArray(arg.baseState?.[key]) ? arg.baseState[key] : [];
         nextState[key] = (Array.isArray(nextState[key]) ? nextState[key] : []).map((item) => ({
             ...item,
@@ -465,9 +469,16 @@ function applyCharacterEvolutionItemMetadata(arg = {}) {
 function mergeAcceptedCharacterEvolutionState(arg = {}) {
     const currentState = arg.currentState || {};
     const proposedState = arg.proposedState || {};
-    const nextState = clone(proposedState);
+    const retainOmittedSections = arg.retainOmittedSections !== false;
+    const includeUnchangedCurrentItems = arg.includeUnchangedCurrentItems !== false;
+    const nextState = retainOmittedSections
+        ? clone(currentState, currentState)
+        : clone(proposedState);
 
     for (const key of CHARACTER_EVOLUTION_ITEM_SECTION_KEYS) {
+        if (!retainOmittedSections && !Object.prototype.hasOwnProperty.call(proposedState, key)) {
+            continue;
+        }
         const currentItems = Array.isArray(currentState[key]) ? clone(currentState[key]) : [];
         const proposedItems = Array.isArray(proposedState[key]) ? clone(proposedState[key]) : [];
         const activeCurrentExactMatchKeys = itemValueKeysForSection(
@@ -479,6 +490,32 @@ function mergeAcceptedCharacterEvolutionState(arg = {}) {
             getCharacterEvolutionItemNormalizedMatchKey
         );
         const mergedItems = [];
+
+        if (!includeUnchangedCurrentItems) {
+            const remainingCurrentItems = [...currentItems];
+            for (const proposedItem of proposedItems) {
+                const matchingCurrentItemIndex = findMatchingItemIndex(
+                    key,
+                    remainingCurrentItems,
+                    proposedItem,
+                    buildPreferredStatusOrder(normalizeCharacterEvolutionItemStatus(proposedItem)),
+                    {
+                        allowReinforcement: true,
+                    }
+                );
+                if (matchingCurrentItemIndex >= 0) {
+                    mergedItems.push(createMergedMatchedItem(
+                        remainingCurrentItems[matchingCurrentItemIndex],
+                        proposedItem
+                    ));
+                    remainingCurrentItems.splice(matchingCurrentItemIndex, 1);
+                } else {
+                    mergedItems.push(proposedItem);
+                }
+            }
+            nextState[key] = mergedItems;
+            continue;
+        }
 
         for (const currentItem of currentItems) {
             const currentStatus = normalizeCharacterEvolutionItemStatus(currentItem);
@@ -534,6 +571,12 @@ function mergeAcceptedCharacterEvolutionState(arg = {}) {
 
         mergedItems.push(...proposedItems);
         nextState[key] = mergedItems;
+    }
+
+    for (const key of CHARACTER_EVOLUTION_OBJECT_SECTION_KEYS) {
+        if (Object.prototype.hasOwnProperty.call(proposedState, key)) {
+            nextState[key] = clone(proposedState[key], proposedState[key]);
+        }
     }
 
     return nextState;

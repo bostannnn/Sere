@@ -6,7 +6,7 @@ const {
 } = require("./proposal.cjs");
 
 describe("character evolution proposal normalization", () => {
-  it("carries forward omitted sections from current state while leaving changed sections untouched", () => {
+  it("keeps proposedState partial and leaves omitted sections out", () => {
     const evolutionSettings = {
       currentState: {
         relationship: {
@@ -47,10 +47,7 @@ describe("character evolution proposal normalization", () => {
       ],
     }, evolutionSettings);
 
-    expect(normalized.proposedState.relationship).toEqual({
-      trustLevel: "steady",
-      dynamic: "warm",
-    });
+    expect(normalized.proposedState).not.toHaveProperty("relationship");
     expect(normalized.proposedState.userFacts).toEqual([
       {
         value: "Has a dog",
@@ -104,6 +101,40 @@ describe("character evolution proposal normalization", () => {
     expect(validationError).toContain('unknown proposedState section "userFact"');
   });
 
+  it("rejects malformed top-level proposedState shapes", () => {
+    const validationError = getCharacterEvolutionProposalValidationError({
+      proposedState: [],
+      changes: [],
+    }, {
+      currentState: {},
+      sectionConfigs: [],
+      privacy: {
+        allowCharacterIntimatePreferences: false,
+        allowUserIntimatePreferences: false,
+      },
+    });
+
+    expect(validationError).toContain("proposedState must be an object");
+  });
+
+  it("rejects malformed top-level changes shapes", () => {
+    const validationError = getCharacterEvolutionProposalValidationError({
+      proposedState: {},
+      changes: {
+        sectionKey: "userFacts",
+      },
+    }, {
+      currentState: {},
+      sectionConfigs: [],
+      privacy: {
+        allowCharacterIntimatePreferences: false,
+        allowUserIntimatePreferences: false,
+      },
+    });
+
+    expect(validationError).toContain("changes must be an array");
+  });
+
   it("rejects malformed object-section replacements that omit required fields", () => {
     const validationError = getCharacterEvolutionProposalValidationError({
       proposedState: {
@@ -138,5 +169,87 @@ describe("character evolution proposal normalization", () => {
     });
 
     expect(validationError).toContain("\"relationship\" must include \"dynamic\"");
+  });
+
+  it("accepts legacy lastChatEnded as an alias for lastInteractionEnded", () => {
+    const validationError = getCharacterEvolutionProposalValidationError({
+      proposedState: {
+        lastChatEnded: {
+          state: "left on a tense note",
+          residue: "uneasy but unfinished",
+        },
+      },
+      changes: [
+        {
+          sectionKey: "lastChatEnded",
+          summary: "The interaction ended on an uneasy note.",
+          evidence: ["They stopped talking after an argument."],
+        },
+      ],
+    }, {
+      currentState: {},
+      sectionConfigs: [
+        {
+          key: "lastInteractionEnded",
+          label: "Last Interaction Ended",
+          enabled: true,
+          includeInPrompt: true,
+          instruction: "Track how the last interaction ended.",
+          kind: "object",
+          sensitive: false,
+        },
+      ],
+      privacy: {
+        allowCharacterIntimatePreferences: false,
+        allowUserIntimatePreferences: false,
+      },
+    });
+
+    expect(validationError).toBe("");
+
+    const normalized = normalizeCharacterEvolutionProposal({
+      proposedState: {
+        lastChatEnded: {
+          state: "left on a tense note",
+          residue: "uneasy but unfinished",
+        },
+      },
+      changes: [
+        {
+          sectionKey: "lastChatEnded",
+          summary: "The interaction ended on an uneasy note.",
+          evidence: ["They stopped talking after an argument."],
+        },
+      ],
+    }, {
+      currentState: {},
+      sectionConfigs: [
+        {
+          key: "lastInteractionEnded",
+          label: "Last Interaction Ended",
+          enabled: true,
+          includeInPrompt: true,
+          instruction: "Track how the last interaction ended.",
+          kind: "object",
+          sensitive: false,
+        },
+      ],
+      privacy: {
+        allowCharacterIntimatePreferences: false,
+        allowUserIntimatePreferences: false,
+      },
+    });
+
+    expect(normalized.proposedState.lastInteractionEnded).toEqual({
+      state: "left on a tense note",
+      residue: "uneasy but unfinished",
+    });
+    expect(normalized.changes).toEqual([
+      {
+        sectionKey: "lastInteractionEnded",
+        summary: "The interaction ended on an uneasy note.",
+        evidence: ["They stopped talking after an argument."],
+      },
+    ]);
   });
 });
