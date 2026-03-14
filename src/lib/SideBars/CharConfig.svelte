@@ -431,7 +431,16 @@
             return null
         }
         const char = selected as character
+        char.emotionImages = Array.isArray(char.emotionImages) ? char.emotionImages : []
+        char.globalLore = Array.isArray(char.globalLore) ? char.globalLore : []
+        char.customscript = Array.isArray(char.customscript) ? char.customscript : []
+        char.triggerscript = Array.isArray(char.triggerscript) ? char.triggerscript : []
+        char.alternateGreetings = Array.isArray(char.alternateGreetings) ? char.alternateGreetings : []
+        char.tags = Array.isArray(char.tags) ? char.tags : []
         char.additionalAssets = Array.isArray(char.additionalAssets) ? char.additionalAssets : []
+        char.prebuiltAssetExclude = Array.isArray(char.prebuiltAssetExclude) ? char.prebuiltAssetExclude : []
+        char.source = Array.isArray(char.source) ? char.source : []
+        char.group_only_greetings = Array.isArray(char.group_only_greetings) ? char.group_only_greetings : []
         char.prebuiltAssetStyle = typeof char.prebuiltAssetStyle === 'string' ? char.prebuiltAssetStyle : ''
         char.backgroundHTML = typeof char.backgroundHTML === 'string' ? char.backgroundHTML : ''
         char.virtualscript = typeof char.virtualscript === 'string' ? char.virtualscript : ''

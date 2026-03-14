@@ -619,6 +619,46 @@ describe("chat sidebar integration runtime smoke", () => {
     expect(document.body.textContent).toContain("No chat selected.");
   });
 
+  it("normalizes malformed imported character arrays before rendering CharConfig", async () => {
+    shared.DBState.db.characters[0] = {
+      ...shared.makeCharacter(),
+      alternateGreetings: null as unknown as string[],
+      emotionImages: null as unknown as [string, string][],
+      customscript: null as unknown as Array<unknown>,
+      triggerscript: null as unknown as Array<unknown>,
+      globalLore: null as unknown as Array<unknown>,
+      tags: null as unknown as string[],
+      additionalAssets: null as unknown as [string, string, string?][],
+      ccAssets: null as unknown as Array<unknown>,
+      bias: null as unknown as Array<unknown>,
+      prebuiltAssetExclude: null as unknown as string[],
+      source: null as unknown as string[],
+      group_only_greetings: null as unknown as string[],
+    };
+    selectedCharID.set(0);
+    await flushUi();
+
+    const characterTab = document.querySelector('[data-testid="chat-sidebar-tab-character"]') as HTMLButtonElement | null;
+    expect(characterTab).not.toBeNull();
+    characterTab!.click();
+    await flushUi();
+
+    expect(document.querySelector(".char-config-root")).not.toBeNull();
+    expect(document.body.textContent).toContain("noData");
+
+    const displayTab = document.querySelector('[data-testid="char-config-subtab-1"]') as HTMLButtonElement | null;
+    expect(displayTab).not.toBeNull();
+    displayTab!.click();
+    await flushUi();
+    expect(document.querySelector('[aria-label="Add icon asset"]')).not.toBeNull();
+
+    const scriptsTab = document.querySelector('[data-testid="char-config-subtab-4"]') as HTMLButtonElement | null;
+    expect(scriptsTab).not.toBeNull();
+    scriptsTab!.click();
+    await flushUi();
+    expect(document.querySelector('[aria-label="Add regex script row"]')).not.toBeNull();
+  });
+
   it("keeps character config top tabs available in mobile mode", async () => {
     MobileGUI.set(true);
     await flushUi();
