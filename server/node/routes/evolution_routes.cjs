@@ -14,6 +14,8 @@ function registerEvolutionRoutes(arg = {}) {
         applyCharacterEvolutionItemMetadata = require('../llm/character_evolution/items.cjs').applyCharacterEvolutionItemMetadata,
         mergeAcceptedCharacterEvolutionState = require('../llm/character_evolution/items.cjs').mergeAcceptedCharacterEvolutionState,
         resolveCharacterEvolutionStateConflicts = require('../llm/character_evolution/conflicts.cjs').resolveCharacterEvolutionStateConflicts,
+        applyCharacterEvolutionDecay = require('../llm/character_evolution/decay.cjs').applyCharacterEvolutionDecay,
+        applyLastInteractionEndedOverwrite = require('../llm/character_evolution/decay.cjs').applyLastInteractionEndedOverwrite,
         createCharacterEvolutionRepository = require('../services/character_evolution_repository.cjs').createCharacterEvolutionRepository,
         createCharacterEvolutionHistoryResolver = require('../services/character_evolution_history_resolver.cjs').createCharacterEvolutionHistoryResolver,
         createCharacterEvolutionVersionStore = require('../services/character_evolution_version_store.cjs').createCharacterEvolutionVersionStore,
@@ -323,11 +325,15 @@ function registerEvolutionRoutes(arg = {}) {
             normalizeCharacterEvolutionProposalState(proposedStateRaw),
             effectiveEvolution
         );
+        const proposalStateForAcceptance = applyLastInteractionEndedOverwrite({
+            proposedState: proposedStateDraft,
+            sectionConfigs: effectiveEvolution.sectionConfigs,
+        });
         const shouldPreserveDisabledSections = !Object.prototype.hasOwnProperty.call(body, 'proposedState')
             && storedEvolution.useGlobalDefaults === false;
         const proposalValidationError = getCharacterEvolutionProposalValidationError({
             proposedState: shouldPreserveDisabledSections
-                ? proposedStateDraft
+                ? proposalStateForAcceptance
                 : Object.prototype.hasOwnProperty.call(body, 'proposedState')
                 ? proposedStateRaw
                 : pendingProposal.proposedState,
@@ -336,23 +342,6 @@ function registerEvolutionRoutes(arg = {}) {
         if (proposalValidationError) {
             throw new LLMHttpError(400, 'EVOLUTION_INVALID_PROPOSAL', proposalValidationError);
         }
-        const normalizedAcceptedProposalState = resolveCharacterEvolutionStateConflicts({
-            currentState: storedEvolution.currentState,
-            proposedState: applyCharacterEvolutionItemMetadata({
-                state: proposedStateDraft,
-                baseState: storedEvolution.currentState,
-                sourceChatId: pendingProposal.sourceChatId,
-                sourceRange,
-                timestamp: acceptedAt,
-                overwriteNewItemTimestamps: true,
-                retainOmittedSections: false,
-            }),
-            retainOmittedSections: false,
-        });
-        const proposedState = (shouldPreserveDisabledSections ? sanitizeStateForEvolution : (value) => value)(mergeAcceptedCharacterEvolutionState({
-            currentState: storedEvolution.currentState,
-            proposedState: normalizedAcceptedProposalState,
-        }), effectiveEvolution, storedEvolution.currentState);
         const recoveredVersions = mergeVersionMetas(
             storedEvolution.stateVersions,
             await readVersionMetasFromDisk(charDir, {
@@ -363,6 +352,28 @@ function registerEvolutionRoutes(arg = {}) {
             storedEvolution.currentStateVersion || 0,
             ...recoveredVersions.map((entry) => Number(entry.version) || 0),
         ) + 1;
+        const normalizedAcceptedProposalState = resolveCharacterEvolutionStateConflicts({
+            currentState: storedEvolution.currentState,
+            proposedState: applyCharacterEvolutionItemMetadata({
+                state: proposalStateForAcceptance,
+                baseState: storedEvolution.currentState,
+                sourceChatId: pendingProposal.sourceChatId,
+                sourceRange,
+                timestamp: acceptedAt,
+                acceptedVersion: nextVersion,
+                overwriteNewItemTimestamps: true,
+                retainOmittedSections: false,
+            }),
+            retainOmittedSections: false,
+        });
+        const mergedCanonicalState = mergeAcceptedCharacterEvolutionState({
+            currentState: storedEvolution.currentState,
+            proposedState: normalizedAcceptedProposalState,
+        });
+        const proposedState = (shouldPreserveDisabledSections ? sanitizeStateForEvolution : (value) => value)(applyCharacterEvolutionDecay({
+            state: mergedCanonicalState,
+            acceptedVersion: nextVersion,
+        }), effectiveEvolution, storedEvolution.currentState);
         const versionFile = await stageVersionFile(charDir, nextVersion, {
             version: nextVersion,
             chatId: pendingProposal.sourceChatId || null,

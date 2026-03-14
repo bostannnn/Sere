@@ -490,7 +490,9 @@ export interface CharacterEvolutionItem {
     }
     updatedAt?: number
     lastSeenAt?: number
+    lastSeenVersion?: number
     timesSeen?: number
+    unseenAcceptedHandoffs?: number
 }
 
 export interface CharacterEvolutionRelationshipState {

@@ -265,6 +265,20 @@ function normalizeCharacterEvolutionItemTimesSeen(item) {
     return Math.max(1, Math.floor(Number(item?.timesSeen)));
 }
 
+function normalizeCharacterEvolutionItemUnseenAcceptedHandoffs(item) {
+    if (!Number.isFinite(Number(item?.unseenAcceptedHandoffs)) || Number(item?.unseenAcceptedHandoffs) < 0) {
+        return undefined;
+    }
+    return Math.max(0, Math.floor(Number(item?.unseenAcceptedHandoffs)));
+}
+
+function normalizeCharacterEvolutionItemLastSeenVersion(item) {
+    if (!Number.isFinite(Number(item?.lastSeenVersion)) || Number(item?.lastSeenVersion) <= 0) {
+        return undefined;
+    }
+    return Math.max(1, Math.floor(Number(item?.lastSeenVersion)));
+}
+
 function normalizeCharacterEvolutionItemNote(item) {
     return typeof item?.note === 'string' ? item.note : '';
 }
@@ -356,6 +370,10 @@ function createMergedMatchedItem(currentItem, proposedItem) {
     const shouldPreserveHistoricalMetadata = nextStatus !== 'active';
     const currentTimesSeen = normalizeCharacterEvolutionItemTimesSeen(currentItem);
     const proposedTimesSeen = normalizeCharacterEvolutionItemTimesSeen(proposedItem);
+    const currentLastSeenVersion = normalizeCharacterEvolutionItemLastSeenVersion(currentItem);
+    const proposedLastSeenVersion = normalizeCharacterEvolutionItemLastSeenVersion(proposedItem);
+    const nextUnseenAcceptedHandoffs = normalizeCharacterEvolutionItemUnseenAcceptedHandoffs(proposedItem)
+        ?? normalizeCharacterEvolutionItemUnseenAcceptedHandoffs(currentItem);
     const nextProposedConfidence = proposedItem.confidence ?? currentItem.confidence;
     const nextProposedNote = proposedItem.note ?? currentItem.note;
     const hasMeaningfulUpdate = currentItem.confidence !== nextProposedConfidence
@@ -379,6 +397,9 @@ function createMergedMatchedItem(currentItem, proposedItem) {
     const nextLastSeenAt = shouldReinforce
         ? proposedItem.lastSeenAt ?? proposedItem.updatedAt ?? currentItem.lastSeenAt
         : currentItem.lastSeenAt;
+    const nextLastSeenVersion = shouldReinforce
+        ? proposedLastSeenVersion ?? currentLastSeenVersion
+        : currentLastSeenVersion;
     const nextSourceChatId = shouldReinforce
         ? proposedItem.sourceChatId ?? currentItem.sourceChatId
         : currentItem.sourceChatId;
@@ -399,7 +420,9 @@ function createMergedMatchedItem(currentItem, proposedItem) {
                 : {}),
         ...(nextUpdatedAt !== undefined ? { updatedAt: nextUpdatedAt } : {}),
         ...(nextLastSeenAt !== undefined ? { lastSeenAt: nextLastSeenAt } : {}),
+        ...(nextLastSeenVersion !== undefined ? { lastSeenVersion: nextLastSeenVersion } : {}),
         ...(nextTimesSeen !== undefined ? { timesSeen: nextTimesSeen } : {}),
+        ...(nextUnseenAcceptedHandoffs !== undefined ? { unseenAcceptedHandoffs: nextUnseenAcceptedHandoffs } : {}),
     };
 }
 
@@ -416,6 +439,9 @@ function applyCharacterEvolutionItemMetadata(arg = {}) {
             : undefined;
     const sourceRange = createCharacterEvolutionItemSourceRange(arg.sourceRange);
     const timestamp = Number.isFinite(Number(arg.timestamp)) ? Number(arg.timestamp) : undefined;
+    const acceptedVersion = Number.isFinite(Number(arg.acceptedVersion)) && Number(arg.acceptedVersion) > 0
+        ? Math.max(1, Math.floor(Number(arg.acceptedVersion)))
+        : undefined;
     const retainOmittedSections = arg.retainOmittedSections !== false;
 
     for (const key of CHARACTER_EVOLUTION_ITEM_SECTION_KEYS) {
@@ -449,6 +475,11 @@ function applyCharacterEvolutionItemMetadata(arg = {}) {
                                 ...(baseMatch.updatedAt !== undefined && item?.updatedAt === undefined ? { updatedAt: baseMatch.updatedAt } : {}),
                                 ...(baseMatch.lastSeenAt !== undefined && item?.lastSeenAt === undefined ? { lastSeenAt: baseMatch.lastSeenAt } : {}),
                             }),
+                        ...(acceptedVersion !== undefined && arg.overwriteNewItemTimestamps
+                            ? { lastSeenVersion: acceptedVersion }
+                            : baseMatch.lastSeenVersion !== undefined && item?.lastSeenVersion === undefined
+                                ? { lastSeenVersion: baseMatch.lastSeenVersion }
+                                : {}),
                         ...(baseMatch.timesSeen !== undefined && item?.timesSeen === undefined ? { timesSeen: baseMatch.timesSeen } : {}),
                     };
                 }
@@ -457,6 +488,7 @@ function applyCharacterEvolutionItemMetadata(arg = {}) {
                     ...(sourceRange && !item?.sourceRange ? { sourceRange: clone(sourceRange) } : {}),
                     ...(timestamp !== undefined && (arg.overwriteNewItemTimestamps || item?.updatedAt === undefined) ? { updatedAt: timestamp } : {}),
                     ...(timestamp !== undefined && (arg.overwriteNewItemTimestamps || item?.lastSeenAt === undefined) ? { lastSeenAt: timestamp } : {}),
+                    ...(acceptedVersion !== undefined && (arg.overwriteNewItemTimestamps || item?.lastSeenVersion === undefined) ? { lastSeenVersion: acceptedVersion } : {}),
                     ...(!(Number.isFinite(Number(item?.timesSeen)) && Number(item.timesSeen) > 0) ? { timesSeen: 1 } : {}),
                 };
             })(),
@@ -476,7 +508,7 @@ function mergeAcceptedCharacterEvolutionState(arg = {}) {
         : clone(proposedState);
 
     for (const key of CHARACTER_EVOLUTION_ITEM_SECTION_KEYS) {
-        if (!retainOmittedSections && !Object.prototype.hasOwnProperty.call(proposedState, key)) {
+        if (!Object.prototype.hasOwnProperty.call(proposedState, key)) {
             continue;
         }
         const currentItems = Array.isArray(currentState[key]) ? clone(currentState[key]) : [];

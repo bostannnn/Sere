@@ -281,6 +281,20 @@ function normalizeCharacterEvolutionItemTimesSeen(item: CharacterEvolutionItem |
     return Math.max(1, Math.floor(Number(item?.timesSeen)))
 }
 
+function normalizeCharacterEvolutionItemUnseenAcceptedHandoffs(item: CharacterEvolutionItem | null | undefined): number | undefined {
+    if (!Number.isFinite(Number(item?.unseenAcceptedHandoffs)) || Number(item?.unseenAcceptedHandoffs) < 0) {
+        return undefined
+    }
+    return Math.max(0, Math.floor(Number(item?.unseenAcceptedHandoffs)))
+}
+
+function normalizeCharacterEvolutionItemLastSeenVersion(item: CharacterEvolutionItem | null | undefined): number | undefined {
+    if (!Number.isFinite(Number(item?.lastSeenVersion)) || Number(item?.lastSeenVersion) <= 0) {
+        return undefined
+    }
+    return Math.max(1, Math.floor(Number(item?.lastSeenVersion)))
+}
+
 function normalizeCharacterEvolutionItemNote(item: CharacterEvolutionItem | null | undefined): string {
     return typeof item?.note === "string" ? item.note : ""
 }
@@ -402,6 +416,10 @@ function createMergedMatchedItem(
     const shouldPreserveHistoricalMetadata = nextStatus !== "active"
     const currentTimesSeen = normalizeCharacterEvolutionItemTimesSeen(currentItem)
     const proposedTimesSeen = normalizeCharacterEvolutionItemTimesSeen(proposedItem)
+    const currentLastSeenVersion = normalizeCharacterEvolutionItemLastSeenVersion(currentItem)
+    const proposedLastSeenVersion = normalizeCharacterEvolutionItemLastSeenVersion(proposedItem)
+    const nextUnseenAcceptedHandoffs = normalizeCharacterEvolutionItemUnseenAcceptedHandoffs(proposedItem)
+        ?? normalizeCharacterEvolutionItemUnseenAcceptedHandoffs(currentItem)
     const nextProposedConfidence = proposedItem.confidence ?? currentItem.confidence
     const nextProposedNote = proposedItem.note ?? currentItem.note
     const hasMeaningfulUpdate = currentItem.confidence !== nextProposedConfidence
@@ -425,6 +443,9 @@ function createMergedMatchedItem(
     const nextLastSeenAt = shouldReinforce
         ? proposedItem.lastSeenAt ?? proposedItem.updatedAt ?? currentItem.lastSeenAt
         : currentItem.lastSeenAt
+    const nextLastSeenVersion = shouldReinforce
+        ? proposedLastSeenVersion ?? currentLastSeenVersion
+        : currentLastSeenVersion
     const nextSourceChatId = shouldReinforce
         ? proposedItem.sourceChatId ?? currentItem.sourceChatId
         : currentItem.sourceChatId
@@ -441,7 +462,9 @@ function createMergedMatchedItem(
         ...(nextSourceRange ? { sourceRange: { ...nextSourceRange } } : {}),
         ...(nextUpdatedAt !== undefined ? { updatedAt: nextUpdatedAt } : {}),
         ...(nextLastSeenAt !== undefined ? { lastSeenAt: nextLastSeenAt } : {}),
+        ...(nextLastSeenVersion !== undefined ? { lastSeenVersion: nextLastSeenVersion } : {}),
         ...(nextTimesSeen !== undefined ? { timesSeen: nextTimesSeen } : {}),
+        ...(nextUnseenAcceptedHandoffs !== undefined ? { unseenAcceptedHandoffs: nextUnseenAcceptedHandoffs } : {}),
     }
 }
 
@@ -458,6 +481,7 @@ export function applyCharacterEvolutionItemMetadata(args: {
     sourceChatId?: string | null
     sourceRange?: CharacterEvolutionRangeRef | null
     timestamp?: number | null
+    acceptedVersion?: number | null
     overwriteNewItemTimestamps?: boolean
 }): CharacterEvolutionState {
     const { state } = args
@@ -469,6 +493,9 @@ export function applyCharacterEvolutionItemMetadata(args: {
             : undefined
     const sourceRange = createCharacterEvolutionItemSourceRange(args.sourceRange)
     const timestamp = Number.isFinite(Number(args.timestamp)) ? Number(args.timestamp) : undefined
+    const acceptedVersion = Number.isFinite(Number(args.acceptedVersion)) && Number(args.acceptedVersion) > 0
+        ? Math.max(1, Math.floor(Number(args.acceptedVersion)))
+        : undefined
 
     for (const key of CHARACTER_EVOLUTION_ITEM_SECTION_KEYS) {
         const baseItems = Array.isArray(args.baseState?.[key])
@@ -500,6 +527,11 @@ export function applyCharacterEvolutionItemMetadata(args: {
                                 ...(baseMatch.updatedAt !== undefined && item.updatedAt === undefined ? { updatedAt: baseMatch.updatedAt } : {}),
                                 ...(baseMatch.lastSeenAt !== undefined && item.lastSeenAt === undefined ? { lastSeenAt: baseMatch.lastSeenAt } : {}),
                             }),
+                        ...(acceptedVersion !== undefined && args.overwriteNewItemTimestamps
+                            ? { lastSeenVersion: acceptedVersion }
+                            : baseMatch.lastSeenVersion !== undefined && item.lastSeenVersion === undefined
+                                ? { lastSeenVersion: baseMatch.lastSeenVersion }
+                                : {}),
                         ...(baseMatch.timesSeen !== undefined && item.timesSeen === undefined ? { timesSeen: baseMatch.timesSeen } : {}),
                     }
                 }
@@ -508,6 +540,7 @@ export function applyCharacterEvolutionItemMetadata(args: {
                     ...(sourceRange && !item.sourceRange ? { sourceRange: { ...sourceRange } } : {}),
                     ...(timestamp !== undefined && (args.overwriteNewItemTimestamps || item.updatedAt === undefined) ? { updatedAt: timestamp } : {}),
                     ...(timestamp !== undefined && (args.overwriteNewItemTimestamps || item.lastSeenAt === undefined) ? { lastSeenAt: timestamp } : {}),
+                    ...(acceptedVersion !== undefined && (args.overwriteNewItemTimestamps || item.lastSeenVersion === undefined) ? { lastSeenVersion: acceptedVersion } : {}),
                     ...(!(Number.isFinite(Number(item.timesSeen)) && Number(item.timesSeen) > 0) ? { timesSeen: 1 } : {}),
                 }
             })(),
@@ -521,9 +554,12 @@ export function mergeAcceptedCharacterEvolutionState(args: {
     currentState: CharacterEvolutionState
     proposedState: CharacterEvolutionState
 }): CharacterEvolutionState {
-    const nextState = structuredClone(args.proposedState)
+    const nextState = structuredClone(args.currentState)
 
     for (const key of CHARACTER_EVOLUTION_ITEM_SECTION_KEYS) {
+        if (!Object.prototype.hasOwnProperty.call(args.proposedState, key)) {
+            continue
+        }
         const currentItems = Array.isArray(args.currentState[key])
             ? structuredClone(args.currentState[key] as CharacterEvolutionItem[])
             : []
@@ -594,6 +630,13 @@ export function mergeAcceptedCharacterEvolutionState(args: {
 
         mergedItems.push(...proposedItems)
         nextState[key] = mergedItems as never
+    }
+
+    for (const key of CHARACTER_EVOLUTION_OBJECT_SECTION_KEYS) {
+        if (!Object.prototype.hasOwnProperty.call(args.proposedState, key)) {
+            continue
+        }
+        nextState[key] = structuredClone(args.proposedState[key]) as never
     }
 
     return nextState

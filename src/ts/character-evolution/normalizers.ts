@@ -63,8 +63,14 @@ function normalizeItem(raw: unknown): CharacterEvolutionItem | null {
         sourceRange: normalizeCharacterEvolutionItemSourceRange(item.sourceRange),
         updatedAt: Number.isFinite(Number(item.updatedAt)) ? Number(item.updatedAt) : undefined,
         lastSeenAt: Number.isFinite(Number(item.lastSeenAt)) ? Number(item.lastSeenAt) : undefined,
+        lastSeenVersion: Number.isFinite(Number(item.lastSeenVersion)) && Number(item.lastSeenVersion) > 0
+            ? Math.max(1, Math.floor(Number(item.lastSeenVersion)))
+            : undefined,
         timesSeen: Number.isFinite(Number(item.timesSeen)) && Number(item.timesSeen) > 0
             ? Math.max(1, Math.floor(Number(item.timesSeen)))
+            : undefined,
+        unseenAcceptedHandoffs: Number.isFinite(Number(item.unseenAcceptedHandoffs)) && Number(item.unseenAcceptedHandoffs) >= 0
+            ? Math.max(0, Math.floor(Number(item.unseenAcceptedHandoffs)))
             : undefined,
     }
 }

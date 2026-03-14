@@ -62,6 +62,43 @@ describe("character evolution normalizers", () => {
         expect(normalizedCjs).toEqual(normalized)
     })
 
+    it("round-trips accepted-handoff decay metadata through state normalization", () => {
+        const input = {
+            activeThreads: [
+                {
+                    value: "keep the lighthouse trip alive",
+                    status: "active",
+                    lastSeenVersion: "7.9",
+                    unseenAcceptedHandoffs: "4.2",
+                },
+                {
+                    value: "invalid metadata is dropped",
+                    status: "active",
+                    lastSeenVersion: "0",
+                    unseenAcceptedHandoffs: "-1",
+                },
+            ],
+        }
+
+        const normalized = normalizeCharacterEvolutionState(input)
+        const { normalizeCharacterEvolutionState: normalizeCharacterEvolutionStateCjs } = require("../../../server/node/llm/character_evolution/normalizers.cjs")
+        const normalizedCjs = normalizeCharacterEvolutionStateCjs(input)
+
+        expect(normalized.activeThreads).toEqual([
+            {
+                value: "keep the lighthouse trip alive",
+                status: "active",
+                lastSeenVersion: 7,
+                unseenAcceptedHandoffs: 4,
+            },
+            {
+                value: "invalid metadata is dropped",
+                status: "active",
+            },
+        ])
+        expect(normalizedCjs).toEqual(normalized)
+    })
+
     it("preserves omitted optional item notes as absent while keeping explicit blank notes", () => {
         const input = {
             characterLikes: [

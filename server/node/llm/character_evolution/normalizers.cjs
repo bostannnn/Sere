@@ -34,8 +34,14 @@ function normalizeItem(raw) {
         sourceRange: normalizeCharacterEvolutionItemSourceRange(raw.sourceRange),
         updatedAt: Number.isFinite(Number(raw.updatedAt)) ? Number(raw.updatedAt) : undefined,
         lastSeenAt: Number.isFinite(Number(raw.lastSeenAt)) ? Number(raw.lastSeenAt) : undefined,
+        lastSeenVersion: Number.isFinite(Number(raw.lastSeenVersion)) && Number(raw.lastSeenVersion) > 0
+            ? Math.max(1, Math.floor(Number(raw.lastSeenVersion)))
+            : undefined,
         timesSeen: Number.isFinite(Number(raw.timesSeen)) && Number(raw.timesSeen) > 0
             ? Math.max(1, Math.floor(Number(raw.timesSeen)))
+            : undefined,
+        unseenAcceptedHandoffs: Number.isFinite(Number(raw.unseenAcceptedHandoffs)) && Number(raw.unseenAcceptedHandoffs) >= 0
+            ? Math.max(0, Math.floor(Number(raw.unseenAcceptedHandoffs)))
             : undefined,
     };
 }
