@@ -51,11 +51,11 @@ export async function exportCharacterCard(
   } = {},
 ) {
   let img: Uint8Array;
+  const localWriter: LocalWriter | VirtualWriter = arg.writer ?? new LocalWriter();
 
   try {
     img = await readImage(char.image);
     img = type === "png" ? (await reencodeImage(img)) : img;
-    const localWriter: LocalWriter | VirtualWriter = arg.writer ?? new LocalWriter();
     if (!arg.writer && type !== "json") {
       const fileType = {
         png: ["Image File", "png"],
@@ -77,9 +77,12 @@ export async function exportCharacterCard(
       await writer.writeJpeg(img);
     }
 
-    await writeV3Card(char, type, writer, img, arg.selection);
+    const jsonOutput = await writeV3Card(char, type, writer, img, arg.selection);
 
     await writer.end();
+    if (jsonOutput) {
+      await writeJsonOutput(localWriter, sanitizeFilename(char.name), jsonOutput, Boolean(arg.writer));
+    }
     await sleep(10);
     if (!arg.writer) {
       alertNormal(language.successExport);
@@ -95,7 +98,7 @@ async function writeV3Card(
   writer: BlankWriter | CharXWriter | InstanceType<typeof PngChunk.streamWriter>,
   img: Uint8Array,
   selection?: CardExportSelection,
-) {
+): Promise<Uint8Array | undefined> {
   const card = createBaseV3(char, selection);
   const seenPaths = new Set<string>();
 
@@ -121,10 +124,9 @@ async function writeV3Card(
       if (type === "png") {
         await writePngAsset(card.data.assets[i], writer, rData, i + 1);
       } else if (type === "json") {
-        const convertedData = await convertImage(rData);
-        const jsonAssetEncoding = getJsonAssetEncoding(card.data.assets[i].ext, convertedData);
+        const jsonAssetEncoding = await encodeAssetForExport(card.data.assets[i].ext, rData);
         card.data.assets[i].ext = jsonAssetEncoding.ext;
-        card.data.assets[i].uri = `data:${jsonAssetEncoding.mime};base64,${Buffer.from(convertedData).toString("base64")}`;
+        card.data.assets[i].uri = `data:${jsonAssetEncoding.mime};base64,${Buffer.from(jsonAssetEncoding.data).toString("base64")}`;
       } else {
         await writeCharXAsset(card.data.assets[i], writer as CharXWriter, rData, seenPaths, i + 1);
       }
@@ -132,8 +134,7 @@ async function writeV3Card(
   }
 
   if (type === "json") {
-    await downloadFile(`${sanitizeFilename(char.name)}_export.json`, Buffer.from(JSON.stringify(card, null, 4), "utf-8"));
-    return;
+    return Buffer.from(JSON.stringify(card, null, 4), "utf-8");
   }
 
   await sleep(10);
@@ -155,10 +156,11 @@ async function writeV3Card(
     delete card.data.extensions.risuai.customScripts;
     await writer.write("module.risum", await exportModule(moduleData, { alertEnd: false, saveData: false }));
     await writer.write("card.json", Buffer.from(JSON.stringify(card, null, 4)));
-    return;
+    return undefined;
   }
 
   await writer.write("ccv3", Buffer.from(JSON.stringify(card)).toString("base64"));
+  return undefined;
 }
 
 async function writePngAsset(
@@ -179,19 +181,39 @@ async function writeCharXAsset(
   assetIndex: number,
 ) {
   const assetCategory = getAssetCategory(asset.type);
-  const assetFamily = getAssetFamily(asset.ext);
+  const encodedAsset = await encodeAssetForExport(asset.ext, rData);
+  const assetFamily = getAssetFamily(encodedAsset.ext);
   const name = (asset.name || `asset_${assetIndex}`).slice(0, 100);
-  const ext = asset.ext === "unknown" ? "png" : asset.ext;
-  const baseDir = asset.ext === "unknown"
+  const ext = encodedAsset.ext === "unknown" ? "png" : encodedAsset.ext;
+  const baseDir = encodedAsset.ext === "unknown"
     ? `assets/${assetCategory}/image`
     : `assets/${assetCategory}/${assetFamily}`;
   const uniqueName = getUniqueAssetName(baseDir, name, ext, seenPaths);
   const assetPath = `${baseDir}/${uniqueName}.${ext}`;
   const metaPath = `x_meta/${uniqueName}.json`;
 
+  asset.ext = ext;
   asset.uri = `embeded://${assetPath}`;
-  await writeAssetMetadata(writer, metaPath, rData);
-  await writer.write(assetPath, Buffer.from(await convertImage(rData)));
+  await writeAssetMetadata(writer, metaPath, encodedAsset.data);
+  await writer.write(assetPath, Buffer.from(encodedAsset.data));
+}
+
+async function writeJsonOutput(
+  writer: LocalWriter | VirtualWriter,
+  fileName: string,
+  data: Uint8Array,
+  useWriter: boolean,
+) {
+  if (!useWriter) {
+    await downloadFile(`${fileName}_export.json`, data);
+    return;
+  }
+
+  if (writer instanceof LocalWriter) {
+    await writer.init(`${fileName}_export`, ["json"]);
+  }
+  await writer.write(data);
+  await writer.close();
 }
 
 async function writeAssetMetadata(writer: CharXWriter, metaPath: string, rData: Uint8Array) {
@@ -279,6 +301,16 @@ function getUniqueAssetName(baseDir: string, name: string, ext: string, seenPath
 
 function sanitizeFilename(name: string) {
   return name.replace(/[<>:"/\\|?*.,]/g, "");
+}
+
+async function encodeAssetForExport(ext: string, data: Uint8Array): Promise<{ data: Uint8Array; mime: string; ext: string }> {
+  const convertedData = await convertImage(data);
+  const encoding = getJsonAssetEncoding(ext, convertedData);
+  return {
+    data: convertedData,
+    mime: encoding.mime,
+    ext: encoding.ext,
+  };
 }
 
 function getJsonAssetEncoding(ext: string, data: Uint8Array): { mime: string; ext: string } {

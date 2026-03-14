@@ -39,38 +39,50 @@ export async function importCharacterProcess(f: {
   name: string;
   data: Uint8Array | File | ReadableStream<Uint8Array>;
 }) {
-  if (f.name.endsWith("json")) {
+  const normalizedName = normalizeImportFileName(f.name);
+
+  if (normalizedName.endsWith(".json")) {
     if (f.data instanceof ReadableStream) {
       return null;
     }
     const data = f.data instanceof Uint8Array ? f.data : new Uint8Array(await f.data.arrayBuffer());
-    const parsed = JSON.parse(Buffer.from(data).toString("utf-8"));
+    let parsed: any;
+    try {
+      parsed = JSON.parse(Buffer.from(data).toString("utf-8"));
+    } catch {
+      alertError(language.errors.noData);
+      return;
+    }
     if (await importCharacterCardSpec(parsed)) {
+      getDatabase().statics.imports += 1;
       return getDatabase().characters.length - 1;
     }
     if ((parsed.char_name || parsed.name) && (parsed.char_persona || parsed.description) && (parsed.char_greeting || parsed.first_mes)) {
       const db = getDatabase();
       db.characters.push(convertOffSpecCards(parsed));
       setDatabaseLite(db);
+      db.statics.imports += 1;
       alertNormal(language.importedCharacter);
-      return;
+      return db.characters.length - 1;
     }
     alertError(language.errors.noData);
     return;
   }
 
-  const db = getDatabase();
-  db.statics.imports += 1;
-
-  if (f.name.endsWith("charx") || f.name.endsWith("jpg") || f.name.endsWith("jpeg")) {
-    return importCharXCharacter(f);
+  if (normalizedName.endsWith(".charx") || normalizedName.endsWith(".jpg") || normalizedName.endsWith(".jpeg")) {
+    const importedIndex = await importCharXCharacter(f);
+    if (typeof importedIndex === "number") {
+      getDatabase().statics.imports += 1;
+    }
+    return importedIndex;
   }
 
-  if (!f.name.endsWith("png")) {
+  if (!normalizedName.endsWith(".png")) {
     alertError(language.errors.noData);
     return;
   }
 
+  const db = getDatabase();
   return importPngCharacter(f, db);
 }
 
@@ -108,7 +120,7 @@ export async function characterURLImport() {
     location.hash = "";
     try {
       const res = await fetch(hash.replace("#import=", ""));
-      await importFileByName(getFileName(res), new Uint8Array(await res.arrayBuffer()));
+      await importFileByName(getImportFileName(res), new Uint8Array(await res.arrayBuffer()));
       checkCharOrder();
     } catch {
       alertError(language.errors.noData);
@@ -297,12 +309,16 @@ async function importPngCharacter(
   if (parsed.spec !== "chara_card_v2" && parsed.spec !== "chara_card_v3") {
     db.characters.push(convertOffSpecCards(parsed as OldTavernChar, await saveAsset(img)));
     setDatabaseLite(db);
+    db.statics.imports += 1;
     alertNormal(language.importedCharacter);
     return db.characters.length - 1;
   }
 
-  await importCharacterCardSpec(parsed, img, "normal", assets);
-  return getDatabase().characters.length - 1;
+  if (await importCharacterCardSpec(parsed, img, "normal", assets)) {
+    getDatabase().statics.imports += 1;
+    return getDatabase().characters.length - 1;
+  }
+  return;
 }
 
 async function importLegacyEncryptedCard(readedChara: string, img: Uint8Array, assets: { [key: string]: string }) {
@@ -328,6 +344,7 @@ async function importLegacyEncryptedCard(readedChara: string, img: Uint8Array, a
     const decrypted = await decryptBuffer(encrypted, password);
     const card = JSON.parse(Buffer.from(decrypted).toString("utf-8")) as CharacterCardV2Risu;
     if (await importCharacterCardSpec(card, img, "normal", assets)) {
+      getDatabase().statics.imports += 1;
       return getDatabase().characters.length - 1;
     }
   } catch {
@@ -336,18 +353,25 @@ async function importLegacyEncryptedCard(readedChara: string, img: Uint8Array, a
 }
 
 async function importFileByName(name: string, data: Uint8Array) {
-  if (name.endsWith(".charx") || name.endsWith(".jpg") || name.endsWith(".jpeg") || name.endsWith(".png")) {
-    await importCharacterProcess({ name, data });
+  const normalizedName = normalizeImportFileName(name);
+  if (
+    normalizedName.endsWith(".json")
+    || normalizedName.endsWith(".charx")
+    || normalizedName.endsWith(".jpg")
+    || normalizedName.endsWith(".jpeg")
+    || normalizedName.endsWith(".png")
+  ) {
+    await importCharacterProcess({ name: normalizedName || "import.json", data });
     return;
   }
-  if (name.endsWith(".risupreset") || name.endsWith(".risup")) {
+  if (normalizedName.endsWith(".risupreset") || normalizedName.endsWith(".risup")) {
     await importPreset({ name, data });
     SettingsMenuIndex.set(1);
     settingsOpen.set(true);
     alertNormal(language.successImport);
     return;
   }
-  if (name.endsWith("risum")) {
+  if (normalizedName.endsWith(".risum")) {
     const moduleData = await readModule(Buffer.from(data));
     moduleData.id = v4();
     const db = getDatabase();
@@ -356,6 +380,10 @@ async function importFileByName(name: string, data: Uint8Array) {
     alertNormal(language.successImport);
     SettingsMenuIndex.set(14);
     settingsOpen.set(true);
+    return;
+  }
+  if (looksLikeJsonImport(data)) {
+    await importCharacterProcess({ name: normalizedName || "import.json", data });
   }
 }
 
@@ -403,8 +431,12 @@ async function resolveCharXState(data: Uint8Array, originalData: Uint8Array | Fi
   };
 }
 
-function getFileName(res: Response): string {
-  return getFromContentDisposition(res.headers.get("content-disposition")) || getFileNameFromUrl(res.url);
+function getImportFileName(res: Response): string {
+  return (
+    getFromContentDisposition(res.headers.get("content-disposition"))
+    || getFileNameFromUrl(res.url)
+    || inferFileNameFromContentType(res.headers.get("content-type"))
+  );
 }
 
 function getFromContentDisposition(contentDisposition: string | null): string | null {
@@ -425,4 +457,20 @@ function getFileNameFromUrl(url: string): string {
   } catch {
     return "";
   }
+}
+
+function inferFileNameFromContentType(contentType: string | null): string {
+  if (contentType?.toLowerCase().includes("application/json")) {
+    return "import.json";
+  }
+  return "";
+}
+
+function normalizeImportFileName(name: string): string {
+  return name.trim().toLowerCase();
+}
+
+function looksLikeJsonImport(data: Uint8Array): boolean {
+  const preview = Buffer.from(data.slice(0, 256)).toString("utf-8").trimStart();
+  return preview.startsWith("{") || preview.startsWith("[");
 }

@@ -13,6 +13,7 @@ const shared = vi.hoisted(() => ({
   alertErrorMock: vi.fn(),
   alertNormalMock: vi.fn(),
   checkImageTypeMock: vi.fn(() => "PNG"),
+  charXWrites: [] as Array<{ key: string; data: Uint8Array | string; level?: number }>,
   convertImageMock: vi.fn(async (data: Uint8Array) => data),
   readImageMock: vi.fn(async () => new Uint8Array([1, 2, 3])),
 }));
@@ -71,10 +72,18 @@ vi.mock("src/ts/globalApi.svelte", () => ({
   loadAsset: async () => new Uint8Array(),
   LocalWriter: class LocalWriter {
     async init() {}
+    async write() {}
+    async close() {}
   },
   readImage: shared.readImageMock,
   saveAsset: async () => "asset-id",
-  VirtualWriter: class VirtualWriter {},
+  VirtualWriter: class VirtualWriter {
+    writes: Uint8Array[] = [];
+    write(data: Uint8Array) {
+      this.writes.push(data);
+    }
+    close() {}
+  },
 }));
 
 vi.mock("src/ts/stores.svelte", async () => {
@@ -110,8 +119,11 @@ vi.mock("src/ts/process/processzip", () => ({
   CharXSkippableChecker: async () => ({ success: false, hash: "" }),
   CharXWriter: class CharXWriter {
     async init() {}
-    async write() {}
+    async write(key: string, data: Uint8Array | string, level?: number) {
+      shared.charXWrites.push({ key, data, level });
+    }
     async end() {}
+    async writeJpeg() {}
   },
 }));
 
@@ -251,6 +263,7 @@ describe("character card memory compatibility", () => {
     shared.alertNormalMock.mockReset();
     shared.checkImageTypeMock.mockReset();
     shared.checkImageTypeMock.mockReturnValue("PNG");
+    shared.charXWrites = [];
     shared.convertImageMock.mockReset();
     shared.convertImageMock.mockImplementation(async (data: Uint8Array) => data);
     shared.readImageMock.mockReset();

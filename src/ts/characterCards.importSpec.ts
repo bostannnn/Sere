@@ -35,7 +35,7 @@ export async function importCharacterCardSpec(
   const data = card.data;
   let im = img ? await saveAsset(img) : undefined;
   const db = getDatabase();
-  const risuext = safeStructuredClone(data.extensions.risuai);
+  const risuext = safeStructuredClone(data.extensions?.risuai ?? {});
   const emotions: [string, string][] = [];
   const extAssets: [string, string, string][] = [];
   const ccAssets: Array<{ type: string; uri: string; name: string; ext: string }> = [];
@@ -183,7 +183,7 @@ async function importV3AssetsAndState(
   const emotions: [string, string][] = [];
   const extAssets: [string, string, string][] = [];
   const ccAssets: Array<{ type: string; uri: string; name: string; ext: string }> = [];
-  const risuext = safeStructuredClone(card.data.extensions.risuai);
+  const risuext = safeStructuredClone(card.data.extensions?.risuai ?? {});
 
   if (card.data.assets) {
     for (let i = 0; i < card.data.assets.length; i++) {
@@ -345,7 +345,7 @@ function buildImportedCharacter(arg: {
         ? data.extensions.risuai.memoryPromptOverride.summarizationPrompt
         : "",
     },
-    prebuiltAssetCommand: data?.extensions?.risuai?.prebuiltAssetCommand ?? "",
+    prebuiltAssetCommand: data?.extensions?.risuai?.prebuiltAssetCommand ?? false,
     prebuiltAssetExclude: data?.extensions?.risuai?.prebuiltAssetExclude ?? [],
     prebuiltAssetStyle: data?.extensions?.risuai?.prebuiltAssetStyle ?? "",
   };

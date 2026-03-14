@@ -137,7 +137,7 @@ export function createBaseV3(char: character, selection?: CardExportSelection): 
           vits: {},
           lowLevelAccess: char.lowLevelAccess ?? false,
           defaultVariables: char.defaultVariables ?? "",
-          prebuiltAssetCommand: char.prebuiltAssetCommand ?? "",
+          prebuiltAssetCommand: char.prebuiltAssetCommand ?? false,
           prebuiltAssetExclude: char.prebuiltAssetExclude ?? [],
           prebuiltAssetStyle: char.prebuiltAssetStyle ?? "",
         },
