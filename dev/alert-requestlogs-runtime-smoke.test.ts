@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mount, tick, unmount } from "svelte";
-import { get } from "svelte/store";
 
 const hoisted = vi.hoisted(() => ({
   getFetchLogs: vi.fn(() => [

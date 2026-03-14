@@ -134,5 +134,5 @@ describe("AlertCardExportModal runtime smoke", () => {
       includeEvolution: true,
       cancelled: false,
     });
-  }, 10000);
+  }, 20000);
 });

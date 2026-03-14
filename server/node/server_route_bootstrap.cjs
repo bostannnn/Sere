@@ -13,6 +13,7 @@ function registerServerRoutes(arg = {}) {
         registerSyncRoutes,
         registerRagRoutes,
         registerEvolutionRoutes,
+        registerEvolutionVersionRoutes,
     } = arg;
 
     registerSystemRoutes({
@@ -172,7 +173,7 @@ function registerServerRoutes(arg = {}) {
     });
 
     if (typeof registerEvolutionRoutes === 'function') {
-        registerEvolutionRoutes({
+        const evolutionRouteContext = registerEvolutionRoutes({
             app: arg.app,
             fs: arg.fs,
             dataDirs: arg.dataDirs,
@@ -193,6 +194,9 @@ function registerServerRoutes(arg = {}) {
             applyStateCommands: arg.applyStateCommands,
             readStateLastEventId: arg.readStateLastEventId,
         });
+        if (typeof registerEvolutionVersionRoutes === 'function' && evolutionRouteContext) {
+            registerEvolutionVersionRoutes(evolutionRouteContext);
+        }
     }
 }
 

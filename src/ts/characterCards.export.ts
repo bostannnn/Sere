@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { v4 } from "uuid";
 import { alertCardExport, alertError, alertNormal, alertStore } from "./alert";
 import { type character, getDatabase } from "./storage/database.svelte";

@@ -13,7 +13,6 @@ function createEvolutionRouteHelpers(arg = {}) {
         logLLMExecutionEnd,
         normalizeCharacterEvolutionRangeRef,
         rangesOverlap,
-        requirePasswordAuth,
         sendJson,
         toLLMErrorResponse,
         toStringOrEmpty,
@@ -210,6 +209,7 @@ function createEvolutionRouteHelpers(arg = {}) {
     }
 
     return {
+        assertHandoffRangeAllowed,
         buildEvolutionAuditRequest,
         ensureCharacterChatInput,
         makeProposalId,

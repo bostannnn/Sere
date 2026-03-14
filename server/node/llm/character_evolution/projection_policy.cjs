@@ -170,8 +170,7 @@ function compareCharacterEvolutionItemsForProjection(arg = {}) {
     return String(arg.left?.value || '').localeCompare(String(arg.right?.value || ''));
 }
 
-function getCharacterEvolutionPromptProjectionPolicy(settings, _character) {
-    // Phase 4.5 keeps prompt projection global-only. The character arg is reserved for a future override path.
+function getCharacterEvolutionPromptProjectionPolicy(settings) {
     return normalizeCharacterEvolutionPromptProjectionPolicy(settings?.characterEvolutionDefaults?.promptProjection);
 }
 

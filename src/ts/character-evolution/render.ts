@@ -14,7 +14,8 @@ import { projectCharacterEvolutionStateForPrompt } from "./projection"
 
 function itemToLine(item: CharacterEvolutionItem): string {
     const confidence = item.confidence ? ` [${item.confidence}]` : ""
-    return `- ${item.value}${confidence}`
+    const note = item.note?.trim() ? ` (${item.note.trim()})` : ""
+    return `- ${item.value}${confidence}${note}`
 }
 
 export function renderCharacterEvolutionStateForPrompt(

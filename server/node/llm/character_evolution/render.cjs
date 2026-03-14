@@ -1,10 +1,8 @@
 const {
     normalizeCharacterEvolutionPrivacy,
     normalizeCharacterEvolutionSectionConfigs,
-    normalizeCharacterEvolutionState,
 } = require('./normalizers.cjs');
 const {
-    filterActiveCharacterEvolutionState,
     isCharacterEvolutionObjectSection,
 } = require('./items.cjs');
 const { toTrimmedString } = require('./utils.cjs');
@@ -12,7 +10,8 @@ const { projectCharacterEvolutionStateForPrompt } = require('./projection.cjs');
 
 function itemToLine(item) {
     const confidence = toTrimmedString(item.confidence) ? ` [${toTrimmedString(item.confidence)}]` : '';
-    return `- ${toTrimmedString(item.value)}${confidence}`;
+    const note = toTrimmedString(item.note) ? ` (${toTrimmedString(item.note)})` : '';
+    return `- ${toTrimmedString(item.value)}${confidence}${note}`;
 }
 
 function renderCharacterEvolutionStateForPrompt(stateRaw, sectionConfigsRaw, privacyRaw, promptProjectionRaw = null) {

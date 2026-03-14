@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { v4 as uuidv4 } from "uuid";
-import type { CharacterCardV3, LorebookEntry } from "@risuai/ccardlib";
+import type { LorebookEntry } from "@risuai/ccardlib";
 import type {
   character,
   customscript,

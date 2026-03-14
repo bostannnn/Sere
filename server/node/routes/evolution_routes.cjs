@@ -17,8 +17,7 @@ function registerEvolutionRoutes(arg = {}) {
         createCharacterEvolutionRepository = require('../services/character_evolution_repository.cjs').createCharacterEvolutionRepository,
         createCharacterEvolutionHistoryResolver = require('../services/character_evolution_history_resolver.cjs').createCharacterEvolutionHistoryResolver,
         createCharacterEvolutionVersionStore = require('../services/character_evolution_version_store.cjs').createCharacterEvolutionVersionStore,
-        createEvolutionRouteHelpers = require('./evolution_routes.helpers.cjs').createEvolutionRouteHelpers,
-        registerEvolutionVersionRoutes = require('./evolution_version_routes.cjs').registerEvolutionVersionRoutes,
+        createEvolutionRouteHelpers = require('../evolution_route_helpers.cjs').createEvolutionRouteHelpers,
         buildCharacterEvolutionPromptMessages = require('../llm/character_evolution.cjs').buildCharacterEvolutionPromptMessages,
         clone = require('../llm/character_evolution.cjs').clone,
         getEffectiveCharacterEvolutionSettings = require('../llm/character_evolution.cjs').getEffectiveCharacterEvolutionSettings,
@@ -31,8 +30,8 @@ function registerEvolutionRoutes(arg = {}) {
         normalizeCharacterEvolutionSettings = require('../llm/character_evolution.cjs').normalizeCharacterEvolutionSettings,
         normalizeCharacterEvolutionState = require('../llm/character_evolution.cjs').normalizeCharacterEvolutionState,
         safeParseEvolutionJson = require('../llm/character_evolution.cjs').safeParseEvolutionJson,
-        sanitizeProposalStateForEvolution = require('../llm/character_evolution/proposal.cjs').sanitizeProposalStateForEvolution,
         sanitizeStateForEvolution = require('../llm/character_evolution.cjs').sanitizeStateForEvolution,
+        sanitizeProposalStateForEvolution = require('../llm/character_evolution/proposal.cjs').sanitizeProposalStateForEvolution,
         buildMemoryPromptTrace = require('../llm/audit_payloads.cjs').createAuditPayloadBuilders({}).buildMemoryPromptTrace,
         getChatLastMessageIndex = require('../llm/character_evolution.cjs').getChatLastMessageIndex,
         getCharacterEvolutionProcessedRanges = require('../llm/character_evolution.cjs').getCharacterEvolutionProcessedRanges,
@@ -83,6 +82,7 @@ function registerEvolutionRoutes(arg = {}) {
         normalizeCharacterEvolutionRangeRef,
     });
     const {
+        assertHandoffRangeAllowed,
         buildEvolutionAuditRequest,
         ensureCharacterChatInput,
         makeProposalId,
@@ -319,17 +319,23 @@ function registerEvolutionRoutes(arg = {}) {
         const proposedStateRaw = Object.prototype.hasOwnProperty.call(body, 'proposedState')
             ? body.proposedState
             : pendingProposal.proposedState;
+        const proposedStateDraft = sanitizeProposalStateForEvolution(
+            normalizeCharacterEvolutionProposalState(proposedStateRaw),
+            effectiveEvolution
+        );
+        const shouldPreserveDisabledSections = !Object.prototype.hasOwnProperty.call(body, 'proposedState')
+            && storedEvolution.useGlobalDefaults === false;
         const proposalValidationError = getCharacterEvolutionProposalValidationError({
-            proposedState: proposedStateRaw,
+            proposedState: shouldPreserveDisabledSections
+                ? proposedStateDraft
+                : Object.prototype.hasOwnProperty.call(body, 'proposedState')
+                ? proposedStateRaw
+                : pendingProposal.proposedState,
             changes: [],
         }, effectiveEvolution);
         if (proposalValidationError) {
             throw new LLMHttpError(400, 'EVOLUTION_INVALID_PROPOSAL', proposalValidationError);
         }
-        const proposedStateDraft = sanitizeProposalStateForEvolution(
-            normalizeCharacterEvolutionProposalState(proposedStateRaw),
-            effectiveEvolution
-        );
         const normalizedAcceptedProposalState = resolveCharacterEvolutionStateConflicts({
             currentState: storedEvolution.currentState,
             proposedState: applyCharacterEvolutionItemMetadata({
@@ -343,10 +349,10 @@ function registerEvolutionRoutes(arg = {}) {
             }),
             retainOmittedSections: false,
         });
-        const proposedState = mergeAcceptedCharacterEvolutionState({
+        const proposedState = (shouldPreserveDisabledSections ? sanitizeStateForEvolution : (value) => value)(mergeAcceptedCharacterEvolutionState({
             currentState: storedEvolution.currentState,
             proposedState: normalizedAcceptedProposalState,
-        });
+        }), effectiveEvolution, storedEvolution.currentState);
         const recoveredVersions = mergeVersionMetas(
             storedEvolution.stateVersions,
             await readVersionMetasFromDisk(charDir, {
@@ -452,7 +458,7 @@ function registerEvolutionRoutes(arg = {}) {
         sendJson(res, 200, { ok: true, cleared: true });
     }));
 
-    registerEvolutionVersionRoutes({
+    return {
         app,
         dataDirs,
         fs,
@@ -472,6 +478,6 @@ function registerEvolutionRoutes(arg = {}) {
         toStringOrEmpty,
         versionHistory: evolutionHistory,
         withAsyncRoute,
-    });
+    };
 }
 module.exports = { registerEvolutionRoutes };

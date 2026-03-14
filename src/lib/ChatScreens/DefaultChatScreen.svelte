@@ -57,7 +57,7 @@
         type EvolutionBusyAction,
     } from 'src/ts/character-evolution/reviewFlow';
     import { getPendingProposalSourceRange } from 'src/ts/character-evolution/pendingProposal';
-    import { createDefaultCharacterEvolutionState } from 'src/ts/characterEvolution';
+    import { createDefaultCharacterEvolutionState } from 'src/ts/character-evolution/schema';
     import {
         ensureCharacterEvolution,
         getEffectiveCharacterEvolutionSettings,

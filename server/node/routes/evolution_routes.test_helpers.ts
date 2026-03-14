@@ -4,6 +4,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 
 import { registerEvolutionRoutes } from "./evolution_routes.cjs";
+import { registerEvolutionVersionRoutes } from "./evolution_version_routes.cjs";
 
 export class MockLLMHttpError extends Error {
   status: number;
@@ -113,7 +114,7 @@ export function buildHandlers(overrides: {
     },
   };
 
-  registerEvolutionRoutes({
+  const evolutionRouteContext = registerEvolutionRoutes({
     app,
     fs: {
       ...fs,
@@ -162,6 +163,7 @@ export function buildHandlers(overrides: {
     }),
     readStateLastEventId: async () => 1,
   });
+  registerEvolutionVersionRoutes(evolutionRouteContext);
 
   return { postHandlers, getHandlers };
 }

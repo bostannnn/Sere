@@ -2,23 +2,14 @@
 import { v4 as uuidv4 } from "uuid";
 import type { CharacterCardV3 } from "@risuai/ccardlib";
 import { alertConfirm, alertError, alertNormal, alertStore } from "./alert";
-import type {
-  character,
-  customscript,
-  loreBook,
-  loreSettings,
-} from "./storage/database.svelte";
-import { getDatabase, setDatabase } from "./storage/database.svelte";
+import { getDatabase, setDatabase, type character, type customscript, type loreBook, type loreSettings } from "./storage/database.svelte";
 import { language } from "src/lang";
-import { checkNullish, sleep } from "./util";
+import { sleep } from "./util";
 import { saveAsset } from "./globalApi.svelte";
 import type { OnnxModelFiles } from "./process/transformers";
 import { getHubResources } from "./characterCards.shared";
 import { applyCharacterExportBundle } from "./cardBundleImport";
-import {
-  convertCharbook,
-} from "./cardSpecLegacy";
-import type { CharacterBook, CharacterCardV2Risu } from "./cardSpecLegacy";
+import { convertCharbook, type CharacterBook, type CharacterCardV2Risu } from "./cardSpecLegacy";
 import { applyImportedV3CardFields } from "./cardSpecV3";
 
 export async function importCharacterCardSpec(

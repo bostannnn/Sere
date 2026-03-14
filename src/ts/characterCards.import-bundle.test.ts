@@ -383,7 +383,17 @@ describe("character card import and bundle compatibility", () => {
     expect(importedIndex).toBe(0);
     expect(shared.db.characters).toHaveLength(1);
 
-    const importedChar = shared.db.characters[0] as Record<string, any>;
+    const importedChar = shared.db.characters[0] as {
+      chaId: string;
+      image: string;
+      chats: Array<{
+        id: string;
+        message: Array<{ chatId: string }>;
+        memoryData: unknown;
+      }>;
+      chatPage: number;
+      characterEvolution: unknown;
+    };
     expect(importedChar.chaId).not.toBe("char-original");
     expect(importedChar.image).toBe("asset-id");
     expect(importedChar.chats[0].id).toBe("chat-1");
@@ -451,7 +461,14 @@ describe("character card import and bundle compatibility", () => {
       data: new TextEncoder().encode(JSON.stringify(card)),
     });
 
-    const importedChar = shared.db.characters[0] as Record<string, any>;
+    const importedChar = shared.db.characters[0] as {
+      chats: Array<{
+        message: unknown[];
+        note: string;
+        name: string;
+        localLore: unknown[];
+      }>;
+    };
     expect(importedChar.chats).toEqual([
       {
         message: [],

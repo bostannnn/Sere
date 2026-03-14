@@ -12,8 +12,7 @@ import { PngChunk } from "./pngChunk";
 import { CharXImporter, CharXSkippableChecker } from "./process/processzip";
 import { readModule } from "./process/modules";
 import { importCharacterCardSpec } from "./characterCards.importSpec";
-import { convertOffSpecCards } from "./cardSpecLegacy";
-import type { CharacterCardV2Risu, OldTavernChar } from "./cardSpecLegacy";
+import { convertOffSpecCards, type CharacterCardV2Risu, type OldTavernChar } from "./cardSpecLegacy";
 
 export async function importCharacter() {
   try {

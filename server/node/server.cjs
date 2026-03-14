@@ -30,6 +30,7 @@ const { registerAuthRoutes } = require('./routes/auth_routes.cjs');
 const { registerStateRoutes } = require('./routes/state_routes.cjs');
 const { registerSyncRoutes } = require('./routes/sync_routes.cjs');
 const { registerEvolutionRoutes } = require('./routes/evolution_routes.cjs');
+const { registerEvolutionVersionRoutes } = require('./routes/evolution_version_routes.cjs');
 const { registerProxyRoutes } = require('./routes/proxy_routes.cjs');
 const { registerIntegrationRoutes } = require('./routes/integration_routes.cjs');
 const { registerSystemRoutes } = require('./routes/system_routes.cjs');
@@ -420,6 +421,7 @@ registerServerRoutes({
     registerStateRoutes,
     registerSyncRoutes,
     registerEvolutionRoutes,
+    registerEvolutionVersionRoutes,
     registerRagRoutes,
 });
 

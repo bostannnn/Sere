@@ -4,7 +4,6 @@ import type {
     CharacterEvolutionProjectedItemSectionKey,
     CharacterEvolutionProjectionBucket,
     CharacterEvolutionProjectionRankField,
-    CharacterEvolutionProjectionSurface,
     CharacterEvolutionPromptProjectionPolicy,
     Database,
     character,

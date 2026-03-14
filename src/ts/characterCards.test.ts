@@ -416,7 +416,12 @@ describe("character card memory compatibility", () => {
     });
 
     expect(importedIndex).toBe(0);
-    const importedChar = shared.db.characters[0] as Record<string, any>;
+    const importedChar = shared.db.characters[0] as {
+      characterVersion: string;
+      additionalData: {
+        character_version: string;
+      };
+    };
     expect(importedChar.characterVersion).toBe("");
     expect(importedChar.additionalData.character_version).toBe("");
   });

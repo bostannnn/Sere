@@ -43,8 +43,7 @@ describe("character evolution render", () => {
         const renderedCjs = renderCharacterEvolutionStateForPromptCjs(state, sectionConfigs)
 
         expect(rendered).toContain("Meet again at the station")
-        expect(rendered).toContain("Meet again at the station [likely]")
-        expect(rendered).not.toContain("Shared promise from the museum conversation.")
+        expect(rendered).toContain("Meet again at the station [likely] (Shared promise from the museum conversation.)")
         expect(rendered).not.toContain("Old resolved detour")
         expect(rendered).toContain("Tea")
         expect(rendered).not.toContain("Coffee")
