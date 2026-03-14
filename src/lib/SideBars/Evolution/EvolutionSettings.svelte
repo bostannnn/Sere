@@ -5,8 +5,10 @@
     import { DBState, evolutionReviewOpenRequest, selectedCharID } from "src/ts/stores.svelte"
     import type { CharacterEvolutionSectionConfig, CharacterEvolutionPrivacySettings, CharacterEvolutionState, CharacterEvolutionVersionMeta, CharacterEvolutionVersionFile, character } from "src/ts/storage/database.types"
     import EvolutionWorkspaceContent from "./EvolutionWorkspaceContent.svelte"
-    import { hasAcceptedEvolutionForChat, rejectEvolutionReviewFlow, runEvolutionHandoffFlow } from "src/ts/character-evolution/reviewFlow"
+    import { acceptEvolutionReviewFlow, hasAcceptedEvolutionForChat, rejectEvolutionReviewFlow, runEvolutionHandoffFlow } from "src/ts/character-evolution/reviewFlow"
+    import { getPendingProposalSourceRange } from "src/ts/character-evolution/pendingProposal"
     import { findSingleCharacterById } from "src/ts/storage/characterList"
+    import { sleep } from "src/ts/util"
     import { openEvolutionGlobalDefaults, persistEvolutionCharacter, refreshEvolutionWorkspaceVersions, loadEvolutionWorkspaceVersion } from "./evolutionSettings.actions"
     import { EVOLUTION_HISTORY_TAB, EVOLUTION_REVIEW_TAB, EVOLUTION_SETUP_TAB, type EvolutionWorkspaceTabId } from "./evolutionSettingsTabs"
     import { createCurrentStateDraft, createSectionDraftSnapshot, getCurrentStateDraftHydrationKey, getSectionDraftHydrationKey } from "./evolutionSettings.drafts"
@@ -32,6 +34,10 @@
     let currentStateDraftKey = $state<string | null>(null)
     let replayingAcceptedChat = $state(false)
     let runningManualRangeHandoff = $state(false)
+    let autoProcessing = $state(false)
+    let autoProcessCancelled = $state(false)
+    let autoProcessedBatches = $state(0)
+    let autoProcessTotalBatches = $state(0)
 
     const selectedEntry = $derived.by(() => {
         const selectedIndex = Number($selectedCharID)
@@ -94,6 +100,28 @@
         return ""
     })
     const manualRangeAvailable = $derived(manualRangeBlockedReason.length === 0)
+
+    const autoHandoffBatchSize = $derived(currentCharacter?.characterEvolution.autoHandoffBatchSize ?? 10)
+
+    const nextUnprocessedMessageNumber = $derived.by(() => {
+        const chatId = activeChatId?.trim()
+        if (!chatId) return 1
+        const ranges = displayedProcessedRanges
+            .filter((entry) => entry.range.chatId === chatId)
+            .sort((a, b) => a.range.startMessageIndex - b.range.startMessageIndex)
+        let contiguousEnd = -1
+        for (const entry of ranges) {
+            if (entry.range.startMessageIndex > contiguousEnd + 1) break
+            contiguousEnd = Math.max(contiguousEnd, entry.range.endMessageIndex)
+        }
+        return contiguousEnd + 2
+    })
+
+    const autoProcessAvailable = $derived(
+        manualRangeAvailable
+        && !autoProcessing
+        && nextUnprocessedMessageNumber + autoHandoffBatchSize - 1 <= activeChatMessageCount
+    )
 
     function findCharacterById(characterId: string) {
         return findSingleCharacterById(DBState.db.characters, characterId)
@@ -360,6 +388,111 @@
         }
     }
 
+    function cancelAutoProcess() {
+        autoProcessCancelled = true
+    }
+
+    async function runAutoProcess() {
+        const characterEntry = currentCharacter
+        const chatId = activeChatId
+        if (!characterEntry?.chaId || !chatId) {
+            alertError("Cannot run auto process without a saved character and chat.")
+            return
+        }
+
+        const batchSize = Math.max(1, Math.floor(autoHandoffBatchSize || 10))
+        const totalMessages = activeChatMessageCount
+
+        let nextStart = nextUnprocessedMessageNumber
+
+        // Count full batches available
+        let batchCount = 0
+        let tempStart = nextStart
+        while (tempStart + batchSize - 1 <= totalMessages) {
+            batchCount++
+            tempStart += batchSize
+        }
+
+        if (batchCount === 0) return
+
+        autoProcessing = true
+        autoProcessCancelled = false
+        autoProcessedBatches = 0
+        autoProcessTotalBatches = batchCount
+
+        try {
+            while (true) {
+                if (autoProcessCancelled) break
+
+                const batchEnd = nextStart + batchSize - 1
+                if (batchEnd > totalMessages) break
+
+                const freshEntry = findCharacterById(characterEntry.chaId)
+                if (!freshEntry) break
+
+                const sourceRange = {
+                    chatId,
+                    startMessageIndex: nextStart - 1,
+                    endMessageIndex: batchEnd - 1,
+                }
+
+                let handoffResult: Awaited<ReturnType<typeof runEvolutionHandoffFlow>>
+                try {
+                    handoffResult = await runEvolutionHandoffFlow({
+                        characterEntry: freshEntry,
+                        chatId,
+                        chatMessageCount: totalMessages,
+                        sourceRange,
+                        resolveCharacterById: findCharacterById,
+                    })
+                } catch (error) {
+                    alertError(getCharacterEvolutionErrorMessage(error))
+                    break
+                }
+
+                if (!handoffResult.nextCharacter) break
+                commitCharacter(handoffResult.nextCharacter)
+
+                if (autoProcessCancelled) {
+                    const charWithProposal = findCharacterById(characterEntry.chaId)
+                    if (charWithProposal?.characterEvolution.pendingProposal) {
+                        try {
+                            commitCharacter(await rejectEvolutionReviewFlow(charWithProposal))
+                        } catch (rejectError) {
+                            alertError(getCharacterEvolutionErrorMessage(rejectError))
+                        }
+                    }
+                    break
+                }
+
+                const freshForAccept = findCharacterById(characterEntry.chaId) ?? handoffResult.nextCharacter
+                const proposalDraft = handoffResult.proposalDraft
+                if (!proposalDraft) break
+
+                try {
+                    const { nextCharacter } = await acceptEvolutionReviewFlow({
+                        characterEntry: freshForAccept,
+                        proposedState: JSON.parse(JSON.stringify(proposalDraft)),
+                        sourceRange,
+                        resolveCharacterById: findCharacterById,
+                    })
+                    commitCharacter(nextCharacter)
+                } catch (error) {
+                    alertError(getCharacterEvolutionErrorMessage(error))
+                    break
+                }
+
+                autoProcessedBatches++
+                nextStart = batchEnd + 1
+
+                if (nextStart + batchSize - 1 > totalMessages) break
+                await sleep(500)
+            }
+        } finally {
+            autoProcessing = false
+        }
+    }
+
     function openFullscreenReview() {
         const characterId = currentCharacter?.chaId
         if (!characterId || !currentPendingProposal) {
@@ -455,6 +588,12 @@
         manualRangeBlockedReason={manualRangeBlockedReason}
         {runningManualRangeHandoff}
         onRunManualRange={runManualRangeHandoff}
+        {autoProcessAvailable}
+        {autoProcessing}
+        {autoProcessedBatches}
+        {autoProcessTotalBatches}
+        onRunAutoProcess={runAutoProcess}
+        onCancelAutoProcess={cancelAutoProcess}
         {replayCurrentChatAvailable}
         {replayingAcceptedChat}
         onReplayCurrentChat={replayAcceptedChat}

@@ -329,6 +329,7 @@ export function normalizeCharacterEvolutionSettings(raw: unknown): CharacterEvol
         return cursorMap
     })()
 
+    const autoHandoffBatchSizeRaw = Number(value.autoHandoffBatchSize)
     return {
         enabled: value.enabled === true,
         useGlobalDefaults: value.useGlobalDefaults !== false,
@@ -351,6 +352,11 @@ export function normalizeCharacterEvolutionSettings(raw: unknown): CharacterEvol
         lastProcessedMessageIndexByChat,
         processedRanges,
         stateVersions,
+        autoHandoffEnabled: value.autoHandoffEnabled === true,
+        autoHandoffBatchSize: Number.isFinite(autoHandoffBatchSizeRaw) && autoHandoffBatchSizeRaw >= 1
+            ? Math.max(1, Math.floor(autoHandoffBatchSizeRaw))
+            : 10,
+        autoHandoffAutoAccept: value.autoHandoffAutoAccept !== false,
     }
 }
 

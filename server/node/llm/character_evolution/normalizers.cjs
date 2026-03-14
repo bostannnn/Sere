@@ -265,6 +265,11 @@ function normalizeCharacterEvolutionSettings(raw) {
         lastProcessedMessageIndexByChat,
         processedRanges,
         stateVersions,
+        autoHandoffEnabled: value.autoHandoffEnabled === true,
+        autoHandoffBatchSize: Number.isFinite(Number(value.autoHandoffBatchSize)) && Number(value.autoHandoffBatchSize) >= 1
+            ? Math.max(1, Math.floor(Number(value.autoHandoffBatchSize)))
+            : 10,
+        autoHandoffAutoAccept: value.autoHandoffAutoAccept !== false,
     };
 }
 

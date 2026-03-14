@@ -42,6 +42,12 @@
         manualRangeBlockedReason: string
         runningManualRangeHandoff: boolean
         onRunManualRange: (startMessageNumber: number, endMessageNumber: number) => void | Promise<void>
+        autoProcessAvailable: boolean
+        autoProcessing: boolean
+        autoProcessedBatches: number
+        autoProcessTotalBatches: number
+        onRunAutoProcess: () => void | Promise<void>
+        onCancelAutoProcess: () => void
         replayCurrentChatAvailable: boolean
         replayingAcceptedChat: boolean
         onReplayCurrentChat: () => void | Promise<void>
@@ -84,6 +90,12 @@
         manualRangeBlockedReason,
         runningManualRangeHandoff,
         onRunManualRange,
+        autoProcessAvailable,
+        autoProcessing,
+        autoProcessedBatches,
+        autoProcessTotalBatches,
+        onRunAutoProcess,
+        onCancelAutoProcess,
         replayCurrentChatAvailable,
         replayingAcceptedChat,
         onReplayCurrentChat,
@@ -149,6 +161,12 @@
                     manualRangeBlockedReason={manualRangeBlockedReason}
                     manualRangeBusy={runningManualRangeHandoff}
                     onRunManualRange={onRunManualRange}
+                    {autoProcessAvailable}
+                    {autoProcessing}
+                    {autoProcessedBatches}
+                    {autoProcessTotalBatches}
+                    {onRunAutoProcess}
+                    {onCancelAutoProcess}
                     {replayCurrentChatAvailable}
                     replayCurrentChatBusy={replayingAcceptedChat}
                     onReplayCurrentChat={onReplayCurrentChat}

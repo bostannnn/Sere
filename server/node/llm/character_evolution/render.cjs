@@ -10,8 +10,7 @@ const { projectCharacterEvolutionStateForPrompt } = require('./projection.cjs');
 
 function itemToLine(item) {
     const confidence = toTrimmedString(item.confidence) ? ` [${toTrimmedString(item.confidence)}]` : '';
-    const note = toTrimmedString(item.note) ? ` (${toTrimmedString(item.note)})` : '';
-    return `- ${toTrimmedString(item.value)}${confidence}${note}`;
+    return `- ${toTrimmedString(item.value)}${confidence}`;
 }
 
 function renderCharacterEvolutionStateForPrompt(stateRaw, sectionConfigsRaw, privacyRaw, promptProjectionRaw = null) {

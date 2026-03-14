@@ -665,11 +665,100 @@
             const audio = new Audio(sendSound);
             audio.play();
         }
+        void checkAndRunAutoHandoff(stableTarget)
     }
 
     function abortChat(){
         if(abortController){
             abortController.abort()
+        }
+    }
+
+    async function checkAndRunAutoHandoff(target: { characterId: string; chatId: string }) {
+        const character = findCharacterById(target.characterId)
+        if (!character) return
+
+        const evoSettings = getEffectiveCharacterEvolutionSettings(DBState.db, character)
+        if (!evoSettings?.enabled || !evoSettings.autoHandoffEnabled) return
+        if (evolutionBusy) return
+        if (character.characterEvolution.pendingProposal) return
+
+        // Acquire lock before any async work so concurrent fire-and-forget calls see it
+        evolutionBusy = true
+        evolutionAction = 'handoff'
+
+        const batchSize = evoSettings.autoHandoffBatchSize ?? 10
+        const autoAccept = evoSettings.autoHandoffAutoAccept !== false
+
+        const processedRanges = evoSettings.processedRanges ?? []
+        const chatRanges = processedRanges
+            .filter((e) => e.range.chatId === target.chatId)
+            .sort((a, b) => a.range.startMessageIndex - b.range.startMessageIndex)
+
+        let contiguousEnd = -1
+        for (const entry of chatRanges) {
+            if (entry.range.startMessageIndex > contiguousEnd + 1) break
+            contiguousEnd = Math.max(contiguousEnd, entry.range.endMessageIndex)
+        }
+        const nextUnprocessedIndex = contiguousEnd + 1
+        const batchEndIndex = nextUnprocessedIndex + batchSize - 1
+
+        const chatState = resolveChatStateByCharacterAndChatId(
+            DBState.db.characters,
+            target.characterId,
+            target.chatId,
+        )
+        const messageCount = chatState.messages.length
+        if (batchEndIndex >= messageCount) return
+
+        const sourceRange = {
+            chatId: target.chatId,
+            startMessageIndex: nextUnprocessedIndex,
+            endMessageIndex: batchEndIndex,
+        }
+
+        evolutionBusy = true
+        evolutionAction = 'handoff'
+        try {
+            const freshCharacter = findCharacterById(target.characterId)
+            if (!freshCharacter) return
+
+            const result = await runEvolutionHandoffFlow({
+                characterEntry: freshCharacter,
+                chatId: target.chatId,
+                chatMessageCount: messageCount,
+                sourceRange,
+                resolveCharacterById: findCharacterById,
+            })
+
+            if (!result.nextCharacter || result.cancelled) return
+            commitCharacter(target.characterId, result.nextCharacter)
+
+            if (!autoAccept || !result.proposalDraft) {
+                if (currentCharacter?.chaId === target.characterId) {
+                    evolutionProposalDraft = result.proposalDraft
+                    evolutionProposalDraftKey = result.proposalDraftKey
+                    showEvolutionProposal = true
+                }
+                alertNormal('Evolution proposal is ready for review.')
+                return
+            }
+
+            evolutionAction = 'accept'
+            const freshCharForAccept = findCharacterById(target.characterId) ?? result.nextCharacter
+            const { nextCharacter } = await acceptEvolutionReviewFlow({
+                characterEntry: freshCharForAccept,
+                proposedState: JSON.parse(JSON.stringify(result.proposalDraft)),
+                sourceRange,
+                resolveCharacterById: findCharacterById,
+            })
+            commitCharacter(target.characterId, nextCharacter)
+            alertNormal(`Evolution auto-accepted (messages ${nextUnprocessedIndex + 1}–${batchEndIndex + 1}).`)
+        } catch (error) {
+            alertError(getCharacterEvolutionErrorMessage(error))
+        } finally {
+            evolutionBusy = false
+            evolutionAction = null
         }
     }
 

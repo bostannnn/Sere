@@ -187,7 +187,7 @@ describe("character evolution phase 4 workflow smoke", () => {
         expect(rendered).toContain("Dynamic: playful and collaborative")
         expect(rendered).toContain("State: energized")
         expect(rendered).toContain("Residue: shared momentum")
-        expect(rendered).toContain("- user lives in Moscow [confirmed] (new explicit move)")
+        expect(rendered).toContain("- user lives in Moscow [confirmed]")
         expect(rendered).toContain("- user likes dark fantasy books [likely]")
         expect(rendered).toContain("- user likes dark fantasy movies [likely]")
         expect(rendered).toContain("- user dislikes tea [confirmed]")
@@ -272,7 +272,7 @@ describe("character evolution phase 4 workflow smoke", () => {
                 timesSeen: 3,
             },
         ])
-        expect(rendered).toContain("- user moved to New York last year [confirmed] (new stronger timing detail)")
+        expect(rendered).toContain("- user moved to New York last year [confirmed]")
         expect(rendered).not.toContain("user moved to New York [likely]")
     })
 })

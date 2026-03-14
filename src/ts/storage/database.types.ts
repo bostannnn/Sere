@@ -600,6 +600,9 @@ export interface CharacterEvolutionSettings {
     lastProcessedMessageIndexByChat?: Record<string, number>
     processedRanges?: CharacterEvolutionProcessedRange[]
     stateVersions: CharacterEvolutionVersionMeta[]
+    autoHandoffEnabled?: boolean
+    autoHandoffBatchSize?: number
+    autoHandoffAutoAccept?: boolean
 }
 
 export interface CharacterEvolutionDefaults {

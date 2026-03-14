@@ -529,6 +529,43 @@ Decay must be section-specific.
 
 The goal is not perfect realism. The goal is predictable, simple memory hygiene.
 
+## Decay Clock
+
+Decay is driven by accepted handoffs, not raw message count.
+
+The unit is:
+
+- how many accepted handoff cycles passed without an item being reinforced
+
+Not:
+
+- how many chat messages passed
+
+Reason:
+
+- accepted handoffs are the stable checkpoints where memory is actually re-evaluated
+- message counts are noisy and uneven across chats and ranges
+- using accepted handoffs keeps decay behavior predictable even when handoff ranges differ in size
+
+## Meaning Of Unseen
+
+After Phase 4.5, `unseen` must be interpreted carefully.
+
+An item is unseen for a handoff only when:
+
+- the accepted handoff does not reinforce it during accept-time merge, matching, promotion, or conflict handling
+
+An item is not automatically unseen just because:
+
+- it was omitted from a changed-sections-only `proposedState`
+- it was omitted from bounded prompt projection
+- the extractor was not asked to restate the section in a no-change handoff
+
+Important rule:
+
+- omission from a partial proposal is not decay evidence by itself
+- decay must run against the merged canonical accepted state, not the projected prompt slice
+
 ## Decay Buckets
 
 ### Fast Decay
@@ -550,7 +587,7 @@ Rule:
 
 Rule:
 
-- if unseen for 5 accepted handoffs, archive or soften unless reinforced
+- if unseen for 5 accepted handoffs, archive unless reinforced
 
 ### Slow Decay
 
@@ -643,7 +680,7 @@ The extractor should be instructed to:
 4. preserve existing archived and corrected items unless the accepted proposal explicitly revives, replaces, or edits them
 5. save the merged full state as the next accepted canonical state
 6. run conflict rules
-7. run decay pass
+7. run decay pass against the merged canonical accepted state
 8. save accepted version file with range metadata
 9. update fast cursors and processed range history
 10. clear pending proposal
@@ -654,6 +691,8 @@ Important:
 - pending proposals may omit archived/corrected items from normal review focus
 - accept must not treat omission from the active-only proposal as deletion from canonical state
 - archived/corrected items remain stored in `currentState` for later history, matching, conflict handling, and decay
+- decay must not treat omission from partial `proposedState` as evidence that an item was unseen
+- decay must not run against bounded prompt projection; it runs against the post-merge canonical accepted state
 
 ## Auto-Handoff Triggers
 
@@ -961,6 +1000,8 @@ Required test coverage:
 - corrected status on direct replacement
 - prompt projection policy behavior
 - partial proposal validation for changed-sections-only extractor output
+- decay uses accepted handoff count rather than raw message count
+- omitted sections/items in partial proposals do not decay just because they were omitted
 - fast decay for active threads and key moments
 - slow decay behavior for facts and preferences
 - prompt exclusion of corrected and archived items
@@ -976,6 +1017,7 @@ Manual scenarios to validate:
 4. Conflicting user preference gets corrected
 5. Archived item stays visible in review UI but not in prompt behavior
 6. Global settings changes apply to new handoffs without code edits
+7. A no-change partial proposal does not cause unrelated items to decay
 
 ## Final Simplified Rules
 

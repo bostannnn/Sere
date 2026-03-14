@@ -34,6 +34,12 @@
         manualRangeBlockedReason?: string
         manualRangeBusy?: boolean
         onRunManualRange?: (startMessageNumber: number, endMessageNumber: number) => void | Promise<void>
+        autoProcessAvailable?: boolean
+        autoProcessing?: boolean
+        autoProcessedBatches?: number
+        autoProcessTotalBatches?: number
+        onRunAutoProcess?: () => void | Promise<void>
+        onCancelAutoProcess?: () => void
         replayCurrentChatAvailable?: boolean
         replayCurrentChatBusy?: boolean
         onReplayCurrentChat?: () => void | Promise<void>
@@ -56,6 +62,12 @@
         manualRangeBlockedReason = "",
         manualRangeBusy = false,
         onRunManualRange = () => {},
+        autoProcessAvailable = false,
+        autoProcessing = false,
+        autoProcessedBatches = 0,
+        autoProcessTotalBatches = 0,
+        onRunAutoProcess = () => {},
+        onCancelAutoProcess = () => {},
         replayCurrentChatAvailable = false,
         replayCurrentChatBusy = false,
         onReplayCurrentChat = () => {},
@@ -161,6 +173,24 @@
 
     async function submitManualRangeHandoff() {
         await onRunManualRange(manualRangeStart, manualRangeEnd)
+    }
+
+    function setAutoHandoffFlag(
+        key: "autoHandoffEnabled" | "autoHandoffAutoAccept",
+        value: boolean,
+    ) {
+        characterEntry.characterEvolution = {
+            ...characterEntry.characterEvolution,
+            [key]: value,
+        }
+    }
+
+    function setAutoHandoffBatchSize(value: number) {
+        const clamped = Math.max(1, Math.floor(Number(value) || 10))
+        characterEntry.characterEvolution = {
+            ...characterEntry.characterEvolution,
+            autoHandoffBatchSize: clamped,
+        }
     }
 </script>
 
@@ -304,10 +334,75 @@
                     styled="outlined"
                     className="ds-ui-fill-width"
                     onclick={submitManualRangeHandoff}
-                    disabled={!manualRangeAvailable || manualRangeBusy}
+                    disabled={!manualRangeAvailable || manualRangeBusy || autoProcessing}
                 >
                     {manualRangeBusy ? "Running Handoff" : "Run Handoff on Range"}
                 </Button>
+            </div>
+
+            <div class="evolution-auto-process">
+                <div class="evolution-manual-range-header">
+                    <span class="ds-settings-label">Auto Process</span>
+                    {#if autoProcessing}
+                        <span class="ds-settings-label-muted-sm">{autoProcessedBatches}/{autoProcessTotalBatches} batches</span>
+                    {/if}
+                </div>
+                <span class="ds-settings-label-muted-sm">
+                    Runs handoffs from next unprocessed message and auto-accepts each batch.
+                </span>
+                <div class="evolution-auto-process-row">
+                    {#if autoProcessing}
+                        <Button
+                            size="sm"
+                            styled="outlined"
+                            className="ds-ui-fill-width"
+                            onclick={onCancelAutoProcess}
+                        >
+                            Cancel
+                        </Button>
+                    {:else}
+                        <Button
+                            size="sm"
+                            styled="outlined"
+                            className="ds-ui-fill-width"
+                            onclick={onRunAutoProcess}
+                            disabled={!autoProcessAvailable || manualRangeBusy}
+                        >
+                            Auto Process
+                        </Button>
+                    {/if}
+                </div>
+            </div>
+
+            <div class="evolution-auto-handoff-settings">
+                <div class="evolution-manual-range-header">
+                    <span class="ds-settings-label">Auto Handoff Every X Messages</span>
+                </div>
+                <CheckInput
+                    bare={true}
+                    className="evolution-toggle-row"
+                    check={characterEntry.characterEvolution.autoHandoffEnabled ?? false}
+                    onChange={(value) => setAutoHandoffFlag("autoHandoffEnabled", value)}
+                    name="Enable auto handoff"
+                />
+                <div class="evolution-auto-handoff-row">
+                    <span class="ds-settings-label-muted-sm">Batch size</span>
+                    <input
+                        class="evolution-manual-range-input control-field"
+                        type="number"
+                        min="1"
+                        placeholder="10"
+                        value={characterEntry.characterEvolution.autoHandoffBatchSize ?? 10}
+                        oninput={(e) => setAutoHandoffBatchSize(Number((e.target as HTMLInputElement).value))}
+                    />
+                </div>
+                <CheckInput
+                    bare={true}
+                    className="evolution-toggle-row"
+                    check={characterEntry.characterEvolution.autoHandoffAutoAccept !== false}
+                    onChange={(value) => setAutoHandoffFlag("autoHandoffAutoAccept", value)}
+                    name="Auto-accept proposals"
+                />
             </div>
 
             <div class="evolution-accepted-coverage">
@@ -453,6 +548,37 @@
     .evolution-manual-range-to {
         color: var(--ds-text-secondary);
         font-size: var(--ds-font-size-sm);
+    }
+
+    .evolution-auto-process {
+        display: flex;
+        flex-direction: column;
+        gap: var(--ds-space-2);
+        margin-bottom: var(--ds-space-3);
+    }
+
+    .evolution-auto-process-row {
+        display: flex;
+        align-items: center;
+        gap: var(--ds-space-2);
+    }
+
+    .evolution-auto-handoff-settings {
+        display: flex;
+        flex-direction: column;
+        gap: var(--ds-space-2);
+        margin-bottom: var(--ds-space-3);
+    }
+
+    .evolution-auto-handoff-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--ds-space-2);
+    }
+
+    .evolution-auto-handoff-row .evolution-manual-range-input {
+        max-width: 80px;
     }
 
     .evolution-accepted-coverage {
