@@ -37,6 +37,7 @@ import { saveServerDatabase } from "../storage/serverDb";
 import { fetchServerStateSnapshot } from "../storage/serverStateClient";
 import {
     getEffectiveCharacterEvolutionSettings,
+    getCharacterEvolutionPromptProjectionPolicy,
     renderCharacterEvolutionStateForPrompt,
 } from "../characterEvolution";
 import { resolveServerAuthToken } from "../storage/serverAuth";
@@ -700,11 +701,13 @@ export async function sendChat(chatProcessIndex = -1,arg:{
     }
 
     const evolutionSettings = getEffectiveCharacterEvolutionSettings(DBState.db, currentChar)
+    const promptProjection = getCharacterEvolutionPromptProjectionPolicy(DBState.db, currentChar)
     const characterStatePrompt = evolutionSettings.enabled
         ? renderCharacterEvolutionStateForPrompt(
             evolutionSettings.currentState,
             evolutionSettings.sectionConfigs,
-            evolutionSettings.privacy
+            evolutionSettings.privacy,
+            promptProjection,
         )
         : ''
     if(characterStatePrompt){

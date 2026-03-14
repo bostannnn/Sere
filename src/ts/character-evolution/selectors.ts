@@ -26,3 +26,8 @@ export function getEffectiveCharacterEvolutionSettings(db: Database, char: chara
 export function hasCharacterStateTemplateBlock(db: Database): boolean {
     return Array.isArray(db.promptTemplate) && db.promptTemplate.some((item) => item?.type === "characterState")
 }
+
+export function getCharacterEvolutionPromptProjectionPolicy(db: Database, _char?: character | groupChat): NonNullable<ReturnType<typeof normalizeCharacterEvolutionDefaults>["promptProjection"]> {
+    // Phase 4.5 keeps prompt projection global-only. The character arg is reserved for a future override path.
+    return normalizeCharacterEvolutionDefaults(db.characterEvolutionDefaults).promptProjection!
+}

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 
 import { projectCharacterEvolutionStateForPrompt } from "./projection"
+import { createCharacterEvolutionPromptProjectionPolicy } from "./projectionPolicy"
 import { createDefaultCharacterEvolutionState } from "./schema"
 
 describe("character evolution prompt projection", () => {
@@ -48,5 +49,25 @@ describe("character evolution prompt projection", () => {
             "thread-mid",
         ])
         expect(projectedValues).not.toContain("thread-oldest")
+    })
+
+    it("uses global policy rankings and limits instead of hardcoded ordering", () => {
+        const state = createDefaultCharacterEvolutionState()
+        state.userLikes = [
+            { value: "fresh-but-weak", confidence: "suspected", status: "active", lastSeenAt: 500, updatedAt: 500, timesSeen: 1 },
+            { value: "older-but-confirmed", confidence: "confirmed", status: "active", lastSeenAt: 100, updatedAt: 100, timesSeen: 2 },
+            { value: "middle-likely", confidence: "likely", status: "active", lastSeenAt: 300, updatedAt: 300, timesSeen: 2 },
+        ]
+
+        const promptProjection = createCharacterEvolutionPromptProjectionPolicy()
+        promptProjection.rankings.slow = ["lastSeenAt", "confidence", "timesSeen", "updatedAt"]
+        promptProjection.limits.generation.userLikes = 1
+
+        const projected = projectCharacterEvolutionStateForPrompt(state, "generation", promptProjection)
+        const { projectCharacterEvolutionStateForPrompt: projectCharacterEvolutionStateForPromptCjs } = require("../../../server/node/llm/character_evolution/projection.cjs")
+        const projectedCjs = projectCharacterEvolutionStateForPromptCjs(state, "generation", promptProjection)
+
+        expect(projected.userLikes.map((item) => item.value)).toEqual(["fresh-but-weak"])
+        expect(projectedCjs.userLikes.map((item: { value: string }) => item.value)).toEqual(["fresh-but-weak"])
     })
 })

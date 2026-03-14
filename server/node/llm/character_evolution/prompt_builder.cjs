@@ -1,6 +1,8 @@
 const { applyPromptVars } = require('../scripts.cjs');
 const { getEffectiveCharacterEvolutionSettings } = require('./normalizers.cjs');
 const { projectCharacterEvolutionStateForPrompt } = require('./projection.cjs');
+const { getCharacterEvolutionPromptProjectionPolicy } = require('./projection_policy.cjs');
+const { sanitizeStateForEvolution } = require('./proposal.cjs');
 const { toTrimmedString } = require('./utils.cjs');
 
 function chatMessageToTranscriptLine(message, characterName, userName) {
@@ -23,12 +25,12 @@ function toCompactPromptItem(item) {
     return {
         value,
         ...(item?.confidence ? { confidence: item.confidence } : {}),
-        status: 'active',
     };
 }
 
-function buildCompactCurrentStateForExtraction(stateRaw) {
-    const state = projectCharacterEvolutionStateForPrompt(stateRaw, 'extraction');
+function buildCompactCurrentStateForExtraction(stateRaw, evolutionSettings, promptProjectionRaw = null) {
+    const sanitizedState = sanitizeStateForEvolution(stateRaw, evolutionSettings);
+    const state = projectCharacterEvolutionStateForPrompt(sanitizedState, 'extraction', promptProjectionRaw);
 
     return {
         relationship: {
@@ -60,6 +62,7 @@ function buildCharacterEvolutionPromptMessages(arg = {}) {
     const character = arg.character || {};
     const chat = arg.chat || {};
     const evolution = getEffectiveCharacterEvolutionSettings(settings, character);
+    const promptProjection = getCharacterEvolutionPromptProjectionPolicy(settings, character);
     const sourceRange = arg.sourceRange && typeof arg.sourceRange === 'object'
         ? arg.sourceRange
         : null;
@@ -94,7 +97,7 @@ function buildCharacterEvolutionPromptMessages(arg = {}) {
         ].join('\n'))
         .join('\n');
 
-    const state = JSON.stringify(buildCompactCurrentStateForExtraction(evolution.currentState), null, 2);
+    const state = JSON.stringify(buildCompactCurrentStateForExtraction(evolution.currentState, evolution, promptProjection), null, 2);
     const prompt = [
         applyPromptVars(evolution.extractionPrompt, character, settings),
         '',

@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest"
 
-import { normalizeCharacterEvolutionSettings, normalizeCharacterEvolutionState } from "../characterEvolution"
+import {
+    normalizeCharacterEvolutionDefaults,
+    normalizeCharacterEvolutionSettings,
+    normalizeCharacterEvolutionState,
+} from "../characterEvolution"
 
 describe("character evolution normalizers", () => {
     it("migrates legacy string-array sections into canonical item objects", () => {
@@ -168,5 +172,42 @@ describe("character evolution normalizers", () => {
         expect(normalized.lastProcessedChatId).toBe("chat-last")
         expect(normalized.currentState.characterLikes[0]?.sourceChatId).toBe("chat-like")
         expect(normalized).toEqual(normalizedCjs)
+    })
+
+    it("normalizes prompt projection defaults with complete ranking orders and per-section limits", () => {
+        const input = {
+            promptProjection: {
+                rankings: {
+                    fast: ["timesSeen", "timesSeen", "confidence"],
+                },
+                limits: {
+                    generation: {
+                        activeThreads: "5",
+                        userFacts: -2,
+                    },
+                },
+            },
+        }
+
+        const normalized = normalizeCharacterEvolutionDefaults(input)
+        const { normalizeCharacterEvolutionDefaults: normalizeCharacterEvolutionDefaultsCjs } = require("../../../server/node/llm/character_evolution/normalizers.cjs")
+        const normalizedCjs = normalizeCharacterEvolutionDefaultsCjs(input)
+
+        expect(normalized.promptProjection?.rankings.fast).toEqual([
+            "timesSeen",
+            "confidence",
+            "lastSeenAt",
+            "updatedAt",
+        ])
+        expect(normalized.promptProjection?.rankings.medium).toEqual([
+            "lastSeenAt",
+            "timesSeen",
+            "confidence",
+            "updatedAt",
+        ])
+        expect(normalized.promptProjection?.limits.generation.activeThreads).toBe(5)
+        expect(normalized.promptProjection?.limits.generation.userFacts).toBe(4)
+        expect(normalized.promptProjection?.limits.extraction.userFacts).toBe(6)
+        expect(normalizedCjs).toEqual(normalized)
     })
 })

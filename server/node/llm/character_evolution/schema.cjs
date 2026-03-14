@@ -1,4 +1,5 @@
 const { clone, toTrimmedString } = require('./utils.cjs');
+const { createCharacterEvolutionPromptProjectionPolicy } = require('./projection_policy.cjs');
 
 const DEFAULT_EXTRACTION_PROMPT = [
     'You update a character evolution state from the current processed roleplay transcript range.',
@@ -8,15 +9,15 @@ const DEFAULT_EXTRACTION_PROMPT = [
     'Do not use code fences.',
     '',
     'proposedState:',
-    '- must contain the full next state object',
-    '- must use the exact keys and structure from Current state JSON',
-    '- must preserve unchanged fields exactly as received',
+    '- must contain only sections that changed in this transcript range',
+    '- omitted sections mean no change',
+    '- each included section must be the full intended replacement for that section',
     '- must not add new keys or rename keys',
     '',
     'changes:',
     '- must be an array of objects with sectionKey, summary, and evidence',
     '- include only sections that actually changed in proposedState',
-    '- never list a section in changes if proposedState for that section is unchanged or empty',
+    '- every section listed in changes must also be present in proposedState',
     '- every changes entry must have at least one non-empty evidence string',
     '- evidence must be short transcript-supported quotes or paraphrases',
     '',
@@ -25,11 +26,10 @@ const DEFAULT_EXTRACTION_PROMPT = [
     '- Do not invent facts.',
     '- Do not use character card identity context as evidence for new changes.',
     '- Prefer no change over weak inference.',
-    '- If nothing changed, return the current state unchanged and return an empty changes array.',
+    '- If nothing changed, return proposedState as {} and changes as [].',
     '- Only update enabled and privacy-allowed sections.',
     '- Keep changes small and durable; do not overreact to one-off lines.',
     '- Maximum 3 to 6 changed sections unless the transcript clearly supports more.',
-    '- When preserving existing item objects, keep their existing fields intact.',
     '- Treat this as long-term memory extraction, not scene summarization.',
     '- Prefer storing fresh scene details in lastInteractionEnded or keyMoments, not as durable traits.',
     '- Do not promote a detail to a durable section unless it is explicit, repeated, or clearly framed as stable.',
@@ -45,6 +45,8 @@ const DEFAULT_EXTRACTION_PROMPT = [
     '- relationship and lastInteractionEnded are objects',
     '- all other list sections are arrays of item objects',
     '- activeThreads, runningJokes, userRead, keyMoments, characterLikes, characterDislikes, characterHabits, characterBoundariesPreferences, userFacts, userLikes, userDislikes, characterIntimatePreferences, and userIntimatePreferences are arrays of item objects',
+    '- if you clear a section, include it explicitly with an empty object or empty array',
+    '- Current state JSON is a compact active-only comparison view, not the full stored history',
     '- do not invent sourceChatId, sourceRange, updatedAt, lastSeenAt, or timesSeen for new items unless they are already present in Current state JSON',
     '',
     'Lifecycle meanings:',
@@ -182,6 +184,7 @@ function createDefaultCharacterEvolutionDefaults() {
             allowCharacterIntimatePreferences: false,
             allowUserIntimatePreferences: false,
         }),
+        promptProjection: createCharacterEvolutionPromptProjectionPolicy(),
     };
 }
 

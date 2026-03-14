@@ -6,7 +6,7 @@ import {
     rejectEvolutionProposalAction,
 } from "src/ts/character-evolution/actions"
 import { getEvolutionProposalIdentity } from "src/ts/character-evolution/workflow"
-import { OtherBotSettingsSubMenuIndex, SettingsMenuIndex, settingsOpen } from "src/ts/stores.svelte"
+import { EvolutionDefaultsSettingsTabIndex, OtherBotSettingsSubMenuIndex, SettingsMenuIndex, settingsOpen } from "src/ts/stores.svelte"
 export {
     acceptEvolutionProposalAction,
     getEvolutionProposalIdentity,
@@ -17,6 +17,7 @@ export {
 }
 
 export function openEvolutionGlobalDefaults(): void {
+    EvolutionDefaultsSettingsTabIndex.set(0)
     OtherBotSettingsSubMenuIndex.set(3)
     SettingsMenuIndex.set(2)
     settingsOpen.set(true)

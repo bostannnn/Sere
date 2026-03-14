@@ -22,6 +22,7 @@ import {
     createDefaultCharacterEvolutionState,
 } from "./schema"
 import { normalizeCharacterEvolutionItemSourceRange } from "./items"
+import { normalizeCharacterEvolutionPromptProjectionPolicy } from "./projectionPolicy"
 import { normalizeCharacterEvolutionRangeRef } from "./ranges"
 
 function jsonEqual(a: unknown, b: unknown): boolean {
@@ -195,6 +196,7 @@ export function normalizeCharacterEvolutionDefaults(raw: unknown): CharacterEvol
             : defaults.extractionPrompt,
         sectionConfigs: normalizeCharacterEvolutionSectionConfigs(value.sectionConfigs),
         privacy: normalizeCharacterEvolutionPrivacy(value.privacy),
+        promptProjection: normalizeCharacterEvolutionPromptProjectionPolicy(value.promptProjection),
     }
 }
 

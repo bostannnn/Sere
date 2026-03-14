@@ -15,8 +15,8 @@ function itemToLine(item) {
     return `- ${toTrimmedString(item.value)}${confidence}`;
 }
 
-function renderCharacterEvolutionStateForPrompt(stateRaw, sectionConfigsRaw, privacyRaw) {
-    const state = projectCharacterEvolutionStateForPrompt(stateRaw, 'generation');
+function renderCharacterEvolutionStateForPrompt(stateRaw, sectionConfigsRaw, privacyRaw, promptProjectionRaw = null) {
+    const state = projectCharacterEvolutionStateForPrompt(stateRaw, 'generation', promptProjectionRaw);
     const sectionConfigs = normalizeCharacterEvolutionSectionConfigs(sectionConfigsRaw);
     const privacy = normalizeCharacterEvolutionPrivacy(privacyRaw);
     const lines = [];

@@ -210,6 +210,128 @@ describe("evolution routes handoff", () => {
     expect(characterFile.character.characterEvolution.pendingProposal ?? null).toBeNull();
   });
 
+  it("rejects malformed partial extractor proposals before staging a pending proposal", async () => {
+    const { postHandlers } = buildHandlers({
+      executeInternalLLMTextCompletion: async () => JSON.stringify({
+        proposedState: {},
+        changes: [
+          {
+            sectionKey: "userFacts",
+            summary: "Claims a change without including a replacement section.",
+            evidence: ["User said they have a dog."],
+          },
+        ],
+      }),
+    });
+    const handler = postHandlers.get("/data/character-evolution/handoff");
+    expect(handler).toBeTruthy();
+
+    const res = createRes();
+    await handler!(createReq({ characterId, chatId }), res);
+
+    expect(res.statusCode).toBe(502);
+    expect(res.payload).toEqual(expect.objectContaining({
+      error: "EVOLUTION_INVALID_PROPOSAL",
+    }));
+
+    const dataDirs = getDataDirs();
+    const characterFile = JSON.parse(readFileSync(path.join(dataDirs.characters, characterId, "character.json"), "utf-8"));
+    expect(characterFile.character.characterEvolution.pendingProposal ?? null).toBeNull();
+  });
+
+  it("rejects extractor proposals with unknown proposedState keys before staging a pending proposal", async () => {
+    const { postHandlers } = buildHandlers({
+      executeInternalLLMTextCompletion: async () => JSON.stringify({
+        proposedState: {
+          userFact: [
+            {
+              value: "User has a dog.",
+            },
+          ],
+        },
+        changes: [],
+      }),
+    });
+    const handler = postHandlers.get("/data/character-evolution/handoff");
+    expect(handler).toBeTruthy();
+
+    const res = createRes();
+    await handler!(createReq({ characterId, chatId }), res);
+
+    expect(res.statusCode).toBe(502);
+    expect(res.payload).toEqual(expect.objectContaining({
+      error: "EVOLUTION_INVALID_PROPOSAL",
+      message: expect.stringContaining('unknown proposedState section "userFact"'),
+    }));
+
+    const dataDirs = getDataDirs();
+    const characterFile = JSON.parse(readFileSync(path.join(dataDirs.characters, characterId, "character.json"), "utf-8"));
+    expect(characterFile.character.characterEvolution.pendingProposal ?? null).toBeNull();
+  });
+
+  it("re-validates extractor proposals against latest global defaults before staging", async () => {
+    const dataDirs = getDataDirs();
+    const executeInternalLLMTextCompletion = vi.fn(async () => {
+      writeJson(path.join(dataDirs.root, "settings.json"), {
+        data: {
+          username: "Andrew",
+          characterEvolutionDefaults: {
+            extractionProvider: "openrouter",
+            extractionModel: "anthropic/claude-3.5-haiku",
+            extractionMaxTokens: 2400,
+            extractionPrompt: "Facts about {{user}} as seen by {{char}}.",
+            sectionConfigs: [
+              {
+                key: "userFacts",
+                label: "User Facts",
+                enabled: false,
+                includeInPrompt: true,
+                instruction: "Track durable user facts.",
+                kind: "list",
+                sensitive: false,
+              },
+            ],
+            privacy: {
+              allowCharacterIntimatePreferences: false,
+              allowUserIntimatePreferences: false,
+            },
+          },
+        },
+      });
+      return JSON.stringify({
+        proposedState: {
+          userFacts: [
+            {
+              value: "User needs a new job soon.",
+            },
+          ],
+        },
+        changes: [
+          {
+            sectionKey: "userFacts",
+            summary: "User is actively job hunting.",
+            evidence: ["[0] Andrew says they need a job soon."],
+          },
+        ],
+      });
+    });
+    const { postHandlers } = buildHandlers({ executeInternalLLMTextCompletion });
+    const handler = postHandlers.get("/data/character-evolution/handoff");
+    expect(handler).toBeTruthy();
+
+    const res = createRes();
+    await handler!(createReq({ characterId, chatId }), res);
+
+    expect(res.statusCode).toBe(502);
+    expect(res.payload).toEqual(expect.objectContaining({
+      error: "EVOLUTION_INVALID_PROPOSAL",
+      message: expect.stringContaining('proposedState section "userFacts" is not enabled for evolution'),
+    }));
+
+    const characterFile = JSON.parse(readFileSync(path.join(dataDirs.characters, characterId, "character.json"), "utf-8"));
+    expect(characterFile.character.characterEvolution.pendingProposal ?? null).toBeNull();
+  });
+
   it("accepts a pending proposal and writes a version file", async () => {
     const { postHandlers, getHandlers } = buildHandlers();
     const handoff = postHandlers.get("/data/character-evolution/handoff");

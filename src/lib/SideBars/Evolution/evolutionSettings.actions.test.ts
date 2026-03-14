@@ -3,6 +3,10 @@ import { describe, expect, it, vi, beforeEach } from "vitest"
 const mocks = vi.hoisted(() => ({
     acceptCharacterEvolutionProposal: vi.fn(),
     createNewChatAfterEvolution: vi.fn(),
+    evolutionDefaultsSettingsTabIndexSet: vi.fn(),
+    otherBotSettingsSubMenuIndexSet: vi.fn(),
+    settingsMenuIndexSet: vi.fn(),
+    settingsOpenSet: vi.fn(),
     DBState: {
         db: {
             characters: [] as Array<Record<string, unknown>>,
@@ -21,17 +25,22 @@ vi.mock("src/ts/evolution", () => ({
 vi.mock("src/ts/stores.svelte", () => ({
     DBState: mocks.DBState,
     selIdState: { selId: 0 },
-    OtherBotSettingsSubMenuIndex: { set: vi.fn() },
-    SettingsMenuIndex: { set: vi.fn() },
-    settingsOpen: { set: vi.fn() },
+    EvolutionDefaultsSettingsTabIndex: { set: mocks.evolutionDefaultsSettingsTabIndexSet },
+    OtherBotSettingsSubMenuIndex: { set: mocks.otherBotSettingsSubMenuIndexSet },
+    SettingsMenuIndex: { set: mocks.settingsMenuIndexSet },
+    settingsOpen: { set: mocks.settingsOpenSet },
 }))
 
-import { acceptEvolutionProposalAction } from "./evolutionSettings.actions"
+import { acceptEvolutionProposalAction, openEvolutionGlobalDefaults } from "./evolutionSettings.actions"
 
-describe("acceptEvolutionProposalAction", () => {
+describe("evolutionSettings.actions", () => {
     beforeEach(() => {
         mocks.createNewChatAfterEvolution.mockReset()
         mocks.acceptCharacterEvolutionProposal.mockReset()
+        mocks.evolutionDefaultsSettingsTabIndexSet.mockReset()
+        mocks.otherBotSettingsSubMenuIndexSet.mockReset()
+        mocks.settingsMenuIndexSet.mockReset()
+        mocks.settingsOpenSet.mockReset()
         mocks.DBState.db.characters = [
             { type: "character", chaId: "char-1" },
             { type: "character", chaId: "char-2" },
@@ -90,5 +99,18 @@ describe("acceptEvolutionProposalAction", () => {
 
         expect(mocks.createNewChatAfterEvolution).toHaveBeenCalledTimes(1)
         expect(mocks.createNewChatAfterEvolution).toHaveBeenCalledWith(1)
+    })
+
+    it("opens Other Bots Evolution on the global defaults tab", () => {
+        openEvolutionGlobalDefaults()
+
+        expect(mocks.evolutionDefaultsSettingsTabIndexSet).toHaveBeenCalledTimes(1)
+        expect(mocks.evolutionDefaultsSettingsTabIndexSet).toHaveBeenCalledWith(0)
+        expect(mocks.otherBotSettingsSubMenuIndexSet).toHaveBeenCalledTimes(1)
+        expect(mocks.otherBotSettingsSubMenuIndexSet).toHaveBeenCalledWith(3)
+        expect(mocks.settingsMenuIndexSet).toHaveBeenCalledTimes(1)
+        expect(mocks.settingsMenuIndexSet).toHaveBeenCalledWith(2)
+        expect(mocks.settingsOpenSet).toHaveBeenCalledTimes(1)
+        expect(mocks.settingsOpenSet).toHaveBeenCalledWith(true)
     })
 })

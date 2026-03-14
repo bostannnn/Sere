@@ -126,6 +126,7 @@ vi.mock(import("src/ts/stores.svelte"), async () => {
   const { writable } = await import("svelte/store");
   return {
     DBState: shared.dbState,
+    EvolutionDefaultsSettingsTabIndex: writable<number | null>(null),
     OtherBotSettingsSubMenuIndex: writable<number | null>(null),
     selectedCharID: writable(0),
   };
@@ -182,7 +183,19 @@ vi.mock(import("src/lib/UI/GUI/TextInput.svelte"), async () => ({
   default: (await import("./test-stubs/BindableFieldStub.svelte")).default,
 }));
 
+vi.mock(import("src/lib/UI/GUI/CheckInput.svelte"), async () => ({
+  default: (await import("./test-stubs/BindableFieldStub.svelte")).default,
+}));
+
 vi.mock(import("src/lib/UI/GUI/EmbeddingModelSelect.svelte"), async () => ({
+  default: (await import("./test-stubs/BindableFieldStub.svelte")).default,
+}));
+
+vi.mock(import("src/lib/UI/ModelList.svelte"), async () => ({
+  default: (await import("./test-stubs/BindableFieldStub.svelte")).default,
+}));
+
+vi.mock(import("src/lib/UI/GUI/OpenRouterModelSelect.svelte"), async () => ({
   default: (await import("./test-stubs/BindableFieldStub.svelte")).default,
 }));
 
@@ -195,7 +208,8 @@ vi.mock(import("src/lib/UI/GUI/Button.svelte"), async () => ({
 }));
 
 import OtherBotSettings from "src/lib/Setting/Pages/OtherBotSettings.svelte";
-import { selectedCharID } from "src/ts/stores.svelte";
+import { createDefaultCharacterEvolutionDefaults } from "src/ts/characterEvolution";
+import { EvolutionDefaultsSettingsTabIndex, OtherBotSettingsSubMenuIndex, selectedCharID } from "src/ts/stores.svelte";
 
 let app: Record<string, unknown> | undefined;
 
@@ -235,7 +249,10 @@ describe("other bots settings runtime smoke", () => {
 
   beforeEach(() => {
     shared.dbState.db = createDbState();
+    shared.dbState.db.characterEvolutionDefaults = createDefaultCharacterEvolutionDefaults();
     selectedCharID.set(0);
+    EvolutionDefaultsSettingsTabIndex.set(null);
+    OtherBotSettingsSubMenuIndex.set(null);
     document.body.innerHTML = "";
   });
 
@@ -353,5 +370,73 @@ describe("other bots settings runtime smoke", () => {
     const presetSettings = shared.dbState.db.memoryPresets?.[0]?.settings as Record<string, unknown> | undefined;
     expect(presetSettings?.periodicSummarizationInterval).toBe(24);
     expect(presetSettings?.maxChatsPerSummary).toBe(24);
+  });
+
+  it("shows Evolution as its own Other Bots page with separate defaults and prompt projection tabs", async () => {
+    const target = document.createElement("div");
+    document.body.appendChild(target);
+    app = mount(OtherBotSettings, { target });
+    await flushUi();
+
+    const evolutionTab = document.querySelector(
+      'button.ds-settings-tab[title="Evolution"]',
+    ) as HTMLButtonElement | null;
+    expect(evolutionTab).not.toBeNull();
+    evolutionTab?.click();
+    await flushUi();
+    await flushUi();
+
+    expect(document.body.textContent).toContain("Character Evolution Defaults");
+
+    const innerTabs = Array.from(document.querySelectorAll('button.ds-settings-tab')) as HTMLButtonElement[];
+    const globalDefaultsTab = innerTabs.find((button) => button.title === "Global Defaults");
+    const promptProjectionTab = innerTabs.find((button) => button.title === "Prompt Projection");
+
+    expect(globalDefaultsTab).toBeDefined();
+    expect(promptProjectionTab).toBeDefined();
+    expect(document.body.textContent).toContain("Extraction Runtime");
+    expect(document.body.textContent).toContain("Default Sections");
+
+    promptProjectionTab?.click();
+    await flushUi();
+
+    expect(document.body.textContent).toContain("Prompt Projection Policy");
+    expect(document.body.textContent).toContain("Per-Section Limits");
+    expect(document.body.textContent).not.toContain("Extraction Runtime");
+    expect(document.body.textContent).not.toContain("Default Sections");
+  });
+
+  it("returns Evolution to the Global Defaults tab when the sidebar deep link requests it", async () => {
+    const target = document.createElement("div");
+    document.body.appendChild(target);
+    app = mount(OtherBotSettings, { target });
+    await flushUi();
+
+    const evolutionTab = document.querySelector(
+      'button.ds-settings-tab[title="Evolution"]',
+    ) as HTMLButtonElement | null;
+    expect(evolutionTab).not.toBeNull();
+    evolutionTab?.click();
+    await flushUi();
+
+    const promptProjectionTab = Array.from(
+      document.querySelectorAll('button.ds-settings-tab'),
+    ).find((button) => (button as HTMLButtonElement).title === "Prompt Projection") as
+      | HTMLButtonElement
+      | undefined;
+    expect(promptProjectionTab).toBeDefined();
+
+    promptProjectionTab?.click();
+    await flushUi();
+
+    expect(document.body.textContent).toContain("Prompt Projection Policy");
+    expect(document.body.textContent).not.toContain("Extraction Runtime");
+
+    EvolutionDefaultsSettingsTabIndex.set(0);
+    await flushUi();
+
+    expect(document.body.textContent).toContain("Extraction Runtime");
+    expect(document.body.textContent).toContain("Default Sections");
+    expect(document.body.textContent).not.toContain("Prompt Projection Policy");
   });
 });

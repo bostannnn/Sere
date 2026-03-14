@@ -470,6 +470,13 @@ export type CharacterEvolutionSectionKey =
     | 'keyMoments'
     | 'characterIntimatePreferences'
     | 'userIntimatePreferences'
+export type CharacterEvolutionProjectedItemSectionKey = Exclude<
+    CharacterEvolutionSectionKey,
+    'relationship' | 'lastInteractionEnded'
+>
+export type CharacterEvolutionProjectionSurface = 'generation' | 'extraction'
+export type CharacterEvolutionProjectionBucket = 'fast' | 'medium' | 'slow'
+export type CharacterEvolutionProjectionRankField = 'confidence' | 'timesSeen' | 'lastSeenAt' | 'updatedAt'
 
 export interface CharacterEvolutionItem {
     value: string
@@ -598,6 +605,12 @@ export interface CharacterEvolutionDefaults {
     extractionPrompt: string
     sectionConfigs: CharacterEvolutionSectionConfig[]
     privacy: CharacterEvolutionPrivacySettings
+    promptProjection?: CharacterEvolutionPromptProjectionPolicy
+}
+
+export interface CharacterEvolutionPromptProjectionPolicy {
+    rankings: Record<CharacterEvolutionProjectionBucket, CharacterEvolutionProjectionRankField[]>
+    limits: Record<CharacterEvolutionProjectionSurface, Record<CharacterEvolutionProjectedItemSectionKey, number>>
 }
 
 export interface character{

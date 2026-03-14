@@ -121,6 +121,105 @@ describe("server prompt template slots", () => {
     expect(assembled?.promptBlocks?.some((entry: Record<string, unknown>) => entry.title === "Character State")).toBe(true);
   });
 
+  it("uses global prompt projection policy for characterState rendering", async () => {
+    const assembled = await buildMessagesFromPromptTemplate(
+      {
+        name: "Chronicle Bot",
+        characterEvolution: {
+          enabled: true,
+          useGlobalDefaults: false,
+          extractionMaxTokens: 2400,
+          currentState: {
+            userFacts: [
+              { value: "Newest weak fact", confidence: "suspected", status: "active", lastSeenAt: 500, updatedAt: 500, timesSeen: 1 },
+              { value: "Older confirmed fact", confidence: "confirmed", status: "active", lastSeenAt: 100, updatedAt: 100, timesSeen: 3 },
+            ],
+          },
+          sectionConfigs: [
+            {
+              key: "userFacts",
+              label: "User Facts",
+              enabled: true,
+              includeInPrompt: true,
+              instruction: "Track user facts",
+              kind: "list",
+              sensitive: false,
+            },
+          ],
+          privacy: {
+            allowCharacterIntimatePreferences: false,
+            allowUserIntimatePreferences: false,
+          },
+        },
+      },
+      {
+        message: [{ role: "user", data: "hello" }],
+      },
+      {
+        characterEvolutionDefaults: {
+          extractionProvider: "openrouter",
+          extractionModel: "model",
+          extractionMaxTokens: 2400,
+          extractionPrompt: "prompt",
+          promptProjection: {
+            rankings: {
+              fast: ["lastSeenAt", "updatedAt", "timesSeen", "confidence"],
+              medium: ["lastSeenAt", "timesSeen", "confidence", "updatedAt"],
+              slow: ["lastSeenAt", "confidence", "timesSeen", "updatedAt"],
+            },
+            limits: {
+              generation: {
+                activeThreads: 2,
+                runningJokes: 2,
+                characterLikes: 3,
+                characterDislikes: 3,
+                characterHabits: 2,
+                characterBoundariesPreferences: 2,
+                userFacts: 1,
+                userRead: 3,
+                userLikes: 2,
+                userDislikes: 2,
+                keyMoments: 2,
+                characterIntimatePreferences: 3,
+                userIntimatePreferences: 3,
+              },
+              extraction: {
+                activeThreads: 3,
+                runningJokes: 3,
+                characterLikes: 4,
+                characterDislikes: 4,
+                characterHabits: 3,
+                characterBoundariesPreferences: 3,
+                userFacts: 6,
+                userRead: 4,
+                userLikes: 3,
+                userDislikes: 3,
+                keyMoments: 3,
+                characterIntimatePreferences: 4,
+                userIntimatePreferences: 4,
+              },
+            },
+          },
+          sectionConfigs: [],
+          privacy: {
+            allowCharacterIntimatePreferences: false,
+            allowUserIntimatePreferences: false,
+          },
+        },
+        promptTemplate: [
+          { type: "characterState", innerFormat: "{{slot}}" },
+        ],
+      },
+      {
+        userMessage: "hello",
+      },
+    );
+
+    const contents = (assembled?.messages ?? []).map((entry: Record<string, unknown>) => String(entry.content || ""));
+    expect(contents.some((content) => content.includes("Newest weak fact"))).toBe(true);
+    expect(contents.some((content) => content.includes("Older confirmed fact"))).toBe(false);
+  });
+
   it("renders description and characterState through the template-only path", async () => {
     const assembled = await buildGeneratePromptMessages({
       character: {

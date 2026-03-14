@@ -33,8 +33,17 @@ export {
 
 export {
     getEffectiveCharacterEvolutionSettings,
+    getCharacterEvolutionPromptProjectionPolicy,
     hasCharacterStateTemplateBlock,
 } from "./character-evolution/selectors"
 
 export { renderCharacterEvolutionStateForPrompt } from "./character-evolution/render"
 export { projectCharacterEvolutionStateForPrompt } from "./character-evolution/projection"
+export {
+    CHARACTER_EVOLUTION_PROJECTION_BUCKET_BY_SECTION,
+    CHARACTER_EVOLUTION_PROJECTION_BUCKETS,
+    CHARACTER_EVOLUTION_PROJECTION_RANK_FIELDS,
+    DEFAULT_CHARACTER_EVOLUTION_PROMPT_PROJECTION_POLICY,
+    createCharacterEvolutionPromptProjectionPolicy,
+    normalizeCharacterEvolutionPromptProjectionPolicy,
+} from "./character-evolution/projectionPolicy"

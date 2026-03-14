@@ -12,6 +12,7 @@ const { buildServerLorebookMessages } = require('./lorebook.cjs');
 const { extractTextFromMessageContent, estimateMessagesTokens } = require('./tokenizer.cjs');
 const {
     getEffectiveCharacterEvolutionSettings,
+    getCharacterEvolutionPromptProjectionPolicy,
     renderCharacterEvolutionStateForPrompt,
 } = require('./character_evolution.cjs');
 const {
@@ -228,11 +229,13 @@ async function buildMessagesFromPromptTemplate(character, chat, settings, arg = 
     const authorNote = resolveServerAuthorNote(chat, settings);
     const lorebook = buildServerLorebookMessages(character, chat, chats);
     const evolutionSettings = getEffectiveCharacterEvolutionSettings(settings, character);
+    const promptProjection = getCharacterEvolutionPromptProjectionPolicy(settings, character);
     const characterState = evolutionSettings.enabled
         ? renderCharacterEvolutionStateForPrompt(
             evolutionSettings.currentState,
             evolutionSettings.sectionConfigs,
-            evolutionSettings.privacy
+            evolutionSettings.privacy,
+            promptProjection
         )
         : '';
     const memoryBuilder = typeof arg.buildServerMemoryMessages === 'function'

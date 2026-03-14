@@ -1,6 +1,7 @@
 import type {
     CharacterEvolutionItem,
     CharacterEvolutionPrivacySettings,
+    CharacterEvolutionPromptProjectionPolicy,
     CharacterEvolutionSectionConfig,
     CharacterEvolutionState,
 } from "../storage/database.types"
@@ -20,8 +21,9 @@ export function renderCharacterEvolutionStateForPrompt(
     stateRaw: CharacterEvolutionState,
     sectionConfigsRaw: CharacterEvolutionSectionConfig[],
     privacyRaw?: CharacterEvolutionPrivacySettings,
+    promptProjectionRaw?: CharacterEvolutionPromptProjectionPolicy | null,
 ): string {
-    const state = projectCharacterEvolutionStateForPrompt(stateRaw, "generation")
+    const state = projectCharacterEvolutionStateForPrompt(stateRaw, "generation", promptProjectionRaw)
     const sectionConfigs = normalizeCharacterEvolutionSectionConfigs(sectionConfigsRaw)
     const privacy = normalizeCharacterEvolutionPrivacy(privacyRaw)
     const lines: string[] = []

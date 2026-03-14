@@ -8,6 +8,7 @@ import {
     DEFAULT_EXTRACTION_PROMPT,
     DEFAULT_PRIVACY,
 } from "./constants"
+import { createCharacterEvolutionPromptProjectionPolicy } from "./projectionPolicy"
 
 export function clone<T>(value: T): T {
     return JSON.parse(JSON.stringify(value)) as T
@@ -59,5 +60,6 @@ export function createDefaultCharacterEvolutionDefaults(): CharacterEvolutionDef
         extractionPrompt: DEFAULT_EXTRACTION_PROMPT,
         sectionConfigs: createDefaultCharacterEvolutionSectionConfigs(),
         privacy: clone(DEFAULT_PRIVACY),
+        promptProjection: createCharacterEvolutionPromptProjectionPolicy(),
     }
 }

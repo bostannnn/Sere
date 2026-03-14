@@ -5,6 +5,7 @@ const {
     normalizeCharacterEvolutionExtractionModel,
 } = require('./schema.cjs');
 const { normalizeCharacterEvolutionItemSourceRange } = require('./items.cjs');
+const { normalizeCharacterEvolutionPromptProjectionPolicy } = require('./projection_policy.cjs');
 const { normalizeCharacterEvolutionRangeRef } = require('./range.cjs');
 const { toTrimmedString } = require('./utils.cjs');
 
@@ -132,6 +133,7 @@ function normalizeCharacterEvolutionDefaults(raw) {
         extractionPrompt: toTrimmedString(value.extractionPrompt) || defaults.extractionPrompt,
         sectionConfigs: normalizeCharacterEvolutionSectionConfigs(value.sectionConfigs),
         privacy: normalizeCharacterEvolutionPrivacy(value.privacy),
+        promptProjection: normalizeCharacterEvolutionPromptProjectionPolicy(value.promptProjection),
     };
 }
 

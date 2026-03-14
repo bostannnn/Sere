@@ -164,13 +164,63 @@ describe("character evolution render", () => {
 
         expect(promptMessages[1]?.content).toContain("\"value\": \"Keep the diner promise\"")
         expect(promptMessages[1]?.content).toContain("\"confidence\": \"likely\"")
-        expect(promptMessages[1]?.content).toContain("\"status\": \"active\"")
+        expect(promptMessages[1]?.content).not.toContain("\"status\"")
         expect(promptMessages[1]?.content).not.toContain("Came up twice in the last handoff.")
         expect(promptMessages[1]?.content).not.toContain("\"sourceChatId\"")
         expect(promptMessages[1]?.content).not.toContain("\"sourceRange\"")
         expect(promptMessages[1]?.content).not.toContain("\"updatedAt\"")
         expect(promptMessages[1]?.content).not.toContain("\"lastSeenAt\"")
         expect(promptMessages[1]?.content).not.toContain("\"timesSeen\"")
+    })
+
+    it("does not leak disabled or privacy-blocked sections into extractor state JSON", () => {
+        const state = createDefaultCharacterEvolutionState()
+        state.characterIntimatePreferences = [
+            {
+                value: "secret preference",
+                status: "active",
+                confidence: "confirmed",
+            },
+        ]
+        const sectionConfigs = createDefaultCharacterEvolutionSectionConfigs()
+        const { buildCharacterEvolutionPromptMessages } = require("../../../server/node/llm/character_evolution/prompt_builder.cjs")
+
+        const promptMessages = buildCharacterEvolutionPromptMessages({
+            settings: {
+                username: "User",
+            },
+            character: {
+                name: "Eva",
+                characterEvolution: {
+                    enabled: true,
+                    useGlobalDefaults: false,
+                    extractionProvider: "openrouter",
+                    extractionModel: "anthropic/claude-3.5-haiku",
+                    extractionMaxTokens: 2400,
+                    extractionPrompt: "prompt",
+                    sectionConfigs,
+                    privacy: {
+                        allowCharacterIntimatePreferences: false,
+                        allowUserIntimatePreferences: false,
+                    },
+                    currentStateVersion: 1,
+                    currentState: state,
+                    stateVersions: [],
+                },
+            },
+            chat: {
+                id: "chat-1",
+                message: [],
+            },
+            sourceRange: {
+                chatId: "chat-1",
+                startMessageIndex: 0,
+                endMessageIndex: 0,
+            },
+        })
+
+        expect(promptMessages[1]?.content).not.toContain("secret preference")
+        expect(promptMessages[1]?.content).toContain('"characterIntimatePreferences": []')
     })
 
     it("caps extracted current state instead of sending every active fact forever", () => {

@@ -5,6 +5,7 @@ import { createDefaultCharacterEvolutionSectionConfigs, createDefaultCharacterEv
 import type {
     CharacterEvolutionPendingProposal,
     CharacterEvolutionPrivacySettings,
+    CharacterEvolutionSettings,
     CharacterEvolutionState,
 } from "src/ts/storage/database.types";
 import EvolutionSetupPanel from "src/lib/SideBars/Evolution/EvolutionSetupPanel.svelte";
@@ -82,7 +83,7 @@ function createProposal(
     };
 }
 
-function createSetupCharacter() {
+function createSetupCharacter(): { characterEvolution: CharacterEvolutionSettings } {
     return {
         characterEvolution: {
             enabled: true,
@@ -91,9 +92,13 @@ function createSetupCharacter() {
             extractionModel: "mistralai/mistral-large-2512",
             extractionMaxTokens: 16000,
             extractionPrompt: "",
+            sectionConfigs: createDefaultCharacterEvolutionSectionConfigs(),
             privacy: createPrivacy(),
+            currentStateVersion: 0,
+            currentState: createDefaultCharacterEvolutionState(),
+            stateVersions: [],
         },
-    } as never;
+    };
 }
 
 const mountedComponents: Array<unknown> = [];

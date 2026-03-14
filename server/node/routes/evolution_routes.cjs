@@ -33,6 +33,7 @@ function registerEvolutionRoutes(arg = {}) {
         getLastProcessedMessageIndexForChat = require('../llm/character_evolution.cjs').getLastProcessedMessageIndexForChat,
         isRangeFullyCoveredByProcessedRanges = require('../llm/character_evolution.cjs').isRangeFullyCoveredByProcessedRanges,
         getEffectiveCharacterEvolutionSettings = require('../llm/character_evolution.cjs').getEffectiveCharacterEvolutionSettings,
+        getCharacterEvolutionProposalValidationError = require('../llm/character_evolution/proposal.cjs').getCharacterEvolutionProposalValidationError,
         normalizeCharacterEvolutionProposal = require('../llm/character_evolution.cjs').normalizeCharacterEvolutionProposal,
         normalizeCharacterEvolutionPrivacy = require('../llm/character_evolution.cjs').normalizeCharacterEvolutionPrivacy,
         normalizeCharacterEvolutionRangeRef = require('../llm/character_evolution.cjs').normalizeCharacterEvolutionRangeRef,
@@ -349,13 +350,25 @@ function registerEvolutionRoutes(arg = {}) {
             };
             throw new LLMHttpError(502, 'EVOLUTION_PARSE_FAILED', 'Extraction model returned invalid JSON.');
         }
-        const { character: latestCharacter } = await loadCharacterAndSettings(characterId);
+        const { settings: latestSettings, character: latestCharacter } = await loadCharacterAndSettings(characterId);
+        const latestEffectiveEvolution = resolveEffectiveEvolutionSettings(latestSettings, latestCharacter);
         const latestEvolution = normalizeCharacterEvolutionSettings(latestCharacter.characterEvolution);
         if (latestEvolution.pendingProposal) {
             throw new LLMHttpError(409, 'PENDING_PROPOSAL_EXISTS', 'Another evolution handoff finished first. Review the current proposal before running another handoff.');
         }
         assertHandoffRangeAllowed(latestEvolution, sourceRange, getChatLastMessageIndex(chat), forceReplay);
-        const proposalPayload = normalizeCharacterEvolutionProposal(parsed, evolution);
+        const proposalValidationError = getCharacterEvolutionProposalValidationError(parsed, latestEffectiveEvolution);
+        if (proposalValidationError) {
+            req._characterEvolutionAudit.rawResult = rawResult;
+            req._characterEvolutionAudit.metadata = {
+                model: evolution.extractionModel,
+                maxTokens: evolution.extractionMaxTokens,
+                reason: 'invalid_proposal',
+                validationError: proposalValidationError,
+            };
+            throw new LLMHttpError(502, 'EVOLUTION_INVALID_PROPOSAL', proposalValidationError);
+        }
+        const proposalPayload = normalizeCharacterEvolutionProposal(parsed, latestEffectiveEvolution);
         const pendingProposalCreatedAt = Date.now();
         const normalizedProposalState = resolveCharacterEvolutionStateConflicts({
             currentState: latestEvolution.currentState,
