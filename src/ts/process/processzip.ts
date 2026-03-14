@@ -3,7 +3,7 @@ import * as fflate from "fflate";
 import { asBuffer, Semaphore } from "../util";
 import { alertStore } from "../alert";
 import { hasher } from "../parser.svelte";
-import { hubURL } from "../characterCards";
+import { hubURL } from "../characterCards.shared";
 
 // File size and chunk size constants
 const MAX_ASSET_SIZE_BYTES = 50 * 1024 * 1024; // 50MB

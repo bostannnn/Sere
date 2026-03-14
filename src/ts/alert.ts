@@ -212,8 +212,11 @@ export async function alertCardExport(type:string = ''){
     await waitAlert()
 
     return JSON.parse(get(alertStoreImported).msg) as {
-        type: string,
-        type2: string,
+        format: "png" | "json" | "charx" | "charxJpeg",
+        includeChats: boolean,
+        includeMemories: boolean,
+        includeEvolution: boolean,
+        cancelled: boolean,
     }
 }
 

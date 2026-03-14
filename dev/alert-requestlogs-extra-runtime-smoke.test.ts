@@ -1,6 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mount, tick, unmount } from "svelte";
 import { get } from "svelte/store";
+import AlertComp from "src/lib/Others/AlertComp.svelte";
+import { alertGenerationInfoStore } from "src/ts/alert";
+import { alertStore } from "src/ts/stores.svelte";
 
 const hoisted = vi.hoisted(() => ({
   getFetchLogs: vi.fn(() => [
@@ -192,77 +195,56 @@ vi.mock(import("src/ts/globalApi.svelte"), () => ({
   getFetchData: hoisted.getFetchData,
   getServerLLMLogs: hoisted.getServerLLMLogs,
 }));
-
 vi.mock(import("src/ts/platform"), () => ({
   get isNodeServer() {
     return hoisted.isNodeServer;
   },
 }));
-
 vi.mock(import("src/ts/characters"), () => ({
   getCharImage: vi.fn(async () => null),
 }));
-
 vi.mock(import("src/ts/parser.svelte"), () => ({
   ParseMarkdown: vi.fn(async () => ""),
 }));
-
 vi.mock(import("src/ts/characterCards"), () => ({
   isCharacterHasAssets: vi.fn(() => false),
 }));
-
 vi.mock(import("src/ts/tokenizer"), () => ({
   tokenize: vi.fn(async () => 13),
 }));
-
 vi.mock(import("src/ts/gui/colorscheme"), async () => {
   const { writable } = await import("svelte/store");
   return {
     ColorSchemeTypeStore: writable(false),
   };
 });
-
 vi.mock(import("src/ts/gui/branches"), () => ({
   getChatBranches: hoisted.getChatBranches,
 }));
-
 vi.mock(import("src/ts/storage/database.svelte"), () => ({
   getCurrentCharacter: hoisted.getCurrentCharacter,
 }));
-
 vi.mock(import("src/ts/sourcemap"), () => ({
   translateStackTrace: vi.fn(async () => "Translated stack trace"),
 }));
-
 vi.mock(import("src/lib/SideBars/BarIcon.svelte"), async () => ({
   default: (await import("./test-stubs/SimplePanelStub.svelte")).default,
 }));
-
 vi.mock(import("src/lib/UI/GUI/TextInput.svelte"), async () => ({
   default: (await import("./test-stubs/BindableFieldStub.svelte")).default,
 }));
-
 vi.mock(import("src/lib/UI/GUI/SelectInput.svelte"), async () => ({
   default: (await import("./test-stubs/BindableFieldStub.svelte")).default,
 }));
-
 vi.mock(import("src/lib/UI/GUI/OptionInput.svelte"), async () => ({
   default: (await import("./test-stubs/SimplePanelStub.svelte")).default,
 }));
-
 vi.mock(import("src/lib/UI/GUI/TextAreaInput.svelte"), async () => ({
   default: (await import("./test-stubs/BindableFieldStub.svelte")).default,
 }));
-
 vi.mock(import("src/lib/Setting/Pages/Module/ModuleChatMenu.svelte"), async () => ({
   default: (await import("./test-stubs/SimplePanelStub.svelte")).default,
 }));
-
-import AlertComp from "src/lib/Others/AlertComp.svelte";
-import { alertGenerationInfoStore } from "src/ts/alert";
-import { alertStore } from "src/ts/stores.svelte";
-
-let app: Record<string, unknown> | undefined;
 
 async function flushUi() {
   await tick();
@@ -270,17 +252,24 @@ async function flushUi() {
   await new Promise((resolve) => setTimeout(resolve, 0));
 }
 
-describe("alert comp runtime smoke", () => {
+describe("alert comp extra runtime smoke", () => {
+  let app: ReturnType<typeof mount> | null = null;
+
   beforeEach(() => {
+    document.body.innerHTML = "";
     hoisted.getFetchLogs.mockClear();
     hoisted.getFetchData.mockReset();
     hoisted.getFetchData.mockReturnValue(null);
-    hoisted.getServerLLMLogs.mockClear();
+    hoisted.getServerLLMLogs.mockReset();
+    hoisted.getServerLLMLogs.mockResolvedValue([]);
     hoisted.getChatBranches.mockReset();
     hoisted.getChatBranches.mockReturnValue([]);
-    hoisted.isNodeServer = false;
-    hoisted.getCurrentCharacter.mockClear();
+    hoisted.getCurrentCharacter.mockReset();
+    hoisted.getCurrentCharacter.mockReturnValue({
+      chats: [{ message: [{ data: "Branch preview" }] }],
+    });
     hoisted.clipboardWriteText.mockClear();
+    hoisted.isNodeServer = false;
     Object.defineProperty(navigator, "clipboard", {
       configurable: true,
       value: {
@@ -301,20 +290,21 @@ describe("alert comp runtime smoke", () => {
       type: "none",
       msg: "",
     });
-    document.body.innerHTML = "";
   });
 
   afterEach(async () => {
     if (app) {
       await unmount(app);
-      app = undefined;
+      app = null;
     }
+    document.body.innerHTML = "";
   });
 
-  it("routes requestlogs store type to RequestLogsViewer", async () => {
+  it("writes card export selections back to alertStore", async () => {
     alertStore.set({
-      type: "requestlogs",
-      msg: "client",
+      type: "cardexport",
+      msg: "",
+      submsg: "",
     });
 
     const target = document.createElement("div");
@@ -322,27 +312,106 @@ describe("alert comp runtime smoke", () => {
     app = mount(AlertComp, { target });
     await flushUi();
 
-    const modalShell = document.querySelector(".alert-requestlog-modal.panel-shell") as HTMLElement | null;
-    expect(modalShell).not.toBeNull();
-    expect((document.querySelector(".alert-requestlog-title")?.textContent ?? "").includes("Session Logs")).toBe(true);
+    const exportButton = document.querySelector(".alert-cardexport-submit") as HTMLButtonElement | null;
+    expect(exportButton).not.toBeNull();
+    exportButton?.click();
+    await flushUi();
+
+    expect(get(alertStore).type).toBe("none");
+    expect(JSON.parse(get(alertStore).msg)).toEqual({
+      format: "json",
+      includeChats: false,
+      includeMemories: false,
+      includeEvolution: false,
+      cancelled: false,
+    });
   });
 
-  it("remounts the request logs viewer when switching sources so server logs load immediately", async () => {
-    hoisted.isNodeServer = true;
-    hoisted.getServerLLMLogs.mockImplementation(async () => [
-      {
-        timestamp: "2026-03-12T08:00:00.000Z",
-        requestId: "req-server-switch",
-        path: "/data/llm/execute",
-        endpoint: "execute",
-        status: 200,
+  it("renders requestdata log tab and copies the request body", async () => {
+    hoisted.getFetchData.mockReturnValue({
+      url: "https://example.test/data/llm/generate",
+      body: {
+        hello: "world",
+      },
+      response: {
         ok: true,
       },
+    });
+    alertStore.set({
+      type: "requestdata",
+      msg: "gen-1",
+    });
+
+    const target = document.createElement("div");
+    document.body.appendChild(target);
+    app = mount(AlertComp, { target });
+    await flushUi();
+
+    const toolbarButtons = [...document.querySelectorAll(".alert-inline-toolbar .ds-ui-button")] as HTMLButtonElement[];
+    expect(toolbarButtons.length).toBeGreaterThanOrEqual(4);
+    toolbarButtons[2]?.click();
+    await flushUi();
+
+    const copyButtons = [...document.querySelectorAll(".alert-requestdata-actions .ds-ui-button")] as HTMLButtonElement[];
+    expect(copyButtons.length).toBeGreaterThanOrEqual(3);
+    copyButtons[2]?.click();
+    await flushUi();
+
+    expect(hoisted.clipboardWriteText).toHaveBeenCalledWith(expect.stringContaining('"hello": "world"'));
+    const codeBlocks = [...document.querySelectorAll(".alert-code-block")] as HTMLElement[];
+    expect(
+      codeBlocks.some((block) =>
+        (block.textContent ?? "").includes("https://example.test/data/llm/generate"),
+      ),
+    ).toBe(true);
+  });
+
+  it("falls back to the best durable server log when client request data is missing", async () => {
+    hoisted.isNodeServer = true;
+    hoisted.getFetchData.mockReturnValue(null);
+    hoisted.getServerLLMLogs.mockResolvedValue([
+      {
+        requestId: "req-wrong",
+        timestamp: "2024-03-09T15:59:59.000Z",
+        endpoint: "generate",
+        mode: "model",
+        path: "/data/llm/generate",
+        request: JSON.stringify({
+          requestBody: {
+            model: "other-model",
+            messages: [{ role: "user", content: "Different prompt" }],
+          },
+        }),
+        response: JSON.stringify({ id: "resp-wrong" }),
+      },
+      {
+        requestId: "req-good",
+        timestamp: "2024-03-09T16:00:01.050Z",
+        endpoint: "generate",
+        mode: "model",
+        path: "/data/llm/generate",
+        status: 200,
+        ok: true,
+        durationMs: 1200,
+        request: JSON.stringify({
+          requestBody: {
+            model: "openrouter/test-model",
+            messages: [
+              { role: "system", content: "You are helpful" },
+              { role: "user", content: "Hello" },
+            ],
+          },
+        }),
+        response: JSON.stringify({
+          id: "resp-good",
+          ok: true,
+        }),
+        error: null,
+      },
     ]);
-
     alertStore.set({
-      type: "requestlogs",
-      msg: "client",
+      type: "requestdata",
+      msg: "missing-gen-id",
     });
 
     const target = document.createElement("div");
@@ -350,57 +419,52 @@ describe("alert comp runtime smoke", () => {
     app = mount(AlertComp, { target });
     await flushUi();
 
-    expect(hoisted.getServerLLMLogs).toHaveBeenCalledTimes(0);
-    expect((document.querySelector(".alert-requestlog-title")?.textContent ?? "").includes("Session Logs")).toBe(true);
+    const toolbarButtons = [...document.querySelectorAll(".alert-inline-toolbar .ds-ui-button")] as HTMLButtonElement[];
+    expect(toolbarButtons.length).toBeGreaterThanOrEqual(4);
+    toolbarButtons[2]?.click();
+    await flushUi();
+    await flushUi();
 
-    alertStore.set({
-      type: "requestlogs",
-      msg: "server",
+    expect(hoisted.getServerLLMLogs).toHaveBeenCalledWith({ limit: 200, chatId: "chat-1" });
+
+    const codeBlocks = [...document.querySelectorAll(".alert-code-block")] as HTMLElement[];
+    expect(codeBlocks.some((block) => (block.textContent ?? "").includes("/data/llm/generate [req:req-good]"))).toBe(true);
+    expect(codeBlocks.some((block) => (block.textContent ?? "").includes('"model": "openrouter/test-model"'))).toBe(true);
+
+    const copyButton = document.querySelector(".alert-requestdata-actions .ds-ui-button") as HTMLButtonElement | null;
+    expect(copyButton).not.toBeNull();
+    copyButton?.click();
+    await flushUi();
+
+    expect(hoisted.clipboardWriteText).toHaveBeenCalledWith(
+      expect.stringContaining('"model": "openrouter/test-model"'),
+    );
+  });
+
+  it("shows branch hover preview and closes the overlay", async () => {
+    hoisted.getChatBranches.mockReturnValue([
+      {
+        x: 1,
+        y: 1,
+        connectX: 1,
+        multiChild: false,
+        chatId: 0,
+      },
+    ]);
+    hoisted.getCurrentCharacter.mockReturnValue({
+      chats: [
+        {
+          message: [
+            {
+              data: "Branch preview",
+            },
+          ],
+        },
+      ],
     });
-    await flushUi();
-
-    expect(hoisted.getServerLLMLogs).toHaveBeenCalledTimes(1);
-    expect((document.querySelector(".alert-requestlog-title")?.textContent ?? "").includes("Server LLM Logs")).toBe(true);
-    expect((document.body.textContent ?? "").includes("/data/llm/execute")).toBe(true);
-  });
-
-  it("renders error stack traces as inert text", async () => {
-    const payload =
-      '<img src="x" onerror="window.__alertStackXss=1">\\n<script>window.__alertStackXss=2</script>\\nError: boom';
-    const xssWindow = window as unknown as { __alertStackXss?: number };
-    delete xssWindow.__alertStackXss;
-
     alertStore.set({
-      type: "error",
-      msg: "Boom",
-      stackTrace: payload,
-    } as never);
-
-    const target = document.createElement("div");
-    document.body.appendChild(target);
-    app = mount(AlertComp, { target });
-    await flushUi();
-
-    const showDetailsButton = document.querySelector(".alert-section-gap-top button") as HTMLButtonElement | null;
-    expect(showDetailsButton).not.toBeNull();
-    showDetailsButton?.click();
-    await flushUi();
-
-    const stackTrace = document.querySelector(".stack-trace") as HTMLElement | null;
-    expect(stackTrace).not.toBeNull();
-    expect(stackTrace?.querySelector("img")).toBeNull();
-    expect(stackTrace?.querySelector("script")).toBeNull();
-    expect((stackTrace?.textContent ?? "").includes("<img src=\"x\"")).toBe(true);
-    expect((stackTrace?.textContent ?? "").includes("<script>window.__alertStackXss=2</script>")).toBe(true);
-    expect((stackTrace?.innerHTML ?? "").includes("&lt;img")).toBe(true);
-    expect((stackTrace?.innerHTML ?? "").includes("&lt;script&gt;")).toBe(true);
-    expect(xssWindow.__alertStackXss).toBeUndefined();
-  });
-
-  it("keeps wait alerts visually present without blocking interaction", async () => {
-    alertStore.set({
-      type: "wait",
-      msg: "Loading...",
+      type: "branches",
+      msg: "",
     });
 
     const target = document.createElement("div");
@@ -408,9 +472,18 @@ describe("alert comp runtime smoke", () => {
     app = mount(AlertComp, { target });
     await flushUi();
 
-    const overlay = document.querySelector(".alert-overlay") as HTMLElement | null;
-    expect(overlay).not.toBeNull();
-    expect(overlay?.classList.contains("alert-overlay-passive")).toBe(true);
-  });
+    const branchNode = document.querySelector(".alert-branch-node") as HTMLElement | null;
+    expect(branchNode).not.toBeNull();
+    branchNode?.dispatchEvent(new MouseEvent("mouseenter", { bubbles: true }));
+    await flushUi();
 
+    const tooltip = document.querySelector(".alert-branch-tooltip") as HTMLElement | null;
+    expect((tooltip?.textContent ?? "").includes("Branch preview")).toBe(true);
+
+    const closeButton = document.querySelector(".alert-branch-close-button") as HTMLButtonElement | null;
+    expect(closeButton).not.toBeNull();
+    closeButton?.click();
+    await flushUi();
+    expect(get(alertStore).type).toBe("none");
+  });
 });

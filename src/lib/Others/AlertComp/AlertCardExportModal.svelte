@@ -1,9 +1,11 @@
 <script lang="ts">
     import { XIcon } from "@lucide/svelte";
     import Button from "src/lib/UI/GUI/Button.svelte";
+    import CheckInput from "src/lib/UI/GUI/CheckInput.svelte";
     import SelectInput from "src/lib/UI/GUI/SelectInput.svelte";
     import OptionInput from "src/lib/UI/GUI/OptionInput.svelte";
     import { isCharacterHasAssets } from "src/ts/characterCards";
+    import { normalizeCardExportSelection, type CardExportScope, type CardExportFormat } from "src/ts/cardExportOptions";
     import { alertStore, DBState, selectedCharID } from "src/ts/stores.svelte";
     import { language } from "src/lang";
     import type { AlertState } from "./types";
@@ -14,19 +16,52 @@
 
     const { alert }: Props = $props();
 
-    let cardExportType = $state("");
-    let cardExportType2 = $state("");
+    const scope = $derived<CardExportScope>(alert.submsg === "preset"
+        ? "preset"
+        : alert.submsg === "module"
+            ? "module"
+            : "character");
+    const isCharacterExport = $derived(scope === "character");
 
-    function finish(type: string, type2: string) {
+    let format = $state<CardExportFormat>("json");
+    let includeChats = $state(false);
+    let includeMemories = $state(false);
+    let includeEvolution = $state(false);
+
+    function setFormat(nextFormat: CardExportFormat) {
+        format = nextFormat;
+        if (nextFormat !== "json") {
+            includeChats = false;
+            includeMemories = false;
+            includeEvolution = false;
+        }
+    }
+
+    function setIncludeChats(nextValue: boolean) {
+        includeChats = nextValue;
+        if (!nextValue) {
+            includeMemories = false;
+        }
+    }
+
+    function finish(cancelled = false) {
+        const selection = normalizeCardExportSelection({
+            format,
+            includeChats,
+            includeMemories,
+            includeEvolution,
+            cancelled,
+        }, scope);
         alertStore.set({
             type: "none",
-            msg: JSON.stringify({ type, type2 }),
+            msg: JSON.stringify(selection),
         });
     }
 
     function close() {
-        finish("cancel", cardExportType2);
+        finish(true);
     }
+
 </script>
 
 <!-- svelte-ignore a11y_click_events_have_key_events -->
@@ -64,84 +99,76 @@
             </button>
         </h1>
         <span class="alert-cardexport-subtitle">{language.type}</span>
-        {#if cardExportType === ""}
-            {#if alert.submsg === "module"}
-                <span class="alert-cardexport-desc">{language.risuMDesc}</span>
-            {:else if alert.submsg === "preset"}
-                <span class="alert-cardexport-desc">{language.risupresetDesc}</span>
-                {#if cardExportType2 === "preset" && (DBState.db.botPresets[DBState.db.botPresetsId].image || DBState.db.botPresets[DBState.db.botPresetsId].regex?.length > 0)}
-                    <span class="alert-note-danger alert-text-sm">Preset with image or regexes cannot be exported for now.</span>
-                {/if}
-            {:else}
-                <span class="alert-cardexport-desc">{language.ccv3Desc}</span>
-                {#if cardExportType2 !== "charx" && cardExportType2 !== "charxJpeg" && isCharacterHasAssets(DBState.db.characters[$selectedCharID])}
-                    <span class="alert-note-danger alert-text-sm">{language.notCharxWarn}</span>
-                {/if}
+        {#if scope === "module"}
+            <span class="alert-cardexport-desc">{language.risuMDesc}</span>
+        {:else if scope === "preset"}
+            <span class="alert-cardexport-desc">{language.risupresetDesc}</span>
+            {#if DBState.db.botPresets[DBState.db.botPresetsId].image || DBState.db.botPresets[DBState.db.botPresetsId].regex?.length > 0}
+                <span class="alert-note-danger alert-text-sm">Preset with image or regexes cannot be exported for now.</span>
             {/if}
-        {:else if cardExportType === "json"}
-            <span class="alert-cardexport-desc">{language.jsonDesc}</span>
-        {:else if cardExportType === "ccv2"}
-            <span class="alert-cardexport-desc">{language.ccv2Desc}</span>
-            <span class="alert-note-danger alert-text-sm">{language.v2Warning}</span>
+        {:else}
+            <span class="alert-cardexport-desc">{language.ccv3Desc}</span>
+            {#if format !== "charx" && format !== "charxJpeg" && isCharacterHasAssets(DBState.db.characters[$selectedCharID])}
+                <span class="alert-note-danger alert-text-sm">{language.notCharxWarn}</span>
+            {/if}
         {/if}
 
-        <div class="alert-cardexport-type-row">
-            {#if alert.submsg === "preset"}
-                <button
-                    type="button"
-                    class="alert-cardexport-type-button"
-                    class:alert-cardexport-type-button-active={cardExportType === ""}
-                    title="Risupreset"
-                    aria-label="Select Risupreset export"
-                    aria-pressed={cardExportType === ""}
-                    onclick={() => cardExportType = ""}
-                >Risupreset</button>
-            {:else if alert.submsg === "module"}
-                <button
-                    type="button"
-                    class="alert-cardexport-type-button"
-                    class:alert-cardexport-type-button-active={cardExportType === ""}
-                    title="RisuM"
-                    aria-label="Select RisuM export"
-                    aria-pressed={cardExportType === ""}
-                    onclick={() => cardExportType = ""}
-                >RisuM</button>
-            {:else}
-                <button
-                    type="button"
-                    class="alert-cardexport-type-button"
-                    class:alert-cardexport-type-button-active={cardExportType === ""}
-                    title="Character Card V3"
-                    aria-label="Select Character Card V3 export"
-                    aria-pressed={cardExportType === ""}
-                    onclick={() => {
-                        cardExportType = "";
-                        cardExportType2 = "charxJpeg";
-                    }}
-                >Character Card V3</button>
-                <button
-                    type="button"
-                    class="alert-cardexport-type-button"
-                    class:alert-cardexport-type-button-active={cardExportType === "ccv2"}
-                    title="Character Card V2"
-                    aria-label="Select Character Card V2 export"
-                    aria-pressed={cardExportType === "ccv2"}
-                    onclick={() => cardExportType = "ccv2"}
-                >Character Card V2</button>
-            {/if}
-        </div>
+        {#if scope !== "character"}
+            <div class="alert-cardexport-type-row">
+                {#if scope === "preset"}
+                    <button
+                        type="button"
+                        class="alert-cardexport-type-button alert-cardexport-type-button-active"
+                        title="Risupreset"
+                        aria-label="Select Risupreset export"
+                        aria-pressed={true}
+                    >Risupreset</button>
+                {:else}
+                    <button
+                        type="button"
+                        class="alert-cardexport-type-button alert-cardexport-type-button-active"
+                        title="RisuM"
+                        aria-label="Select RisuM export"
+                        aria-pressed={true}
+                    >RisuM</button>
+                {/if}
+            </div>
+        {/if}
 
-        {#if alert.submsg === "" && cardExportType === ""}
+        {#if isCharacterExport}
             <span class="alert-cardexport-subtitle">{language.format}</span>
-            <SelectInput bind:value={cardExportType2} className="alert-cardexport-select">
+            <SelectInput
+                value={format}
+                className="alert-cardexport-select"
+                onchange={(event) => {
+                    setFormat(event.currentTarget.value as CardExportFormat);
+                }}
+            >
                 <OptionInput value="charx">CHARX</OptionInput>
                 <OptionInput value="charxJpeg">CHARX-JPEG</OptionInput>
-                <OptionInput value="">PNG</OptionInput>
+                <OptionInput value="png">PNG</OptionInput>
                 <OptionInput value="json">JSON</OptionInput>
             </SelectInput>
         {/if}
 
-        <Button className="alert-cardexport-submit" onclick={() => finish(cardExportType, cardExportType2)}>
+        {#if isCharacterExport && format === "json"}
+            <div class="alert-cardexport-options">
+                <CheckInput
+                    check={includeChats}
+                    name="Chats"
+                    onChange={(value) => {
+                        setIncludeChats(value);
+                    }}
+                />
+                <CheckInput bind:check={includeMemories} name="Memories" disabled={!includeChats} />
+                <CheckInput bind:check={includeEvolution} name="Evolution" />
+                <span class="alert-cardexport-hint">Memories requires chats.</span>
+            </div>
+        {:else if isCharacterExport}
+            <span class="alert-cardexport-hint">Other formats export the base character card only.</span>
+        {/if}
+
+        <Button className="alert-cardexport-submit" onclick={() => finish()}>
             {language.export}
         </Button>
     </div>
@@ -224,6 +251,19 @@
 
     :global(.alert-cardexport-submit) {
         margin-top: var(--ds-space-4);
+    }
+
+    .alert-cardexport-options {
+        margin-top: var(--ds-space-3);
+        display: flex;
+        flex-direction: column;
+        gap: var(--ds-space-2);
+    }
+
+    .alert-cardexport-hint {
+        margin-top: var(--ds-space-2);
+        color: var(--ds-text-secondary);
+        font-size: var(--ds-font-size-sm);
     }
 
     .alert-close-button {

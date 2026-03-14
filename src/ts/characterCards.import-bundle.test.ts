@@ -235,7 +235,7 @@ function createCharacter(overrides: Record<string, unknown> = {}) {
   };
 }
 
-describe("character card memory compatibility", () => {
+describe("character card import and bundle compatibility", () => {
   beforeEach(() => {
     globalThis.safeStructuredClone = structuredClone as typeof globalThis.safeStructuredClone;
     shared.db = {
@@ -257,116 +257,36 @@ describe("character card memory compatibility", () => {
     shared.readImageMock.mockImplementation(async () => new Uint8Array([1, 2, 3]));
   });
 
-  it("exports canonical memory prompt override without legacy prompt fields", async () => {
-    const { createBaseV3, exportCharacterCard } = await import("src/ts/characterCards");
-    const char = createCharacter();
-
-    const v3Card = createBaseV3(structuredClone(char) as never);
-    expect(v3Card.data.extensions.risuai?.memoryPromptOverride).toEqual({
-      summarizationPrompt: "Export prompt",
+  it("exports JSON asset data URIs with an extension-based mime fallback", async () => {
+    const { exportCharacterCard } = await import("src/ts/characterCards");
+    shared.checkImageTypeMock.mockReturnValue("Unknown");
+    const char = createCharacter({
+      ccAssets: [
+        {
+          type: "other",
+          uri: "asset://audio",
+          name: "Voice",
+          ext: "ogg",
+        },
+      ],
     });
 
     await exportCharacterCard(structuredClone(char) as never, "json");
-    expect(shared.downloadFileMock).toHaveBeenCalledTimes(1);
 
     const exportedPayload = shared.downloadFileMock.mock.calls[0]?.[1];
     const exportedCard = JSON.parse(Buffer.from(exportedPayload).toString("utf-8"));
-    expect(exportedCard.data.extensions.risuai.memoryPromptOverride).toEqual({
-      summarizationPrompt: "Export prompt",
-    });
+
+    expect(exportedCard.data.assets[0].uri).toMatch(/^data:audio\/ogg;base64,/);
+    expect(exportedCard.data.assets[0].ext).toBe("ogg");
   });
 
-  it("exports an empty character version when additional data is missing", async () => {
-    const { createBaseV3 } = await import("src/ts/characterCards");
-    const char = createCharacter({
-      additionalData: undefined,
-    });
-
-    const v3Card = createBaseV3(structuredClone(char) as never);
-
-    expect(v3Card.data.character_version).toBe("");
-  });
-
-  it("includes the main icon asset for avatar-only V3 exports", async () => {
-    const { createBaseV3 } = await import("src/ts/characterCards");
-    const char = createCharacter({
-      ccAssets: [],
-      emotionImages: [],
-      image: "asset-id",
-    });
-
-    const v3Card = createBaseV3(structuredClone(char) as never);
-
-    expect(v3Card.data.assets).toContainEqual({
-      type: "icon",
-      uri: "ccdefault:",
-      name: "main",
-      ext: "png",
-    });
-  });
-
-  it("does not mutate lore extensions when creating a V3 card", async () => {
-    const { createBaseV3 } = await import("src/ts/characterCards");
-    const char = createCharacter({
-      loreExt: undefined,
-      loreSettings: {
-        scanDepth: 0,
-        tokenBudget: 0,
-        recursiveScanning: false,
-        fullWordMatching: true,
-      },
-    });
-
-    const v3Card = createBaseV3(char as never);
-
-    expect(char.loreExt).toBeUndefined();
-    expect(v3Card.data.character_book?.extensions?.risu_fullWordMatching).toBe(true);
-  });
-
-  it("does not mutate the source character image during export", async () => {
-    const { exportCharacterCard } = await import("src/ts/characterCards");
-    const char = createCharacter({
-      image: "asset-id",
-    });
-
-    await exportCharacterCard(char as never, "json");
-
-    expect(char.image).toBe("asset-id");
-  });
-
-  it("reports invalid image reads via alertError instead of throwing", async () => {
-    const { exportCharacterCard } = await import("src/ts/characterCards");
-    const char = createCharacter({
-      image: "broken-asset-id",
-    });
-    const imageError = new Error("Missing image");
-    shared.readImageMock.mockRejectedValueOnce(imageError);
-
-    await expect(exportCharacterCard(char as never, "json")).resolves.toBeUndefined();
-
-    expect(shared.alertErrorMock).toHaveBeenCalledTimes(1);
-    expect(shared.alertErrorMock).toHaveBeenCalledWith(imageError);
-    expect(shared.downloadFileMock).not.toHaveBeenCalled();
-  });
-
-  it("shows the JSON export success alert only once", async () => {
-    const { exportCharacterCard } = await import("src/ts/characterCards");
-    const char = createCharacter();
-
-    await exportCharacterCard(structuredClone(char) as never, "json");
-
-    expect(shared.downloadFileMock).toHaveBeenCalledTimes(1);
-    expect(shared.alertNormalMock).toHaveBeenCalledTimes(1);
-    expect(shared.alertNormalMock).toHaveBeenCalledWith("Exported");
-  });
-
-  it("imports an empty character version when the card omits it", async () => {
+  it("imports canonical memory prompt override", async () => {
     const { importCharacterProcess } = await import("src/ts/characterCards");
     const card = {
       spec: "chara_card_v3",
       spec_version: "3.0",
       data: {
-        name: "No Version",
+        name: "Legacy Import",
         description: "desc",
         personality: "kind",
         scenario: "scene",
@@ -385,8 +305,13 @@ describe("character card memory compatibility", () => {
         },
         tags: [],
         creator: "",
+        character_version: "",
         extensions: {
-          risuai: {},
+          risuai: {
+            memoryPromptOverride: {
+              summarizationPrompt: "Canonical prompt",
+            },
+          },
         },
         group_only_greetings: [],
         nickname: "",
@@ -398,60 +323,142 @@ describe("character card memory compatibility", () => {
     };
 
     const importedIndex = await importCharacterProcess({
-      name: "missing-version-card.json",
+      name: "canonical-card.json",
       data: new TextEncoder().encode(JSON.stringify(card)),
     });
 
     expect(importedIndex).toBe(0);
+    expect(shared.setDatabaseMock).toHaveBeenCalledTimes(1);
+    expect(shared.db.characters).toHaveLength(1);
+    expect(
+      (shared.db.characters[0]?.memoryPromptOverride as { summarizationPrompt?: string } | undefined)
+        ?.summarizationPrompt,
+    ).toBe("Canonical prompt");
+  });
+
+  it("exports JSON bundles without memory data when memories are disabled", async () => {
+    const { exportCharacterCard } = await import("src/ts/characterCards");
+    const char = createCharacter();
+
+    await exportCharacterCard(structuredClone(char) as never, "json", {
+      selection: {
+        format: "json",
+        includeChats: true,
+        includeMemories: false,
+        includeEvolution: true,
+        cancelled: false,
+      },
+    });
+
+    const exportedPayload = shared.downloadFileMock.mock.calls[0]?.[1];
+    const exportedCard = JSON.parse(Buffer.from(exportedPayload).toString("utf-8"));
+    const bundle = exportedCard.data.extensions.risuai.exportBundleV1;
+
+    expect(bundle.selectedChatId).toBe("chat-2");
+    expect(bundle.chats[0].memoryData).toBeUndefined();
+    expect(bundle.chatFolders).toEqual([{ id: "folder-1", name: "Folder", folded: false }]);
+    expect(bundle.characterEvolution).toEqual(char.characterEvolution);
+  });
+
+  it("round-trips bundled chats, memories, and evolution through JSON import", async () => {
+    const { exportCharacterCard, importCharacterProcess } = await import("src/ts/characterCards");
+    const char = createCharacter();
+
+    await exportCharacterCard(structuredClone(char) as never, "json", {
+      selection: {
+        format: "json",
+        includeChats: true,
+        includeMemories: true,
+        includeEvolution: true,
+        cancelled: false,
+      },
+    });
+
+    const exportedPayload = shared.downloadFileMock.mock.calls[0]?.[1];
+    const importedIndex = await importCharacterProcess({
+      name: "bundle-card.json",
+      data: new Uint8Array(Buffer.from(exportedPayload)),
+    });
+
+    expect(importedIndex).toBe(0);
+    expect(shared.db.characters).toHaveLength(1);
+
     const importedChar = shared.db.characters[0] as Record<string, any>;
-    expect(importedChar.characterVersion).toBe("");
-    expect(importedChar.additionalData.character_version).toBe("");
+    expect(importedChar.chaId).not.toBe("char-original");
+    expect(importedChar.image).toBe("asset-id");
+    expect(importedChar.chats[0].id).toBe("chat-1");
+    expect(importedChar.chats[0].message[0].chatId).toBe("msg-1");
+    expect(importedChar.chats[0].memoryData).toEqual({
+      summaries: [{ text: "Summary 1", chatMemos: ["msg-1"], isImportant: false }],
+    });
+    expect(importedChar.chatPage).toBe(1);
+    expect(importedChar.characterEvolution).toEqual(char.characterEvolution);
   });
 
-  it("exports JSON asset data URIs with a detected image mime type", async () => {
-    const { exportCharacterCard } = await import("src/ts/characterCards");
-    const char = createCharacter({
-      ccAssets: [
-        {
-          type: "icon",
-          uri: "asset://icon",
-          name: "Icon",
-          ext: "png",
+  it("falls back to a default chat when bundle version is unknown", async () => {
+    const { importCharacterProcess } = await import("src/ts/characterCards");
+    const card = {
+      spec: "chara_card_v3",
+      spec_version: "3.0",
+      data: {
+        name: "Invalid Bundle",
+        description: "desc",
+        personality: "kind",
+        scenario: "scene",
+        first_mes: "hello",
+        mes_example: "example",
+        creator_notes: "",
+        system_prompt: "",
+        post_history_instructions: "",
+        alternate_greetings: [],
+        character_book: {
+          scan_depth: 0,
+          token_budget: 0,
+          recursive_scanning: false,
+          extensions: {},
+          entries: [],
         },
-      ],
+        tags: [],
+        creator: "",
+        character_version: "",
+        extensions: {
+          risuai: {
+            exportBundleV1: {
+              version: 2,
+              chats: [
+                {
+                  id: "chat-bad",
+                  name: "Bad Chat",
+                  note: "",
+                  localLore: [],
+                  message: [],
+                },
+              ],
+            },
+          },
+        },
+        group_only_greetings: [],
+        nickname: "",
+        source: [],
+        creation_date: 0,
+        modification_date: 0,
+        assets: [],
+      },
+    };
+
+    await importCharacterProcess({
+      name: "invalid-bundle-card.json",
+      data: new TextEncoder().encode(JSON.stringify(card)),
     });
 
-    await exportCharacterCard(structuredClone(char) as never, "json");
-
-    const exportedPayload = shared.downloadFileMock.mock.calls[0]?.[1];
-    const exportedCard = JSON.parse(Buffer.from(exportedPayload).toString("utf-8"));
-
-    expect(exportedCard.data.assets[0].uri).toMatch(/^data:image\/png;base64,/);
-    expect(exportedCard.data.assets[0].ext).toBe("png");
+    const importedChar = shared.db.characters[0] as Record<string, any>;
+    expect(importedChar.chats).toEqual([
+      {
+        message: [],
+        note: "",
+        name: "Chat 1",
+        localLore: [],
+      },
+    ]);
   });
-
-  it("exports JSON asset metadata using the converted asset format when it changes", async () => {
-    const { exportCharacterCard } = await import("src/ts/characterCards");
-    shared.convertImageMock.mockResolvedValueOnce(new Uint8Array([0xff, 0xd8, 0xff, 0xd9]));
-    shared.checkImageTypeMock.mockReturnValue("JPEG");
-    const char = createCharacter({
-      ccAssets: [
-        {
-          type: "icon",
-          uri: "asset://icon",
-          name: "Icon",
-          ext: "png",
-        },
-      ],
-    });
-
-    await exportCharacterCard(structuredClone(char) as never, "json");
-
-    const exportedPayload = shared.downloadFileMock.mock.calls[0]?.[1];
-    const exportedCard = JSON.parse(Buffer.from(exportedPayload).toString("utf-8"));
-
-    expect(exportedCard.data.assets[0].uri).toMatch(/^data:image\/jpeg;base64,/);
-    expect(exportedCard.data.assets[0].ext).toBe("jpeg");
-  });
-
 });

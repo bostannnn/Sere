@@ -7,7 +7,7 @@
   }
 
   let {
-    value = "",
+    value = $bindable(""),
     disabled = false,
     onchange,
     children,
@@ -15,7 +15,7 @@
 </script>
 
 <select
-  value={value}
+  bind:value
   {disabled}
   onchange={onchange}
 >

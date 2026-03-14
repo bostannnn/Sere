@@ -208,7 +208,7 @@
                     <div class="ds-settings-icon-link icon-btn icon-btn--sm" role="button" tabindex="0" aria-label="Export preset" title="Export preset" onclick={async (e) => {
                         e.stopPropagation()
                         const data = await alertCardExport('preset')
-                        if(data.type === ''){
+                        if(!data.cancelled){
                             downloadPreset(i, 'risupreset')
                         }
                     }} onkeydown={(e) => {
