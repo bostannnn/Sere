@@ -216,6 +216,11 @@ describe("evolution state panel runtime smoke", () => {
         version: 3,
         chatId: "chat-1",
         acceptedAt: 1234,
+        range: {
+          chatId: "chat-1",
+          startMessageIndex: 144,
+          endMessageIndex: 167,
+        },
       },
     ];
 
@@ -260,6 +265,8 @@ describe("evolution state panel runtime smoke", () => {
     });
 
     await flushUi();
+
+    expect(target.textContent).toContain("Messages 145-168");
 
     const renderedValues = Array.from(target.querySelectorAll("input, textarea"))
       .map((element) => (element as HTMLInputElement | HTMLTextAreaElement).value);

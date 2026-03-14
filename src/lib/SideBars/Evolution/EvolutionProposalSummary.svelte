@@ -32,6 +32,14 @@
         return Math.max(0, proposal.sourceRange.endMessageIndex - proposal.sourceRange.startMessageIndex + 1)
     }
 
+    function formatSourceRange() {
+        if (!proposal.sourceRange) {
+            return null
+        }
+
+        return `Messages ${proposal.sourceRange.startMessageIndex + 1}-${proposal.sourceRange.endMessageIndex + 1}`
+    }
+
     function formatCreatedAt(timestamp: number) {
         const date = new Date(timestamp)
         if (Number.isNaN(date.getTime())) {
@@ -48,6 +56,7 @@
 
     const changedSectionCount = $derived(proposal.changes.length)
     const coveredMessageCount = $derived(getCoveredMessageCount())
+    const sourceRangeLabel = $derived(formatSourceRange())
     const createdAtLabel = $derived(formatCreatedAt(proposal.createdAt))
 </script>
 
@@ -65,10 +74,12 @@
             <span class="ds-settings-label-muted-sm">Changed sections</span>
             <span class="ds-settings-text-medium">{changedSectionCount}</span>
         </div>
-        {#if coveredMessageCount !== null}
+        {#if sourceRangeLabel !== null}
             <div class="ds-settings-list-row ds-settings-list-row-inset evolution-proposal-summary-row">
-                <span class="ds-settings-label-muted-sm">Source messages</span>
-                <span class="ds-settings-text-medium">{coveredMessageCount}</span>
+                <span class="ds-settings-label-muted-sm">Source range</span>
+                <span class="ds-settings-text-medium evolution-proposal-summary-value">
+                    {sourceRangeLabel}{#if coveredMessageCount !== null} ({coveredMessageCount} messages){/if}
+                </span>
             </div>
         {/if}
         <div class="ds-settings-list-row ds-settings-list-row-inset evolution-proposal-summary-row">

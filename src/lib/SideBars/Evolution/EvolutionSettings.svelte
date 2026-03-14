@@ -1,64 +1,23 @@
 <script lang="ts">
     import { alertError, alertNormal } from "src/ts/alert"
-    import {
-        ensureCharacterEvolution,
-        getEffectiveCharacterEvolutionSettings,
-        hasCharacterStateTemplateBlock,
-    } from "src/ts/characterEvolution"
-    import {
-        getCharacterEvolutionErrorMessage,
-    } from "src/ts/evolution"
+    import { ensureCharacterEvolution, getEffectiveCharacterEvolutionSettings, hasCharacterStateTemplateBlock } from "src/ts/characterEvolution"
+    import { getCharacterEvolutionErrorMessage } from "src/ts/evolution"
     import { DBState, evolutionReviewOpenRequest, selectedCharID } from "src/ts/stores.svelte"
-    import type {
-        CharacterEvolutionSectionConfig,
-        CharacterEvolutionPrivacySettings,
-        CharacterEvolutionState,
-        CharacterEvolutionVersionFile,
-        character,
-    } from "src/ts/storage/database.types"
-    import EvolutionHistoryPanel from "./EvolutionHistoryPanel.svelte"
-    import EvolutionReviewPanel from "./EvolutionReviewPanel.svelte"
-    import EvolutionSectionsPanel from "./EvolutionSectionsPanel.svelte"
-    import EvolutionSetupPanel from "./EvolutionSetupPanel.svelte"
-    import EvolutionStatePanel from "./EvolutionStatePanel.svelte"
-    import EvolutionWorkspaceTabs from "./EvolutionWorkspaceTabs.svelte"
-    import {
-        hasAcceptedEvolutionForChat,
-        rejectEvolutionReviewFlow,
-        runEvolutionHandoffFlow,
-    } from "src/ts/character-evolution/reviewFlow"
-    import { findSingleCharacterById, replaceCharacterById } from "src/ts/storage/characterList"
-    import {
-        loadEvolutionVersionState,
-        openEvolutionGlobalDefaults,
-        persistEvolutionCharacter,
-        refreshEvolutionVersions,
-    } from "./evolutionSettings.actions"
-    import {
-        EVOLUTION_HISTORY_TAB,
-        EVOLUTION_REVIEW_TAB,
-        EVOLUTION_SECTIONS_TAB,
-        EVOLUTION_SETUP_TAB,
-        EVOLUTION_STATE_TAB,
-        type EvolutionWorkspaceTabId,
-    } from "./evolutionSettingsTabs"
-    import {
-        buildEvolutionSyncSettings,
-        createCurrentStateDraft,
-        createSectionDraftSnapshot,
-        getCurrentStateDraftHydrationKey,
-        getSectionDraftHydrationKey,
-    } from "./evolutionSettings.drafts"
-    import {
-        deriveSelectedVersionPrivacy,
-        deriveSelectedVersionSectionConfigs,
-        isSingleCharacter,
-    } from "./evolutionSettings.helpers"
+    import type { CharacterEvolutionSectionConfig, CharacterEvolutionPrivacySettings, CharacterEvolutionState, CharacterEvolutionVersionMeta, CharacterEvolutionVersionFile, character } from "src/ts/storage/database.types"
+    import EvolutionWorkspaceContent from "./EvolutionWorkspaceContent.svelte"
+    import { hasAcceptedEvolutionForChat, rejectEvolutionReviewFlow, runEvolutionHandoffFlow } from "src/ts/character-evolution/reviewFlow"
+    import { findSingleCharacterById } from "src/ts/storage/characterList"
+    import { openEvolutionGlobalDefaults, persistEvolutionCharacter, refreshEvolutionWorkspaceVersions, loadEvolutionWorkspaceVersion } from "./evolutionSettings.actions"
+    import { EVOLUTION_HISTORY_TAB, EVOLUTION_REVIEW_TAB, EVOLUTION_SETUP_TAB, type EvolutionWorkspaceTabId } from "./evolutionSettingsTabs"
+    import { createCurrentStateDraft, createSectionDraftSnapshot, getCurrentStateDraftHydrationKey, getSectionDraftHydrationKey } from "./evolutionSettings.drafts"
+    import { commitEvolutionCharacter, setCharacterUseGlobalEvolutionDefaults, syncEvolutionCharacterDrafts } from "./evolutionSettings.character"
+    import { deriveSelectedVersionPrivacy, deriveSelectedVersionSectionConfigs, deriveMergedProcessedRanges, isSingleCharacter, mergeEvolutionVersionMetas } from "./evolutionSettings.helpers"
 
     let loadingVersions = $state(false)
     let reviewActionBusy = $state(false)
     let selectedVersion = $state<number | null>(null)
     let selectedVersionFile = $state<CharacterEvolutionVersionFile | null>(null)
+    let refreshedVersionMetas = $state<CharacterEvolutionVersionMeta[]>([])
     let activeProposalId = $state<string | null>(null)
     let versionCharacterId = $state<string | null>(null)
     let revealCharacterOverrides = $state(false)
@@ -98,6 +57,14 @@
 
         return getEffectiveCharacterEvolutionSettings(DBState.db, characterEntry)
     })
+    const displayedStateVersions = $derived.by(() => mergeEvolutionVersionMetas(
+        currentCharacter?.characterEvolution.stateVersions,
+        refreshedVersionMetas,
+    ))
+    const displayedProcessedRanges = $derived.by(() => deriveMergedProcessedRanges({
+        evolutionSettings: currentCharacter?.characterEvolution,
+        mergedStateVersions: displayedStateVersions,
+    }))
 
     const hasTemplateSlot = $derived(hasCharacterStateTemplateBlock(DBState.db))
     const usingGlobalDefaults = $derived(currentCharacter?.characterEvolution.useGlobalDefaults ?? true)
@@ -133,25 +100,7 @@
     }
 
     function commitCharacter(characterEntry: character) {
-        replaceCharacterById(DBState.db.characters, characterEntry)
-    }
-
-    function syncCharacterDrafts(characterEntry: character) {
-        const baseCharacter = findCharacterById(characterEntry.chaId) ?? characterEntry
-        const nextEvolution = buildEvolutionSyncSettings({
-            baseCharacter,
-            currentStateDraft,
-            sectionConfigDraft,
-            privacyDraft,
-        })
-        if (!nextEvolution) {
-            return
-        }
-
-        commitCharacter({
-            ...baseCharacter,
-            characterEvolution: nextEvolution,
-        })
+        commitEvolutionCharacter(DBState.db.characters, characterEntry)
     }
 
     function setUseGlobalDefaults(nextValue: boolean) {
@@ -160,11 +109,7 @@
             return
         }
 
-        characterEntry.characterEvolution = {
-            ...characterEntry.characterEvolution,
-            useGlobalDefaults: nextValue,
-        }
-        commitCharacter(characterEntry)
+        setCharacterUseGlobalEvolutionDefaults(characterEntry, nextValue, commitCharacter)
     }
 
     $effect(() => {
@@ -201,7 +146,14 @@
             return
         }
 
-        syncCharacterDrafts(characterEntry)
+        syncEvolutionCharacterDrafts({
+            characterEntry,
+            currentStateDraft,
+            sectionConfigDraft,
+            privacyDraft,
+            resolveCharacterById: findCharacterById,
+            commitCharacter,
+        })
     })
 
     $effect(() => {
@@ -221,7 +173,14 @@
             return
         }
 
-        syncCharacterDrafts(characterEntry)
+        syncEvolutionCharacterDrafts({
+            characterEntry,
+            currentStateDraft,
+            sectionConfigDraft,
+            privacyDraft,
+            resolveCharacterById: findCharacterById,
+            commitCharacter,
+        })
     })
 
     async function persistCharacter() {
@@ -230,7 +189,14 @@
             return
         }
 
-        syncCharacterDrafts(characterEntry)
+        syncEvolutionCharacterDrafts({
+            characterEntry,
+            currentStateDraft,
+            sectionConfigDraft,
+            privacyDraft,
+            resolveCharacterById: findCharacterById,
+            commitCharacter,
+        })
         await persistEvolutionCharacter(DBState.db, characterEntry.chaId)
     }
 
@@ -244,20 +210,22 @@
             selectedVersionFile = null
         }
         try {
-            const payload = await refreshEvolutionVersions(
+            await refreshEvolutionWorkspaceVersions({
                 characterId,
                 selectedVersion,
-            )
-            const characterEntry = findCharacterById(characterId)
-            if (characterEntry) {
-                characterEntry.characterEvolution.stateVersions = payload.versions
-                commitCharacter(characterEntry)
-            }
-            if (currentCharacter?.chaId === characterId) {
-                selectedVersionFile = payload.selectedVersionFile
-            }
+                currentCharacterId: currentCharacter?.chaId ?? null,
+                findCharacterById,
+                commitCharacter,
+                setRefreshedVersionMetas: (versions) => {
+                    refreshedVersionMetas = versions
+                },
+                setSelectedVersionFile: (file) => {
+                    selectedVersionFile = file
+                },
+            })
         } catch (error) {
             if (currentCharacter?.chaId === characterId) {
+                refreshedVersionMetas = []
                 selectedVersionFile = null
             }
             alertError(getCharacterEvolutionErrorMessage(error))
@@ -278,10 +246,14 @@
         try {
             selectedWorkspaceTab = EVOLUTION_HISTORY_TAB
             selectedVersion = version
-            const payload = await loadEvolutionVersionState(characterId, version)
-            if (currentCharacter?.chaId === characterId) {
-                selectedVersionFile = payload
-            }
+            await loadEvolutionWorkspaceVersion({
+                characterId,
+                version,
+                currentCharacterId: currentCharacter?.chaId ?? null,
+                setSelectedVersionFile: (file) => {
+                    selectedVersionFile = file
+                },
+            })
         } catch (error) {
             if (currentCharacter?.chaId === characterId) {
                 selectedVersionFile = null
@@ -421,11 +393,13 @@
         versionCharacterId = characterId
 
         if (!characterId) {
+            refreshedVersionMetas = []
             selectedVersion = null
             selectedVersionFile = null
             return
         }
 
+        refreshedVersionMetas = []
         selectedVersion = null
         selectedVersionFile = null
         void handleRefreshVersions()
@@ -456,88 +430,50 @@
     <div class="ds-settings-section ds-settings-card">
         <span class="ds-settings-label">Select a single character to configure evolution.</span>
     </div>
-{:else if evolutionSettings && currentCharacter.characterEvolution}
-    <div class="ds-settings-page evolution-settings-page">
-        <div class="ds-settings-section">
-            <EvolutionWorkspaceTabs
-                selectedTab={selectedWorkspaceTab}
-                onSelect={(tab) => {
-                    selectedWorkspaceTab = tab
-                }}
-            />
-        </div>
-
-        {#if selectedWorkspaceTab === EVOLUTION_SETUP_TAB}
-            <div
-                class="ds-settings-section"
-                role="tabpanel"
-                id="evolution-panel-setup"
-                aria-labelledby="evolution-subtab-0"
-                tabindex="0"
-            >
-                <EvolutionSetupPanel
-                    characterEntry={currentCharacter}
-                    {evolutionSettings}
-                    {usingGlobalDefaults}
-                    {effectiveProvider}
-                    {effectiveModel}
-                    {hasTemplateSlot}
-                    activeChatId={activeChatId}
-                    activeChatMessageCount={activeChatMessageCount}
-                    {revealCharacterOverrides}
-                    onToggleRevealCharacterOverrides={() => {
-                        revealCharacterOverrides = !revealCharacterOverrides
-                    }}
-                    onOpenGlobalDefaults={openEvolutionGlobalDefaults}
-                    {manualRangeAvailable}
-                    manualRangeBlockedReason={manualRangeBlockedReason}
-                    manualRangeBusy={runningManualRangeHandoff}
-                    onRunManualRange={runManualRangeHandoff}
-                    {replayCurrentChatAvailable}
-                    replayCurrentChatBusy={replayingAcceptedChat}
-                    onReplayCurrentChat={replayAcceptedChat}
-                />
-            </div>
-        {:else if selectedWorkspaceTab === EVOLUTION_SECTIONS_TAB}
-            <EvolutionSectionsPanel
-                {usingGlobalDefaults}
-                bind:sectionConfigDraft
-                bind:privacyDraft
-                onUseGlobalDefaultsChange={setUseGlobalDefaults}
-                onOpenGlobalDefaults={openEvolutionGlobalDefaults}
-            />
-        {:else if selectedWorkspaceTab === EVOLUTION_REVIEW_TAB}
-            <EvolutionReviewPanel
-                {currentPendingProposal}
-                {reviewActionBusy}
-                onOpenFullscreenReview={openFullscreenReview}
-                onRejectProposal={rejectProposal}
-            />
-        {:else if selectedWorkspaceTab === EVOLUTION_STATE_TAB}
-            <EvolutionStatePanel
-                hasPendingProposal={Boolean(currentPendingProposal)}
-                bind:currentStateDraft
-                sectionConfigs={evolutionSettings.sectionConfigs}
-                privacy={evolutionSettings.privacy}
-                onPersist={persistCharacter}
-            />
-        {:else}
-            <EvolutionHistoryPanel
-                stateVersions={currentCharacter.characterEvolution.stateVersions}
-                {loadingVersions}
-                {selectedVersion}
-                {selectedVersionState}
-                {selectedVersionSectionConfigs}
-                {selectedVersionPrivacy}
-                onRefresh={() => handleRefreshVersions()}
-                onLoadVersion={loadVersion}
-            />
-        {/if}
-    </div>
+{:else}
+    <EvolutionWorkspaceContent
+        {hasGroupSelection}
+        {currentCharacter}
+        {evolutionSettings}
+        {selectedWorkspaceTab}
+        onSelectWorkspaceTab={(tab) => {
+            selectedWorkspaceTab = tab
+        }}
+        {displayedProcessedRanges}
+        {usingGlobalDefaults}
+        {effectiveProvider}
+        {effectiveModel}
+        {hasTemplateSlot}
+        {activeChatId}
+        {activeChatMessageCount}
+        {revealCharacterOverrides}
+        onToggleRevealCharacterOverrides={() => {
+            revealCharacterOverrides = !revealCharacterOverrides
+        }}
+        onOpenGlobalDefaults={openEvolutionGlobalDefaults}
+        {manualRangeAvailable}
+        manualRangeBlockedReason={manualRangeBlockedReason}
+        {runningManualRangeHandoff}
+        onRunManualRange={runManualRangeHandoff}
+        {replayCurrentChatAvailable}
+        {replayingAcceptedChat}
+        onReplayCurrentChat={replayAcceptedChat}
+        bind:sectionConfigDraft
+        bind:privacyDraft
+        onUseGlobalDefaultsChange={setUseGlobalDefaults}
+        {currentPendingProposal}
+        {reviewActionBusy}
+        onOpenFullscreenReview={openFullscreenReview}
+        onRejectProposal={rejectProposal}
+        bind:currentStateDraft
+        onPersist={persistCharacter}
+        {displayedStateVersions}
+        {loadingVersions}
+        {selectedVersion}
+        {selectedVersionState}
+        {selectedVersionSectionConfigs}
+        {selectedVersionPrivacy}
+        onRefreshVersions={() => handleRefreshVersions()}
+        onLoadVersion={loadVersion}
+    />
 {/if}
-
-<style>
-    .evolution-settings-page {
-        gap: var(--ds-settings-section-gap);
-    }
-</style>

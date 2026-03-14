@@ -8,13 +8,19 @@
     import ModelList from "src/lib/UI/ModelList.svelte"
     import {
         getCharacterEvolutionModelSuggestions,
+        getLastProcessedMessageIndexForChat,
         normalizeCharacterEvolutionExtractionModel,
     } from "src/ts/characterEvolution"
-    import type { CharacterEvolutionSettings, character as CharacterEntry } from "src/ts/storage/database.types"
+    import type {
+        CharacterEvolutionProcessedRange,
+        CharacterEvolutionSettings,
+        character as CharacterEntry,
+    } from "src/ts/storage/database.types"
 
     interface Props {
         characterEntry: CharacterEntry
         evolutionSettings: CharacterEvolutionSettings
+        processedRanges?: CharacterEvolutionProcessedRange[]
         usingGlobalDefaults: boolean
         effectiveProvider: string
         effectiveModel: string
@@ -36,6 +42,7 @@
     let {
         characterEntry,
         evolutionSettings,
+        processedRanges = [],
         usingGlobalDefaults,
         effectiveProvider,
         effectiveModel,
@@ -89,6 +96,35 @@
         getCharacterEvolutionModelSuggestions(characterEntry.characterEvolution.extractionProvider)
     )
     const manualRangeMax = $derived(Math.max(1, Number(activeChatMessageCount) || 1))
+    const activeChatProcessedRanges = $derived.by(() => {
+        const chatId = activeChatId?.trim()
+        if (!chatId) {
+            return []
+        }
+
+        return processedRanges
+            .filter((entry) => entry.range.chatId === chatId)
+            .sort((left, right) => left.range.startMessageIndex - right.range.startMessageIndex)
+    })
+    const nextUnprocessedMessageNumber = $derived.by(() => {
+        let contiguousProcessedEnd = -1
+        for (const entry of activeChatProcessedRanges) {
+            if (entry.range.startMessageIndex > contiguousProcessedEnd + 1) {
+                break
+            }
+            contiguousProcessedEnd = Math.max(contiguousProcessedEnd, entry.range.endMessageIndex)
+        }
+        return contiguousProcessedEnd + 2
+    })
+    const activeChatProcessedCursor = $derived.by(() => (
+        activeChatId
+            ? getLastProcessedMessageIndexForChat(evolutionSettings, activeChatId)
+            : -1
+    ))
+
+    function formatProcessedRange(range: CharacterEvolutionProcessedRange["range"]) {
+        return `Messages ${range.startMessageIndex + 1}-${range.endMessageIndex + 1}`
+    }
 
     $effect(() => {
         const normalizedModel = normalizeCharacterEvolutionExtractionModel(
@@ -273,6 +309,32 @@
                     {manualRangeBusy ? "Running Handoff" : "Run Handoff on Range"}
                 </Button>
             </div>
+
+            <div class="evolution-accepted-coverage">
+                <div class="evolution-manual-range-header">
+                    <span class="ds-settings-label">Accepted Coverage</span>
+                    <span class="ds-settings-label-muted-sm">{activeChatProcessedRanges.length} accepted range{activeChatProcessedRanges.length === 1 ? "" : "s"}</span>
+                </div>
+
+                {#if activeChatProcessedRanges.length > 0}
+                    <div class="evolution-accepted-coverage-list">
+                        {#each activeChatProcessedRanges as entry (entry.version + ":" + entry.range.chatId + ":" + entry.range.startMessageIndex + ":" + entry.range.endMessageIndex)}
+                            <div class="ds-settings-list-row evolution-accepted-coverage-row">
+                                <span class="ds-settings-label-muted-sm">v{entry.version}</span>
+                                <span class="ds-settings-text-medium">{formatProcessedRange(entry.range)}</span>
+                            </div>
+                        {/each}
+                    </div>
+                    <span class="ds-settings-label-muted-sm">Next unprocessed message: {nextUnprocessedMessageNumber}</span>
+                {:else if activeChatProcessedCursor >= 0}
+                    <span class="ds-settings-label-muted-sm">
+                        Accepted coverage exists through message {activeChatProcessedCursor + 1}, but detailed range history is unavailable for this chat.
+                    </span>
+                    <span class="ds-settings-label-muted-sm">Next unprocessed message: {activeChatProcessedCursor + 2}</span>
+                {:else}
+                    <span class="ds-settings-label-muted-sm">No accepted handoffs for the current chat yet.</span>
+                {/if}
+            </div>
         {/if}
 
         <div class="evolution-setup-actions-stack">
@@ -393,6 +455,27 @@
         font-size: var(--ds-font-size-sm);
     }
 
+    .evolution-accepted-coverage {
+        display: flex;
+        flex-direction: column;
+        gap: var(--ds-space-2);
+        margin-bottom: var(--ds-space-3);
+    }
+
+    .evolution-accepted-coverage-list {
+        display: flex;
+        flex-direction: column;
+        gap: var(--ds-space-2);
+    }
+
+    .evolution-accepted-coverage-row {
+        justify-content: space-between;
+        align-items: center;
+        gap: var(--ds-space-3);
+        min-height: 0;
+        padding: 0;
+    }
+
     @media (max-width: 640px) {
         .evolution-runtime-row {
             flex-direction: column;
@@ -400,6 +483,11 @@
 
         .evolution-runtime-value {
             text-align: left;
+        }
+
+        .evolution-accepted-coverage-row {
+            flex-direction: column;
+            align-items: flex-start;
         }
     }
 </style>

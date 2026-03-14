@@ -1,12 +1,15 @@
 import {
   createDefaultCharacterEvolutionSectionConfigs,
+  getCharacterEvolutionProcessedRanges,
   normalizeCharacterEvolutionPrivacy,
 } from "src/ts/characterEvolution";
 import type {
+  CharacterEvolutionProcessedRange,
   CharacterEvolutionPrivacySettings,
   CharacterEvolutionSectionConfig,
   CharacterEvolutionSettings,
   CharacterEvolutionState,
+  CharacterEvolutionVersionMeta,
   CharacterEvolutionVersionFile,
   character,
   groupChat,
@@ -26,6 +29,93 @@ export function clonePrivacy(
 
 export function jsonEqual(a: unknown, b: unknown): boolean {
   return JSON.stringify(a) === JSON.stringify(b);
+}
+
+function normalizeVersion(value: unknown): number | null {
+  const version = Number(value);
+  if (!Number.isFinite(version) || version < 0) {
+    return null;
+  }
+  return Math.floor(version);
+}
+
+function mergeVersionMetaEntry(
+  base: CharacterEvolutionVersionMeta | null | undefined,
+  overlay: CharacterEvolutionVersionMeta | null | undefined,
+): CharacterEvolutionVersionMeta | null {
+  const version = normalizeVersion(overlay?.version ?? base?.version);
+  if (version === null) {
+    return null;
+  }
+
+  const range = overlay?.range ?? base?.range;
+  return {
+    version,
+    chatId: overlay?.chatId ?? base?.chatId ?? null,
+    acceptedAt: Number(overlay?.acceptedAt ?? base?.acceptedAt) || 0,
+    ...(range ? { range } : {}),
+  };
+}
+
+export function mergeEvolutionVersionMetas(
+  localVersions: CharacterEvolutionVersionMeta[] | null | undefined,
+  refreshedVersions: CharacterEvolutionVersionMeta[] | null | undefined,
+): CharacterEvolutionVersionMeta[] {
+  const byVersion = new Map<number, CharacterEvolutionVersionMeta>();
+
+  for (const entry of localVersions ?? []) {
+    const version = normalizeVersion(entry?.version);
+    if (version === null) {
+      continue;
+    }
+    const merged = mergeVersionMetaEntry(null, entry);
+    if (merged) {
+      byVersion.set(version, merged);
+    }
+  }
+
+  for (const entry of refreshedVersions ?? []) {
+    const version = normalizeVersion(entry?.version);
+    if (version === null) {
+      continue;
+    }
+    const merged = mergeVersionMetaEntry(byVersion.get(version), entry);
+    if (merged) {
+      byVersion.set(version, merged);
+    }
+  }
+
+  return [...byVersion.values()].sort((left, right) => right.version - left.version);
+}
+
+export function deriveMergedProcessedRanges(args: {
+  evolutionSettings: CharacterEvolutionSettings | null | undefined;
+  mergedStateVersions: CharacterEvolutionVersionMeta[] | null | undefined;
+}): CharacterEvolutionProcessedRange[] {
+  const { evolutionSettings, mergedStateVersions } = args;
+  const fromVersions = getCharacterEvolutionProcessedRanges({
+    processedRanges: [],
+    stateVersions: mergedStateVersions ?? [],
+  });
+  const explicit = getCharacterEvolutionProcessedRanges({
+    processedRanges: evolutionSettings?.processedRanges,
+    stateVersions: [],
+  });
+
+  const byVersion = new Map<number, CharacterEvolutionProcessedRange>();
+  for (const entry of fromVersions) {
+    byVersion.set(entry.version, entry);
+  }
+  for (const entry of explicit) {
+    byVersion.set(entry.version, entry);
+  }
+
+  return [...byVersion.values()].sort((left, right) => {
+    if (left.range.chatId !== right.range.chatId) {
+      return left.range.chatId.localeCompare(right.range.chatId);
+    }
+    return left.range.startMessageIndex - right.range.startMessageIndex;
+  });
 }
 
 export function versionSectionHasData(
