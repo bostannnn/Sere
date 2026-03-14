@@ -381,6 +381,7 @@ function createMergedMatchedItem(currentItem, proposedItem) {
         || currentStatus !== nextStatus;
     const shouldReinforce = !shouldPreserveHistoricalMetadata
         && (currentStatus === 'archived' || hasMeaningfulUpdate);
+    const shouldMarkSeenForDecay = currentStatus === 'active' && nextStatus === 'active';
     const currentSeenBaseline = shouldReinforce ? (currentTimesSeen ?? 1) : currentTimesSeen;
     const nextTimesSeen = shouldReinforce
         ? Math.max((currentSeenBaseline ?? proposedTimesSeen ?? 0) + 1, proposedTimesSeen ?? 0, 1)
@@ -397,7 +398,7 @@ function createMergedMatchedItem(currentItem, proposedItem) {
     const nextLastSeenAt = shouldReinforce
         ? proposedItem.lastSeenAt ?? proposedItem.updatedAt ?? currentItem.lastSeenAt
         : currentItem.lastSeenAt;
-    const nextLastSeenVersion = shouldReinforce
+    const nextLastSeenVersion = shouldReinforce || shouldMarkSeenForDecay
         ? proposedLastSeenVersion ?? currentLastSeenVersion
         : currentLastSeenVersion;
     const nextSourceChatId = shouldReinforce

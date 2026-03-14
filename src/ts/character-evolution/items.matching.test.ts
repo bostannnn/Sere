@@ -117,7 +117,9 @@ describe("character evolution item matching", () => {
                 },
                 updatedAt: 120,
                 lastSeenAt: 120,
+                lastSeenVersion: 1,
                 timesSeen: 2,
+                unseenAcceptedHandoffs: 1,
             },
         ]
 
@@ -134,6 +136,7 @@ describe("character evolution item matching", () => {
                 },
                 updatedAt: 240,
                 lastSeenAt: 240,
+                lastSeenVersion: 2,
                 timesSeen: 1,
             },
         ]
@@ -160,7 +163,65 @@ describe("character evolution item matching", () => {
                 },
                 updatedAt: 120,
                 lastSeenAt: 120,
+                lastSeenVersion: 2,
                 timesSeen: 2,
+                unseenAcceptedHandoffs: 1,
+            },
+        ])
+        expect(mergedCjs).toEqual(merged)
+    })
+
+    it("marks an unchanged matched active item as seen for decay without counting repeat evidence", () => {
+        const currentState = createDefaultCharacterEvolutionState()
+        currentState.activeThreads = [
+            {
+                value: "meet again at the station",
+                status: "active",
+                confidence: "likely",
+                note: "stable standing plan",
+                updatedAt: 100,
+                lastSeenAt: 100,
+                lastSeenVersion: 1,
+                timesSeen: 2,
+                unseenAcceptedHandoffs: 1,
+            },
+        ]
+
+        const proposedState = createDefaultCharacterEvolutionState()
+        proposedState.activeThreads = [
+            {
+                value: "meet again at the station",
+                status: "active",
+                confidence: "likely",
+                note: "stable standing plan",
+                updatedAt: 200,
+                lastSeenAt: 200,
+                lastSeenVersion: 2,
+                timesSeen: 1,
+            },
+        ]
+
+        const merged = mergeAcceptedCharacterEvolutionState({
+            currentState,
+            proposedState,
+        })
+        const { mergeAcceptedCharacterEvolutionState: mergeAcceptedCharacterEvolutionStateCjs } = require("../../../server/node/llm/character_evolution/items.cjs")
+        const mergedCjs = mergeAcceptedCharacterEvolutionStateCjs({
+            currentState,
+            proposedState,
+        })
+
+        expect(merged.activeThreads).toEqual([
+            {
+                value: "meet again at the station",
+                status: "active",
+                confidence: "likely",
+                note: "stable standing plan",
+                updatedAt: 100,
+                lastSeenAt: 100,
+                lastSeenVersion: 2,
+                timesSeen: 2,
+                unseenAcceptedHandoffs: 1,
             },
         ])
         expect(mergedCjs).toEqual(merged)

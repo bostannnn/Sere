@@ -509,4 +509,92 @@ describe("evolution routes phase 5 decay", () => {
       }),
     ]);
   });
+
+  it("treats repeated unchanged active items as seen for decay on accept", async () => {
+    const dataDirs = getDataDirs();
+    writeJson(path.join(dataDirs.characters, characterId, "character.json"), {
+      character: {
+        chaId: characterId,
+        type: "character",
+        name: "Eva",
+        desc: "desc",
+        personality: "personality",
+        characterEvolution: {
+          enabled: true,
+          useGlobalDefaults: false,
+          extractionProvider: "openrouter",
+          extractionModel: "anthropic/claude-3.5-haiku",
+          extractionMaxTokens: 2400,
+          extractionPrompt: "prompt",
+          currentStateVersion: 1,
+          currentState: {
+            activeThreads: [
+              {
+                value: "meet again at the station",
+                status: "active",
+                confidence: "likely",
+                note: "stable standing plan",
+                lastSeenVersion: 1,
+                unseenAcceptedHandoffs: 1,
+                updatedAt: 100,
+                lastSeenAt: 100,
+                timesSeen: 2,
+              },
+            ],
+          },
+          pendingProposal: {
+            proposalId: "proposal-phase5-unchanged-repeat",
+            sourceChatId: chatId,
+            sourceRange: {
+              chatId,
+              startMessageIndex: 0,
+              endMessageIndex: 1,
+            },
+            proposedState: {
+              activeThreads: [
+                {
+                  value: "meet again at the station",
+                  status: "active",
+                  confidence: "likely",
+                  note: "stable standing plan",
+                },
+              ],
+            },
+            changes: [
+              {
+                sectionKey: "activeThreads",
+                summary: "The station plan was repeated without a wording change.",
+                evidence: ["They again agreed to meet at the station."],
+              },
+            ],
+            createdAt: 100,
+          },
+          stateVersions: [],
+          lastProcessedChatId: null,
+        },
+      },
+    });
+
+    const { postHandlers } = buildHandlers();
+    const accept = postHandlers.get("/data/character-evolution/:charId/proposal/accept");
+    expect(accept).toBeTruthy();
+
+    const acceptRes = createRes();
+    await accept!(createReq({}, { charId: characterId }), acceptRes);
+
+    expect(acceptRes.statusCode).toBe(200);
+    expect(acceptRes.payload.state.activeThreads).toEqual([
+      expect.objectContaining({
+        value: "meet again at the station",
+        status: "active",
+        confidence: "likely",
+        note: "stable standing plan",
+        lastSeenVersion: 2,
+        unseenAcceptedHandoffs: 0,
+        updatedAt: 100,
+        lastSeenAt: 100,
+        timesSeen: 2,
+      }),
+    ]);
+  });
 });

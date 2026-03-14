@@ -273,7 +273,9 @@ describe("evolution routes phase 3 promotion", () => {
                 },
                 updatedAt: 120,
                 lastSeenAt: 120,
+                lastSeenVersion: 1,
                 timesSeen: 2,
+                unseenAcceptedHandoffs: 1,
               },
             ],
           },
@@ -333,7 +335,9 @@ describe("evolution routes phase 3 promotion", () => {
         },
         updatedAt: 120,
         lastSeenAt: 120,
+        lastSeenVersion: 2,
         timesSeen: 2,
+        unseenAcceptedHandoffs: 0,
       }),
     ]);
   });
