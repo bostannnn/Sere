@@ -97,6 +97,7 @@
     let showEvolutionProposal = $state(false)
     let evolutionBusy = $state(false)
     let evolutionAction: EvolutionBusyAction = $state(null)
+    let evolutionAutoHandoffInProgress = $state(false)
     let evolutionProposalDraft = $state(null)
     let evolutionProposalDraftKey = $state<string | null>(null)
     let {
@@ -381,7 +382,7 @@
     })
 
     $effect(() => {
-        if (evolutionAction === 'handoff' && currentEvolutionSettings?.pendingProposal) {
+        if (evolutionAction === 'handoff' && currentEvolutionSettings?.pendingProposal && !evolutionAutoHandoffInProgress) {
             evolutionBusy = false
             evolutionAction = null
         }
@@ -683,10 +684,6 @@
         if (evolutionBusy) return
         if (character.characterEvolution.pendingProposal) return
 
-        // Acquire lock before any async work so concurrent fire-and-forget calls see it
-        evolutionBusy = true
-        evolutionAction = 'handoff'
-
         const batchSize = evoSettings.autoHandoffBatchSize ?? 10
         const autoAccept = evoSettings.autoHandoffAutoAccept !== false
 
@@ -717,8 +714,12 @@
             endMessageIndex: batchEndIndex,
         }
 
+        // Re-check the lock right before acquiring — closes the race window when
+        // multiple fire-and-forget calls pass the early guard before any sets the flag
+        if (evolutionBusy) return
         evolutionBusy = true
         evolutionAction = 'handoff'
+        evolutionAutoHandoffInProgress = true
         try {
             const freshCharacter = findCharacterById(target.characterId)
             if (!freshCharacter) return
@@ -757,6 +758,7 @@
         } catch (error) {
             alertError(getCharacterEvolutionErrorMessage(error))
         } finally {
+            evolutionAutoHandoffInProgress = false
             evolutionBusy = false
             evolutionAction = null
         }
