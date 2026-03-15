@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { getPendingProposalSourceRange } from "./pendingProposal"
+import { getPendingProposalSourceRange, mergeProposalStateWithCurrentState } from "./pendingProposal"
 
 describe("pending proposal source range", () => {
     it("returns the stored source range when present", () => {
@@ -30,5 +30,40 @@ describe("pending proposal source range", () => {
             changes: [],
             createdAt: 10,
         })).toBeNull()
+    })
+
+    it("preserves current relationship trustLevel when a proposal only updates dynamic", () => {
+        const merged = mergeProposalStateWithCurrentState({
+            relationship: {
+                dynamic: "warmer and more trusting",
+            },
+        }, {
+            relationship: {
+                trustLevel: "high",
+                dynamic: "warm",
+            },
+            activeThreads: [],
+            runningJokes: [],
+            characterLikes: [],
+            characterDislikes: [],
+            characterHabits: [],
+            characterBoundariesPreferences: [],
+            userFacts: [],
+            userRead: [],
+            userLikes: [],
+            userDislikes: [],
+            lastInteractionEnded: {
+                state: "",
+                residue: "",
+            },
+            keyMoments: [],
+            characterIntimatePreferences: [],
+            userIntimatePreferences: [],
+        })
+
+        expect(merged.relationship).toEqual({
+            trustLevel: "high",
+            dynamic: "warmer and more trusting",
+        })
     })
 })

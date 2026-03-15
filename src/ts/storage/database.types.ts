@@ -536,7 +536,11 @@ export interface CharacterEvolutionState {
     userIntimatePreferences: CharacterEvolutionItem[]
 }
 
-export type CharacterEvolutionProposalState = Partial<CharacterEvolutionState>
+export type CharacterEvolutionProposalState =
+    Partial<Omit<CharacterEvolutionState, "relationship">>
+    & {
+        relationship?: Partial<CharacterEvolutionRelationshipState>
+    }
 
 export interface CharacterEvolutionSectionConfig {
     key: CharacterEvolutionSectionKey

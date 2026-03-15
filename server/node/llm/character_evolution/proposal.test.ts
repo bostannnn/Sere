@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 const {
   getCharacterEvolutionProposalValidationError,
+  mergeChangedProposalStateWithCurrentState,
   normalizeCharacterEvolutionProposal,
 } = require("./proposal.cjs");
 
@@ -169,6 +170,77 @@ describe("character evolution proposal normalization", () => {
     });
 
     expect(validationError).toContain("\"relationship\" must include \"dynamic\"");
+  });
+
+  it("accepts relationship updates that omit trustLevel", () => {
+    const validationError = getCharacterEvolutionProposalValidationError({
+      proposedState: {
+        relationship: {
+          dynamic: "warmer and more trusting",
+        },
+      },
+      changes: [
+        {
+          sectionKey: "relationship",
+          summary: "Relationship shifted.",
+          evidence: ["They explicitly softened toward each other."],
+        },
+      ],
+    }, {
+      currentState: {},
+      sectionConfigs: [
+        {
+          key: "relationship",
+          label: "Relationship",
+          enabled: true,
+          includeInPrompt: true,
+          instruction: "Track relationship",
+          kind: "object",
+          sensitive: false,
+        },
+      ],
+      privacy: {
+        allowCharacterIntimatePreferences: false,
+        allowUserIntimatePreferences: false,
+      },
+    });
+
+    expect(validationError).toBe("");
+  });
+
+  it("preserves the current trustLevel when a relationship proposal only updates dynamic", () => {
+    const merged = mergeChangedProposalStateWithCurrentState({
+      relationship: {
+        dynamic: "warmer and more trusting",
+      },
+    }, {
+      relationship: {
+        trustLevel: "high",
+        dynamic: "warm",
+      },
+      activeThreads: [],
+      runningJokes: [],
+      characterLikes: [],
+      characterDislikes: [],
+      characterHabits: [],
+      characterBoundariesPreferences: [],
+      userFacts: [],
+      userRead: [],
+      userLikes: [],
+      userDislikes: [],
+      lastInteractionEnded: {
+        state: "",
+        residue: "",
+      },
+      keyMoments: [],
+      characterIntimatePreferences: [],
+      userIntimatePreferences: [],
+    });
+
+    expect(merged.relationship).toEqual({
+      trustLevel: "high",
+      dynamic: "warmer and more trusting",
+    });
   });
 
   it("accepts legacy lastChatEnded as an alias for lastInteractionEnded", () => {

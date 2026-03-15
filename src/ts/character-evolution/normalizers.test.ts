@@ -252,7 +252,7 @@ describe("character evolution normalizers", () => {
     it("upgrades legacy built-in full-replacement prompts to the changed-subset prompt", () => {
         const defaults = createDefaultCharacterEvolutionDefaults()
         const legacyPrompt = defaults.extractionPrompt.replace(
-            "- for list sections, include only changed, new, corrected, archived, or explicitly cleared items; do not copy unchanged active items from Current state JSON\n- for relationship and lastInteractionEnded, include the full object when that section changes",
+            "- for list sections, include only changed, new, corrected, archived, or explicitly cleared items; do not copy unchanged active items from Current state JSON\n- for relationship, include dynamic when that section changes; include trustLevel when it materially changes or clarifies the shift\n- for lastInteractionEnded, include the full object when that section changes",
             "- each included section must be the full intended replacement for that section",
         )
 

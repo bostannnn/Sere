@@ -8,7 +8,7 @@ const {
 } = require('./normalizers.cjs');
 
 const CHARACTER_EVOLUTION_OBJECT_SECTION_SHAPE_KEYS = {
-    relationship: ['trustLevel', 'dynamic'],
+    relationship: ['dynamic'],
     lastInteractionEnded: ['state', 'residue'],
 };
 
@@ -245,6 +245,13 @@ function mergeChangedProposalStateWithCurrentState(proposedStateRaw, currentStat
 
     for (const key of Object.keys(createDefaultCharacterEvolutionState())) {
         if (Object.prototype.hasOwnProperty.call(proposedState, key)) {
+            if (key === 'relationship' && proposedState[key] && typeof proposedState[key] === 'object' && !Array.isArray(proposedState[key])) {
+                mergedState.relationship = {
+                    ...mergedState.relationship,
+                    ...clone(proposedState[key], {}),
+                };
+                continue;
+            }
             mergedState[key] = proposedState[key];
         }
     }

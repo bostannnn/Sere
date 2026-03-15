@@ -114,6 +114,20 @@ function normalizeCharacterEvolutionProposalState(raw) {
 
     for (const key of Object.keys(defaults)) {
         if (!Object.prototype.hasOwnProperty.call(value, key)) continue;
+        if (key === 'relationship') {
+            const relationshipRaw = value.relationship;
+            const relationshipState = {};
+            if (relationshipRaw && typeof relationshipRaw === 'object' && !Array.isArray(relationshipRaw)) {
+                if (Object.prototype.hasOwnProperty.call(relationshipRaw, 'trustLevel')) {
+                    relationshipState.trustLevel = toTrimmedString(relationshipRaw.trustLevel);
+                }
+                if (Object.prototype.hasOwnProperty.call(relationshipRaw, 'dynamic')) {
+                    relationshipState.dynamic = toTrimmedString(relationshipRaw.dynamic);
+                }
+            }
+            proposalState[key] = relationshipState;
+            continue;
+        }
         proposalState[key] = normalizeCharacterEvolutionState({ [key]: value[key] })[key];
     }
 

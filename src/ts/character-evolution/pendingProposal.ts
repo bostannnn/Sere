@@ -22,12 +22,20 @@ export function mergeProposalStateWithCurrentState(
 ): CharacterEvolutionState {
     const merged = structuredClone(currentState)
     const source = proposedState ?? {}
-    const assignMergedSection = <K extends keyof CharacterEvolutionState>(key: K, sectionValue: CharacterEvolutionState[K]) => {
+    const assignMergedSection = <K extends keyof CharacterEvolutionState>(key: K, sectionValue: CharacterEvolutionState[K] | CharacterEvolutionProposalState[K]) => {
         ;(merged as unknown as Record<string, unknown>)[key] = sectionValue as unknown
     }
 
     for (const key of CHARACTER_EVOLUTION_PROPOSAL_SECTION_KEYS) {
         if (!Object.prototype.hasOwnProperty.call(source, key)) continue
+        if (key === "relationship") {
+            const relationshipPatch = source.relationship ?? {}
+            assignMergedSection(key, {
+                ...merged.relationship,
+                ...structuredClone(relationshipPatch),
+            })
+            continue
+        }
         const sectionValue = structuredClone(source[key] as CharacterEvolutionState[typeof key])
         assignMergedSection(key, sectionValue)
     }

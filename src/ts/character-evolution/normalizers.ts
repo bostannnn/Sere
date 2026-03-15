@@ -213,6 +213,24 @@ export function normalizeCharacterEvolutionProposalState(raw: unknown): Characte
 
     for (const key of Object.keys(defaults) as Array<keyof CharacterEvolutionState>) {
         if (!Object.prototype.hasOwnProperty.call(value, key)) continue
+        if (key === "relationship") {
+            const relationshipRaw = value.relationship
+            const relationshipState: CharacterEvolutionProposalState["relationship"] = {}
+            if (relationshipRaw && typeof relationshipRaw === "object" && !Array.isArray(relationshipRaw)) {
+                if (Object.prototype.hasOwnProperty.call(relationshipRaw, "trustLevel")) {
+                    relationshipState.trustLevel = typeof (relationshipRaw as Record<string, unknown>).trustLevel === "string"
+                        ? ((relationshipRaw as Record<string, unknown>).trustLevel as string).trim()
+                        : ""
+                }
+                if (Object.prototype.hasOwnProperty.call(relationshipRaw, "dynamic")) {
+                    relationshipState.dynamic = typeof (relationshipRaw as Record<string, unknown>).dynamic === "string"
+                        ? ((relationshipRaw as Record<string, unknown>).dynamic as string).trim()
+                        : ""
+                }
+            }
+            assignProposalSection(key, relationshipState as CharacterEvolutionState[typeof key])
+            continue
+        }
         const normalizedSection = normalizeCharacterEvolutionState({ [key]: value[key] })[key]
         assignProposalSection(key, normalizedSection)
     }
