@@ -521,6 +521,64 @@ export function mergeReinforcedCharacterEvolutionItems(
     return createMergedMatchedItem(currentItem, proposedItem)
 }
 
+function hasExplicitProposalItemUpdate(
+    currentItem: CharacterEvolutionItem,
+    proposedItem: CharacterEvolutionItem,
+): boolean {
+    if (normalizeCharacterEvolutionItemStatus(proposedItem) !== normalizeCharacterEvolutionItemStatus(currentItem)) {
+        return true
+    }
+    if (proposedItem.confidence !== undefined && proposedItem.confidence !== currentItem.confidence) {
+        return true
+    }
+    if (Object.prototype.hasOwnProperty.call(proposedItem, "note")) {
+        return normalizeCharacterEvolutionItemNote(proposedItem) !== normalizeCharacterEvolutionItemNote(currentItem)
+    }
+    return false
+}
+
+export function pruneUnchangedCharacterEvolutionProposalState(args: {
+    currentState: CharacterEvolutionState
+    proposedState: Partial<CharacterEvolutionState>
+}): Partial<CharacterEvolutionState> {
+    const nextState = structuredClone((args.proposedState ?? {}) as Partial<CharacterEvolutionState>)
+
+    for (const key of CHARACTER_EVOLUTION_ITEM_SECTION_KEYS) {
+        if (!Object.prototype.hasOwnProperty.call(nextState, key) || REINFORCEMENT_MATCH_SECTIONS.has(key)) {
+            continue
+        }
+        const proposedItems = Array.isArray(nextState[key])
+            ? structuredClone(nextState[key] as CharacterEvolutionItem[])
+            : []
+        if (proposedItems.length === 0) {
+            continue
+        }
+
+        const currentActiveItems = Array.isArray(args.currentState[key])
+            ? (args.currentState[key] as CharacterEvolutionItem[]).filter((item) => normalizeCharacterEvolutionItemStatus(item) === "active")
+            : []
+        const filteredItems = proposedItems.filter((proposedItem) => {
+            if (normalizeCharacterEvolutionItemStatus(proposedItem) !== "active") {
+                return true
+            }
+            const matchingCurrentIndex = findMatchingItemIndex(key, currentActiveItems, proposedItem, ["active"])
+            if (matchingCurrentIndex < 0) {
+                return true
+            }
+            return hasExplicitProposalItemUpdate(currentActiveItems[matchingCurrentIndex], proposedItem)
+        })
+
+        if (filteredItems.length === 0) {
+            delete nextState[key]
+            continue
+        }
+
+        nextState[key] = filteredItems as never
+    }
+
+    return nextState
+}
+
 export function applyCharacterEvolutionItemMetadata(args: {
     state: CharacterEvolutionState
     baseState?: CharacterEvolutionState | null

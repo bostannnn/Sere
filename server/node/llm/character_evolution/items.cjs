@@ -469,6 +469,58 @@ function mergeReinforcedCharacterEvolutionItems(currentItem, proposedItem) {
     return createMergedMatchedItem(currentItem, proposedItem);
 }
 
+function hasExplicitProposalItemUpdate(currentItem, proposedItem) {
+    if (normalizeCharacterEvolutionItemStatus(proposedItem) !== normalizeCharacterEvolutionItemStatus(currentItem)) {
+        return true;
+    }
+    if (proposedItem.confidence !== undefined && proposedItem.confidence !== currentItem.confidence) {
+        return true;
+    }
+    if (Object.prototype.hasOwnProperty.call(proposedItem, 'note')) {
+        return normalizeCharacterEvolutionItemNote(proposedItem) !== normalizeCharacterEvolutionItemNote(currentItem);
+    }
+    return false;
+}
+
+function pruneUnchangedCharacterEvolutionProposalState(args) {
+    const nextState = clone(args?.proposedState || {}, args?.proposedState || {});
+
+    for (const key of CHARACTER_EVOLUTION_ITEM_SECTION_KEYS) {
+        if (!Object.prototype.hasOwnProperty.call(nextState, key) || REINFORCEMENT_MATCH_SECTIONS.has(key)) {
+            continue;
+        }
+        const proposedItems = Array.isArray(nextState[key])
+            ? clone(nextState[key], nextState[key])
+            : [];
+        if (proposedItems.length === 0) {
+            continue;
+        }
+
+        const currentActiveItems = Array.isArray(args?.currentState?.[key])
+            ? args.currentState[key].filter((item) => normalizeCharacterEvolutionItemStatus(item) === 'active')
+            : [];
+        const filteredItems = proposedItems.filter((proposedItem) => {
+            if (normalizeCharacterEvolutionItemStatus(proposedItem) !== 'active') {
+                return true;
+            }
+            const matchingCurrentIndex = findMatchingItemIndex(key, currentActiveItems, proposedItem, ['active']);
+            if (matchingCurrentIndex < 0) {
+                return true;
+            }
+            return hasExplicitProposalItemUpdate(currentActiveItems[matchingCurrentIndex], proposedItem);
+        });
+
+        if (filteredItems.length === 0) {
+            delete nextState[key];
+            continue;
+        }
+
+        nextState[key] = filteredItems;
+    }
+
+    return nextState;
+}
+
 function applyCharacterEvolutionItemMetadata(arg = {}) {
     const nextState = clone(arg.state);
     const sourceChatId = typeof arg.sourceChatId === 'string' && arg.sourceChatId.trim()
@@ -669,4 +721,5 @@ module.exports = {
     mergeAcceptedCharacterEvolutionState,
     mergeReinforcedCharacterEvolutionItems,
     normalizeCharacterEvolutionItemSourceRange,
+    pruneUnchangedCharacterEvolutionProposalState,
 };

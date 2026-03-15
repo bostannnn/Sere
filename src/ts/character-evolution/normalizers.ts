@@ -36,6 +36,23 @@ function normalizeSectionConfigKey(keyRaw: unknown): string {
     return key === "lastChatEnded" ? "lastInteractionEnded" : key
 }
 
+function normalizeExtractionPrompt(promptRaw: unknown, fallback: string): string {
+    const prompt = typeof promptRaw === "string" && promptRaw.trim()
+        ? promptRaw
+        : fallback
+    const looksLikeBuiltinEvolutionPrompt = prompt.startsWith(
+        "You update a character evolution state from the current processed roleplay transcript range.",
+    )
+    const usesLegacyFullReplacementContract = prompt.includes(
+        "- each included section must be the full intended replacement for that section",
+    ) || prompt.includes("- must contain the full next state object")
+
+    if (looksLikeBuiltinEvolutionPrompt && usesLegacyFullReplacementContract) {
+        return fallback
+    }
+    return prompt
+}
+
 function normalizeItem(raw: unknown): CharacterEvolutionItem | null {
     if (!raw || typeof raw !== "object") {
         if (typeof raw === "string" && raw.trim()) {
@@ -225,9 +242,7 @@ export function normalizeCharacterEvolutionDefaults(raw: unknown): CharacterEvol
         extractionMaxTokens: Number.isFinite(extractionMaxTokens) && extractionMaxTokens > 0
             ? Math.max(64, Math.floor(extractionMaxTokens))
             : defaults.extractionMaxTokens,
-        extractionPrompt: typeof value.extractionPrompt === "string" && value.extractionPrompt.trim()
-            ? value.extractionPrompt
-            : defaults.extractionPrompt,
+        extractionPrompt: normalizeExtractionPrompt(value.extractionPrompt, defaults.extractionPrompt),
         sectionConfigs: normalizeCharacterEvolutionSectionConfigs(value.sectionConfigs),
         privacy: normalizeCharacterEvolutionPrivacy(value.privacy),
         promptProjection: normalizeCharacterEvolutionPromptProjectionPolicy(value.promptProjection),
@@ -340,9 +355,7 @@ export function normalizeCharacterEvolutionSettings(raw: unknown): CharacterEvol
         extractionMaxTokens: Number.isFinite(extractionMaxTokens) && extractionMaxTokens > 0
             ? Math.max(64, Math.floor(extractionMaxTokens))
             : defaults.extractionMaxTokens,
-        extractionPrompt: typeof value.extractionPrompt === "string" && value.extractionPrompt.trim()
-            ? value.extractionPrompt
-            : defaults.extractionPrompt,
+        extractionPrompt: normalizeExtractionPrompt(value.extractionPrompt, defaults.extractionPrompt),
         sectionConfigs: normalizeCharacterEvolutionSectionConfigs(value.sectionConfigs),
         privacy: normalizeCharacterEvolutionPrivacy(value.privacy),
         currentStateVersion: Number.isFinite(Number(value.currentStateVersion)) ? Math.max(0, Math.floor(Number(value.currentStateVersion))) : 0,

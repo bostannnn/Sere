@@ -595,7 +595,7 @@ describe("evolution routes phase 4 conflicts", () => {
     ]);
   });
 
-  it("keeps same-prefix likes active together when they can coexist", async () => {
+  it("stages only the new compatible same-prefix like when the current one can coexist", async () => {
     const dataDirs = getDataDirs();
     writeJson(path.join(dataDirs.characters, characterId, "character.json"), {
       character: {
@@ -672,12 +672,6 @@ describe("evolution routes phase 4 conflicts", () => {
 
     expect(handoffRes.statusCode).toBe(200);
     expect(handoffRes.payload.proposal.proposedState.characterLikes).toEqual([
-      expect.objectContaining({
-        value: "user likes dark fantasy books",
-        status: "active",
-        confidence: "likely",
-        note: "existing stable preference",
-      }),
       expect.objectContaining({
         value: "user likes dark fantasy movies",
         status: "active",

@@ -13,6 +13,7 @@ function registerEvolutionRoutes(arg = {}) {
         readStateLastEventId,
         applyCharacterEvolutionItemMetadata = require('../llm/character_evolution/items.cjs').applyCharacterEvolutionItemMetadata,
         mergeAcceptedCharacterEvolutionState = require('../llm/character_evolution/items.cjs').mergeAcceptedCharacterEvolutionState,
+        pruneUnchangedCharacterEvolutionProposalState = require('../llm/character_evolution/items.cjs').pruneUnchangedCharacterEvolutionProposalState,
         resolveCharacterEvolutionStateConflicts = require('../llm/character_evolution/conflicts.cjs').resolveCharacterEvolutionStateConflicts,
         applyCharacterEvolutionDecay = require('../llm/character_evolution/decay.cjs').applyCharacterEvolutionDecay,
         applyLastInteractionEndedOverwrite = require('../llm/character_evolution/decay.cjs').applyLastInteractionEndedOverwrite,
@@ -268,18 +269,23 @@ function registerEvolutionRoutes(arg = {}) {
             }),
             retainOmittedSections: false,
         });
-        const stagedProposalState = mergeAcceptedCharacterEvolutionState({
+        const stagedProposalDraft = pruneUnchangedCharacterEvolutionProposalState({
             currentState: latestEvolution.currentState,
             proposedState: normalizedProposalState,
+        });
+        const stagedProposalState = mergeAcceptedCharacterEvolutionState({
+            currentState: latestEvolution.currentState,
+            proposedState: stagedProposalDraft,
             retainOmittedSections: false,
             includeUnchangedCurrentItems: false,
         });
+        const stagedProposalSectionKeys = new Set(Object.keys(stagedProposalState));
         const pendingProposal = {
             proposalId: makeProposalId(),
             sourceChatId: chatId,
             sourceRange,
             proposedState: stagedProposalState,
-            changes: proposalPayload.changes,
+            changes: proposalPayload.changes.filter((change) => stagedProposalSectionKeys.has(change.sectionKey)),
             createdAt: pendingProposalCreatedAt,
         };
 

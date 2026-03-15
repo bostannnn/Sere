@@ -598,6 +598,113 @@ describe("evolution routes handoff", () => {
     expect(characterFile.character.characterEvolution.pendingProposal.proposedState.userFacts).toHaveLength(1);
   });
 
+  it("drops unchanged echoed non-reinforcement items from the staged pending proposal", async () => {
+    const dataDirs = getDataDirs();
+    writeJson(path.join(dataDirs.characters, characterId, "character.json"), {
+      character: {
+        chaId: characterId,
+        type: "character",
+        name: "Eva",
+        desc: "desc",
+        personality: "personality",
+        characterEvolution: {
+          enabled: true,
+          useGlobalDefaults: true,
+          currentStateVersion: 2,
+          currentState: {
+            relationship: {
+              trustLevel: "steady",
+              dynamic: "guarded but warmer",
+            },
+            userRead: [
+              {
+                value: "Andrew keeps joking to dodge vulnerability",
+                status: "active",
+                confidence: "confirmed",
+                note: "older accepted read",
+                sourceChatId: "chat-old",
+                sourceRange: {
+                  chatId: "chat-old",
+                  startMessageIndex: 0,
+                  endMessageIndex: 2,
+                },
+                updatedAt: 100,
+                lastSeenAt: 100,
+                timesSeen: 2,
+              },
+            ],
+          },
+          stateVersions: [],
+        },
+      },
+    });
+
+    const { postHandlers } = buildHandlers({
+      executeInternalLLMTextCompletion: async () => JSON.stringify({
+        proposedState: {
+          relationship: {
+            trustLevel: "high",
+            dynamic: "closer after the last chat",
+          },
+          userRead: [
+            {
+              value: "Andrew keeps joking to dodge vulnerability",
+              status: "active",
+              confidence: "confirmed",
+            },
+          ],
+        },
+        changes: [
+          {
+            sectionKey: "relationship",
+            summary: "The relationship warmed further.",
+            evidence: ["They sounded closer by the end of the range."],
+          },
+          {
+            sectionKey: "userRead",
+            summary: "Eva repeated the same read again.",
+            evidence: ["She framed him the same way again."],
+          },
+        ],
+      }),
+    });
+    const handler = postHandlers.get("/data/character-evolution/handoff");
+    expect(handler).toBeTruthy();
+
+    const res = createRes();
+    await handler!(createReq({ characterId, chatId }), res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.payload).toEqual(expect.objectContaining({
+      proposal: expect.objectContaining({
+        proposedState: {
+          relationship: {
+            trustLevel: "high",
+            dynamic: "closer after the last chat",
+          },
+        },
+        changes: [
+          expect.objectContaining({
+            sectionKey: "relationship",
+          }),
+        ],
+      }),
+    }));
+
+    const characterFile = JSON.parse(readFileSync(path.join(dataDirs.characters, characterId, "character.json"), "utf-8"));
+    expect(characterFile.character.characterEvolution.pendingProposal.proposedState).toEqual({
+      relationship: {
+        trustLevel: "high",
+        dynamic: "closer after the last chat",
+      },
+    });
+    expect(characterFile.character.characterEvolution.pendingProposal.changes).toEqual([
+      expect.objectContaining({
+        sectionKey: "relationship",
+      }),
+    ]);
+  });
+
   it("accepts a pending proposal and writes a version file", async () => {
     const { postHandlers, getHandlers } = buildHandlers();
     const handoff = postHandlers.get("/data/character-evolution/handoff");

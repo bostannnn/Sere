@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest"
 
-import { mergeAcceptedCharacterEvolutionState } from "./items"
+import {
+    mergeAcceptedCharacterEvolutionState,
+    pruneUnchangedCharacterEvolutionProposalState,
+} from "./items"
 import { createDefaultCharacterEvolutionState } from "./schema"
 
 describe("character evolution item matching", () => {
@@ -276,6 +279,68 @@ describe("character evolution item matching", () => {
             },
         ])
         expect(mergedCjs).toEqual(merged)
+    })
+
+    it("prunes unchanged echoed non-reinforcement items from a changed-subset proposal", () => {
+        const currentState = createDefaultCharacterEvolutionState()
+        currentState.userRead = [
+            {
+                value: "Andrew keeps joking to dodge vulnerability",
+                status: "active",
+                confidence: "confirmed",
+                note: "older accepted read",
+                sourceChatId: "chat-1",
+                updatedAt: 100,
+                lastSeenAt: 100,
+                timesSeen: 2,
+            },
+        ]
+        currentState.activeThreads = [
+            {
+                value: "meet again at the station",
+                status: "active",
+                confidence: "likely",
+                updatedAt: 100,
+                lastSeenAt: 100,
+                timesSeen: 2,
+            },
+        ]
+
+        const proposedState = createDefaultCharacterEvolutionState()
+        proposedState.userRead = [
+            {
+                value: "Andrew keeps joking to dodge vulnerability",
+                status: "active",
+                confidence: "confirmed",
+            },
+        ]
+        proposedState.activeThreads = [
+            {
+                value: "meet again at the station",
+                status: "active",
+                confidence: "likely",
+            },
+        ]
+
+        const pruned = pruneUnchangedCharacterEvolutionProposalState({
+            currentState,
+            proposedState,
+        })
+        const { pruneUnchangedCharacterEvolutionProposalState: pruneUnchangedCharacterEvolutionProposalStateCjs } = require("../../../server/node/llm/character_evolution/items.cjs")
+        const prunedCjs = pruneUnchangedCharacterEvolutionProposalStateCjs({
+            currentState,
+            proposedState,
+        })
+
+        expect(pruned.userRead).toBeUndefined()
+        expect(pruned.activeThreads).toEqual([
+            {
+                value: "meet again at the station",
+                status: "active",
+                confidence: "likely",
+            },
+        ])
+        expect(prunedCjs).toEqual(pruned)
     })
 
     it("does not count omitted note on a matched carried-forward item as repeat evidence", () => {

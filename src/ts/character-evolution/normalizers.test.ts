@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 
 import {
+    createDefaultCharacterEvolutionDefaults,
     normalizeCharacterEvolutionDefaults,
     normalizeCharacterEvolutionSettings,
     normalizeCharacterEvolutionState,
@@ -246,6 +247,28 @@ describe("character evolution normalizers", () => {
         expect(normalized.promptProjection?.limits.generation.userFacts).toBe(4)
         expect(normalized.promptProjection?.limits.extraction.userFacts).toBe(6)
         expect(normalizedCjs).toEqual(normalized)
+    })
+
+    it("upgrades legacy built-in full-replacement prompts to the changed-subset prompt", () => {
+        const defaults = createDefaultCharacterEvolutionDefaults()
+        const legacyPrompt = defaults.extractionPrompt.replace(
+            "- for list sections, include only changed, new, corrected, archived, or explicitly cleared items; do not copy unchanged active items from Current state JSON\n- for relationship and lastInteractionEnded, include the full object when that section changes",
+            "- each included section must be the full intended replacement for that section",
+        )
+
+        const normalizedDefaults = normalizeCharacterEvolutionDefaults({
+            extractionPrompt: legacyPrompt,
+        })
+        const normalizedSettings = normalizeCharacterEvolutionSettings({
+            extractionPrompt: legacyPrompt,
+        })
+        const { normalizeCharacterEvolutionDefaults: normalizeCharacterEvolutionDefaultsCjs } = require("../../../server/node/llm/character_evolution/normalizers.cjs")
+        const { normalizeCharacterEvolutionSettings: normalizeCharacterEvolutionSettingsCjs } = require("../../../server/node/llm/character_evolution/normalizers.cjs")
+
+        expect(normalizedDefaults.extractionPrompt).toBe(defaults.extractionPrompt)
+        expect(normalizedSettings.extractionPrompt).toBe(defaults.extractionPrompt)
+        expect(normalizeCharacterEvolutionDefaultsCjs({ extractionPrompt: legacyPrompt }).extractionPrompt).toBe(defaults.extractionPrompt)
+        expect(normalizeCharacterEvolutionSettingsCjs({ extractionPrompt: legacyPrompt }).extractionPrompt).toBe(defaults.extractionPrompt)
     })
 
 })
