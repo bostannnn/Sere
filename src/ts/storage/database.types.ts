@@ -477,6 +477,7 @@ export type CharacterEvolutionProjectedItemSectionKey = Exclude<
 export type CharacterEvolutionProjectionSurface = 'generation' | 'extraction'
 export type CharacterEvolutionProjectionBucket = 'fast' | 'medium' | 'slow'
 export type CharacterEvolutionProjectionRankField = 'confidence' | 'timesSeen' | 'lastSeenAt' | 'updatedAt'
+export type CharacterEvolutionRetentionBucket = CharacterEvolutionProjectionBucket
 
 export interface CharacterEvolutionItem {
     value: string
@@ -613,11 +614,63 @@ export interface CharacterEvolutionDefaults {
     sectionConfigs: CharacterEvolutionSectionConfig[]
     privacy: CharacterEvolutionPrivacySettings
     promptProjection?: CharacterEvolutionPromptProjectionPolicy
+    retention?: CharacterEvolutionRetentionPolicy
 }
 
 export interface CharacterEvolutionPromptProjectionPolicy {
     rankings: Record<CharacterEvolutionProjectionBucket, CharacterEvolutionProjectionRankField[]>
     limits: Record<CharacterEvolutionProjectionSurface, Record<CharacterEvolutionProjectedItemSectionKey, number>>
+}
+
+export interface CharacterEvolutionRetentionThresholds {
+    archive: Record<CharacterEvolutionRetentionBucket, number>
+    deleteNonActive: Record<CharacterEvolutionRetentionBucket, number>
+    deleteConfirmedSlow: number
+}
+
+export interface CharacterEvolutionRetentionSectionCap {
+    active: number
+    nonActive: number
+}
+
+export interface CharacterEvolutionRetentionPolicy {
+    thresholds: CharacterEvolutionRetentionThresholds
+    caps: Partial<Record<CharacterEvolutionProjectedItemSectionKey, CharacterEvolutionRetentionSectionCap>>
+}
+
+export interface CharacterEvolutionRetentionDryRunCounts {
+    total: number
+    active: number
+    archived: number
+    corrected: number
+}
+
+export interface CharacterEvolutionRetentionDryRunSectionReport {
+    before: CharacterEvolutionRetentionDryRunCounts
+    after: CharacterEvolutionRetentionDryRunCounts
+    archivedByDecay: number
+    deletedByDecay: number
+    archivedByCap: number
+    deletedByCap: number
+}
+
+export interface CharacterEvolutionRetentionDryRunReport {
+    currentStateVersion: number
+    simulatedAcceptedVersion: number
+    totals: {
+        before: CharacterEvolutionRetentionDryRunCounts
+        after: CharacterEvolutionRetentionDryRunCounts
+    }
+    sections: Record<CharacterEvolutionProjectedItemSectionKey, CharacterEvolutionRetentionDryRunSectionReport>
+}
+
+export interface CharacterEvolutionRetentionCompactionReport {
+    currentStateVersion: number
+    totals: {
+        before: CharacterEvolutionRetentionDryRunCounts
+        after: CharacterEvolutionRetentionDryRunCounts
+    }
+    sections: Record<CharacterEvolutionProjectedItemSectionKey, CharacterEvolutionRetentionDryRunSectionReport>
 }
 
 export interface character{

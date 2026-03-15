@@ -173,6 +173,62 @@ describe("character evolution render", () => {
         expect(promptMessages[1]?.content).not.toContain("\"timesSeen\"")
     })
 
+    it("truncates verbose extractor-facing values without mutating canonical stored wording", () => {
+        const state = createDefaultCharacterEvolutionState()
+        state.activeThreads = [
+            {
+                value: "This is an intentionally overlong active thread value that keeps going with extra connective wording and repeated detail so the extractor prompt stays compact even when canonical storage keeps the full phrasing untouched for history and merge quality across later handoffs.",
+                status: "active",
+                confidence: "likely",
+            },
+        ]
+        state.relationship = {
+            trustLevel: "very high trust with a lot of repeated explanation about how stable and carefully repaired the dynamic feels after several recent conversations",
+            dynamic: "warm, teasing, and unusually open in a way that keeps restating the same emotional texture over and over to simulate a very long extractor-facing string",
+        }
+        const sectionConfigs = createDefaultCharacterEvolutionSectionConfigs()
+        const { buildCharacterEvolutionPromptMessages } = require("../../../server/node/llm/character_evolution/prompt_builder.cjs")
+
+        const promptMessages = buildCharacterEvolutionPromptMessages({
+            settings: {
+                username: "User",
+            },
+            character: {
+                name: "Eva",
+                characterEvolution: {
+                    enabled: true,
+                    useGlobalDefaults: false,
+                    extractionProvider: "openrouter",
+                    extractionModel: "anthropic/claude-3.5-haiku",
+                    extractionMaxTokens: 2400,
+                    extractionPrompt: "prompt",
+                    sectionConfigs,
+                    privacy: {
+                        allowCharacterIntimatePreferences: false,
+                        allowUserIntimatePreferences: false,
+                    },
+                    currentStateVersion: 1,
+                    currentState: state,
+                    stateVersions: [],
+                },
+            },
+            chat: {
+                id: "chat-1",
+                message: [],
+            },
+            sourceRange: {
+                chatId: "chat-1",
+                startMessageIndex: 0,
+                endMessageIndex: 0,
+            },
+        })
+
+        expect(state.activeThreads[0]?.value).toContain("canonical storage keeps the full phrasing untouched")
+        expect(promptMessages[1]?.content).toContain("\"value\": \"This is an intentionally overlong active thread value")
+        expect(promptMessages[1]?.content).toContain("...\"")
+        expect(promptMessages[1]?.content).not.toContain("canonical storage keeps the full phrasing untouched")
+    })
+
     it("does not leak disabled or privacy-blocked sections into extractor state JSON", () => {
         const state = createDefaultCharacterEvolutionState()
         state.characterIntimatePreferences = [

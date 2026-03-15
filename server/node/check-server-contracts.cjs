@@ -319,6 +319,60 @@ async function runContracts() {
             );
         }
 
+        const contractCharacterPath = path.join(dataRoot, 'characters', 'contract-char', 'character.json');
+        await fs.mkdir(path.dirname(contractCharacterPath), { recursive: true });
+        await fs.writeFile(
+            contractCharacterPath,
+            JSON.stringify({
+                character: {
+                    chaId: 'contract-char',
+                    type: 'character',
+                    name: 'Contracts',
+                    desc: 'desc',
+                    personality: 'personality',
+                    characterEvolution: {
+                        enabled: true,
+                        useGlobalDefaults: true,
+                        currentStateVersion: 4,
+                        currentState: {
+                            activeThreads: [
+                                {
+                                    value: 'follow up on the gallery invite',
+                                    status: 'active',
+                                    confidence: 'likely',
+                                    lastSeenVersion: 4,
+                                    unseenAcceptedHandoffs: 1,
+                                },
+                                {
+                                    value: 'older corrected gallery invite wording',
+                                    status: 'corrected',
+                                    confidence: 'likely',
+                                    unseenAcceptedHandoffs: 5,
+                                },
+                            ],
+                        },
+                        stateVersions: [],
+                    },
+                },
+            }, null, 2),
+            'utf-8'
+        );
+
+        const retentionDryRun = await api
+            .post('/data/character-evolution/contract-char/retention/dry-run')
+            .set('risu-auth', PASSWORD)
+            .send({})
+            .expect(200);
+        if (retentionDryRun.body?.ok !== true) {
+            throw new Error(`Expected retention dry-run ok=true, got ${JSON.stringify(retentionDryRun.body)}`);
+        }
+        if (retentionDryRun.body?.report?.simulatedAcceptedVersion !== 5) {
+            throw new Error(`Expected retention dry-run simulatedAcceptedVersion=5, got ${JSON.stringify(retentionDryRun.body)}`);
+        }
+        if (retentionDryRun.body?.report?.sections?.activeThreads?.deletedByDecay !== 1) {
+            throw new Error(`Expected retention dry-run activeThreads.deletedByDecay=1, got ${JSON.stringify(retentionDryRun.body)}`);
+        }
+
         const staleBase = await api
             .post('/data/state/commands')
             .set('risu-auth', PASSWORD)

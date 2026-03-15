@@ -5,6 +5,9 @@ const { getCharacterEvolutionPromptProjectionPolicy } = require('./projection_po
 const { sanitizeStateForEvolution } = require('./proposal.cjs');
 const { toTrimmedString } = require('./utils.cjs');
 
+const EXTRACTION_ITEM_VALUE_MAX_CHARS = 180;
+const EXTRACTION_STRING_VALUE_MAX_CHARS = 160;
+
 function chatMessageToTranscriptLine(message, characterName, userName) {
     if (!message || typeof message !== 'object' || message.disabled === true) return '';
     const role = toTrimmedString(message.role).toLowerCase();
@@ -16,8 +19,20 @@ function chatMessageToTranscriptLine(message, characterName, userName) {
     return `${label}: ${content}`;
 }
 
+function compactPromptText(value, maxChars) {
+    const normalized = toTrimmedString(value).replace(/\s+/g, ' ').trim();
+    if (!normalized) {
+        return '';
+    }
+    if (!Number.isFinite(maxChars) || maxChars < 1 || normalized.length <= maxChars) {
+        return normalized;
+    }
+    const truncated = normalized.slice(0, Math.max(1, maxChars - 3)).replace(/\s+[^\s]*$/, '').trim();
+    return `${truncated || normalized.slice(0, Math.max(1, maxChars - 3)).trim()}...`;
+}
+
 function toCompactPromptItem(item) {
-    const value = toTrimmedString(item?.value);
+    const value = compactPromptText(item?.value, EXTRACTION_ITEM_VALUE_MAX_CHARS);
     if (!value) {
         return null;
     }
@@ -34,8 +49,8 @@ function buildCompactCurrentStateForExtraction(stateRaw, evolutionSettings, prom
 
     return {
         relationship: {
-            trustLevel: toTrimmedString(state.relationship?.trustLevel),
-            dynamic: toTrimmedString(state.relationship?.dynamic),
+            trustLevel: compactPromptText(state.relationship?.trustLevel, EXTRACTION_STRING_VALUE_MAX_CHARS),
+            dynamic: compactPromptText(state.relationship?.dynamic, EXTRACTION_STRING_VALUE_MAX_CHARS),
         },
         activeThreads: state.activeThreads.map((item) => toCompactPromptItem(item)).filter(Boolean),
         runningJokes: state.runningJokes.map((item) => toCompactPromptItem(item)).filter(Boolean),
@@ -48,8 +63,8 @@ function buildCompactCurrentStateForExtraction(stateRaw, evolutionSettings, prom
         userLikes: state.userLikes.map((item) => toCompactPromptItem(item)).filter(Boolean),
         userDislikes: state.userDislikes.map((item) => toCompactPromptItem(item)).filter(Boolean),
         lastInteractionEnded: {
-            state: toTrimmedString(state.lastInteractionEnded?.state),
-            residue: toTrimmedString(state.lastInteractionEnded?.residue),
+            state: compactPromptText(state.lastInteractionEnded?.state, EXTRACTION_STRING_VALUE_MAX_CHARS),
+            residue: compactPromptText(state.lastInteractionEnded?.residue, EXTRACTION_STRING_VALUE_MAX_CHARS),
         },
         keyMoments: state.keyMoments.map((item) => toCompactPromptItem(item)).filter(Boolean),
         characterIntimatePreferences: state.characterIntimatePreferences.map((item) => toCompactPromptItem(item)).filter(Boolean),

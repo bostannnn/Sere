@@ -1,5 +1,6 @@
 const { clone, toTrimmedString } = require('./utils.cjs');
 const { createCharacterEvolutionPromptProjectionPolicy } = require('./projection_policy.cjs');
+const { createCharacterEvolutionRetentionPolicy } = require('./retention_policy.cjs');
 
 const DEFAULT_EXTRACTION_PROMPT = [
     'You update a character evolution state from the current processed roleplay transcript range.',
@@ -185,6 +186,7 @@ function createDefaultCharacterEvolutionDefaults() {
             allowUserIntimatePreferences: false,
         }),
         promptProjection: createCharacterEvolutionPromptProjectionPolicy(),
+        retention: createCharacterEvolutionRetentionPolicy(),
     };
 }
 

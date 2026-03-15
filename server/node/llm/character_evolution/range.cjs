@@ -72,11 +72,6 @@ function getLastProcessedMessageIndexForChat(evolution, chatId) {
         return -1;
     }
 
-    const explicitCursor = evolution?.lastProcessedMessageIndexByChat?.[normalizedChatId];
-    if (Number.isFinite(Number(explicitCursor))) {
-        return Math.max(-1, Math.floor(Number(explicitCursor)));
-    }
-
     let derivedCursor = -1;
     for (const entry of getCharacterEvolutionProcessedRanges(evolution)) {
         if (entry.range.chatId !== normalizedChatId) {
@@ -86,6 +81,11 @@ function getLastProcessedMessageIndexForChat(evolution, chatId) {
     }
     if (derivedCursor >= 0) {
         return derivedCursor;
+    }
+
+    const explicitCursor = evolution?.lastProcessedMessageIndexByChat?.[normalizedChatId];
+    if (Number.isFinite(Number(explicitCursor))) {
+        return Math.max(-1, Math.floor(Number(explicitCursor)));
     }
 
     return -1;

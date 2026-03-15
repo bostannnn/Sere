@@ -224,6 +224,30 @@ function isTokenSuffix(shorter: string[], longer: string[]): boolean {
     return shorter.every((token, index) => token === longer[longer.length - shorter.length + index])
 }
 
+function containsTokenSubsequence(shorter: string[], longer: string[]): boolean {
+    if (shorter.length === 0 || shorter.length > longer.length) {
+        return false
+    }
+    for (let startIndex = 0; startIndex <= longer.length - shorter.length; startIndex += 1) {
+        let matches = true
+        for (let offset = 0; offset < shorter.length; offset += 1) {
+            if (longer[startIndex + offset] !== shorter[offset]) {
+                matches = false
+                break
+            }
+        }
+        if (matches) {
+            return true
+        }
+    }
+    return false
+}
+
+function countSharedTokens(left: string[], right: string[]): number {
+    const rightTokens = new Set(right)
+    return [...new Set(left)].filter((token) => rightTokens.has(token)).length
+}
+
 export function doCharacterEvolutionItemsReinforceSameIdea(
     sectionKey: CharacterEvolutionItemSectionKey,
     left: CharacterEvolutionItem | string,
@@ -241,22 +265,43 @@ export function doCharacterEvolutionItemsReinforceSameIdea(
 
     const commonPrefixCount = countCommonTokenPrefix(leftTokens, rightTokens)
     const commonSuffixCount = countCommonTokenSuffix(leftTokens, rightTokens, commonPrefixCount)
-    if (commonPrefixCount < 3 && commonSuffixCount < 3) {
-        return false
-    }
 
     const leftMeaningfulTokens = getMeaningfulCharacterEvolutionItemTokens(left)
     const rightMeaningfulTokens = getMeaningfulCharacterEvolutionItemTokens(right)
     if (leftMeaningfulTokens.length === 0 || rightMeaningfulTokens.length === 0) {
         return false
     }
+    const meaningfulPrefixCount = countCommonTokenPrefix(leftMeaningfulTokens, rightMeaningfulTokens)
+    const meaningfulSuffixCount = countCommonTokenSuffix(
+        leftMeaningfulTokens,
+        rightMeaningfulTokens,
+        meaningfulPrefixCount,
+    )
 
     const [shorterMeaningfulTokens, longerMeaningfulTokens] = leftMeaningfulTokens.length <= rightMeaningfulTokens.length
         ? [leftMeaningfulTokens, rightMeaningfulTokens]
         : [rightMeaningfulTokens, leftMeaningfulTokens]
 
+    const sharedMeaningfulTokenCount = countSharedTokens(shorterMeaningfulTokens, longerMeaningfulTokens)
+    const hasStrongBoundaryMatch = commonPrefixCount >= 3
+        || commonSuffixCount >= 3
+        || meaningfulPrefixCount >= 3
+        || meaningfulSuffixCount >= 3
+    const hasContainedMeaningfulSubsequence = containsTokenSubsequence(
+        shorterMeaningfulTokens,
+        longerMeaningfulTokens,
+    )
+    const hasHighMeaningfulTokenOverlap = shorterMeaningfulTokens.length >= 4
+        && sharedMeaningfulTokenCount >= Math.max(3, shorterMeaningfulTokens.length - 1)
+
+    if (!hasStrongBoundaryMatch && !hasContainedMeaningfulSubsequence && !hasHighMeaningfulTokenOverlap) {
+        return false
+    }
+
     return isTokenPrefix(shorterMeaningfulTokens, longerMeaningfulTokens)
         || isTokenSuffix(shorterMeaningfulTokens, longerMeaningfulTokens)
+        || hasContainedMeaningfulSubsequence
+        || hasHighMeaningfulTokenOverlap
 }
 
 function itemValueKeysForSection(

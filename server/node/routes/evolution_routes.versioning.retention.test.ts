@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import * as fs from "node:fs";
 import * as path from "node:path";
 
 import {
@@ -22,6 +23,91 @@ afterEach(() => {
 });
 
 describe("evolution routes versioning retention", () => {
+  it("previews retention cleanup without mutating canonical state", async () => {
+    const dataDirs = getDataDirs();
+    writeJson(path.join(dataDirs.characters, characterId, "character.json"), {
+      character: {
+        chaId: characterId,
+        type: "character",
+        name: "Eva",
+        desc: "desc",
+        personality: "personality",
+        characterEvolution: {
+          enabled: true,
+          useGlobalDefaults: true,
+          currentStateVersion: 4,
+          currentState: {
+            activeThreads: [
+              {
+                value: "follow up on the gallery invite",
+                status: "active",
+                confidence: "likely",
+                lastSeenVersion: 4,
+                unseenAcceptedHandoffs: 1,
+              },
+              {
+                value: "older corrected gallery invite wording",
+                status: "corrected",
+                confidence: "likely",
+                unseenAcceptedHandoffs: 5,
+              },
+            ],
+          },
+          stateVersions: [],
+          lastProcessedChatId: null,
+        },
+      },
+    });
+
+    const { postHandlers } = buildHandlers();
+    const preview = postHandlers.get("/data/character-evolution/:charId/retention/dry-run");
+    expect(preview).toBeTruthy();
+
+    const previewRes = createRes();
+    await preview!(createReq({}, { charId: characterId }), previewRes);
+
+    expect(previewRes.statusCode).toBe(200);
+    expect(previewRes.payload).toEqual(expect.objectContaining({
+      ok: true,
+      report: expect.objectContaining({
+        currentStateVersion: 4,
+        simulatedAcceptedVersion: 5,
+        sections: expect.objectContaining({
+          activeThreads: {
+            before: {
+              total: 2,
+              active: 1,
+              archived: 0,
+              corrected: 1,
+            },
+            after: {
+              total: 1,
+              active: 0,
+              archived: 1,
+              corrected: 0,
+            },
+            archivedByDecay: 1,
+            deletedByDecay: 1,
+            archivedByCap: 0,
+            deletedByCap: 0,
+          },
+        }),
+      }),
+    }));
+
+    const characterFile = JSON.parse(await fs.promises.readFile(path.join(dataDirs.characters, characterId, "character.json"), "utf-8"));
+    expect(characterFile.character.characterEvolution.currentState.activeThreads).toEqual([
+      expect.objectContaining({
+        value: "follow up on the gallery invite",
+        status: "active",
+      }),
+      expect.objectContaining({
+        value: "older corrected gallery invite wording",
+        status: "corrected",
+      }),
+    ]);
+  });
+
   it("keeps archived items in canonical state when a later active-only proposal omits them", async () => {
     const dataDirs = getDataDirs();
     writeJson(path.join(dataDirs.characters, characterId, "character.json"), {

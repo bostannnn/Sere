@@ -24,6 +24,7 @@ import {
 } from "./schema"
 import { normalizeCharacterEvolutionItemSourceRange } from "./items"
 import { normalizeCharacterEvolutionPromptProjectionPolicy } from "./projectionPolicy"
+import { normalizeCharacterEvolutionRetentionPolicy } from "./retentionPolicy"
 import { normalizeCharacterEvolutionRangeRef } from "./ranges"
 
 function jsonEqual(a: unknown, b: unknown): boolean {
@@ -230,6 +231,7 @@ export function normalizeCharacterEvolutionDefaults(raw: unknown): CharacterEvol
         sectionConfigs: normalizeCharacterEvolutionSectionConfigs(value.sectionConfigs),
         privacy: normalizeCharacterEvolutionPrivacy(value.privacy),
         promptProjection: normalizeCharacterEvolutionPromptProjectionPolicy(value.promptProjection),
+        retention: normalizeCharacterEvolutionRetentionPolicy(value.retention),
     }
 }
 

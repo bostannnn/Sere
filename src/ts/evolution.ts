@@ -4,10 +4,13 @@ import { getDatabase, setDatabase, type Chat, type character, type groupChat } f
 import { saveServerDatabase } from "./storage/serverDb";
 import type {
     CharacterEvolutionPendingProposal,
+    CharacterEvolutionProcessedRange,
     CharacterEvolutionProposalState,
     CharacterEvolutionRangeRef,
+    CharacterEvolutionRetentionDryRunReport,
     CharacterEvolutionVersionFile,
     CharacterEvolutionVersionMeta,
+    CharacterEvolutionState,
 } from "./storage/database.types";
 
 function toErrorMessage(error: unknown): string {
@@ -77,6 +80,35 @@ export async function listCharacterEvolutionVersions(characterId: string): Promi
 export async function fetchCharacterEvolutionVersion(characterId: string, version: number): Promise<CharacterEvolutionVersionFile | null> {
     const payload = await getJson(`/data/character-evolution/${encodeURIComponent(characterId)}/versions/${encodeURIComponent(String(version))}`);
     return payload.version && typeof payload.version === "object" ? payload.version as CharacterEvolutionVersionFile : null;
+}
+
+export interface CharacterEvolutionVersionMutationResult extends Record<string, unknown> {
+    currentStateVersion?: number
+    invalidatedVersions?: number[]
+    state?: CharacterEvolutionState
+    versions?: CharacterEvolutionVersionMeta[]
+    processedRanges?: CharacterEvolutionProcessedRange[]
+}
+
+export async function clearCharacterEvolutionCoverage(characterId: string, range: CharacterEvolutionRangeRef): Promise<CharacterEvolutionVersionMutationResult> {
+    return await postJson(`/data/character-evolution/${encodeURIComponent(characterId)}/coverage/clear`, {
+        range,
+    }) as CharacterEvolutionVersionMutationResult;
+}
+
+export async function revertCharacterEvolutionVersion(characterId: string, version: number): Promise<CharacterEvolutionVersionMutationResult> {
+    return await postJson(`/data/character-evolution/${encodeURIComponent(characterId)}/versions/${encodeURIComponent(String(version))}/revert`, {}) as CharacterEvolutionVersionMutationResult;
+}
+
+export async function deleteCharacterEvolutionVersion(characterId: string, version: number): Promise<CharacterEvolutionVersionMutationResult> {
+    return await postJson(`/data/character-evolution/${encodeURIComponent(characterId)}/versions/${encodeURIComponent(String(version))}/delete`, {}) as CharacterEvolutionVersionMutationResult;
+}
+
+export async function previewCharacterEvolutionRetention(characterId: string): Promise<CharacterEvolutionRetentionDryRunReport | null> {
+    const payload = await postJson(`/data/character-evolution/${encodeURIComponent(characterId)}/retention/dry-run`, {});
+    return payload.report && typeof payload.report === "object"
+        ? payload.report as CharacterEvolutionRetentionDryRunReport
+        : null;
 }
 
 export function getCharacterEvolutionErrorMessage(error: unknown): string {

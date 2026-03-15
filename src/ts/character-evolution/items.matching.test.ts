@@ -103,6 +103,57 @@ describe("character evolution item matching", () => {
         expect(mergedCjs).toEqual(merged)
     })
 
+    it("treats article changes and inserted detail as reinforcement for the same active thread", () => {
+        const currentState = createDefaultCharacterEvolutionState()
+        currentState.activeThreads = [
+            {
+                value: "the sink as recurring symbol of dread",
+                status: "active",
+                confidence: "likely",
+                sourceChatId: "chat-1",
+                updatedAt: 120,
+                lastSeenAt: 120,
+                timesSeen: 2,
+            },
+        ]
+
+        const proposedState = createDefaultCharacterEvolutionState()
+        proposedState.activeThreads = [
+            {
+                value: "sink as recurring symbol of grief and dread in the apartment",
+                status: "active",
+                note: "restated with sharper apartment imagery",
+                updatedAt: 240,
+                lastSeenAt: 240,
+                timesSeen: 1,
+            },
+        ]
+
+        const merged = mergeAcceptedCharacterEvolutionState({
+            currentState,
+            proposedState,
+        })
+        const { mergeAcceptedCharacterEvolutionState: mergeAcceptedCharacterEvolutionStateCjs } = require("../../../server/node/llm/character_evolution/items.cjs")
+        const mergedCjs = mergeAcceptedCharacterEvolutionStateCjs({
+            currentState,
+            proposedState,
+        })
+
+        expect(merged.activeThreads).toEqual([
+            {
+                value: "sink as recurring symbol of grief and dread in the apartment",
+                status: "active",
+                confidence: "confirmed",
+                note: "restated with sharper apartment imagery",
+                sourceChatId: "chat-1",
+                updatedAt: 240,
+                lastSeenAt: 240,
+                timesSeen: 3,
+            },
+        ])
+        expect(mergedCjs).toEqual(merged)
+    })
+
     it("dedupes normalized formatting-only matches without counting them as repeat evidence", () => {
         const currentState = createDefaultCharacterEvolutionState()
         currentState.characterLikes = [

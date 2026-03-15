@@ -1,8 +1,12 @@
 import {
     acceptEvolutionProposalAction,
+    clearEvolutionCoverageAction,
+    deleteEvolutionVersionAction,
     loadEvolutionVersionState,
     persistEvolutionCharacter,
+    previewEvolutionRetentionAction,
     refreshEvolutionVersions,
+    revertEvolutionVersionAction,
     rejectEvolutionProposalAction,
 } from "src/ts/character-evolution/actions"
 import { getEvolutionProposalIdentity } from "src/ts/character-evolution/workflow"
@@ -11,10 +15,14 @@ import type { CharacterEvolutionVersionFile, CharacterEvolutionVersionMeta, char
 import { deriveMergedProcessedRanges, mergeEvolutionVersionMetas } from "./evolutionSettings.helpers"
 export {
     acceptEvolutionProposalAction,
+    clearEvolutionCoverageAction,
+    deleteEvolutionVersionAction,
     getEvolutionProposalIdentity,
     loadEvolutionVersionState,
     persistEvolutionCharacter,
+    previewEvolutionRetentionAction,
     refreshEvolutionVersions,
+    revertEvolutionVersionAction,
     rejectEvolutionProposalAction,
 }
 

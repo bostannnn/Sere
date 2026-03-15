@@ -1,18 +1,24 @@
 import { saveServerDatabase } from "src/ts/storage/serverDb"
 import {
     acceptCharacterEvolutionProposal,
+    clearCharacterEvolutionCoverage,
     createNewChatAfterEvolution,
+    deleteCharacterEvolutionVersion,
     fetchCharacterEvolutionVersion,
     listCharacterEvolutionVersions,
+    previewCharacterEvolutionRetention,
     rejectCharacterEvolutionProposal,
+    revertCharacterEvolutionVersion,
 } from "src/ts/evolution"
 import { DBState } from "src/ts/stores.svelte"
 import type {
     CharacterEvolutionProposalState,
     CharacterEvolutionRangeRef,
+    CharacterEvolutionRetentionDryRunReport,
     CharacterEvolutionState,
     CharacterEvolutionVersionFile,
     CharacterEvolutionVersionMeta,
+    CharacterEvolutionProcessedRange,
     Database,
 } from "src/ts/storage/database.types"
 
@@ -23,6 +29,14 @@ export interface AcceptedEvolutionProposalPayload extends Record<string, unknown
     chatId?: string | null
     range?: CharacterEvolutionRangeRef
     chatCreationError?: string
+}
+
+export interface CharacterEvolutionVersionMutationPayload extends Record<string, unknown> {
+    currentStateVersion?: number | string
+    invalidatedVersions?: number[]
+    state?: CharacterEvolutionState
+    versions?: CharacterEvolutionVersionMeta[]
+    processedRanges?: CharacterEvolutionProcessedRange[]
 }
 
 function toErrorMessage(error: unknown): string {
@@ -77,6 +91,33 @@ export async function loadEvolutionVersionState(
     version: number,
 ): Promise<CharacterEvolutionVersionFile | null> {
     return await fetchCharacterEvolutionVersion(characterId, version)
+}
+
+export async function clearEvolutionCoverageAction(
+    characterId: string,
+    range: CharacterEvolutionRangeRef,
+): Promise<CharacterEvolutionVersionMutationPayload> {
+    return await clearCharacterEvolutionCoverage(characterId, range)
+}
+
+export async function revertEvolutionVersionAction(
+    characterId: string,
+    version: number,
+): Promise<CharacterEvolutionVersionMutationPayload> {
+    return await revertCharacterEvolutionVersion(characterId, version)
+}
+
+export async function deleteEvolutionVersionAction(
+    characterId: string,
+    version: number,
+): Promise<CharacterEvolutionVersionMutationPayload> {
+    return await deleteCharacterEvolutionVersion(characterId, version)
+}
+
+export async function previewEvolutionRetentionAction(
+    characterId: string,
+): Promise<CharacterEvolutionRetentionDryRunReport | null> {
+    return await previewCharacterEvolutionRetention(characterId)
 }
 
 export async function rejectEvolutionProposalAction(

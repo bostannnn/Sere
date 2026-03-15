@@ -9,6 +9,7 @@ import {
     DEFAULT_PRIVACY,
 } from "./constants"
 import { createCharacterEvolutionPromptProjectionPolicy } from "./projectionPolicy"
+import { createCharacterEvolutionRetentionPolicy } from "./retentionPolicy"
 
 export function clone<T>(value: T): T {
     return JSON.parse(JSON.stringify(value)) as T
@@ -61,5 +62,6 @@ export function createDefaultCharacterEvolutionDefaults(): CharacterEvolutionDef
         sectionConfigs: createDefaultCharacterEvolutionSectionConfigs(),
         privacy: clone(DEFAULT_PRIVACY),
         promptProjection: createCharacterEvolutionPromptProjectionPolicy(),
+        retention: createCharacterEvolutionRetentionPolicy(),
     }
 }

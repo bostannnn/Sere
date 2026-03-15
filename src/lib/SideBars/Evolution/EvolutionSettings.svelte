@@ -3,17 +3,27 @@
     import { ensureCharacterEvolution, getEffectiveCharacterEvolutionSettings, hasCharacterStateTemplateBlock } from "src/ts/characterEvolution"
     import { getCharacterEvolutionErrorMessage } from "src/ts/evolution"
     import { DBState, evolutionReviewOpenRequest, selectedCharID } from "src/ts/stores.svelte"
-    import type { CharacterEvolutionSectionConfig, CharacterEvolutionPrivacySettings, CharacterEvolutionState, CharacterEvolutionVersionMeta, CharacterEvolutionVersionFile, character } from "src/ts/storage/database.types"
+    import type { CharacterEvolutionRetentionDryRunReport, CharacterEvolutionSectionConfig, CharacterEvolutionPrivacySettings, CharacterEvolutionState, CharacterEvolutionVersionMeta, CharacterEvolutionVersionFile, character } from "src/ts/storage/database.types"
     import EvolutionWorkspaceContent from "./EvolutionWorkspaceContent.svelte"
     import { acceptEvolutionReviewFlow, hasAcceptedEvolutionForChat, rejectEvolutionReviewFlow, runEvolutionHandoffFlow } from "src/ts/character-evolution/reviewFlow"
     import { getPendingProposalSourceRange } from "src/ts/character-evolution/pendingProposal"
     import { findSingleCharacterById } from "src/ts/storage/characterList"
     import { sleep } from "src/ts/util"
-    import { openEvolutionGlobalDefaults, persistEvolutionCharacter, refreshEvolutionWorkspaceVersions, loadEvolutionWorkspaceVersion } from "./evolutionSettings.actions"
+    import {
+        clearEvolutionCoverageAction,
+        deleteEvolutionVersionAction,
+        loadEvolutionWorkspaceVersion,
+        openEvolutionGlobalDefaults,
+        persistEvolutionCharacter,
+        previewEvolutionRetentionAction,
+        refreshEvolutionWorkspaceVersions,
+        revertEvolutionVersionAction,
+    } from "./evolutionSettings.actions"
     import { EVOLUTION_HISTORY_TAB, EVOLUTION_REVIEW_TAB, EVOLUTION_SETUP_TAB, type EvolutionWorkspaceTabId } from "./evolutionSettingsTabs"
     import { createCurrentStateDraft, createSectionDraftSnapshot, getCurrentStateDraftHydrationKey, getSectionDraftHydrationKey } from "./evolutionSettings.drafts"
     import { commitEvolutionCharacter, setCharacterUseGlobalEvolutionDefaults, syncEvolutionCharacterDrafts } from "./evolutionSettings.character"
     import { deriveSelectedVersionPrivacy, deriveSelectedVersionSectionConfigs, deriveMergedProcessedRanges, isSingleCharacter, mergeEvolutionVersionMetas } from "./evolutionSettings.helpers"
+    import { buildClearCoveragePreview, buildDeleteVersionPreview, buildRevertVersionPreview } from "./evolutionSettings.versionPreview"
 
     let loadingVersions = $state(false)
     let reviewActionBusy = $state(false)
@@ -129,6 +139,87 @@
 
     function commitCharacter(characterEntry: character) {
         commitEvolutionCharacter(DBState.db.characters, characterEntry)
+    }
+
+    function deriveLastProcessedMessageIndexByChat(processedRanges: NonNullable<character["characterEvolution"]["processedRanges"]>) {
+        const cursors: Record<string, number> = {}
+        for (const entry of processedRanges) {
+            const chatId = entry?.range?.chatId?.trim()
+            if (!chatId) {
+                continue
+            }
+            cursors[chatId] = Math.max(cursors[chatId] ?? -1, entry.range.endMessageIndex)
+        }
+        return cursors
+    }
+
+    function formatRetentionDryRun(report: CharacterEvolutionRetentionDryRunReport): string {
+        const changedSections = Object.entries(report.sections)
+            .filter(([, section]) => (
+                section.archivedByDecay > 0
+                || section.deletedByDecay > 0
+                || section.archivedByCap > 0
+                || section.deletedByCap > 0
+            ))
+            .map(([sectionKey, section]) => {
+                const parts: string[] = []
+                if (section.archivedByDecay > 0) {
+                    parts.push(`archived ${section.archivedByDecay} by decay`)
+                }
+                if (section.deletedByDecay > 0) {
+                    parts.push(`deleted ${section.deletedByDecay} by decay`)
+                }
+                if (section.archivedByCap > 0) {
+                    parts.push(`archived ${section.archivedByCap} by cap`)
+                }
+                if (section.deletedByCap > 0) {
+                    parts.push(`deleted ${section.deletedByCap} by cap`)
+                }
+                return `${sectionKey}: ${parts.join(", ")}`
+            })
+
+        if (changedSections.length === 0) {
+            return `Retention dry run for v${report.currentStateVersion} -> v${report.simulatedAcceptedVersion}: no canonical-state cleanup would occur on the next accepted handoff.`
+        }
+
+        const removedTotal = Math.max(0, report.totals.before.total - report.totals.after.total)
+        return [
+            `Retention dry run for v${report.currentStateVersion} -> v${report.simulatedAcceptedVersion}`,
+            `Items before: ${report.totals.before.total}. After: ${report.totals.after.total}. Removed: ${removedTotal}.`,
+            ...changedSections,
+        ].join("\n")
+    }
+
+    function applyVersionMutationPayload(characterId: string, payload: Record<string, unknown>) {
+        const characterEntry = findCharacterById(characterId)
+        if (!characterEntry) {
+            return
+        }
+        const nextVersions = Array.isArray(payload.versions)
+            ? payload.versions as CharacterEvolutionVersionMeta[]
+            : []
+        const nextProcessedRanges = Array.isArray(payload.processedRanges)
+            ? payload.processedRanges as typeof characterEntry.characterEvolution.processedRanges
+            : []
+        const nextCurrentStateVersion = Number.isFinite(Number(payload.currentStateVersion))
+            ? Math.max(0, Math.floor(Number(payload.currentStateVersion)))
+            : characterEntry.characterEvolution.currentStateVersion
+        characterEntry.characterEvolution = {
+            ...characterEntry.characterEvolution,
+            currentStateVersion: nextCurrentStateVersion,
+            currentState: (payload.state as CharacterEvolutionState | undefined) ?? characterEntry.characterEvolution.currentState,
+            pendingProposal: null,
+            stateVersions: nextVersions,
+            processedRanges: nextProcessedRanges,
+            lastProcessedChatId: [...(nextProcessedRanges ?? [])]
+                .sort((left, right) => (left?.version ?? 0) - (right?.version ?? 0))
+                .at(-1)?.range.chatId ?? null,
+            lastProcessedMessageIndexByChat: deriveLastProcessedMessageIndexByChat(nextProcessedRanges ?? []),
+        }
+        commitCharacter(characterEntry)
+        refreshedVersionMetas = nextVersions
+        selectedVersion = null
+        selectedVersionFile = null
     }
 
     function setUseGlobalDefaults(nextValue: boolean) {
@@ -290,6 +381,123 @@
         } finally {
             loadingVersions = false
         }
+    }
+
+    async function clearCoverage(versionMeta: CharacterEvolutionVersionMeta): Promise<boolean> {
+        const characterEntry = currentCharacter
+        if (!characterEntry?.chaId || !versionMeta.range) {
+            return false
+        }
+        const clearPreview = buildClearCoveragePreview({
+            versions: displayedStateVersions,
+            targetVersion: versionMeta.version,
+            range: versionMeta.range,
+            pendingProposal: currentPendingProposal,
+        })
+        if (typeof window !== "undefined" && !window.confirm(clearPreview.summary)) {
+            return false
+        }
+
+        loadingVersions = true
+        try {
+            const payload = await clearEvolutionCoverageAction(characterEntry.chaId, versionMeta.range)
+            applyVersionMutationPayload(characterEntry.chaId, payload)
+            alertNormal(`Cleared accepted evolution coverage for messages ${versionMeta.range.startMessageIndex + 1}-${versionMeta.range.endMessageIndex + 1}.`)
+            return true
+        } catch (error) {
+            alertError(getCharacterEvolutionErrorMessage(error))
+            return false
+        } finally {
+            loadingVersions = false
+        }
+    }
+
+    async function revertVersion(version: number) {
+        const characterEntry = currentCharacter
+        if (!characterEntry?.chaId) {
+            return
+        }
+        const revertPreview = buildRevertVersionPreview({
+            versions: displayedStateVersions,
+            targetVersion: version,
+            pendingProposal: currentPendingProposal,
+        })
+        if (typeof window !== "undefined" && !window.confirm(revertPreview.summary)) {
+            return
+        }
+
+        loadingVersions = true
+        try {
+            const payload = await revertEvolutionVersionAction(characterEntry.chaId, version)
+            applyVersionMutationPayload(characterEntry.chaId, payload)
+            alertNormal(`Reverted evolution state to version v${version}.`)
+        } catch (error) {
+            alertError(getCharacterEvolutionErrorMessage(error))
+        } finally {
+            loadingVersions = false
+        }
+    }
+
+    async function deleteVersion(version: number) {
+        const characterEntry = currentCharacter
+        if (!characterEntry?.chaId) {
+            return
+        }
+        const deletePreview = buildDeleteVersionPreview({
+            versions: displayedStateVersions,
+            targetVersion: version,
+            pendingProposal: currentPendingProposal,
+        })
+        if (typeof window !== "undefined" && !window.confirm(deletePreview.summary)) {
+            return
+        }
+
+        loadingVersions = true
+        try {
+            const payload = await deleteEvolutionVersionAction(characterEntry.chaId, version)
+            applyVersionMutationPayload(characterEntry.chaId, payload)
+            alertNormal(`Deleted evolution version v${version}.`)
+        } catch (error) {
+            alertError(getCharacterEvolutionErrorMessage(error))
+        } finally {
+            loadingVersions = false
+        }
+    }
+
+    async function previewRetention() {
+        const characterEntry = currentCharacter
+        if (!characterEntry?.chaId) {
+            return
+        }
+
+        loadingVersions = true
+        try {
+            const report = await previewEvolutionRetentionAction(characterEntry.chaId)
+            if (!report) {
+                alertNormal("Retention dry run returned no report.")
+                return
+            }
+            alertNormal(formatRetentionDryRun(report))
+        } catch (error) {
+            alertError(getCharacterEvolutionErrorMessage(error))
+        } finally {
+            loadingVersions = false
+        }
+    }
+
+    async function rerunFromVersion(versionMeta: CharacterEvolutionVersionMeta) {
+        if (!versionMeta.range) {
+            return
+        }
+        const cleared = await clearCoverage(versionMeta)
+        if (!cleared) {
+            return
+        }
+        selectedWorkspaceTab = EVOLUTION_SETUP_TAB
+        await runManualRangeHandoff(
+            versionMeta.range.startMessageIndex + 1,
+            versionMeta.range.endMessageIndex + 1,
+        )
     }
 
     async function rejectProposal() {
@@ -613,6 +821,11 @@
         {selectedVersionSectionConfigs}
         {selectedVersionPrivacy}
         onRefreshVersions={() => handleRefreshVersions()}
+        onPreviewRetention={previewRetention}
         onLoadVersion={loadVersion}
+        onRevertVersion={revertVersion}
+        onDeleteVersion={deleteVersion}
+        onClearCoverage={clearCoverage}
+        onRerunFromHere={rerunFromVersion}
     />
 {/if}

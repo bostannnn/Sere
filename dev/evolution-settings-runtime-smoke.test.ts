@@ -44,9 +44,15 @@ vi.mock(import("src/lib/SideBars/Evolution/evolutionSettings.actions"), () => ({
     return `${characterId}:${proposal.proposalId ?? proposal.sourceChatId ?? "pending"}:${proposal.createdAt ?? 0}`;
   }),
   loadEvolutionVersionState: vi.fn(async () => null),
+  loadEvolutionWorkspaceVersion: vi.fn(async ({ setSelectedVersionFile }: { setSelectedVersionFile: (file: unknown) => void }) => {
+    setSelectedVersionFile(null);
+  }),
   openEvolutionGlobalDefaults: vi.fn(),
   persistEvolutionCharacter: vi.fn(async () => {}),
   refreshEvolutionVersions: mocks.refreshEvolutionVersions,
+  refreshEvolutionWorkspaceVersions: vi.fn(async ({ characterId, selectedVersion }: { characterId: string; selectedVersion: number | null }) => {
+    await mocks.refreshEvolutionVersions(characterId, selectedVersion);
+  }),
   rejectEvolutionProposalAction: vi.fn(async () => {}),
 }));
 

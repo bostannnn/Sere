@@ -11,6 +11,13 @@ Last reviewed: 2026-02-15
   - `GET /data/llm/logs` (durable JSON execution logs)
 - OpenRouter model catalog endpoint:
   - `GET /data/openrouter/models` (upstream fetch + cache fallback)
+- Character evolution operational endpoints:
+  - `GET /data/character-evolution/:charId/versions`
+  - `GET /data/character-evolution/:charId/versions/:version`
+  - `POST /data/character-evolution/:charId/retention/dry-run`
+  - `POST /data/character-evolution/:charId/coverage/clear`
+  - `POST /data/character-evolution/:charId/versions/:version/revert`
+  - `POST /data/character-evolution/:charId/versions/:version/delete`
 - Server-side local model utilities:
   - `POST /data/embeddings`
   - `POST /data/transformers/summarize`
@@ -119,6 +126,9 @@ RISU_STORAGE_TEST_ALLOW_WRITE=1 RISU_DATA_TEST_URL=http://localhost:6001 node de
 pnpm run smoke:memory:api     # Memory integration tests
 pnpm run smoke:server:auth    # Auth flow
 pnpm run smoke:server:safe    # Storage + LLM + memory (combined)
+pnpm run evolution:retention:dry-run -- --json   # Next-handoff retention preview
+pnpm run evolution:retention:apply -- --preview  # Current-state compaction preview
+pnpm run evolution:retention:apply -- --json     # Offline cleanup apply summary
 ```
 
 **Auth token (when server has a password set):**

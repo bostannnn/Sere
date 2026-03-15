@@ -23,6 +23,7 @@ function registerEvolutionRoutes(arg = {}) {
         buildCharacterEvolutionPromptMessages = require('../llm/character_evolution.cjs').buildCharacterEvolutionPromptMessages,
         clone = require('../llm/character_evolution.cjs').clone,
         getEffectiveCharacterEvolutionSettings = require('../llm/character_evolution.cjs').getEffectiveCharacterEvolutionSettings,
+        normalizeCharacterEvolutionDefaults = require('../llm/character_evolution.cjs').normalizeCharacterEvolutionDefaults,
         getCharacterEvolutionProposalValidationError = require('../llm/character_evolution/proposal.cjs').getCharacterEvolutionProposalValidationError,
         normalizeCharacterEvolutionProposal = require('../llm/character_evolution.cjs').normalizeCharacterEvolutionProposal,
         normalizeCharacterEvolutionProposalState = require('../llm/character_evolution/proposal.cjs').normalizeCharacterEvolutionProposalState,
@@ -50,6 +51,22 @@ function registerEvolutionRoutes(arg = {}) {
         truncatePromptMessagesForAudit = require('../llm/prompt.cjs').truncatePromptMessagesForAudit,
         fs,
     } = arg;
+
+    function buildEvolutionJsonRetryMessages(promptMessages, rawResult) {
+        return [
+            ...(Array.isArray(promptMessages) ? promptMessages : []),
+            { role: 'assistant', content: typeof rawResult === 'string' ? rawResult : '' },
+            {
+                role: 'user',
+                content: [
+                    'Your previous response was invalid JSON.',
+                    'Return the same extraction result again as valid JSON only.',
+                    'Do not use markdown fences.',
+                    'Do not add commentary.',
+                ].join(' '),
+            },
+        ];
+    }
 
     if (!app || typeof app.get !== 'function' || typeof app.post !== 'function') {
         throw new Error('registerEvolutionRoutes requires an Express app instance.');
@@ -191,13 +208,30 @@ function registerEvolutionRoutes(arg = {}) {
             messages: promptMessages,
             taskLabel: 'character_evolution_handoff',
         });
-        const parsed = safeParseEvolutionJson(rawResult);
+        let parsed = safeParseEvolutionJson(rawResult);
+        let finalRawResult = rawResult;
+        let parseRetried = false;
         if (!parsed) {
-            req._characterEvolutionAudit.rawResult = rawResult;
+            parseRetried = true;
+            finalRawResult = await executeInternalLLMTextCompletion({
+                provider: evolution.extractionProvider,
+                model: evolution.extractionModel,
+                mode: 'memory',
+                characterId,
+                chatId,
+                maxTokens: evolution.extractionMaxTokens,
+                messages: buildEvolutionJsonRetryMessages(promptMessages, rawResult),
+                taskLabel: 'character_evolution_handoff_retry',
+            });
+            parsed = safeParseEvolutionJson(finalRawResult);
+        }
+        if (!parsed) {
+            req._characterEvolutionAudit.rawResult = finalRawResult;
             req._characterEvolutionAudit.metadata = {
                 model: evolution.extractionModel,
                 maxTokens: evolution.extractionMaxTokens,
                 reason: 'parse_failed',
+                parseRetried,
             };
             throw new LLMHttpError(502, 'EVOLUTION_PARSE_FAILED', 'Extraction model returned invalid JSON.');
         }
@@ -210,12 +244,13 @@ function registerEvolutionRoutes(arg = {}) {
         assertHandoffRangeAllowed(latestEvolution, sourceRange, getChatLastMessageIndex(chat), forceReplay);
         const proposalValidationError = getCharacterEvolutionProposalValidationError(parsed, latestEffectiveEvolution);
         if (proposalValidationError) {
-            req._characterEvolutionAudit.rawResult = rawResult;
+            req._characterEvolutionAudit.rawResult = finalRawResult;
             req._characterEvolutionAudit.metadata = {
                 model: evolution.extractionModel,
                 maxTokens: evolution.extractionMaxTokens,
                 reason: 'invalid_proposal',
                 validationError: proposalValidationError,
+                parseRetried,
             };
             throw new LLMHttpError(502, 'EVOLUTION_INVALID_PROPOSAL', proposalValidationError);
         }
@@ -331,6 +366,7 @@ function registerEvolutionRoutes(arg = {}) {
         });
         const shouldPreserveDisabledSections = !Object.prototype.hasOwnProperty.call(body, 'proposedState')
             && storedEvolution.useGlobalDefaults === false;
+        const evolutionDefaults = normalizeCharacterEvolutionDefaults(settings.characterEvolutionDefaults);
         const proposalValidationError = getCharacterEvolutionProposalValidationError({
             proposedState: shouldPreserveDisabledSections
                 ? proposalStateForAcceptance
@@ -373,6 +409,8 @@ function registerEvolutionRoutes(arg = {}) {
         const proposedState = (shouldPreserveDisabledSections ? sanitizeStateForEvolution : (value) => value)(applyCharacterEvolutionDecay({
             state: mergedCanonicalState,
             acceptedVersion: nextVersion,
+            retentionPolicy: evolutionDefaults.retention,
+            promptProjectionPolicy: evolutionDefaults.promptProjection,
         }), effectiveEvolution, storedEvolution.currentState);
         const versionFile = await stageVersionFile(charDir, nextVersion, {
             version: nextVersion,
@@ -476,6 +514,7 @@ function registerEvolutionRoutes(arg = {}) {
         isSafePathSegment,
         LLMHttpError,
         loadCharacterAndSettings,
+        replaceCharacterWithRetry,
         normalizeCharacterEvolutionPrivacy,
         normalizeCharacterEvolutionRangeRef,
         normalizeCharacterEvolutionSectionConfigs,

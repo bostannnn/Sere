@@ -48,3 +48,10 @@ export {
     createCharacterEvolutionPromptProjectionPolicy,
     normalizeCharacterEvolutionPromptProjectionPolicy,
 } from "./character-evolution/projectionPolicy"
+
+export {
+    DEFAULT_CHARACTER_EVOLUTION_RETENTION_POLICY,
+    createCharacterEvolutionRetentionPolicy,
+    getCharacterEvolutionRetentionBucket,
+    normalizeCharacterEvolutionRetentionPolicy,
+} from "./character-evolution/retentionPolicy"

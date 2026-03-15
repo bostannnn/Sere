@@ -6,6 +6,7 @@ const {
 } = require('./schema.cjs');
 const { normalizeCharacterEvolutionItemSourceRange } = require('./items.cjs');
 const { normalizeCharacterEvolutionPromptProjectionPolicy } = require('./projection_policy.cjs');
+const { normalizeCharacterEvolutionRetentionPolicy } = require('./retention_policy.cjs');
 const { normalizeCharacterEvolutionRangeRef } = require('./range.cjs');
 const { toTrimmedString } = require('./utils.cjs');
 
@@ -162,6 +163,7 @@ function normalizeCharacterEvolutionDefaults(raw) {
         sectionConfigs: normalizeCharacterEvolutionSectionConfigs(value.sectionConfigs),
         privacy: normalizeCharacterEvolutionPrivacy(value.privacy),
         promptProjection: normalizeCharacterEvolutionPromptProjectionPolicy(value.promptProjection),
+        retention: normalizeCharacterEvolutionRetentionPolicy(value.retention),
     };
 }
 

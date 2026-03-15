@@ -49,4 +49,28 @@ describe("character evolution ranges", () => {
             characterEvolution: settings,
         } as never, "chat-1", 3)).toBe(true)
     })
+
+    it("derives last processed cursor from surviving processed ranges before trusting an explicit cursor", () => {
+        const settings = {
+            processedRanges: [
+                {
+                    version: 2,
+                    acceptedAt: 20,
+                    range: {
+                        chatId: "chat-1",
+                        startMessageIndex: 5,
+                        endMessageIndex: 8,
+                    },
+                },
+            ],
+            stateVersions: [],
+            lastProcessedMessageIndexByChat: {
+                "chat-1": 99,
+            },
+        }
+        const { getLastProcessedMessageIndexForChat: getLastProcessedMessageIndexForChatCjs } = require("../../../server/node/llm/character_evolution/range.cjs")
+
+        expect(getLastProcessedMessageIndexForChat(settings, "chat-1")).toBe(8)
+        expect(getLastProcessedMessageIndexForChat(settings, "chat-1")).toBe(getLastProcessedMessageIndexForChatCjs(settings, "chat-1"))
+    })
 })

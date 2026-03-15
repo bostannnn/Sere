@@ -16,7 +16,12 @@
         selectedVersionSectionConfigs: CharacterEvolutionSectionConfig[]
         selectedVersionPrivacy: CharacterEvolutionPrivacySettings
         onRefresh: () => void | Promise<void>
+        onPreviewRetention: () => void | Promise<void>
         onLoadVersion: (version: number) => void | Promise<void>
+        onRevertVersion: (version: number) => void | Promise<void>
+        onDeleteVersion: (version: number) => void | Promise<void>
+        onClearCoverage: (version: CharacterEvolutionVersionMeta) => void | Promise<void>
+        onRerunFromHere: (version: CharacterEvolutionVersionMeta) => void | Promise<void>
     }
 
     let {
@@ -27,7 +32,12 @@
         selectedVersionSectionConfigs,
         selectedVersionPrivacy,
         onRefresh,
+        onPreviewRetention,
         onLoadVersion,
+        onRevertVersion,
+        onDeleteVersion,
+        onClearCoverage,
+        onRerunFromHere,
     }: Props = $props()
 
     function formatVersionRange(version: CharacterEvolutionVersionMeta) {
@@ -56,6 +66,14 @@
         >
             Refresh
         </Button>
+        <Button
+            size="sm"
+            styled="outlined"
+            onclick={onPreviewRetention}
+            disabled={loadingVersions}
+        >
+            Retention Dry Run
+        </Button>
     </div>
     <div class="ds-settings-card ds-settings-list-shell">
         {#if stateVersions.length === 0}
@@ -72,14 +90,50 @@
                         <span class="ds-settings-label-muted-sm">{formatVersionRange(version)}</span>
                     {/if}
                 </div>
-                <Button
-                    size="sm"
-                    styled="outlined"
-                    onclick={() => onLoadVersion(version.version)}
-                    disabled={loadingVersions}
-                >
-                    View
-                </Button>
+                <div class="evolution-history-actions">
+                    <Button
+                        size="sm"
+                        styled="outlined"
+                        onclick={() => onLoadVersion(version.version)}
+                        disabled={loadingVersions}
+                    >
+                        View
+                    </Button>
+                    {#if version.range}
+                        <Button
+                            size="sm"
+                            styled="outlined"
+                            onclick={() => onClearCoverage(version)}
+                            disabled={loadingVersions}
+                        >
+                            Clear Coverage
+                        </Button>
+                        <Button
+                            size="sm"
+                            styled="outlined"
+                            onclick={() => onRerunFromHere(version)}
+                            disabled={loadingVersions}
+                        >
+                            Rerun From Here
+                        </Button>
+                    {/if}
+                    <Button
+                        size="sm"
+                        styled="outlined"
+                        onclick={() => onRevertVersion(version.version)}
+                        disabled={loadingVersions}
+                    >
+                        Revert
+                    </Button>
+                    <Button
+                        size="sm"
+                        styled="danger"
+                        onclick={() => onDeleteVersion(version.version)}
+                        disabled={loadingVersions}
+                    >
+                        Delete
+                    </Button>
+                </div>
             </div>
         {/each}
     </div>
@@ -106,5 +160,12 @@
         flex-direction: column;
         gap: 4px;
         min-width: 0;
+    }
+
+    .evolution-history-actions {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+        gap: var(--ds-space-2);
     }
 </style>

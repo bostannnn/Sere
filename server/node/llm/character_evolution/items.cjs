@@ -212,6 +212,30 @@ function isTokenSuffix(shorter, longer) {
     return shorter.every((token, index) => token === longer[longer.length - shorter.length + index]);
 }
 
+function containsTokenSubsequence(shorter, longer) {
+    if (shorter.length === 0 || shorter.length > longer.length) {
+        return false;
+    }
+    for (let startIndex = 0; startIndex <= longer.length - shorter.length; startIndex += 1) {
+        let matches = true;
+        for (let offset = 0; offset < shorter.length; offset += 1) {
+            if (longer[startIndex + offset] !== shorter[offset]) {
+                matches = false;
+                break;
+            }
+        }
+        if (matches) {
+            return true;
+        }
+    }
+    return false;
+}
+
+function countSharedTokens(left, right) {
+    const rightTokens = new Set(right);
+    return [...new Set(left)].filter((token) => rightTokens.has(token)).length;
+}
+
 function doCharacterEvolutionItemsReinforceSameIdea(sectionKey, left, right) {
     if (!REINFORCEMENT_MATCH_SECTIONS.has(sectionKey) || doCharacterEvolutionItemsMatch(left, right)) {
         return false;
@@ -225,15 +249,14 @@ function doCharacterEvolutionItemsReinforceSameIdea(sectionKey, left, right) {
 
     const commonPrefixCount = countCommonTokenPrefix(leftTokens, rightTokens);
     const commonSuffixCount = countCommonTokenSuffix(leftTokens, rightTokens, commonPrefixCount);
-    if (commonPrefixCount < 3 && commonSuffixCount < 3) {
-        return false;
-    }
 
     const leftMeaningfulTokens = getMeaningfulCharacterEvolutionItemTokens(left);
     const rightMeaningfulTokens = getMeaningfulCharacterEvolutionItemTokens(right);
     if (leftMeaningfulTokens.length === 0 || rightMeaningfulTokens.length === 0) {
         return false;
     }
+    const meaningfulPrefixCount = countCommonTokenPrefix(leftMeaningfulTokens, rightMeaningfulTokens);
+    const meaningfulSuffixCount = countCommonTokenSuffix(leftMeaningfulTokens, rightMeaningfulTokens, meaningfulPrefixCount);
 
     const shorterMeaningfulTokens = leftMeaningfulTokens.length <= rightMeaningfulTokens.length
         ? leftMeaningfulTokens
@@ -242,8 +265,23 @@ function doCharacterEvolutionItemsReinforceSameIdea(sectionKey, left, right) {
         ? rightMeaningfulTokens
         : leftMeaningfulTokens;
 
+    const sharedMeaningfulTokenCount = countSharedTokens(shorterMeaningfulTokens, longerMeaningfulTokens);
+    const hasStrongBoundaryMatch = commonPrefixCount >= 3
+        || commonSuffixCount >= 3
+        || meaningfulPrefixCount >= 3
+        || meaningfulSuffixCount >= 3;
+    const hasContainedMeaningfulSubsequence = containsTokenSubsequence(shorterMeaningfulTokens, longerMeaningfulTokens);
+    const hasHighMeaningfulTokenOverlap = shorterMeaningfulTokens.length >= 4
+        && sharedMeaningfulTokenCount >= Math.max(3, shorterMeaningfulTokens.length - 1);
+
+    if (!hasStrongBoundaryMatch && !hasContainedMeaningfulSubsequence && !hasHighMeaningfulTokenOverlap) {
+        return false;
+    }
+
     return isTokenPrefix(shorterMeaningfulTokens, longerMeaningfulTokens)
-        || isTokenSuffix(shorterMeaningfulTokens, longerMeaningfulTokens);
+        || isTokenSuffix(shorterMeaningfulTokens, longerMeaningfulTokens)
+        || hasContainedMeaningfulSubsequence
+        || hasHighMeaningfulTokenOverlap;
 }
 
 function itemValueKeysForSection(items, matcher) {

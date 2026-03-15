@@ -13,11 +13,13 @@
     import NumberInput from "src/lib/UI/GUI/NumberInput.svelte";
     import SectionConfigEditor from "src/lib/Evolution/SectionConfigEditor.svelte";
     import ProjectionPolicyEditor from "src/lib/Evolution/ProjectionPolicyEditor.svelte";
+    import RetentionPolicyEditor from "src/lib/Evolution/RetentionPolicyEditor.svelte";
     import SettingsSubTabs from "src/lib/Setting/SettingsSubTabs.svelte";
 
     const evolutionSettingsTabs = [
         { id: 0, label: "Global Defaults" },
         { id: 1, label: "Prompt Projection" },
+        { id: 2, label: "Retention" },
     ] as const;
 
     let selectedTab = $state(0);
@@ -46,7 +48,7 @@
         if (requestedTab === null) {
             return
         }
-        if ((requestedTab === 0 || requestedTab === 1) && selectedTab !== requestedTab) {
+        if ((requestedTab === 0 || requestedTab === 1 || requestedTab === 2) && selectedTab !== requestedTab) {
             selectedTab = requestedTab
         }
         EvolutionDefaultsSettingsTabIndex.set(null)
@@ -152,12 +154,19 @@
 
                 <SectionConfigEditor bind:value={DBState.db.characterEvolutionDefaults.sectionConfigs} privacy={DBState.db.characterEvolutionDefaults.privacy} title="Default Sections" />
             </div>
-        {:else}
+        {:else if selectedTab === 1}
             <div class="evolution-defaults-panel">
                 <span class="ds-settings-label-muted-sm evolution-defaults-panel-copy">
                     Phase 4.5 prompt projection controls how much accepted active state is surfaced to generation and extraction prompts.
                 </span>
                 <ProjectionPolicyEditor bind:value={DBState.db.characterEvolutionDefaults.promptProjection} />
+            </div>
+        {:else}
+            <div class="evolution-defaults-panel">
+                <span class="ds-settings-label-muted-sm evolution-defaults-panel-copy">
+                    Retention controls accepted-state lifecycle in canonical storage: archive timing, stale non-active deletion, and optional stored caps.
+                </span>
+                <RetentionPolicyEditor bind:value={DBState.db.characterEvolutionDefaults.retention} />
             </div>
         {/if}
     </div>

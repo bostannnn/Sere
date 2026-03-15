@@ -67,7 +67,12 @@
         selectedVersionSectionConfigs: CharacterEvolutionSectionConfig[]
         selectedVersionPrivacy: CharacterEvolutionPrivacySettings
         onRefreshVersions: () => void | Promise<void>
+        onPreviewRetention: () => void | Promise<void>
         onLoadVersion: (version: number) => void | Promise<void>
+        onRevertVersion: (version: number) => void | Promise<void>
+        onDeleteVersion: (version: number) => void | Promise<void>
+        onClearCoverage: (version: CharacterEvolutionVersionMeta) => void | Promise<void>
+        onRerunFromHere: (version: CharacterEvolutionVersionMeta) => void | Promise<void>
     }
 
     let {
@@ -115,7 +120,12 @@
         selectedVersionSectionConfigs,
         selectedVersionPrivacy,
         onRefreshVersions,
+        onPreviewRetention,
         onLoadVersion,
+        onRevertVersion,
+        onDeleteVersion,
+        onClearCoverage,
+        onRerunFromHere,
     }: Props = $props()
 </script>
 
@@ -204,7 +214,12 @@
                 {selectedVersionSectionConfigs}
                 {selectedVersionPrivacy}
                 onRefresh={onRefreshVersions}
+                {onPreviewRetention}
                 onLoadVersion={onLoadVersion}
+                {onRevertVersion}
+                {onDeleteVersion}
+                {onClearCoverage}
+                {onRerunFromHere}
             />
         {/if}
     </div>

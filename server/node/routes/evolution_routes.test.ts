@@ -245,6 +245,60 @@ describe("evolution routes handoff", () => {
     expect(characterFile.character.characterEvolution.pendingProposal ?? null).toBeNull();
   });
 
+  it("retries once when the extractor returns malformed JSON and succeeds on a valid retry", async () => {
+    const executeInternalLLMTextCompletion = vi
+      .fn()
+      .mockResolvedValueOnce("```json\n{ invalid }\n```")
+      .mockResolvedValueOnce(JSON.stringify({
+        proposedState: {
+          relationship: {
+            trustLevel: "high",
+            dynamic: "closer after the retry",
+          },
+        },
+        changes: [
+          {
+            sectionKey: "relationship",
+            summary: "Recovered valid JSON on retry.",
+            evidence: ["retry"],
+          },
+        ],
+      }));
+    const { postHandlers } = buildHandlers({ executeInternalLLMTextCompletion });
+    const handler = postHandlers.get("/data/character-evolution/handoff");
+    expect(handler).toBeTruthy();
+
+    const res = createRes();
+    await handler!(createReq({ characterId, chatId }), res);
+
+    expect(res.statusCode).toBe(200);
+    expect(executeInternalLLMTextCompletion).toHaveBeenCalledTimes(2);
+    expect(executeInternalLLMTextCompletion).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      taskLabel: "character_evolution_handoff_retry",
+      messages: expect.arrayContaining([
+        expect.objectContaining({
+          role: "assistant",
+          content: "```json\n{ invalid }\n```",
+        }),
+        expect.objectContaining({
+          role: "user",
+          content: expect.stringContaining("invalid JSON"),
+        }),
+      ]),
+    }));
+    expect(res.payload).toEqual(expect.objectContaining({
+      ok: true,
+      proposal: expect.objectContaining({
+        proposedState: {
+          relationship: {
+            trustLevel: "high",
+            dynamic: "closer after the retry",
+          },
+        },
+      }),
+    }));
+  });
+
   it("rejects extractor proposals with unknown proposedState keys before staging a pending proposal", async () => {
     const { postHandlers } = buildHandlers({
       executeInternalLLMTextCompletion: async () => JSON.stringify({
