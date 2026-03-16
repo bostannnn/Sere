@@ -17,7 +17,6 @@ export const CHARACTER_EVOLUTION_ITEM_SECTION_KEYS = [
     "characterLikes",
     "characterDislikes",
     "characterHabits",
-    "characterBoundariesPreferences",
     "userFacts",
     "userRead",
     "userLikes",

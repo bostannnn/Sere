@@ -223,7 +223,6 @@ describe("character evolution proposal normalization", () => {
       characterLikes: [],
       characterDislikes: [],
       characterHabits: [],
-      characterBoundariesPreferences: [],
       userFacts: [],
       userRead: [],
       userLikes: [],

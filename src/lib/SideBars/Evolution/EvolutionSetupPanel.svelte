@@ -11,6 +11,7 @@
         getLastProcessedMessageIndexForChat,
         normalizeCharacterEvolutionExtractionModel,
     } from "src/ts/characterEvolution"
+    import { DEFAULT_EXTRACTION_PROMPT } from "src/ts/character-evolution/constants"
     import type {
         CharacterEvolutionProcessedRange,
         CharacterEvolutionSettings,
@@ -192,6 +193,8 @@
             autoHandoffBatchSize: clamped,
         }
     }
+
+    let showDefaultPrompt = $state(false)
 </script>
 
 <div class="ds-settings-card evolution-setup-panel">
@@ -262,11 +265,20 @@
             </span>
 
             <span class="ds-settings-label">{usingGlobalDefaults ? "Character Override Prompt" : "Extraction Prompt Override"}</span>
-            <TextAreaInput bind:value={characterEntry.characterEvolution.extractionPrompt} height="32" disabled={usingGlobalDefaults} />
+            <TextAreaInput bind:value={characterEntry.characterEvolution.extractionPrompt} height="32" disabled={usingGlobalDefaults} placeholder="Leave empty to use built-in default prompt" />
 
             <span class="ds-settings-label-muted-sm">
                 This prompt is used only for the extraction/update pass, not for live roleplay prompting.
             </span>
+            {#if !characterEntry.characterEvolution.extractionPrompt && !usingGlobalDefaults}
+                <span class="ds-settings-label-muted-sm">Using built-in default prompt.</span>
+                <button class="evolution-toggle-link" onclick={() => showDefaultPrompt = !showDefaultPrompt}>
+                    {showDefaultPrompt ? "Hide default prompt" : "Show default prompt"}
+                </button>
+                {#if showDefaultPrompt}
+                    <pre class="evolution-prompt-preview">{DEFAULT_EXTRACTION_PROMPT}</pre>
+                {/if}
+            {/if}
 
             <div class="ds-settings-grid-two">
                 <CheckInput
@@ -600,6 +612,34 @@
         gap: var(--ds-space-3);
         min-height: 0;
         padding: 0;
+    }
+
+    .evolution-toggle-link {
+        all: unset;
+        cursor: pointer;
+        color: var(--ds-text-link, var(--ds-text-secondary));
+        font-size: var(--ds-font-size-sm);
+        text-decoration: underline;
+        text-underline-offset: 2px;
+    }
+
+    .evolution-toggle-link:hover {
+        color: var(--ds-text-primary);
+    }
+
+    .evolution-prompt-preview {
+        margin: 0;
+        padding: var(--ds-space-3);
+        border: 1px solid var(--ds-border-subtle);
+        border-radius: var(--ds-radius-sm, 4px);
+        background: var(--ds-surface-secondary, rgba(0,0,0,0.05));
+        color: var(--ds-text-secondary);
+        font-size: var(--ds-font-size-sm);
+        line-height: 1.5;
+        white-space: pre-wrap;
+        word-break: break-word;
+        max-height: 24rem;
+        overflow-y: auto;
     }
 
     @media (max-width: 640px) {

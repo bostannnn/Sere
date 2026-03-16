@@ -24,7 +24,7 @@ function getBucketKeyForSection(sectionKey) {
     if (sectionKey === 'activeThreads' || sectionKey === 'runningJokes' || sectionKey === 'keyMoments') {
         return 'fast';
     }
-    if (sectionKey === 'userRead' || sectionKey === 'characterHabits' || sectionKey === 'characterBoundariesPreferences') {
+    if (sectionKey === 'userRead' || sectionKey === 'characterHabits') {
         return 'medium';
     }
     return 'slow';

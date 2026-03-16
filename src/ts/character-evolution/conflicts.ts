@@ -31,7 +31,6 @@ const SLOT_REPLACEMENT_SECTIONS = new Set<CharacterEvolutionItemSectionKey>([
 const COMPARISON_CONFLICT_SECTIONS = new Set<CharacterEvolutionItemSectionKey>([
     "characterLikes",
     "characterDislikes",
-    "characterBoundariesPreferences",
     "userLikes",
     "userDislikes",
     "characterIntimatePreferences",

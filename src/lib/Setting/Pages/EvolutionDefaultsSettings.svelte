@@ -5,6 +5,7 @@
         getCharacterEvolutionModelSuggestions,
         normalizeCharacterEvolutionExtractionModel,
     } from "src/ts/characterEvolution";
+    import { DEFAULT_EXTRACTION_PROMPT } from "src/ts/character-evolution/constants";
     import CheckInput from "src/lib/UI/GUI/CheckInput.svelte";
     import ModelList from "src/lib/UI/ModelList.svelte";
     import OpenRouterModelSelect from "src/lib/UI/GUI/OpenRouterModelSelect.svelte";
@@ -78,6 +79,8 @@
     const modelSuggestions = $derived(
         getCharacterEvolutionModelSuggestions(DBState.db.characterEvolutionDefaults?.extractionProvider ?? "openrouter")
     );
+
+    let showDefaultPrompt = $state(false);
 </script>
 
 {#if DBState.db.characterEvolutionDefaults}
@@ -126,7 +129,16 @@
                         </span>
 
                         <span class="ds-settings-label">Extraction Prompt</span>
-                        <TextAreaInput bind:value={DBState.db.characterEvolutionDefaults.extractionPrompt} height="32" />
+                        <TextAreaInput bind:value={DBState.db.characterEvolutionDefaults.extractionPrompt} height="32" placeholder="Leave empty to use built-in default prompt" />
+                        {#if !DBState.db.characterEvolutionDefaults.extractionPrompt}
+                            <span class="ds-settings-label-muted-sm">Using built-in default prompt.</span>
+                            <button class="evolution-defaults-toggle-link" onclick={() => showDefaultPrompt = !showDefaultPrompt}>
+                                {showDefaultPrompt ? "Hide default prompt" : "Show default prompt"}
+                            </button>
+                            {#if showDefaultPrompt}
+                                <pre class="evolution-defaults-prompt-preview">{DEFAULT_EXTRACTION_PROMPT}</pre>
+                            {/if}
+                        {/if}
                     </div>
 
                     <div class="ds-settings-divider"></div>
@@ -224,5 +236,33 @@
         width: 100%;
         min-height: var(--ds-height-control-sm);
         justify-content: flex-start;
+    }
+
+    .evolution-defaults-toggle-link {
+        all: unset;
+        cursor: pointer;
+        color: var(--ds-text-link, var(--ds-text-secondary));
+        font-size: var(--ds-font-size-sm);
+        text-decoration: underline;
+        text-underline-offset: 2px;
+    }
+
+    .evolution-defaults-toggle-link:hover {
+        color: var(--ds-text-primary);
+    }
+
+    .evolution-defaults-prompt-preview {
+        margin: 0;
+        padding: var(--ds-space-3);
+        border: 1px solid var(--ds-border-subtle);
+        border-radius: var(--ds-radius-sm, 4px);
+        background: var(--ds-surface-secondary, rgba(0,0,0,0.05));
+        color: var(--ds-text-secondary);
+        font-size: var(--ds-font-size-sm);
+        line-height: 1.5;
+        white-space: pre-wrap;
+        word-break: break-word;
+        max-height: 24rem;
+        overflow-y: auto;
     }
 </style>

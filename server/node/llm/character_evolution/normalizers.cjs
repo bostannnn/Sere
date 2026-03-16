@@ -2,6 +2,8 @@ const {
     createDefaultCharacterEvolutionDefaults,
     createDefaultCharacterEvolutionSectionConfigs,
     createDefaultCharacterEvolutionState,
+    isBuiltinExtractionPrompt,
+    isBuiltinSectionInstruction,
     normalizeCharacterEvolutionExtractionModel,
 } = require('./schema.cjs');
 const { normalizeCharacterEvolutionItemSourceRange } = require('./items.cjs');
@@ -52,18 +54,10 @@ function normalizeSectionConfigKey(keyRaw) {
     return key === 'lastChatEnded' ? 'lastInteractionEnded' : key;
 }
 
-function normalizeExtractionPrompt(promptRaw, fallback) {
-    const prompt = toTrimmedString(promptRaw) || fallback;
-    const looksLikeBuiltinEvolutionPrompt = prompt.startsWith(
-        'You update a character evolution state from the current processed roleplay transcript range.'
-    );
-    const usesLegacyFullReplacementContract = prompt.includes(
-        '- each included section must be the full intended replacement for that section'
-    ) || prompt.includes('- must contain the full next state object');
-
-    if (looksLikeBuiltinEvolutionPrompt && usesLegacyFullReplacementContract) {
-        return fallback;
-    }
+function normalizeExtractionPrompt(promptRaw) {
+    const prompt = toTrimmedString(promptRaw);
+    if (!prompt) return '';
+    if (isBuiltinExtractionPrompt(prompt)) return '';
     return prompt;
 }
 
@@ -91,8 +85,10 @@ function normalizeCharacterEvolutionState(raw) {
     state.runningJokes = normalizeItemList(value.runningJokes);
     state.characterLikes = normalizeItemList(value.characterLikes);
     state.characterDislikes = normalizeItemList(value.characterDislikes);
-    state.characterHabits = normalizeItemList(value.characterHabits);
-    state.characterBoundariesPreferences = normalizeItemList(value.characterBoundariesPreferences);
+    state.characterHabits = [
+        ...normalizeItemList(value.characterHabits),
+        ...normalizeItemList(value.characterBoundariesPreferences),
+    ];
     state.userFacts = normalizeItemList(value.userFacts);
     state.userRead = normalizeItemList(value.userRead);
     state.userLikes = normalizeItemList(value.userLikes);
@@ -158,12 +154,13 @@ function normalizeCharacterEvolutionSectionConfigs(raw) {
     }
     return defaults.map((section) => {
         const override = rawMap.get(section.key) || {};
+        const rawInstruction = toTrimmedString(override.instruction);
         return {
             ...section,
             label: toTrimmedString(override.label) || section.label,
             enabled: override.enabled === undefined ? section.enabled : override.enabled === true,
             includeInPrompt: override.includeInPrompt === undefined ? section.includeInPrompt : override.includeInPrompt === true,
-            instruction: toTrimmedString(override.instruction) || section.instruction,
+            instruction: (!rawInstruction || isBuiltinSectionInstruction(rawInstruction)) ? '' : rawInstruction,
             sensitive: override.sensitive === undefined ? section.sensitive : override.sensitive === true,
         };
     });
@@ -188,7 +185,7 @@ function normalizeCharacterEvolutionDefaults(raw) {
         extractionMaxTokens: Number.isFinite(extractionMaxTokens) && extractionMaxTokens > 0
             ? Math.max(64, Math.floor(extractionMaxTokens))
             : defaults.extractionMaxTokens,
-        extractionPrompt: normalizeExtractionPrompt(value.extractionPrompt, defaults.extractionPrompt),
+        extractionPrompt: normalizeExtractionPrompt(value.extractionPrompt),
         sectionConfigs: normalizeCharacterEvolutionSectionConfigs(value.sectionConfigs),
         privacy: normalizeCharacterEvolutionPrivacy(value.privacy),
         promptProjection: normalizeCharacterEvolutionPromptProjectionPolicy(value.promptProjection),
@@ -286,7 +283,7 @@ function normalizeCharacterEvolutionSettings(raw) {
         extractionMaxTokens: Number.isFinite(extractionMaxTokens) && extractionMaxTokens > 0
             ? Math.max(64, Math.floor(extractionMaxTokens))
             : defaults.extractionMaxTokens,
-        extractionPrompt: normalizeExtractionPrompt(value.extractionPrompt, defaults.extractionPrompt),
+        extractionPrompt: normalizeExtractionPrompt(value.extractionPrompt),
         sectionConfigs: normalizeCharacterEvolutionSectionConfigs(value.sectionConfigs),
         privacy: normalizeCharacterEvolutionPrivacy(value.privacy),
         currentStateVersion: Number.isFinite(Number(value.currentStateVersion)) ? Math.max(0, Math.floor(Number(value.currentStateVersion))) : 0,

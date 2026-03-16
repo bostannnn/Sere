@@ -461,7 +461,6 @@ export type CharacterEvolutionSectionKey =
     | 'characterLikes'
     | 'characterDislikes'
     | 'characterHabits'
-    | 'characterBoundariesPreferences'
     | 'userFacts'
     | 'userRead'
     | 'userLikes'
@@ -525,7 +524,8 @@ export interface CharacterEvolutionState {
     characterLikes: CharacterEvolutionItem[]
     characterDislikes: CharacterEvolutionItem[]
     characterHabits: CharacterEvolutionItem[]
-    characterBoundariesPreferences: CharacterEvolutionItem[]
+    /** @deprecated Merged into characterHabits. Kept for migration only. */
+    characterBoundariesPreferences?: CharacterEvolutionItem[]
     userFacts: CharacterEvolutionItem[]
     userRead: CharacterEvolutionItem[]
     userLikes: CharacterEvolutionItem[]

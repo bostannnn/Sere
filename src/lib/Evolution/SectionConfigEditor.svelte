@@ -1,5 +1,6 @@
 <script lang="ts">
     import type { CharacterEvolutionPrivacySettings, CharacterEvolutionSectionConfig } from "src/ts/storage/database.types";
+    import { BUILTIN_SECTION_DEFS } from "src/ts/character-evolution/constants";
     import CheckInput from "../UI/GUI/CheckInput.svelte";
     import TextInput from "../UI/GUI/TextInput.svelte";
     import TextAreaInput from "../UI/GUI/TextAreaInput.svelte";
@@ -20,6 +21,16 @@
         readonly = false,
         title = "Tracked Sections",
     }: Props = $props();
+
+    const builtinInstructionByKey = Object.fromEntries(
+        BUILTIN_SECTION_DEFS.map((s) => [s.key, s.instruction])
+    );
+
+    let expandedDefaults: Record<string, boolean> = $state({});
+
+    function toggleDefaultPreview(key: string) {
+        expandedDefaults = { ...expandedDefaults, [key]: !expandedDefaults[key] };
+    }
 
     function sectionHelp(key: string) {
         if (key === "characterIntimatePreferences") {
@@ -66,7 +77,15 @@
                         <CheckInput bare={true} className="evolution-section-editor-toggle" bind:check={value[index].includeInPrompt} disabled={readonly} name="Use In RP Prompt" />
                         <CheckInput bare={true} className="evolution-section-editor-toggle" bind:check={value[index].sensitive} disabled={readonly} name="Sensitive" />
                     </div>
-                    <TextAreaInput bind:value={value[index].instruction} disabled={readonly} height="24" placeholder="Extraction instruction" />
+                    <TextAreaInput bind:value={value[index].instruction} disabled={readonly} height="24" placeholder="Leave empty to use built-in default" />
+                    {#if !value[index].instruction && builtinInstructionByKey[section.key]}
+                        <button class="evolution-section-toggle-link" onclick={() => toggleDefaultPreview(section.key)}>
+                            {expandedDefaults[section.key] ? "Hide default" : "Show default"}
+                        </button>
+                        {#if expandedDefaults[section.key]}
+                            <span class="evolution-section-default-preview">{builtinInstructionByKey[section.key]}</span>
+                        {/if}
+                    {/if}
                 </div>
             </section>
         {/each}
@@ -143,6 +162,30 @@
 
     :global(.evolution-section-editor-toggle) {
         justify-content: flex-start;
+    }
+
+    .evolution-section-toggle-link {
+        all: unset;
+        cursor: pointer;
+        color: var(--ds-text-link, var(--ds-text-secondary));
+        font-size: var(--ds-font-size-sm);
+        text-decoration: underline;
+        text-underline-offset: 2px;
+    }
+
+    .evolution-section-toggle-link:hover {
+        color: var(--ds-text-primary);
+    }
+
+    .evolution-section-default-preview {
+        display: block;
+        padding: var(--ds-space-2);
+        border: 1px solid var(--ds-border-subtle);
+        border-radius: var(--ds-radius-sm, 4px);
+        background: var(--ds-surface-secondary, rgba(0,0,0,0.05));
+        color: var(--ds-text-secondary);
+        font-size: var(--ds-font-size-sm);
+        line-height: 1.5;
     }
 
     @media (max-width: 640px) {

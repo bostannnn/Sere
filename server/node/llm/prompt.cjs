@@ -23,7 +23,7 @@ const {
 } = require('../../../src/ts/process/promptTemplateShared.cjs');
 
 const TRACE_AUDIT_MAX_MESSAGE_COUNT = 64;
-const TRACE_AUDIT_MAX_CONTENT_CHARS = 1200;
+const TRACE_AUDIT_MAX_CONTENT_CHARS = 32000;
 
 function safeJsonClone(value, fallback = null) {
     try {

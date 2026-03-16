@@ -82,7 +82,7 @@ function getBucketKeyForSection(sectionKey: CharacterEvolutionItemSectionKey) {
     if (sectionKey === "activeThreads" || sectionKey === "runningJokes" || sectionKey === "keyMoments") {
         return "fast" as const
     }
-    if (sectionKey === "userRead" || sectionKey === "characterHabits" || sectionKey === "characterBoundariesPreferences") {
+    if (sectionKey === "userRead" || sectionKey === "characterHabits") {
         return "medium" as const
     }
     return "slow" as const

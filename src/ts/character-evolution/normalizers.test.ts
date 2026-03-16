@@ -249,26 +249,31 @@ describe("character evolution normalizers", () => {
         expect(normalizedCjs).toEqual(normalized)
     })
 
-    it("upgrades legacy built-in full-replacement prompts to the changed-subset prompt", () => {
-        const defaults = createDefaultCharacterEvolutionDefaults()
-        const legacyPrompt = defaults.extractionPrompt.replace(
-            "- for list sections, include only changed, new, corrected, archived, or explicitly cleared items; do not copy unchanged active items from Current state JSON\n- for relationship, include dynamic when that section changes; include trustLevel when it materially changes or clarifies the shift\n- for lastInteractionEnded, include the full object when that section changes",
-            "- each included section must be the full intended replacement for that section",
-        )
+    it("clears builtin extraction prompts to empty (empty = use code default at runtime)", () => {
+        const legacyFullReplacement = "You update a character evolution state from the current processed roleplay transcript range.\n\n- each included section must be the full intended replacement for that section"
+        const legacyUnderExtraction = "You update a character evolution state from the current processed roleplay transcript range.\n\n- Prefer under-extraction over over-extraction."
+        const currentBuiltin = "You update a character evolution state from the current processed roleplay transcript range.\n\nReturn raw JSON only."
 
-        const normalizedDefaults = normalizeCharacterEvolutionDefaults({
-            extractionPrompt: legacyPrompt,
-        })
-        const normalizedSettings = normalizeCharacterEvolutionSettings({
-            extractionPrompt: legacyPrompt,
-        })
-        const { normalizeCharacterEvolutionDefaults: normalizeCharacterEvolutionDefaultsCjs } = require("../../../server/node/llm/character_evolution/normalizers.cjs")
-        const { normalizeCharacterEvolutionSettings: normalizeCharacterEvolutionSettingsCjs } = require("../../../server/node/llm/character_evolution/normalizers.cjs")
+        // All known builtins should be cleared to empty
+        for (const builtinPrompt of [legacyFullReplacement, legacyUnderExtraction, currentBuiltin]) {
+            expect(normalizeCharacterEvolutionDefaults({ extractionPrompt: builtinPrompt }).extractionPrompt).toBe("")
+            expect(normalizeCharacterEvolutionSettings({ extractionPrompt: builtinPrompt }).extractionPrompt).toBe("")
+        }
 
-        expect(normalizedDefaults.extractionPrompt).toBe(defaults.extractionPrompt)
-        expect(normalizedSettings.extractionPrompt).toBe(defaults.extractionPrompt)
-        expect(normalizeCharacterEvolutionDefaultsCjs({ extractionPrompt: legacyPrompt }).extractionPrompt).toBe(defaults.extractionPrompt)
-        expect(normalizeCharacterEvolutionSettingsCjs({ extractionPrompt: legacyPrompt }).extractionPrompt).toBe(defaults.extractionPrompt)
+        // User customizations should be preserved
+        expect(normalizeCharacterEvolutionDefaults({ extractionPrompt: "My custom prompt" }).extractionPrompt).toBe("My custom prompt")
+        expect(normalizeCharacterEvolutionSettings({ extractionPrompt: "My custom prompt" }).extractionPrompt).toBe("My custom prompt")
+
+        // Empty/missing should stay empty
+        expect(normalizeCharacterEvolutionDefaults({}).extractionPrompt).toBe("")
+        expect(normalizeCharacterEvolutionDefaults({ extractionPrompt: "" }).extractionPrompt).toBe("")
+
+        // Server-side parity
+        const { normalizeCharacterEvolutionDefaults: normalizeDefaultsCjs } = require("../../../server/node/llm/character_evolution/normalizers.cjs")
+        const { normalizeCharacterEvolutionSettings: normalizeSettingsCjs } = require("../../../server/node/llm/character_evolution/normalizers.cjs")
+        expect(normalizeDefaultsCjs({ extractionPrompt: legacyFullReplacement }).extractionPrompt).toBe("")
+        expect(normalizeSettingsCjs({ extractionPrompt: legacyFullReplacement }).extractionPrompt).toBe("")
+        expect(normalizeDefaultsCjs({ extractionPrompt: "My custom prompt" }).extractionPrompt).toBe("My custom prompt")
     })
 
 })

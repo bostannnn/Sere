@@ -26,7 +26,6 @@ const SLOT_REPLACEMENT_SECTIONS = new Set([
 const COMPARISON_CONFLICT_SECTIONS = new Set([
     'characterLikes',
     'characterDislikes',
-    'characterBoundariesPreferences',
     'userLikes',
     'userDislikes',
     'characterIntimatePreferences',

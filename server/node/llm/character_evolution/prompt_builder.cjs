@@ -3,7 +3,12 @@ const { getEffectiveCharacterEvolutionSettings } = require('./normalizers.cjs');
 const { projectCharacterEvolutionStateForPrompt } = require('./projection.cjs');
 const { getCharacterEvolutionPromptProjectionPolicy } = require('./projection_policy.cjs');
 const { sanitizeStateForEvolution } = require('./proposal.cjs');
+const { DEFAULT_EXTRACTION_PROMPT, BUILTIN_SECTION_DEFS } = require('./schema.cjs');
 const { toTrimmedString } = require('./utils.cjs');
+
+const _BUILTIN_INSTRUCTION_BY_KEY = Object.fromEntries(
+    BUILTIN_SECTION_DEFS.map((s) => [s.key, s.instruction])
+);
 
 const EXTRACTION_ITEM_VALUE_MAX_CHARS = 180;
 const EXTRACTION_STRING_VALUE_MAX_CHARS = 160;
@@ -57,7 +62,6 @@ function buildCompactCurrentStateForExtraction(stateRaw, evolutionSettings, prom
         characterLikes: state.characterLikes.map((item) => toCompactPromptItem(item)).filter(Boolean),
         characterDislikes: state.characterDislikes.map((item) => toCompactPromptItem(item)).filter(Boolean),
         characterHabits: state.characterHabits.map((item) => toCompactPromptItem(item)).filter(Boolean),
-        characterBoundariesPreferences: state.characterBoundariesPreferences.map((item) => toCompactPromptItem(item)).filter(Boolean),
         userFacts: state.userFacts.map((item) => toCompactPromptItem(item)).filter(Boolean),
         userRead: state.userRead.map((item) => toCompactPromptItem(item)).filter(Boolean),
         userLikes: state.userLikes.map((item) => toCompactPromptItem(item)).filter(Boolean),
@@ -108,13 +112,13 @@ function buildCharacterEvolutionPromptMessages(arg = {}) {
             `  label: ${section.label}`,
             `  kind: ${section.kind}`,
             `  includeInPrompt: ${section.includeInPrompt ? 'true' : 'false'}`,
-            `  instruction: ${applyPromptVars(section.instruction, character, settings)}`,
+            `  instruction: ${applyPromptVars(section.instruction || _BUILTIN_INSTRUCTION_BY_KEY[section.key] || '', character, settings)}`,
         ].join('\n'))
         .join('\n');
 
     const state = JSON.stringify(buildCompactCurrentStateForExtraction(evolution.currentState, evolution, promptProjection), null, 2);
     const prompt = [
-        applyPromptVars(evolution.extractionPrompt, character, settings),
+        applyPromptVars(evolution.extractionPrompt || DEFAULT_EXTRACTION_PROMPT, character, settings),
         '',
         'Enabled sections:',
         sections || '[none]',
