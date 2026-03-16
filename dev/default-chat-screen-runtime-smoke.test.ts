@@ -41,6 +41,9 @@ const mocks = vi.hoisted(() => ({
   })),
   rejectEvolutionProposalAction: vi.fn(async () => ({ ok: true })),
   changeChatTo: vi.fn(),
+  alertError: vi.fn(),
+  alertNormal: vi.fn(),
+  alertWait: vi.fn(),
 }));
 
 const platformState = vi.hoisted(() => ({
@@ -294,9 +297,9 @@ vi.mock(import("src/ts/translator/translator"), () => ({
 }));
 
 vi.mock(import("src/ts/alert"), () => ({
-  alertError: () => {},
-  alertNormal: () => {},
-  alertWait: () => {},
+  alertError: mocks.alertError,
+  alertNormal: mocks.alertNormal,
+  alertWait: mocks.alertWait,
 }));
 
 vi.mock(import("src/ts/process/scripts"), () => ({
@@ -320,6 +323,35 @@ vi.mock(import("src/ts/characterEvolution"), () => {
   return {
     ensureCharacterEvolution: (char: Record<string, unknown>) => ensureState(char),
     getEffectiveCharacterEvolutionSettings: (_db: unknown, char: Record<string, unknown>) => ensureState(char),
+    getNextUnprocessedMessageIndexForChat: (
+      settings: {
+        processedRanges?: Array<{ range: { chatId: string; startMessageIndex: number; endMessageIndex: number } }>;
+        lastProcessedMessageIndexByChat?: Record<string, number>;
+      } | null | undefined,
+      chatId: string | null | undefined,
+    ) => {
+      if (!chatId) {
+        return 0;
+      }
+      const chatRanges = (settings?.processedRanges ?? [])
+        .filter((entry) => entry.range.chatId === chatId)
+        .sort((left, right) => left.range.startMessageIndex - right.range.startMessageIndex);
+      if (chatRanges.length > 0) {
+        let contiguousEnd = -1;
+        for (const entry of chatRanges) {
+          if (entry.range.startMessageIndex > contiguousEnd + 1) {
+            break;
+          }
+          contiguousEnd = Math.max(contiguousEnd, entry.range.endMessageIndex);
+        }
+        return contiguousEnd + 1;
+      }
+
+      const explicitCursor = settings?.lastProcessedMessageIndexByChat?.[chatId];
+      return Number.isFinite(Number(explicitCursor))
+        ? Math.floor(Number(explicitCursor)) + 1
+        : 0;
+    },
     hasAcceptedEvolutionForChat: (char: Record<string, unknown>, chatId: string | null | undefined) => {
       return (char?.characterEvolution as { lastProcessedChatId?: string | null } | undefined)?.lastProcessedChatId === chatId;
     },
@@ -519,6 +551,9 @@ describe("default chat screen runtime smoke", () => {
     mocks.acceptEvolutionProposalAction.mockClear();
     mocks.rejectEvolutionProposalAction.mockClear();
     mocks.changeChatTo.mockClear();
+    mocks.alertError.mockClear();
+    mocks.alertNormal.mockClear();
+    mocks.alertWait.mockClear();
     platformState.isMobile = false;
     selectedCharID.set(0);
     DBState.db.fixedChatTextarea = false;
@@ -563,6 +598,8 @@ describe("default chat screen runtime smoke", () => {
         },
         pendingProposal: null,
         lastProcessedChatId: null,
+        lastProcessedMessageIndexByChat: {},
+        processedRanges: [],
         stateVersions: [],
       },
     };
@@ -604,6 +641,8 @@ describe("default chat screen runtime smoke", () => {
         },
         pendingProposal: null,
         lastProcessedChatId: null,
+        lastProcessedMessageIndexByChat: {},
+        processedRanges: [],
         stateVersions: [],
       },
     };
@@ -1051,6 +1090,90 @@ describe("default chat screen runtime smoke", () => {
     expect(DBState.db.characters[0].chats[0]?.name).toBe("New Chat 1");
     expect(DBState.db.characters[0].chatPage).toBe(0);
     expect(mocks.changeChatTo).toHaveBeenCalledWith(0);
+  });
+
+  it("does not trigger auto handoff after a failed send", async () => {
+    DBState.db.characters[0].characterEvolution.autoHandoffEnabled = true;
+    DBState.db.characters[0].characterEvolution.autoHandoffBatchSize = 1;
+    DBState.db.characters[0].characterEvolution.autoHandoffAutoAccept = false;
+    mocks.sendChat.mockImplementationOnce(async () => {
+      throw new Error("send failed");
+    });
+
+    const target = document.createElement("div");
+    document.body.appendChild(target);
+    app = mount(DefaultChatScreen, { target });
+    await flushUi();
+
+    const composerInput = document.querySelector(
+      ".ds-chat-composer-input.control-field",
+    ) as HTMLTextAreaElement | null;
+    expect(composerInput).not.toBeNull();
+
+    composerInput!.value = "trigger failure";
+    composerInput!.dispatchEvent(new Event("input", { bubbles: true }));
+    composerInput!.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    await flushUi();
+    await flushUi();
+
+    expect(mocks.sendChat).toHaveBeenCalledTimes(1);
+    expect(mocks.createEvolutionProposal).not.toHaveBeenCalled();
+  });
+
+  it("starts auto handoff from the cursor fallback when range history is unavailable", async () => {
+    DBState.db.characters[0].chats[0].message = [
+      {
+        role: "user",
+        data: "msg 1",
+      },
+      {
+        role: "char",
+        data: "msg 2",
+      },
+    ];
+    DBState.db.characters[0].characterEvolution.autoHandoffEnabled = true;
+    DBState.db.characters[0].characterEvolution.autoHandoffBatchSize = 2;
+    DBState.db.characters[0].characterEvolution.autoHandoffAutoAccept = false;
+    DBState.db.characters[0].characterEvolution.lastProcessedMessageIndexByChat = {
+      "chat-1": 1,
+    };
+    DBState.db.characters[0].characterEvolution.processedRanges = [];
+    mocks.sendChat.mockImplementationOnce(async (_index: number, arg: { target?: { characterId: string; chatId: string } }) => {
+      const targetChat = DBState.db.characters
+        .find((entry) => entry.chaId === arg.target?.characterId)
+        ?.chats.find((chat) => chat.id === arg.target?.chatId);
+      targetChat?.message.push({
+        role: "char",
+        data: "assistant reply",
+      });
+    });
+
+    const target = document.createElement("div");
+    document.body.appendChild(target);
+    app = mount(DefaultChatScreen, { target });
+    await flushUi();
+
+    const composerInput = document.querySelector(
+      ".ds-chat-composer-input.control-field",
+    ) as HTMLTextAreaElement | null;
+    expect(composerInput).not.toBeNull();
+
+    composerInput!.value = "new message";
+    composerInput!.dispatchEvent(new Event("input", { bubbles: true }));
+    composerInput!.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    await flushUi();
+    await flushUi();
+
+    expect(mocks.createEvolutionProposal).toHaveBeenCalledTimes(1);
+    expect(mocks.createEvolutionProposal.mock.calls[0]?.[0]).toBe("char-1");
+    expect(mocks.createEvolutionProposal.mock.calls[0]?.[1]).toBe("chat-1");
+    expect(mocks.createEvolutionProposal.mock.calls[0]?.[2]).toMatchObject({
+      sourceRange: {
+        chatId: "chat-1",
+        startMessageIndex: 2,
+        endMessageIndex: 3,
+      },
+    });
   });
 
   it("records the accepted chat locally after accepting without creating a new one", async () => {

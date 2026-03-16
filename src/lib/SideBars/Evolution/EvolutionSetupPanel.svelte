@@ -4,6 +4,7 @@
     import EvolutionAcceptedCoverageCard from "./EvolutionAcceptedCoverageCard.svelte"
     import {
         getLastProcessedMessageIndexForChat,
+        getNextUnprocessedMessageIndexForChat,
     } from "src/ts/characterEvolution"
     import type {
         CharacterEvolutionProcessedRange,
@@ -86,14 +87,15 @@
             .sort((left, right) => left.range.startMessageIndex - right.range.startMessageIndex)
     })
     const nextUnprocessedMessageNumber = $derived.by(() => {
-        let contiguousProcessedEnd = -1
-        for (const entry of activeChatProcessedRanges) {
-            if (entry.range.startMessageIndex > contiguousProcessedEnd + 1) {
-                break
-            }
-            contiguousProcessedEnd = Math.max(contiguousProcessedEnd, entry.range.endMessageIndex)
-        }
-        return contiguousProcessedEnd + 2
+        return getNextUnprocessedMessageIndexForChat(
+            {
+                lastProcessedChatId: evolutionSettings.lastProcessedChatId,
+                lastProcessedMessageIndexByChat: evolutionSettings.lastProcessedMessageIndexByChat,
+                processedRanges,
+                stateVersions: evolutionSettings.stateVersions,
+            },
+            activeChatId,
+        ) + 1
     })
     const activeChatProcessedCursor = $derived.by(() => (
         activeChatId

@@ -28,6 +28,7 @@ export {
 export {
     getCharacterEvolutionProcessedRanges,
     getLastProcessedMessageIndexForChat,
+    getNextUnprocessedMessageIndexForChat,
     hasAcceptedEvolutionForChat,
     normalizeCharacterEvolutionRangeRef,
 } from "./character-evolution/ranges"

@@ -28,7 +28,7 @@ vi.mock(import("src/lib/SideBars/Evolution/EvolutionReviewPanel.svelte"), async 
 }));
 
 vi.mock(import("src/lib/SideBars/Evolution/EvolutionSetupPanel.svelte"), async () => ({
-  default: (await import("./test-stubs/SimplePanelStub.svelte")).default,
+  default: (await import("./test-stubs/EvolutionSetupPanelPropsStub.svelte")).default,
 }));
 
 vi.mock(import("src/ts/character-evolution/actions"), () => ({
@@ -493,5 +493,41 @@ describe("evolution settings runtime smoke", () => {
         status: "active",
       },
     ]);
+  });
+
+  it("disables auto process when only cursor fallback coverage remains and no full batch is left", async () => {
+    DBState.db.characters[0].characterEvolution.pendingProposal = null;
+    DBState.db.characters[0].characterEvolution.autoHandoffBatchSize = 10;
+    DBState.db.characters[0].characterEvolution.lastProcessedMessageIndexByChat = {
+      "char-1-chat": 24,
+    };
+    DBState.db.characters[0].characterEvolution.processedRanges = [];
+    DBState.db.characters[0].characterEvolution.stateVersions = [];
+    DBState.db.characters[0].chats = [
+      {
+        id: "char-1-chat",
+        name: "Character One Chat",
+        fmIndex: -1,
+        message: Array.from({ length: 30 }, (_unused, index) => ({
+          role: index % 2 === 0 ? "user" : "char",
+          data: `Message ${index + 1}`,
+        })),
+        localLore: [],
+        modules: [],
+        note: "",
+        bindedPersona: "",
+      },
+    ];
+    DBState.db.characters[0].chatPage = 0;
+
+    const target = document.createElement("div");
+    document.body.appendChild(target);
+
+    app = mount(EvolutionSettings, { target });
+    await flushUi();
+
+    expect(target.querySelector('[data-testid="setup-active-chat-id"]')?.textContent).toBe("char-1-chat");
+    expect(target.querySelector('[data-testid="setup-active-chat-count"]')?.textContent).toBe("30");
+    expect(target.querySelector('[data-testid="setup-auto-process-available"]')?.textContent).toBe("false");
   });
 });

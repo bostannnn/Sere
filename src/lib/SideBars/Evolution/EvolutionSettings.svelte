@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { ensureCharacterEvolution, getEffectiveCharacterEvolutionSettings, hasCharacterStateTemplateBlock } from "src/ts/characterEvolution"
+    import { ensureCharacterEvolution, getEffectiveCharacterEvolutionSettings, getNextUnprocessedMessageIndexForChat, hasCharacterStateTemplateBlock } from "src/ts/characterEvolution"
     import { DBState, evolutionReviewOpenRequest, selectedCharID } from "src/ts/stores.svelte"
     import type { CharacterEvolutionPrivacySettings, CharacterEvolutionSectionConfig, CharacterEvolutionState, CharacterEvolutionVersionFile, CharacterEvolutionVersionMeta, character } from "src/ts/storage/database.types"
     import EvolutionWorkspaceContent from "./EvolutionWorkspaceContent.svelte"
@@ -102,17 +102,15 @@
     const autoHandoffBatchSize = $derived(currentCharacter?.characterEvolution.autoHandoffBatchSize ?? 10)
 
     const nextUnprocessedMessageNumber = $derived.by(() => {
-        const chatId = activeChatId?.trim()
-        if (!chatId) return 1
-        const ranges = displayedProcessedRanges
-            .filter((entry) => entry.range.chatId === chatId)
-            .sort((a, b) => a.range.startMessageIndex - b.range.startMessageIndex)
-        let contiguousEnd = -1
-        for (const entry of ranges) {
-            if (entry.range.startMessageIndex > contiguousEnd + 1) break
-            contiguousEnd = Math.max(contiguousEnd, entry.range.endMessageIndex)
-        }
-        return contiguousEnd + 2
+        return getNextUnprocessedMessageIndexForChat(
+            {
+                lastProcessedChatId: currentCharacter?.characterEvolution.lastProcessedChatId,
+                lastProcessedMessageIndexByChat: currentCharacter?.characterEvolution.lastProcessedMessageIndexByChat,
+                processedRanges: displayedProcessedRanges,
+                stateVersions: displayedStateVersions,
+            },
+            activeChatId,
+        ) + 1
     })
 
     const autoProcessAvailable = $derived(
@@ -371,7 +369,5 @@
         onLoadVersion={operations.loadVersion}
         onRevertVersion={operations.revertVersion}
         onDeleteVersion={operations.deleteVersion}
-        onClearCoverage={operations.clearCoverage}
-        onRerunFromHere={operations.rerunFromVersion}
     />
 {/if}

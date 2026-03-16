@@ -111,6 +111,32 @@ export function getLastProcessedMessageIndexForChat(
     return -1
 }
 
+export function getNextUnprocessedMessageIndexForChat(
+    settings: Pick<CharacterEvolutionSettings, "lastProcessedChatId" | "lastProcessedMessageIndexByChat" | "processedRanges" | "stateVersions"> | null | undefined,
+    chatId: string | null | undefined,
+): number {
+    if (!chatId) {
+        return 0
+    }
+
+    const chatRanges = getCharacterEvolutionProcessedRanges(settings)
+        .filter((entry) => entry.range.chatId === chatId)
+        .sort((left, right) => left.range.startMessageIndex - right.range.startMessageIndex)
+
+    if (chatRanges.length > 0) {
+        let contiguousProcessedEnd = -1
+        for (const entry of chatRanges) {
+            if (entry.range.startMessageIndex > contiguousProcessedEnd + 1) {
+                break
+            }
+            contiguousProcessedEnd = Math.max(contiguousProcessedEnd, entry.range.endMessageIndex)
+        }
+        return contiguousProcessedEnd + 1
+    }
+
+    return getLastProcessedMessageIndexForChat(settings, chatId) + 1
+}
+
 export function hasAcceptedEvolutionForChat(
     characterEntry: character | null | undefined,
     chatId: string | null | undefined,

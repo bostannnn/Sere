@@ -91,6 +91,30 @@ function getLastProcessedMessageIndexForChat(evolution, chatId) {
     return -1;
 }
 
+function getNextUnprocessedMessageIndexForChat(evolution, chatId) {
+    const normalizedChatId = toTrimmedString(chatId);
+    if (!normalizedChatId) {
+        return 0;
+    }
+
+    const chatRanges = getCharacterEvolutionProcessedRanges(evolution)
+        .filter((entry) => entry.range.chatId === normalizedChatId)
+        .sort((left, right) => left.range.startMessageIndex - right.range.startMessageIndex);
+
+    if (chatRanges.length > 0) {
+        let contiguousProcessedEnd = -1;
+        for (const entry of chatRanges) {
+            if (entry.range.startMessageIndex > contiguousProcessedEnd + 1) {
+                break;
+            }
+            contiguousProcessedEnd = Math.max(contiguousProcessedEnd, entry.range.endMessageIndex);
+        }
+        return contiguousProcessedEnd + 1;
+    }
+
+    return getLastProcessedMessageIndexForChat(evolution, normalizedChatId) + 1;
+}
+
 function rangesOverlap(left, right) {
     if (!left || !right) {
         return false;
@@ -152,6 +176,7 @@ module.exports = {
     getCharacterEvolutionProcessedRanges,
     getChatLastMessageIndex,
     getLastProcessedMessageIndexForChat,
+    getNextUnprocessedMessageIndexForChat,
     isRangeFullyCoveredByProcessedRanges,
     normalizeCharacterEvolutionRangeRef,
     rangesOverlap,

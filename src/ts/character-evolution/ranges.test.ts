@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest"
 import {
     getCharacterEvolutionProcessedRanges,
     getLastProcessedMessageIndexForChat,
+    getNextUnprocessedMessageIndexForChat,
     hasAcceptedEvolutionForChat,
 } from "./ranges"
 
@@ -72,5 +73,52 @@ describe("character evolution ranges", () => {
 
         expect(getLastProcessedMessageIndexForChat(settings, "chat-1")).toBe(8)
         expect(getLastProcessedMessageIndexForChat(settings, "chat-1")).toBe(getLastProcessedMessageIndexForChatCjs(settings, "chat-1"))
+    })
+
+    it("derives the next unprocessed message index from the cursor fallback when detailed ranges are unavailable", () => {
+        const settings = {
+            processedRanges: [],
+            stateVersions: [],
+            lastProcessedMessageIndexByChat: {
+                "chat-1": 8,
+            },
+        }
+        const { getNextUnprocessedMessageIndexForChat: getNextUnprocessedMessageIndexForChatCjs } = require("../../../server/node/llm/character_evolution/range.cjs")
+
+        expect(getNextUnprocessedMessageIndexForChat(settings, "chat-1")).toBe(9)
+        expect(getNextUnprocessedMessageIndexForChat(settings, "chat-1")).toBe(getNextUnprocessedMessageIndexForChatCjs(settings, "chat-1"))
+    })
+
+    it("derives the next unprocessed message index from the first uncovered gap before trusting an explicit cursor", () => {
+        const settings = {
+            processedRanges: [
+                {
+                    version: 1,
+                    acceptedAt: 10,
+                    range: {
+                        chatId: "chat-1",
+                        startMessageIndex: 0,
+                        endMessageIndex: 4,
+                    },
+                },
+                {
+                    version: 2,
+                    acceptedAt: 20,
+                    range: {
+                        chatId: "chat-1",
+                        startMessageIndex: 7,
+                        endMessageIndex: 8,
+                    },
+                },
+            ],
+            stateVersions: [],
+            lastProcessedMessageIndexByChat: {
+                "chat-1": 99,
+            },
+        }
+        const { getNextUnprocessedMessageIndexForChat: getNextUnprocessedMessageIndexForChatCjs } = require("../../../server/node/llm/character_evolution/range.cjs")
+
+        expect(getNextUnprocessedMessageIndexForChat(settings, "chat-1")).toBe(5)
+        expect(getNextUnprocessedMessageIndexForChat(settings, "chat-1")).toBe(getNextUnprocessedMessageIndexForChatCjs(settings, "chat-1"))
     })
 })

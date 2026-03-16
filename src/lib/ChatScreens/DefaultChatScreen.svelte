@@ -61,6 +61,7 @@
     import {
         ensureCharacterEvolution,
         getEffectiveCharacterEvolutionSettings,
+        getNextUnprocessedMessageIndexForChat,
         hasAcceptedEvolutionForChat,
     } from 'src/ts/characterEvolution';
     import { findSingleCharacterById, replaceCharacterById } from 'src/ts/storage/characterList';
@@ -630,6 +631,8 @@
         const previousLength = activeChatAtStart.message.length
         messageInput = ''
         abortController = new AbortController()
+        let generationSucceeded = false
+        let chatExtended = false
         try {
             await sendChat(-1, {
                 signal:abortController.signal,
@@ -643,6 +646,7 @@
             )
             const isCurrentSelection = currentCharacter?.chaId === stableTarget.characterId
                 && currentChatEntry?.id === stableTarget.chatId
+            chatExtended = !!activeState.chat && previousLength < activeState.chat.message.length
             if(isCurrentSelection && activeState.chat && previousLength < activeState.chat.message.length){
                 const nextRerollState = appendRerollSnapshot(
                     rerolls,
@@ -656,6 +660,7 @@
                 await tick()
                 scrollToBottom()
             }
+            generationSucceeded = true
         } catch (error) {
             defaultChatScreenLog(error)
             alertError(error)
@@ -666,7 +671,9 @@
             const audio = new Audio(sendSound);
             audio.play();
         }
-        void checkAndRunAutoHandoff(stableTarget)
+        if (generationSucceeded && chatExtended) {
+            void checkAndRunAutoHandoff(stableTarget)
+        }
     }
 
     function abortChat(){
@@ -687,17 +694,7 @@
         const batchSize = evoSettings.autoHandoffBatchSize ?? 10
         const autoAccept = evoSettings.autoHandoffAutoAccept !== false
 
-        const processedRanges = evoSettings.processedRanges ?? []
-        const chatRanges = processedRanges
-            .filter((e) => e.range.chatId === target.chatId)
-            .sort((a, b) => a.range.startMessageIndex - b.range.startMessageIndex)
-
-        let contiguousEnd = -1
-        for (const entry of chatRanges) {
-            if (entry.range.startMessageIndex > contiguousEnd + 1) break
-            contiguousEnd = Math.max(contiguousEnd, entry.range.endMessageIndex)
-        }
-        const nextUnprocessedIndex = contiguousEnd + 1
+        const nextUnprocessedIndex = getNextUnprocessedMessageIndexForChat(evoSettings, target.chatId)
         const batchEndIndex = nextUnprocessedIndex + batchSize - 1
 
         const chatState = resolveChatStateByCharacterAndChatId(
