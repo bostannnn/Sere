@@ -78,6 +78,7 @@
     onMount(() => {
         updateViewport()
         window.addEventListener("resize", updateViewport)
+        document.addEventListener("pointerdown", handleChatScreenPointerDown, true)
         const savedTab = window.localStorage.getItem(rightPanelTabKey)
         if (isPersistedRightPanelTab(savedTab)) {
             rightSidebarTab = savedTab
@@ -90,6 +91,7 @@
 
     onDestroy(() => {
         window.removeEventListener("resize", updateViewport)
+        document.removeEventListener("pointerdown", handleChatScreenPointerDown, true)
     })
 
     $effect(() => {
@@ -175,6 +177,33 @@
     let emotionSrc = $state<string[]>([])
     let emotionRequestId = 0
     let backgroundRequestId = 0
+    let chatScreenMainElement = $state<HTMLDivElement | null>(null)
+    let rightSidebarDrawerElement = $state<HTMLDivElement | null>(null)
+    const hasBlockingScreen = $derived(openChatList || openModuleList || evolutionReviewActive)
+
+    const closeRightSidebar = () => {
+        if (!showDesktopSidePanel || !rightSidebarOpen) {
+            return
+        }
+        rightSidebarOpen = false
+    }
+
+    const handleChatScreenPointerDown = (event: PointerEvent) => {
+        if (!showDesktopSidePanel || !rightSidebarOpen) {
+            return
+        }
+        const target = event.target
+        if (!(target instanceof Node)) {
+            return
+        }
+        if (!chatScreenMainElement?.contains(target)) {
+            return
+        }
+        if (rightSidebarDrawerElement?.contains(target)) {
+            return
+        }
+        closeRightSidebar()
+    }
     $effect(() => {
         const selected = $selectedCharID
         const currentChat = selected >= 0 ? DBState.db.characters[selected]?.chats?.[DBState.db.characters[selected]?.chatPage ?? 0] : null
@@ -221,6 +250,13 @@
             }
         })()
     })
+
+    $effect(() => {
+        if (!hasBlockingScreen || !rightSidebarOpen) {
+            return
+        }
+        rightSidebarOpen = false
+    })
 </script>
 
 <div
@@ -229,7 +265,7 @@
     data-chat-theme={chatThemeToken}
     data-review-mode={evolutionReviewActive ? 'evolution' : 'chat'}
 >
-    <div class="ds-chat-screen-main">
+    <div class="ds-chat-screen-main" bind:this={chatScreenMainElement}>
         {#if DBState.db.theme === 'waifu'}
             <div
                 class="ds-chat-theme-waifu-shell"
@@ -319,6 +355,7 @@
             id={rightSidebarPanelId}
             class="ds-chat-right-drawer drawer-elevation--right"
             data-testid="chat-right-sidebar-drawer"
+            bind:this={rightSidebarDrawerElement}
         >
             <ChatRightSidebarHost
                 rightSidebarTab={rightSidebarTab}

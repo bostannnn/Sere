@@ -320,7 +320,7 @@ describe("chat sidebar runtime smoke", () => {
     expect(window.localStorage.getItem("risu:desktop-right-panel-tab")).toBe("character");
   });
 
-  it("temporarily hides sidebar while chat overlay is open", async () => {
+  it("closes the sidebar when a chat overlay opens", async () => {
     await flushUi();
     expect(document.querySelector('[data-testid="chat-sidebar-host"]')).not.toBeNull();
 
@@ -337,7 +337,19 @@ describe("chat sidebar runtime smoke", () => {
     closeOverlay!.click();
     await flushUi();
 
+    expect(document.querySelector('[data-testid="chat-sidebar-host"]')).toBeNull();
+  });
+
+  it("closes the sidebar when chat content is clicked", async () => {
+    await flushUi();
     expect(document.querySelector('[data-testid="chat-sidebar-host"]')).not.toBeNull();
+
+    const chatSurface = document.querySelector('[data-testid="default-chat-screen-stub"]') as HTMLDivElement | null;
+    expect(chatSurface).not.toBeNull();
+    chatSurface!.dispatchEvent(new Event("pointerdown", { bubbles: true }));
+    await flushUi();
+
+    expect(document.querySelector('[data-testid="chat-sidebar-host"]')).toBeNull();
   });
 
   it("keeps sidebar closed when rightSidebarOpen prop is false", async () => {
@@ -502,10 +514,17 @@ describe("chat sidebar runtime smoke", () => {
     openChat!.click();
     await flushUi();
     expect((document.querySelector('[data-testid="chat-sidebar-visible-probe"]') as HTMLElement | null)?.dataset.visible).toBe("0");
+    expect((document.querySelector('[data-testid="chat-sidebar-open-probe"]') as HTMLElement | null)?.dataset.open).toBe("0");
 
     const closeOverlay = document.querySelector('[data-testid="overlay-close"]') as HTMLButtonElement | null;
     expect(closeOverlay).not.toBeNull();
     closeOverlay!.click();
+    await flushUi();
+    expect((document.querySelector('[data-testid="chat-sidebar-visible-probe"]') as HTMLElement | null)?.dataset.visible).toBe("0");
+
+    const reopenSidebar = document.querySelector('[data-testid="chat-sidebar-open-true"]') as HTMLButtonElement | null;
+    expect(reopenSidebar).not.toBeNull();
+    reopenSidebar!.click();
     await flushUi();
     expect((document.querySelector('[data-testid="chat-sidebar-visible-probe"]') as HTMLElement | null)?.dataset.visible).toBe("1");
 
@@ -514,12 +533,13 @@ describe("chat sidebar runtime smoke", () => {
     openModule!.click();
     await flushUi();
     expect((document.querySelector('[data-testid="chat-sidebar-visible-probe"]') as HTMLElement | null)?.dataset.visible).toBe("0");
+    expect((document.querySelector('[data-testid="chat-sidebar-open-probe"]') as HTMLElement | null)?.dataset.open).toBe("0");
 
     const closeModuleOverlay = document.querySelector('[data-testid="overlay-close"]') as HTMLButtonElement | null;
     expect(closeModuleOverlay).not.toBeNull();
     closeModuleOverlay!.click();
     await flushUi();
-    expect((document.querySelector('[data-testid="chat-sidebar-visible-probe"]') as HTMLElement | null)?.dataset.visible).toBe("1");
+    expect((document.querySelector('[data-testid="chat-sidebar-visible-probe"]') as HTMLElement | null)?.dataset.visible).toBe("0");
 
     Object.defineProperty(window, "innerWidth", {
       writable: true,
