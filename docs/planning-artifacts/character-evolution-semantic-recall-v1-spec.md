@@ -45,6 +45,7 @@ V1 must:
 - allow the user to choose which Character Evolution categories participate
 - keep archive as archive
 - keep one-chat continuity reset semantics
+- be server-authoritative in the first implementation pass
 - avoid requiring a new canonical storage model
 - avoid rerunning handoffs just to make retrieval work
 - keep prompt size bounded and explainable
@@ -56,6 +57,7 @@ V1 does not:
 - redesign Character Evolution canonical storage
 - change merge behavior for accepted handoffs
 - automatically reactivate archived facts when recalled
+- require a matching client-only semantic recall implementation
 - add per-character semantic recall settings
 - add per-section custom prompt text
 - add semantic recall to every prompt source in the app
@@ -153,7 +155,19 @@ This index is not canonical storage.
 
 ### Recall Candidate
 
-An archived fact from an enabled section whose `sourceChatId` matches the current chat and whose embedding is available in the semantic archive index.
+An archived fact from an enabled section whose resolved source chat matches the current chat and whose embedding is available in the semantic archive index.
+
+### Resolved Source Chat
+
+The chat identity used for semantic recall eligibility.
+
+V1 resolution order:
+
+1. `item.sourceChatId`
+2. accepted version `chatId`
+3. accepted version `range.chatId`
+
+If no chat can be resolved, the item is skipped in V1.
 
 ### Semantic Recall Block
 
@@ -271,8 +285,18 @@ id?: string
 
 Implementation goal:
 
-- normalize legacy items to have IDs
 - assign IDs to new items when created or first normalized
+- preserve IDs across merges, reinforcements, and manual edits
+- backfill deterministic legacy IDs during semantic index build
+
+V1 legacy ID contract:
+
+1. walk accepted versions oldest to newest
+2. for each archived candidate, try to match it to an earlier logical item in the same section and resolved chat
+3. reuse the earlier item ID if there is an exact match or reinforcement-equivalent match
+4. otherwise mint a deterministic legacy ID from section key, resolved chat ID, normalized value, first-seen version, and source range
+
+This keeps backfill stable without requiring a destructive rewrite of older version files before semantic recall can work.
 
 ### 2. Do not store embeddings in canonical Character Evolution items
 
@@ -322,7 +346,8 @@ Rules:
 - one index file per character and chat
 - only archived facts are indexed
 - only enabled sections are indexed
-- only facts whose source chat matches the index `chatId` are included
+- only facts whose resolved source chat matches the index `chatId` are included
+- facts remain eligible even if they were later removed from `currentState`, as long as they were archived in surviving accepted history
 
 ## Source Of Truth For Index Build
 
@@ -340,11 +365,14 @@ The index build should:
 
 1. scan accepted versions for the character
 2. read each version payload
-3. keep only items whose `sourceChatId` or `sourceRange.chatId` matches the target chat
+3. resolve each item chat identity in this order: `item.sourceChatId`, then version `chatId`, then version `range.chatId`
 4. keep only items in enabled sections
 5. keep only `status: archived`
-6. dedupe by stable item ID, keeping the latest snapshot copy
-7. generate embeddings for remaining candidates
+6. skip items whose chat cannot be resolved in V1
+7. dedupe by stable item ID, keeping the latest snapshot copy
+8. generate embeddings for remaining candidates
+
+V1 intentionally does not infer recall candidates from facts that merely disappeared later without ever being stored as archived items in accepted history.
 
 ## Retrieval Algorithm
 
@@ -374,6 +402,24 @@ Suggested practical defaults:
 
 - `MiniLM` for English-heavy use
 - `multiMiniLM` or `bgem3` for multilingual use
+
+### Text Embedded For Each Archived Fact
+
+Embed a compact semantic text representation, not raw JSON.
+
+V1 format:
+
+- `SectionLabel: Value`
+- append `Note: ...` only when the note is short and materially clarifies meaning
+
+Do not include in the embedded text:
+
+- confidence labels
+- timestamps
+- source IDs
+- status markers
+
+Confidence remains a ranking bonus, not part of the semantic text.
 
 ### Similarity Score
 
@@ -408,6 +454,22 @@ Before final render:
 - dedupe by `itemId`
 - dedupe repeated value text within the same section
 
+### Active Canon Suppression
+
+Before final render, suppress recalled archived items that are already represented or contradicted by current active canon in the same section.
+
+V1 suppression rules:
+
+1. drop recalled items that exactly match an active item
+2. drop recalled items that reinforce the same idea as an active item
+3. drop recalled items that would conflict with active canon according to existing Character Evolution conflict logic
+
+Implementation intent:
+
+- reuse existing `doCharacterEvolutionItemsMatch`
+- reuse existing `doCharacterEvolutionItemsReinforceSameIdea`
+- when needed, probe the item against active section items using existing conflict resolution helpers instead of inventing semantic-recall-specific contradiction rules
+
 ### Section Balancing
 
 V1 should avoid one section taking all slots.
@@ -425,12 +487,15 @@ At generation time:
 1. determine current `characterId` and `chatId`
 2. load semantic recall settings
 3. if disabled, skip
-4. load the chat-scoped semantic archive index
-5. build query from recent messages
-6. rank candidates by similarity
-7. take top recalled items
-8. group by section
-9. render `semanticRecall` prompt block
+4. if runtime is not server-authoritative, skip with trace reason
+5. load the chat-scoped semantic archive index
+6. rebuild lazily if the index is missing, stale, or dirty
+7. build query from recent messages
+8. rank candidates by similarity
+9. suppress duplicates and contradictions against active canon
+10. take top recalled items
+11. group by section
+12. render `semanticRecall` prompt block
 
 ### Prompt Titles And Trace
 
@@ -447,6 +512,7 @@ Trace metadata for each recalled item should include:
 - similarity score
 - snapshot version
 - source chat ID
+- suppression outcome when a candidate was dropped after ranking
 
 ## Interactions With Existing Systems
 
@@ -480,6 +546,16 @@ Extraction and acceptance logic stay unchanged.
 
 Semantic recall only affects prompt assembly for generation, not the extraction handoff itself in V1.
 
+### Runtime Authority
+
+V1 semantic recall is server-authoritative only.
+
+Implications:
+
+- index build and retrieval depend on accepted version files and server-side sidecar storage
+- server prompt assembly is the only supported semantic recall path in V1
+- if the runtime path does not have access to server semantic recall services, retrieval skips safely and trace should explain why
+
 ## Migration And Backfill
 
 ### Default Migration Path
@@ -494,6 +570,12 @@ Preferred migration:
 4. generate embeddings for archived facts found in enabled sections
 
 This is deterministic and does not alter accepted state.
+
+Details:
+
+- backfill should resolve legacy item IDs during the index build even before every canonical item has been rewritten with an `id`
+- legacy items without a resolved chat ID are skipped in V1 rather than guessed across chats
+- rerunning handoffs is optional and only needed if the goal is to regenerate extracted facts, not to make semantic recall function
 
 ### Optional Rerun Path
 
@@ -513,8 +595,9 @@ Do not use rerun just to add embeddings.
 
 If the index file for the current chat does not exist:
 
-- semantic recall skips safely
-- trace should show `skipped: no_index`
+- semantic recall should attempt a lazy rebuild once
+- if rebuild is unavailable or fails, semantic recall skips safely
+- trace should show `skipped: no_index` or `skipped: rebuild_failed`
 
 ### Embedding Model Change
 
@@ -523,6 +606,27 @@ If the configured embedding model changes:
 - existing semantic archive index for that chat is stale
 - mark it stale by model mismatch
 - skip retrieval until rebuilt, or rebuild lazily
+
+### Dirty Index Triggers
+
+The semantic archive index is derived data and must be invalidated when accepted history or semantic recall settings change.
+
+Mark the relevant `(characterId, chatId)` index dirty when any of the following happen:
+
+- an accepted proposal creates a new version
+- a version revert changes the accepted state/history surface
+- a version file is deleted
+- offline retention apply changes `currentState`
+- a manual current-state save changes archived items
+- semantic recall enabled sections change
+- semantic recall embedding model changes
+
+V1 rebuild policy:
+
+- do not eagerly rebuild on every mutation
+- record dirty state
+- rebuild lazily on the next generation request for that character and chat
+- also allow an explicit rebuild action from settings
 
 ### Rebuild Entry Point
 
@@ -537,6 +641,15 @@ Suggested rebuild scope:
 
 - selected character
 - selected chat only
+
+### Legacy Chatless Items
+
+If an archived legacy item has no resolved source chat after checking item and version metadata:
+
+- skip it in V1
+- do not guess across chats
+
+This preserves the product rule that starting a new chat resets continuity.
 
 ## Implementation Touchpoints
 
@@ -574,6 +687,7 @@ Responsibilities:
 - build per-chat semantic archive index
 - load and save index files
 - handle model mismatch and rebuild state
+- track dirty metadata for lazy rebuilds
 
 ### Prompt Assembly
 
@@ -585,6 +699,7 @@ Changes:
 
 - add `semanticRecall` prompt template block type
 - render it with grouped per-section semantic recall content
+- suppress recalled items that duplicate or contradict active canon before final render
 
 ### Embedding Reuse
 
@@ -645,6 +760,7 @@ V1 is successful when:
 - semantic recall is scoped to the current chat only
 - recalled facts are visible in prompt trace
 - recalled facts do not mutate canonical state
+- recalled facts do not duplicate or contradict active canon in the final prompt
 - the feature works without rerunning past handoffs
 
 ## Open Questions
@@ -682,3 +798,31 @@ V1 answer:
 - yes, but optional
 - not required for the feature to work
 
+### 6. How should chat scoping work for legacy items?
+
+V1 answer:
+
+- resolve chat identity from `item.sourceChatId`, then version `chatId`, then version `range.chatId`
+- if no chat can be resolved, skip the item
+
+### 7. Should recalled archive items be allowed to contradict live canon?
+
+V1 answer:
+
+- no
+- suppress duplicates, reinforcements, and conflicts against current active items before final recall selection
+
+### 8. What exact text should be embedded?
+
+V1 answer:
+
+- embed `SectionLabel: Value`
+- append a short note only when it clarifies meaning
+- do not embed confidence or metadata noise
+
+### 9. Should V1 support client-only prompt assembly too?
+
+V1 answer:
+
+- no
+- V1 is server-authoritative only
