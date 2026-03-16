@@ -5541,11 +5541,17 @@ body {
     color var(--ds-motion-base) var(--ds-ease-standard);
 }
 
-.ds-chat-right-panel-tab-active,
 .ds-chat-right-panel-tab:hover {
-  background: var(--ds-surface-active);
+  background: var(--surface-recessed);
   color: var(--ds-text-primary);
   box-shadow: none;
+}
+
+.ds-chat-right-panel-tab-active {
+  background: var(--ds-surface-active);
+  border-color: var(--ds-border-strong);
+  color: var(--ds-text-primary);
+  box-shadow: inset 0 -2px 0 var(--ds-border-strong);
 }
 
 .ds-chat-right-panel-content {

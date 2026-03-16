@@ -803,15 +803,21 @@ describe("chat sidebar integration runtime smoke", () => {
     await flushUi();
     const chatTab = document.querySelector('[data-testid="chat-sidebar-tab-chat"]') as HTMLButtonElement | null;
     const characterTab = document.querySelector('[data-testid="chat-sidebar-tab-character"]') as HTMLButtonElement | null;
+    const memoryTab = document.querySelector('[data-testid="chat-sidebar-tab-memory"]') as HTMLButtonElement | null;
+    const evolutionTab = document.querySelector('[data-testid="chat-sidebar-tab-evolution"]') as HTMLButtonElement | null;
     const tablist = document.querySelector('[role="tablist"]') as HTMLElement | null;
     expect(chatTab).not.toBeNull();
     expect(characterTab).not.toBeNull();
+    expect(memoryTab).not.toBeNull();
+    expect(evolutionTab).not.toBeNull();
     expect(tablist).not.toBeNull();
     expect(tablist?.classList.contains("seg-tabs")).toBe(true);
     expect(chatTab?.classList.contains("seg-tab")).toBe(true);
     expect(characterTab?.classList.contains("seg-tab")).toBe(true);
     expect(chatTab?.classList.contains("active")).toBe(true);
     expect(characterTab?.classList.contains("active")).toBe(false);
+    expect(memoryTab?.classList.contains("active")).toBe(false);
+    expect(evolutionTab?.classList.contains("active")).toBe(false);
 
     chatTab!.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
     await flushUi();
@@ -828,6 +834,20 @@ describe("chat sidebar integration runtime smoke", () => {
     expect(characterTab?.classList.contains("active")).toBe(false);
 
     tablist!.dispatchEvent(new KeyboardEvent("keydown", { key: "Right", bubbles: true }));
+    await flushUi();
+    expect((document.querySelector('[data-testid="host-right-tab-state"]') as HTMLElement | null)?.dataset.tab).toBe("character");
+    expect(document.activeElement).toBe(characterTab);
+
+    characterTab!.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
+    await flushUi();
+    expect((document.querySelector('[data-testid="host-right-tab-state"]') as HTMLElement | null)?.dataset.tab).toBe("memory");
+    expect(document.activeElement).toBe(memoryTab);
+    expect(memoryTab?.classList.contains("active")).toBe(true);
+    expect(chatTab?.classList.contains("active")).toBe(false);
+    expect(characterTab?.classList.contains("active")).toBe(false);
+    expect(evolutionTab?.classList.contains("active")).toBe(false);
+
+    memoryTab!.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true }));
     await flushUi();
     expect((document.querySelector('[data-testid="host-right-tab-state"]') as HTMLElement | null)?.dataset.tab).toBe("character");
     expect(document.activeElement).toBe(characterTab);
