@@ -123,49 +123,61 @@
         </span>
     </div>
 
-    <div class="evolution-retention-grid">
-        <section class="evolution-retention-card">
+    <div class="evolution-retention-stack">
+        <section class="evolution-retention-section">
             <span class="ds-settings-label">Bucket Thresholds</span>
             <span class="ds-settings-label-muted-sm">
                 Thresholds are counted in accepted handoffs, not raw message count. Permanent sections never auto-archive or auto-delete.
             </span>
 
             {#each CHARACTER_EVOLUTION_ALL_BUCKETS as bucket (bucket)}
-                <div class="evolution-retention-subsection">
-                    <span class="ds-settings-label">{bucketLabels[bucket]}</span>
-                    <div class="ds-settings-list-row evolution-retention-threshold-row">
-                        <span class="ds-settings-text-medium">Archive</span>
-                        <div class="evolution-retention-input">
-                            {#if bucket === "permanent"}
-                                <span class="ds-settings-label-muted-sm evolution-retention-static-value">Never</span>
-                            {:else}
-                                <NumberInput
-                                    value={value.thresholds.archive[bucket]}
-                                    min={0}
-                                    onInput={(event) => setArchiveThreshold(bucket, Number(event.currentTarget.value || 0))}
-                                />
-                            {/if}
-                        </div>
+                <div class="evolution-retention-subsection evolution-retention-subsection--framed">
+                    <div class="evolution-retention-subsection-copy">
+                        <span class="ds-settings-label">{bucketLabels[bucket]}</span>
+                        <span class="ds-settings-label-muted-sm">
+                            Tune when accepted items age out of active storage for this bucket.
+                        </span>
                     </div>
-                    <div class="ds-settings-list-row evolution-retention-threshold-row">
-                        <span class="ds-settings-text-medium">Delete Non-Active</span>
-                        <div class="evolution-retention-input">
-                            {#if bucket === "permanent"}
-                                <span class="ds-settings-label-muted-sm evolution-retention-static-value">Never</span>
-                            {:else}
-                                <NumberInput
-                                    value={value.thresholds.deleteNonActive[bucket]}
-                                    min={0}
-                                    onInput={(event) => setDeleteThreshold(bucket, Number(event.currentTarget.value || 0))}
-                                />
-                            {/if}
+                    <div class="evolution-retention-threshold-list">
+                        <div class="ds-settings-list-row evolution-retention-threshold-row">
+                            <span class="ds-settings-text-medium">Archive</span>
+                            <div class="evolution-retention-input">
+                                {#if bucket === "permanent"}
+                                    <span class="ds-settings-label-muted-sm evolution-retention-static-value">Never</span>
+                                {:else}
+                                    <NumberInput
+                                        value={value.thresholds.archive[bucket]}
+                                        min={0}
+                                        onInput={(event) => setArchiveThreshold(bucket, Number(event.currentTarget.value || 0))}
+                                    />
+                                {/if}
+                            </div>
+                        </div>
+                        <div class="ds-settings-list-row evolution-retention-threshold-row">
+                            <span class="ds-settings-text-medium">Delete Non-Active</span>
+                            <div class="evolution-retention-input">
+                                {#if bucket === "permanent"}
+                                    <span class="ds-settings-label-muted-sm evolution-retention-static-value">Never</span>
+                                {:else}
+                                    <NumberInput
+                                        value={value.thresholds.deleteNonActive[bucket]}
+                                        min={0}
+                                        onInput={(event) => setDeleteThreshold(bucket, Number(event.currentTarget.value || 0))}
+                                    />
+                                {/if}
+                            </div>
                         </div>
                     </div>
                 </div>
             {/each}
 
-            <div class="evolution-retention-subsection">
-                <span class="ds-settings-label">Confirmed Slow Memory</span>
+            <div class="evolution-retention-subsection evolution-retention-subsection--framed">
+                <div class="evolution-retention-subsection-copy">
+                    <span class="ds-settings-label">Confirmed Slow Memory</span>
+                    <span class="ds-settings-label-muted-sm">
+                        Separate cleanup threshold for confirmed slow-memory items.
+                    </span>
+                </div>
                 <div class="ds-settings-list-row evolution-retention-threshold-row">
                     <span class="ds-settings-text-medium">Delete Threshold</span>
                     <div class="evolution-retention-input">
@@ -179,58 +191,66 @@
             </div>
         </section>
 
-        <section class="evolution-retention-card">
+        <section class="evolution-retention-section">
             <span class="ds-settings-label">Section Buckets</span>
             <span class="ds-settings-label-muted-sm">
                 Each section can be reassigned to any retention bucket. Permanent keeps items until you archive or correct them manually.
             </span>
 
-            {#each sectionDefinitions as section (section.key)}
-                <div class="ds-settings-list-row evolution-retention-cap-row">
-                    <span class="ds-settings-text-medium">{section.label}</span>
-                    <div class="evolution-retention-input evolution-retention-select">
-                        <SelectInput
-                            value={getSectionBucket(section.key)}
-                            onchange={(event) => setSectionBucket(section.key, event.currentTarget.value as CharacterEvolutionRetentionBucket)}
-                        >
-                            {#each CHARACTER_EVOLUTION_ALL_BUCKETS as bucket (bucket)}
-                                <option value={bucket}>{bucketLabels[bucket]}</option>
-                            {/each}
-                        </SelectInput>
-                    </div>
+            <div class="evolution-retention-subsection evolution-retention-subsection--framed">
+                <div class="evolution-retention-select-list">
+                    {#each sectionDefinitions as section (section.key)}
+                        <div class="ds-settings-list-row evolution-retention-cap-row">
+                            <span class="ds-settings-text-medium">{section.label}</span>
+                            <div class="evolution-retention-input evolution-retention-select">
+                                <SelectInput
+                                    value={getSectionBucket(section.key)}
+                                    onchange={(event) => setSectionBucket(section.key, event.currentTarget.value as CharacterEvolutionRetentionBucket)}
+                                >
+                                    {#each CHARACTER_EVOLUTION_ALL_BUCKETS as bucket (bucket)}
+                                        <option value={bucket}>{bucketLabels[bucket]}</option>
+                                    {/each}
+                                </SelectInput>
+                            </div>
+                        </div>
+                    {/each}
                 </div>
-            {/each}
+            </div>
         </section>
 
-        <section class="evolution-retention-card">
+        <section class="evolution-retention-section">
             <span class="ds-settings-label">Stored Caps</span>
             <span class="ds-settings-label-muted-sm">
                 Caps apply to accepted canonical state, not prompt projection. Leave a field empty to keep the section uncapped by retention policy. Configured caps must be at least `1`.
             </span>
 
             {#each sectionDefinitions as section (section.key)}
-                <div class="evolution-retention-subsection">
-                    <span class="ds-settings-label">{section.label}</span>
-                    <div class="ds-settings-list-row evolution-retention-cap-row">
-                        <span class="ds-settings-text-medium">Active cap</span>
-                        <div class="evolution-retention-input">
-                            <NumberInput
-                                value={value.caps[section.key]?.active ?? Number.NaN}
-                                min={1}
-                                onInput={(event) => setCap(section.key, "active", Number(event.currentTarget.value || 1))}
-                                placeholder="Unset"
-                            />
-                        </div>
+                <div class="evolution-retention-subsection evolution-retention-subsection--framed">
+                    <div class="evolution-retention-subsection-copy">
+                        <span class="ds-settings-label">{section.label}</span>
                     </div>
-                    <div class="ds-settings-list-row evolution-retention-cap-row">
-                        <span class="ds-settings-text-medium">Non-active cap</span>
-                        <div class="evolution-retention-input">
-                            <NumberInput
-                                value={value.caps[section.key]?.nonActive ?? Number.NaN}
-                                min={1}
-                                onInput={(event) => setCap(section.key, "nonActive", Number(event.currentTarget.value || 1))}
-                                placeholder="Unset"
-                            />
+                    <div class="evolution-retention-cap-list">
+                        <div class="ds-settings-list-row evolution-retention-cap-row">
+                            <span class="ds-settings-text-medium">Active cap</span>
+                            <div class="evolution-retention-input">
+                                <NumberInput
+                                    value={value.caps[section.key]?.active ?? Number.NaN}
+                                    min={1}
+                                    onInput={(event) => setCap(section.key, "active", Number(event.currentTarget.value || 1))}
+                                    placeholder="Unset"
+                                />
+                            </div>
+                        </div>
+                        <div class="ds-settings-list-row evolution-retention-cap-row">
+                            <span class="ds-settings-text-medium">Non-active cap</span>
+                            <div class="evolution-retention-input">
+                                <NumberInput
+                                    value={value.caps[section.key]?.nonActive ?? Number.NaN}
+                                    min={1}
+                                    onInput={(event) => setCap(section.key, "nonActive", Number(event.currentTarget.value || 1))}
+                                    placeholder="Unset"
+                                />
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -242,6 +262,7 @@
 <style>
     .evolution-retention-editor {
         gap: var(--ds-space-4);
+        width: min(100%, 70rem);
     }
 
     .evolution-retention-copy {
@@ -250,15 +271,16 @@
         gap: var(--ds-space-2);
     }
 
-    .evolution-retention-grid {
-        display: grid;
+    .evolution-retention-stack {
+        display: flex;
+        flex-direction: column;
         gap: var(--ds-space-4);
     }
 
-    .evolution-retention-card {
+    .evolution-retention-section {
         display: flex;
         flex-direction: column;
-        gap: var(--ds-space-3);
+        gap: var(--ds-space-4);
         padding: var(--ds-space-4);
         border: 1px solid var(--ds-border-subtle);
         border-radius: var(--ds-radius-lg);
@@ -266,6 +288,27 @@
     }
 
     .evolution-retention-subsection {
+        display: flex;
+        flex-direction: column;
+        gap: var(--ds-space-3);
+    }
+
+    .evolution-retention-subsection--framed {
+        padding: var(--ds-space-3);
+        border: 1px solid color-mix(in srgb, var(--ds-border-subtle) 84%, transparent);
+        border-radius: var(--ds-radius-md);
+        background: color-mix(in srgb, var(--ds-surface-elevated) 82%, var(--ds-surface) 18%);
+    }
+
+    .evolution-retention-subsection-copy {
+        display: flex;
+        flex-direction: column;
+        gap: var(--ds-space-1);
+    }
+
+    .evolution-retention-threshold-list,
+    .evolution-retention-select-list,
+    .evolution-retention-cap-list {
         display: flex;
         flex-direction: column;
         gap: var(--ds-space-2);
@@ -276,6 +319,7 @@
         align-items: center;
         justify-content: space-between;
         gap: var(--ds-space-3);
+        flex-wrap: wrap;
     }
 
     .evolution-retention-input {
@@ -292,9 +336,15 @@
         min-height: var(--ds-height-control-md, 2.5rem);
     }
 
-    @media (min-width: 980px) {
-        .evolution-retention-grid {
-            grid-template-columns: repeat(3, minmax(0, 1fr));
+    @media (max-width: 720px) {
+        .evolution-retention-editor,
+        .evolution-retention-section {
+            width: 100%;
+        }
+
+        .evolution-retention-threshold-row,
+        .evolution-retention-cap-row {
+            align-items: flex-start;
         }
     }
 </style>

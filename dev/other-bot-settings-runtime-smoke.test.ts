@@ -402,8 +402,40 @@ describe("other bots settings runtime smoke", () => {
 
     expect(document.body.textContent).toContain("Prompt Projection Policy");
     expect(document.body.textContent).toContain("Per-Section Limits");
+    expect(document.querySelector(".evolution-projection-stack")).not.toBeNull();
+    expect(document.querySelectorAll(".evolution-projection-section")).toHaveLength(2);
+    expect(document.querySelector(".evolution-projection-grid")).toBeNull();
     expect(document.body.textContent).not.toContain("Extraction Runtime");
     expect(document.body.textContent).not.toContain("Default Sections");
+  });
+
+  it("renders the Retention tab as stacked sections instead of desktop columns", async () => {
+    const target = document.createElement("div");
+    document.body.appendChild(target);
+    app = mount(OtherBotSettings, { target });
+    await flushUi();
+
+    const evolutionTab = document.querySelector(
+      'button.ds-settings-tab[title="Evolution"]',
+    ) as HTMLButtonElement | null;
+    expect(evolutionTab).not.toBeNull();
+    evolutionTab?.click();
+    await flushUi();
+
+    const retentionTab = Array.from(
+      document.querySelectorAll('button.ds-settings-tab'),
+    ).find((button) => (button as HTMLButtonElement).title === "Retention") as
+      | HTMLButtonElement
+      | undefined;
+    expect(retentionTab).toBeDefined();
+
+    retentionTab?.click();
+    await flushUi();
+
+    expect(document.body.textContent).toContain("Retention Policy");
+    expect(document.querySelector(".evolution-retention-stack")).not.toBeNull();
+    expect(document.querySelectorAll(".evolution-retention-section")).toHaveLength(3);
+    expect(document.querySelector(".evolution-retention-grid")).toBeNull();
   });
 
   it("returns Evolution to the Global Defaults tab when the sidebar deep link requests it", async () => {

@@ -100,16 +100,21 @@
         </span>
     </div>
 
-    <div class="evolution-projection-grid">
-        <section class="evolution-projection-card">
+    <div class="evolution-projection-stack">
+        <section class="evolution-projection-section">
             <span class="ds-settings-label">Ranking By Bucket</span>
             <span class="ds-settings-label-muted-sm">
                 Each bucket ranks active memory with its own ordered priority list.
             </span>
 
             {#each CHARACTER_EVOLUTION_PROJECTION_BUCKETS as bucket (bucket)}
-                <div class="evolution-projection-subsection">
-                    <span class="ds-settings-label">{bucketLabels[bucket]}</span>
+                <div class="evolution-projection-subsection evolution-projection-subsection--framed">
+                    <div class="evolution-projection-subsection-copy">
+                        <span class="ds-settings-label">{bucketLabels[bucket]}</span>
+                        <span class="ds-settings-label-muted-sm">
+                            Reorder the ranking fields from highest to lowest projection priority.
+                        </span>
+                    </div>
                     <div class="evolution-projection-ranking-list">
                         {#each value.rankings[bucket] as field, index (field)}
                             <div class="ds-settings-list-row evolution-projection-ranking-row">
@@ -139,15 +144,20 @@
             {/each}
         </section>
 
-        <section class="evolution-projection-card">
+        <section class="evolution-projection-section">
             <span class="ds-settings-label">Per-Section Limits</span>
             <span class="ds-settings-label-muted-sm">
                 `relationship` and `lastInteractionEnded` are always included and are not capped here.
             </span>
 
             {#each projectionSurfaces as surface (surface)}
-                <div class="evolution-projection-subsection">
-                    <span class="ds-settings-label">{surfaceLabels[surface]}</span>
+                <div class="evolution-projection-subsection evolution-projection-subsection--framed">
+                    <div class="evolution-projection-subsection-copy">
+                        <span class="ds-settings-label">{surfaceLabels[surface]}</span>
+                        <span class="ds-settings-label-muted-sm">
+                            Set how many accepted items from each section can be surfaced on this prompt path.
+                        </span>
+                    </div>
                     <div class="evolution-projection-limit-list">
                         {#each sectionDefinitions as section (section.key)}
                             <div class="ds-settings-list-row evolution-projection-limit-row">
@@ -171,6 +181,7 @@
 <style>
     .evolution-projection-editor {
         gap: var(--ds-space-4);
+        width: min(100%, 70rem);
     }
 
     .evolution-projection-copy {
@@ -179,15 +190,16 @@
         gap: var(--ds-space-2);
     }
 
-    .evolution-projection-grid {
-        display: grid;
+    .evolution-projection-stack {
+        display: flex;
+        flex-direction: column;
         gap: var(--ds-space-4);
     }
 
-    .evolution-projection-card {
+    .evolution-projection-section {
         display: flex;
         flex-direction: column;
-        gap: var(--ds-space-3);
+        gap: var(--ds-space-4);
         padding: var(--ds-space-4);
         border: 1px solid var(--ds-border-subtle);
         border-radius: var(--ds-radius-lg);
@@ -197,7 +209,20 @@
     .evolution-projection-subsection {
         display: flex;
         flex-direction: column;
-        gap: var(--ds-space-2);
+        gap: var(--ds-space-3);
+    }
+
+    .evolution-projection-subsection--framed {
+        padding: var(--ds-space-3);
+        border: 1px solid color-mix(in srgb, var(--ds-border-subtle) 84%, transparent);
+        border-radius: var(--ds-radius-md);
+        background: color-mix(in srgb, var(--ds-surface-elevated) 82%, var(--ds-surface) 18%);
+    }
+
+    .evolution-projection-subsection-copy {
+        display: flex;
+        flex-direction: column;
+        gap: var(--ds-space-1);
     }
 
     .evolution-projection-ranking-list,
@@ -212,20 +237,32 @@
         align-items: center;
         justify-content: space-between;
         gap: var(--ds-space-3);
+        flex-wrap: wrap;
     }
 
     .evolution-projection-ranking-actions {
         display: flex;
         gap: var(--ds-space-2);
+        flex-wrap: wrap;
     }
 
     .evolution-projection-limit-input {
         width: 6.5rem;
     }
 
-    @media (min-width: 980px) {
-        .evolution-projection-grid {
-            grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    @media (max-width: 720px) {
+        .evolution-projection-editor,
+        .evolution-projection-section {
+            width: 100%;
+        }
+
+        .evolution-projection-ranking-row,
+        .evolution-projection-limit-row {
+            align-items: flex-start;
+        }
+
+        .evolution-projection-limit-input {
+            width: min(100%, 7rem);
         }
     }
 </style>
