@@ -68,8 +68,6 @@
         onLoadVersion: (version: number) => void | Promise<void>
         onRevertVersion: (version: number) => void | Promise<void>
         onDeleteVersion: (version: number) => void | Promise<void>
-        onClearCoverage: (version: CharacterEvolutionVersionMeta) => void | Promise<void>
-        onRerunFromHere: (version: CharacterEvolutionVersionMeta) => void | Promise<void>
     }
 
     let {
@@ -117,8 +115,6 @@
         onLoadVersion,
         onRevertVersion,
         onDeleteVersion,
-        onClearCoverage,
-        onRerunFromHere,
     }: Props = $props()
 </script>
 
@@ -134,7 +130,7 @@
     <div class="ds-settings-page evolution-settings-page">
         <div class="ds-settings-section">
             <EvolutionWorkspaceTabs
-                {selectedWorkspaceTab}
+                selectedTab={selectedWorkspaceTab}
                 onSelect={onSelectWorkspaceTab}
             />
         </div>
@@ -206,8 +202,6 @@
                 onLoadVersion={onLoadVersion}
                 {onRevertVersion}
                 {onDeleteVersion}
-                {onClearCoverage}
-                {onRerunFromHere}
             />
         {/if}
     </div>
