@@ -1,5 +1,6 @@
 <script lang="ts">
     import NumberInput from "src/lib/UI/GUI/NumberInput.svelte"
+    import SelectInput from "src/lib/UI/GUI/SelectInput.svelte"
     import {
         createCharacterEvolutionRetentionPolicy,
         createDefaultCharacterEvolutionSectionConfigs,
@@ -9,6 +10,8 @@
         CharacterEvolutionRetentionBucket,
         CharacterEvolutionRetentionPolicy,
     } from "src/ts/storage/database.types"
+    import { CHARACTER_EVOLUTION_ALL_BUCKETS } from "src/ts/storage/database.types"
+    import { CHARACTER_EVOLUTION_RETENTION_BUCKET_BY_SECTION } from "src/ts/character-evolution/retentionPolicy"
 
     type ItemSectionDefinition = {
         key: CharacterEvolutionProjectedItemSectionKey
@@ -27,6 +30,7 @@
         fast: "Fast bucket",
         medium: "Medium bucket",
         slow: "Slow bucket",
+        permanent: "Permanent bucket",
     }
 
     const sectionDefinitions: ItemSectionDefinition[] = createDefaultCharacterEvolutionSectionConfigs()
@@ -92,6 +96,23 @@
             },
         }
     }
+
+    function setSectionBucket(
+        sectionKey: CharacterEvolutionProjectedItemSectionKey,
+        nextBucket: CharacterEvolutionRetentionBucket,
+    ) {
+        value = {
+            ...value,
+            sectionBuckets: {
+                ...value.sectionBuckets,
+                [sectionKey]: nextBucket,
+            },
+        }
+    }
+
+    function getSectionBucket(sectionKey: CharacterEvolutionProjectedItemSectionKey): CharacterEvolutionRetentionBucket {
+        return value.sectionBuckets?.[sectionKey] ?? CHARACTER_EVOLUTION_RETENTION_BUCKET_BY_SECTION[sectionKey]
+    }
 </script>
 
 <div class="ds-settings-section evolution-retention-editor">
@@ -106,31 +127,38 @@
         <section class="evolution-retention-card">
             <span class="ds-settings-label">Bucket Thresholds</span>
             <span class="ds-settings-label-muted-sm">
-                Thresholds are counted in accepted handoffs, not raw message count. A value of `0` acts immediately.
+                Thresholds are counted in accepted handoffs, not raw message count. Permanent sections never auto-archive or auto-delete.
             </span>
 
-            {#each Object.keys(bucketLabels) as bucketKey (bucketKey)}
-                {@const bucket = bucketKey as CharacterEvolutionRetentionBucket}
+            {#each CHARACTER_EVOLUTION_ALL_BUCKETS as bucket (bucket)}
                 <div class="evolution-retention-subsection">
                     <span class="ds-settings-label">{bucketLabels[bucket]}</span>
                     <div class="ds-settings-list-row evolution-retention-threshold-row">
                         <span class="ds-settings-text-medium">Archive</span>
                         <div class="evolution-retention-input">
-                            <NumberInput
-                                value={value.thresholds.archive[bucket]}
-                                min={0}
-                                onInput={(event) => setArchiveThreshold(bucket, Number(event.currentTarget.value || 0))}
-                            />
+                            {#if bucket === "permanent"}
+                                <span class="ds-settings-label-muted-sm evolution-retention-static-value">Never</span>
+                            {:else}
+                                <NumberInput
+                                    value={value.thresholds.archive[bucket]}
+                                    min={0}
+                                    onInput={(event) => setArchiveThreshold(bucket, Number(event.currentTarget.value || 0))}
+                                />
+                            {/if}
                         </div>
                     </div>
                     <div class="ds-settings-list-row evolution-retention-threshold-row">
                         <span class="ds-settings-text-medium">Delete Non-Active</span>
                         <div class="evolution-retention-input">
-                            <NumberInput
-                                value={value.thresholds.deleteNonActive[bucket]}
-                                min={0}
-                                onInput={(event) => setDeleteThreshold(bucket, Number(event.currentTarget.value || 0))}
-                            />
+                            {#if bucket === "permanent"}
+                                <span class="ds-settings-label-muted-sm evolution-retention-static-value">Never</span>
+                            {:else}
+                                <NumberInput
+                                    value={value.thresholds.deleteNonActive[bucket]}
+                                    min={0}
+                                    onInput={(event) => setDeleteThreshold(bucket, Number(event.currentTarget.value || 0))}
+                                />
+                            {/if}
                         </div>
                     </div>
                 </div>
@@ -149,6 +177,29 @@
                     </div>
                 </div>
             </div>
+        </section>
+
+        <section class="evolution-retention-card">
+            <span class="ds-settings-label">Section Buckets</span>
+            <span class="ds-settings-label-muted-sm">
+                Each section can be reassigned to any retention bucket. Permanent keeps items until you archive or correct them manually.
+            </span>
+
+            {#each sectionDefinitions as section (section.key)}
+                <div class="ds-settings-list-row evolution-retention-cap-row">
+                    <span class="ds-settings-text-medium">{section.label}</span>
+                    <div class="evolution-retention-input evolution-retention-select">
+                        <SelectInput
+                            value={getSectionBucket(section.key)}
+                            onchange={(event) => setSectionBucket(section.key, event.currentTarget.value as CharacterEvolutionRetentionBucket)}
+                        >
+                            {#each CHARACTER_EVOLUTION_ALL_BUCKETS as bucket (bucket)}
+                                <option value={bucket}>{bucketLabels[bucket]}</option>
+                            {/each}
+                        </SelectInput>
+                    </div>
+                </div>
+            {/each}
         </section>
 
         <section class="evolution-retention-card">
@@ -231,9 +282,19 @@
         width: 6.5rem;
     }
 
+    .evolution-retention-select {
+        width: 11rem;
+    }
+
+    .evolution-retention-static-value {
+        display: inline-flex;
+        align-items: center;
+        min-height: var(--ds-height-control-md, 2.5rem);
+    }
+
     @media (min-width: 980px) {
         .evolution-retention-grid {
-            grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+            grid-template-columns: repeat(3, minmax(0, 1fr));
         }
     }
 </style>

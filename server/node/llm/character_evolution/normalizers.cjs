@@ -194,10 +194,7 @@ function normalizeCharacterEvolutionDefaults(raw) {
 }
 
 function normalizeCharacterEvolutionSettings(raw) {
-    const defaults = createDefaultCharacterEvolutionDefaults();
     const value = (raw && typeof raw === 'object') ? raw : {};
-    const extractionMaxTokens = Number(value.extractionMaxTokens);
-    const extractionProvider = toTrimmedString(value.extractionProvider) || defaults.extractionProvider;
     const pendingProposal = value.pendingProposal && typeof value.pendingProposal === 'object'
         ? {
             proposalId: toTrimmedString(value.pendingProposal.proposalId),
@@ -277,15 +274,6 @@ function normalizeCharacterEvolutionSettings(raw) {
 
     return {
         enabled: value.enabled === true,
-        useGlobalDefaults: value.useGlobalDefaults !== false,
-        extractionProvider,
-        extractionModel: normalizeCharacterEvolutionExtractionModel(extractionProvider, value.extractionModel),
-        extractionMaxTokens: Number.isFinite(extractionMaxTokens) && extractionMaxTokens > 0
-            ? Math.max(64, Math.floor(extractionMaxTokens))
-            : defaults.extractionMaxTokens,
-        extractionPrompt: normalizeExtractionPrompt(value.extractionPrompt),
-        sectionConfigs: normalizeCharacterEvolutionSectionConfigs(value.sectionConfigs),
-        privacy: normalizeCharacterEvolutionPrivacy(value.privacy),
         currentStateVersion: Number.isFinite(Number(value.currentStateVersion)) ? Math.max(0, Math.floor(Number(value.currentStateVersion))) : 0,
         currentState: normalizeCharacterEvolutionState(value.currentState),
         pendingProposal,
@@ -304,9 +292,6 @@ function normalizeCharacterEvolutionSettings(raw) {
 function getEffectiveCharacterEvolutionSettings(settings, character) {
     const defaults = normalizeCharacterEvolutionDefaults(settings?.characterEvolutionDefaults);
     const evolution = normalizeCharacterEvolutionSettings(character?.characterEvolution);
-    if (!evolution.useGlobalDefaults) {
-        return evolution;
-    }
     return {
         ...evolution,
         extractionProvider: defaults.extractionProvider,

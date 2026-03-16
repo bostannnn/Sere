@@ -34,7 +34,6 @@ describe("evolution routes versioning migration", () => {
         personality: "personality",
         characterEvolution: {
           enabled: true,
-          useGlobalDefaults: false,
           extractionProvider: "openrouter",
           extractionModel: "anthropic/claude-3.5-haiku",
           extractionMaxTokens: 2400,
@@ -101,7 +100,6 @@ describe("evolution routes versioning migration", () => {
         personality: "personality",
         characterEvolution: {
           enabled: true,
-          useGlobalDefaults: true,
           currentStateVersion: 0,
           currentState: {
             relationship: {
@@ -343,7 +341,6 @@ describe("evolution routes versioning migration", () => {
         personality: "personality",
         characterEvolution: {
           enabled: true,
-          useGlobalDefaults: true,
           currentStateVersion: 0,
           currentState: {
             relationship: {

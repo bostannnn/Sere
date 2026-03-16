@@ -164,6 +164,7 @@ describe("character evolution normalizers", () => {
         const normalizedCjs = normalizeCharacterEvolutionSettingsCjs(input)
 
         expect(normalized.lastProcessedMessageIndexByChat?.["chat-1"]).toBe(-1)
+        expect("useGlobalDefaults" in normalized).toBe(false)
         expect(normalizedCjs.lastProcessedMessageIndexByChat?.["chat-1"]).toBe(-1)
     })
 
@@ -209,6 +210,7 @@ describe("character evolution normalizers", () => {
         expect(normalized.stateVersions[0]?.chatId).toBe("chat-version")
         expect(normalized.lastProcessedChatId).toBe("chat-last")
         expect(normalized.currentState.characterLikes[0]?.sourceChatId).toBe("chat-like")
+        expect("useGlobalDefaults" in normalized).toBe(false)
         expect(normalized).toEqual(normalizedCjs)
     })
 
@@ -243,9 +245,54 @@ describe("character evolution normalizers", () => {
             "confidence",
             "updatedAt",
         ])
+        expect(normalized.promptProjection?.rankings.permanent).toEqual([
+            "confidence",
+            "timesSeen",
+            "lastSeenAt",
+            "updatedAt",
+        ])
         expect(normalized.promptProjection?.limits.generation.activeThreads).toBe(5)
         expect(normalized.promptProjection?.limits.generation.userFacts).toBe(4)
         expect(normalized.promptProjection?.limits.extraction.userFacts).toBe(6)
+        expect(normalizedCjs).toEqual(normalized)
+    })
+
+    it("normalizes retention defaults with permanent thresholds and section bucket overrides", () => {
+        const input = {
+            retention: {
+                thresholds: {
+                    archive: {
+                        fast: "3",
+                        permanent: 0,
+                    },
+                    deleteNonActive: {
+                        medium: "7",
+                        permanent: 0,
+                    },
+                    deleteConfirmedSlow: "41",
+                },
+                sectionBuckets: {
+                    runningJokes: "fast",
+                    keyMoments: "medium",
+                    userFacts: "permanent",
+                    userLikes: "bogus",
+                },
+            },
+        }
+
+        const normalized = normalizeCharacterEvolutionDefaults(input)
+        const { normalizeCharacterEvolutionDefaults: normalizeCharacterEvolutionDefaultsCjs } = require("../../../server/node/llm/character_evolution/normalizers.cjs")
+        const normalizedCjs = normalizeCharacterEvolutionDefaultsCjs(input)
+
+        expect(normalized.retention?.thresholds.archive.fast).toBe(3)
+        expect(normalized.retention?.thresholds.archive.permanent).toBe(Number.POSITIVE_INFINITY)
+        expect(normalized.retention?.thresholds.deleteNonActive.medium).toBe(7)
+        expect(normalized.retention?.thresholds.deleteNonActive.permanent).toBe(Number.POSITIVE_INFINITY)
+        expect(normalized.retention?.thresholds.deleteConfirmedSlow).toBe(41)
+        expect(normalized.retention?.sectionBuckets?.runningJokes).toBe("fast")
+        expect(normalized.retention?.sectionBuckets?.keyMoments).toBe("medium")
+        expect(normalized.retention?.sectionBuckets?.userFacts).toBe("permanent")
+        expect(normalized.retention?.sectionBuckets?.userLikes).toBe("permanent")
         expect(normalizedCjs).toEqual(normalized)
     })
 
@@ -257,12 +304,12 @@ describe("character evolution normalizers", () => {
         // All known builtins should be cleared to empty
         for (const builtinPrompt of [legacyFullReplacement, legacyUnderExtraction, currentBuiltin]) {
             expect(normalizeCharacterEvolutionDefaults({ extractionPrompt: builtinPrompt }).extractionPrompt).toBe("")
-            expect(normalizeCharacterEvolutionSettings({ extractionPrompt: builtinPrompt }).extractionPrompt).toBe("")
+            expect("extractionPrompt" in normalizeCharacterEvolutionSettings({ extractionPrompt: builtinPrompt })).toBe(false)
         }
 
-        // User customizations should be preserved
+        // User customizations should be preserved in defaults
         expect(normalizeCharacterEvolutionDefaults({ extractionPrompt: "My custom prompt" }).extractionPrompt).toBe("My custom prompt")
-        expect(normalizeCharacterEvolutionSettings({ extractionPrompt: "My custom prompt" }).extractionPrompt).toBe("My custom prompt")
+        expect("extractionPrompt" in normalizeCharacterEvolutionSettings({ extractionPrompt: "My custom prompt" })).toBe(false)
 
         // Empty/missing should stay empty
         expect(normalizeCharacterEvolutionDefaults({}).extractionPrompt).toBe("")
@@ -272,7 +319,7 @@ describe("character evolution normalizers", () => {
         const { normalizeCharacterEvolutionDefaults: normalizeDefaultsCjs } = require("../../../server/node/llm/character_evolution/normalizers.cjs")
         const { normalizeCharacterEvolutionSettings: normalizeSettingsCjs } = require("../../../server/node/llm/character_evolution/normalizers.cjs")
         expect(normalizeDefaultsCjs({ extractionPrompt: legacyFullReplacement }).extractionPrompt).toBe("")
-        expect(normalizeSettingsCjs({ extractionPrompt: legacyFullReplacement }).extractionPrompt).toBe("")
+        expect("extractionPrompt" in normalizeSettingsCjs({ extractionPrompt: legacyFullReplacement })).toBe(false)
         expect(normalizeDefaultsCjs({ extractionPrompt: "My custom prompt" }).extractionPrompt).toBe("My custom prompt")
     })
 

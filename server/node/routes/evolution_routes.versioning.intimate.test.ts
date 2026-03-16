@@ -78,7 +78,6 @@ describe("evolution routes versioning intimate preferences", () => {
         personality: "personality",
         characterEvolution: {
           enabled: true,
-          useGlobalDefaults: true,
           extractionProvider: "openrouter",
           extractionModel: "anthropic/claude-3.5-haiku",
           extractionMaxTokens: 2400,

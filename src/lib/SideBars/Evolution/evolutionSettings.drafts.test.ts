@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 import { createDefaultCharacterEvolutionSectionConfigs } from "src/ts/characterEvolution"
 import type {
     CharacterEvolutionPrivacySettings,
+    CharacterEvolutionRuntimeSettings,
     CharacterEvolutionSectionConfig,
     CharacterEvolutionSettings,
     CharacterEvolutionState,
@@ -23,7 +24,6 @@ function createState(overrides: Partial<CharacterEvolutionState> = {}): Characte
         characterLikes: [],
         characterDislikes: [],
         characterHabits: [],
-        characterBoundariesPreferences: [],
         userFacts: [],
         userRead: [],
         userLikes: [],
@@ -60,7 +60,6 @@ function createEvolutionSettings(
 ): CharacterEvolutionSettings {
     return {
         enabled: true,
-        useGlobalDefaults: false,
         extractionProvider: "openrouter",
         extractionModel: "model-a",
         extractionMaxTokens: 2400,
@@ -75,24 +74,32 @@ function createEvolutionSettings(
     }
 }
 
+function createStoredEvolutionSettings(
+    overrides: Partial<CharacterEvolutionRuntimeSettings> = {},
+): CharacterEvolutionRuntimeSettings {
+    return {
+        enabled: true,
+        currentStateVersion: 3,
+        currentState: createState(),
+        pendingProposal: null,
+        stateVersions: [],
+        ...overrides,
+    }
+}
+
 function createCharacter(
-    evolutionOverrides: Partial<CharacterEvolutionSettings> = {},
+    evolutionOverrides: Partial<CharacterEvolutionRuntimeSettings> = {},
 ): character {
     return {
         chaId: "char-1",
-        characterEvolution: createEvolutionSettings(evolutionOverrides),
-    } as character
+        characterEvolution: createStoredEvolutionSettings(evolutionOverrides),
+    } as unknown as character
 }
 
 describe("evolutionSettings.drafts", () => {
-    it("hydrates section drafts from effective settings when using global defaults", () => {
-        const characterEntry = createCharacter({
-            useGlobalDefaults: true,
-            sectionConfigs: createSectionConfigs("character"),
-            privacy: createPrivacy({ allowCharacterIntimatePreferences: true }),
-        })
+    it("hydrates section drafts from effective settings", () => {
+        const characterEntry = createCharacter()
         const evolutionSettings = createEvolutionSettings({
-            useGlobalDefaults: true,
             sectionConfigs: createSectionConfigs("effective"),
             privacy: createPrivacy({ allowUserIntimatePreferences: true }),
         })
@@ -107,51 +114,44 @@ describe("evolutionSettings.drafts", () => {
         expect(snapshot.privacyDraft).toEqual(evolutionSettings.privacy)
     })
 
-    it("hydrates local section drafts when character overrides are active", () => {
-        const characterEntry = createCharacter({
-            useGlobalDefaults: false,
-            sectionConfigs: createSectionConfigs("character"),
-            privacy: createPrivacy({ allowCharacterIntimatePreferences: true }),
-        })
-
+    it("ignores stored character policy remnants when hydrating section drafts", () => {
+        const characterEntry = createCharacter()
         const snapshot = createSectionDraftSnapshot({
             characterEntry,
             evolutionSettings: createEvolutionSettings({
-                useGlobalDefaults: true,
                 sectionConfigs: createSectionConfigs("effective"),
+                privacy: createPrivacy({ allowUserIntimatePreferences: true }),
             }),
         })
 
-        expect(snapshot.sectionConfigDraft).toEqual(characterEntry.characterEvolution?.sectionConfigs)
-        expect(snapshot.privacyDraft).toEqual(characterEntry.characterEvolution?.privacy)
+        expect(snapshot.sectionConfigDraft).toEqual(createSectionConfigs("effective"))
+        expect(snapshot.privacyDraft).toEqual(createPrivacy({ allowUserIntimatePreferences: true }))
     })
 
     it("returns no sync payload when normalized drafts match the base character", () => {
         const baseCharacter = createCharacter({
-            useGlobalDefaults: false,
             currentState: createState(),
-            sectionConfigs: createSectionConfigs("local"),
+        })
+        const evolutionSettings = createEvolutionSettings({
+            sectionConfigs: createSectionConfigs("effective"),
             privacy: createPrivacy({ allowUserIntimatePreferences: true }),
         })
 
         const nextEvolution = buildEvolutionSyncSettings({
             baseCharacter,
             currentStateDraft: createCurrentStateDraft(baseCharacter),
-            sectionConfigDraft: structuredClone(baseCharacter.characterEvolution?.sectionConfigs ?? []),
-            privacyDraft: structuredClone(baseCharacter.characterEvolution?.privacy ?? createPrivacy()),
+            sectionConfigDraft: structuredClone(evolutionSettings.sectionConfigs),
+            privacyDraft: structuredClone(evolutionSettings.privacy),
         })
 
         expect(nextEvolution).toBeNull()
     })
 
-    it("updates state, sections, and privacy when local drafts changed", () => {
+    it("updates state while ignoring section and privacy drafts", () => {
         const baseCharacter = createCharacter({
-            useGlobalDefaults: false,
             currentState: createState(),
-            sectionConfigs: createSectionConfigs("local"),
-            privacy: createPrivacy(),
         })
-        const nextSectionDraft = structuredClone(baseCharacter.characterEvolution?.sectionConfigs ?? [])
+        const nextSectionDraft = createSectionConfigs("changed")
         nextSectionDraft[0] = {
             ...nextSectionDraft[0],
             enabled: !nextSectionDraft[0].enabled,
@@ -179,19 +179,12 @@ describe("evolutionSettings.drafts", () => {
                 status: "active",
             },
         ])
-        expect(nextEvolution?.sectionConfigs[0]).toMatchObject({
-            enabled: nextSectionDraft[0].enabled,
-            label: "updated section",
-        })
-        expect(nextEvolution?.privacy.allowCharacterIntimatePreferences).toBe(true)
+        expect("sectionConfigs" in (nextEvolution ?? {})).toBe(false)
+        expect("privacy" in (nextEvolution ?? {})).toBe(false)
     })
 
-    it("ignores local section and privacy drafts when the character uses global defaults", () => {
-        const baseCharacter = createCharacter({
-            useGlobalDefaults: true,
-            sectionConfigs: createSectionConfigs("local"),
-            privacy: createPrivacy(),
-        })
+    it("ignores section and privacy drafts when state is unchanged", () => {
+        const baseCharacter = createCharacter()
 
         const nextEvolution = buildEvolutionSyncSettings({
             baseCharacter,
@@ -205,11 +198,9 @@ describe("evolutionSettings.drafts", () => {
 
     it("builds stable hydration keys for section and state drafts", () => {
         const characterEntry = createCharacter({
-            useGlobalDefaults: true,
             currentStateVersion: 7,
         })
         const evolutionSettings = createEvolutionSettings({
-            useGlobalDefaults: true,
             sectionConfigs: createSectionConfigs("effective"),
         })
 

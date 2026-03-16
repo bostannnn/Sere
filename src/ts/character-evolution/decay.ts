@@ -18,7 +18,7 @@ import {
 } from "./items"
 import { normalizeCharacterEvolutionSectionConfigs } from "./normalizers"
 import { compareCharacterEvolutionItemsForProjection, normalizeCharacterEvolutionPromptProjectionPolicy } from "./projectionPolicy"
-import { normalizeCharacterEvolutionRetentionPolicy } from "./retentionPolicy"
+import { getCharacterEvolutionRetentionBucket, normalizeCharacterEvolutionRetentionPolicy } from "./retentionPolicy"
 
 function normalizeUnseenAcceptedHandoffs(item: CharacterEvolutionItem): number {
     if (!Number.isFinite(Number(item.unseenAcceptedHandoffs)) || Number(item.unseenAcceptedHandoffs) < 0) {
@@ -42,7 +42,7 @@ function shouldArchiveAfterDecay(
     if ((item.status ?? "active") !== "active") {
         return false
     }
-    const bucket = getBucketKeyForSection(sectionKey)
+    const bucket = getCharacterEvolutionRetentionBucket(sectionKey, retentionPolicy)
     const threshold = retentionPolicy.thresholds.archive[bucket]
     const confidence = item.confidence ?? "suspected"
     if (bucket === "slow" && confidence === "confirmed") {
@@ -61,31 +61,27 @@ function shouldDeleteAfterDecay(
     if (status === "active") {
         return false
     }
+    const bucket = getCharacterEvolutionRetentionBucket(sectionKey, retentionPolicy)
+    if (bucket === "permanent") {
+        return false
+    }
     const confidence = item.confidence ?? "suspected"
     const isSlowConfirmed = (
-        sectionKey === "userFacts"
-        || sectionKey === "characterLikes"
-        || sectionKey === "characterDislikes"
-        || sectionKey === "userLikes"
-        || sectionKey === "userDislikes"
-        || sectionKey === "characterIntimatePreferences"
-        || sectionKey === "userIntimatePreferences"
+        bucket === "slow"
+        && (
+            sectionKey === "userFacts"
+            || sectionKey === "characterLikes"
+            || sectionKey === "characterDislikes"
+            || sectionKey === "userLikes"
+            || sectionKey === "userDislikes"
+            || sectionKey === "characterIntimatePreferences"
+            || sectionKey === "userIntimatePreferences"
+        )
     ) && confidence === "confirmed"
     if (isSlowConfirmed) {
         return unseenAcceptedHandoffs >= retentionPolicy.thresholds.deleteConfirmedSlow
     }
-    const bucket = getBucketKeyForSection(sectionKey)
     return unseenAcceptedHandoffs >= retentionPolicy.thresholds.deleteNonActive[bucket]
-}
-
-function getBucketKeyForSection(sectionKey: CharacterEvolutionItemSectionKey) {
-    if (sectionKey === "activeThreads" || sectionKey === "runningJokes" || sectionKey === "keyMoments") {
-        return "fast" as const
-    }
-    if (sectionKey === "userRead" || sectionKey === "characterHabits") {
-        return "medium" as const
-    }
-    return "slow" as const
 }
 
 function normalizeVersionNumber(value: unknown): number | null {

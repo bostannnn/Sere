@@ -50,7 +50,6 @@ function buildVersionPayload(version: number, startMessageNumber: number, stateV
       characterLikes: [],
       characterDislikes: [],
       characterHabits: [],
-      characterBoundariesPreferences: [],
       userFacts: [],
       userRead: [],
       userLikes: [],
@@ -83,7 +82,6 @@ function seedLinearVersions() {
       personality: "personality",
       characterEvolution: {
         enabled: true,
-        useGlobalDefaults: false,
         extractionProvider: "openrouter",
         extractionModel: "anthropic/claude-3.5-haiku",
         extractionMaxTokens: 2400,

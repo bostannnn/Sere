@@ -3,6 +3,33 @@ import { describe, expect, it } from "vitest"
 import { renderCharacterEvolutionStateForPrompt } from "../characterEvolution"
 import { createDefaultCharacterEvolutionSectionConfigs, createDefaultCharacterEvolutionState } from "./schema"
 
+function createPromptBuilderArgs(state: ReturnType<typeof createDefaultCharacterEvolutionState>) {
+    const sectionConfigs = createDefaultCharacterEvolutionSectionConfigs()
+    return {
+        sectionConfigs,
+        settings: {
+            username: "User",
+            characterEvolutionDefaults: {
+                extractionProvider: "openrouter",
+                extractionModel: "anthropic/claude-3.5-haiku",
+                extractionMaxTokens: 2400,
+                extractionPrompt: "",
+                sectionConfigs,
+                privacy: {
+                    allowCharacterIntimatePreferences: false,
+                    allowUserIntimatePreferences: false,
+                },
+            },
+        },
+        characterEvolution: {
+            enabled: true,
+            currentStateVersion: 1,
+            currentState: state,
+            stateVersions: [],
+        },
+    }
+}
+
 describe("character evolution render", () => {
     it("includes only active item-object memory in the normal prompt render", () => {
         const state = createDefaultCharacterEvolutionState()
@@ -66,31 +93,14 @@ describe("character evolution render", () => {
                 confidence: "confirmed",
             },
         ]
-        const sectionConfigs = createDefaultCharacterEvolutionSectionConfigs()
+        const { sectionConfigs, settings, characterEvolution } = createPromptBuilderArgs(state)
         const { buildCharacterEvolutionPromptMessages } = require("../../../server/node/llm/character_evolution/prompt_builder.cjs")
 
         const promptMessages = buildCharacterEvolutionPromptMessages({
-            settings: {
-                username: "User",
-            },
+            settings,
             character: {
                 name: "Eva",
-                characterEvolution: {
-                    enabled: true,
-                    useGlobalDefaults: false,
-                    extractionProvider: "openrouter",
-                    extractionModel: "anthropic/claude-3.5-haiku",
-                    extractionMaxTokens: 2400,
-                    extractionPrompt: "prompt",
-                    sectionConfigs,
-                    privacy: {
-                        allowCharacterIntimatePreferences: false,
-                        allowUserIntimatePreferences: false,
-                    },
-                    currentStateVersion: 1,
-                    currentState: state,
-                    stateVersions: [],
-                },
+                characterEvolution,
             },
             chat: {
                 id: "chat-1",
@@ -125,31 +135,14 @@ describe("character evolution render", () => {
                 timesSeen: 3,
             },
         ]
-        const sectionConfigs = createDefaultCharacterEvolutionSectionConfigs()
+        const { sectionConfigs, settings, characterEvolution } = createPromptBuilderArgs(state)
         const { buildCharacterEvolutionPromptMessages } = require("../../../server/node/llm/character_evolution/prompt_builder.cjs")
 
         const promptMessages = buildCharacterEvolutionPromptMessages({
-            settings: {
-                username: "User",
-            },
+            settings,
             character: {
                 name: "Eva",
-                characterEvolution: {
-                    enabled: true,
-                    useGlobalDefaults: false,
-                    extractionProvider: "openrouter",
-                    extractionModel: "anthropic/claude-3.5-haiku",
-                    extractionMaxTokens: 2400,
-                    extractionPrompt: "prompt",
-                    sectionConfigs,
-                    privacy: {
-                        allowCharacterIntimatePreferences: false,
-                        allowUserIntimatePreferences: false,
-                    },
-                    currentStateVersion: 1,
-                    currentState: state,
-                    stateVersions: [],
-                },
+                characterEvolution,
             },
             chat: {
                 id: "chat-1",
@@ -186,31 +179,14 @@ describe("character evolution render", () => {
             trustLevel: "very high trust with a lot of repeated explanation about how stable and carefully repaired the dynamic feels after several recent conversations",
             dynamic: "warm, teasing, and unusually open in a way that keeps restating the same emotional texture over and over to simulate a very long extractor-facing string",
         }
-        const sectionConfigs = createDefaultCharacterEvolutionSectionConfigs()
+        const { sectionConfigs, settings, characterEvolution } = createPromptBuilderArgs(state)
         const { buildCharacterEvolutionPromptMessages } = require("../../../server/node/llm/character_evolution/prompt_builder.cjs")
 
         const promptMessages = buildCharacterEvolutionPromptMessages({
-            settings: {
-                username: "User",
-            },
+            settings,
             character: {
                 name: "Eva",
-                characterEvolution: {
-                    enabled: true,
-                    useGlobalDefaults: false,
-                    extractionProvider: "openrouter",
-                    extractionModel: "anthropic/claude-3.5-haiku",
-                    extractionMaxTokens: 2400,
-                    extractionPrompt: "prompt",
-                    sectionConfigs,
-                    privacy: {
-                        allowCharacterIntimatePreferences: false,
-                        allowUserIntimatePreferences: false,
-                    },
-                    currentStateVersion: 1,
-                    currentState: state,
-                    stateVersions: [],
-                },
+                characterEvolution,
             },
             chat: {
                 id: "chat-1",
@@ -238,31 +214,14 @@ describe("character evolution render", () => {
                 confidence: "confirmed",
             },
         ]
-        const sectionConfigs = createDefaultCharacterEvolutionSectionConfigs()
+        const { sectionConfigs, settings, characterEvolution } = createPromptBuilderArgs(state)
         const { buildCharacterEvolutionPromptMessages } = require("../../../server/node/llm/character_evolution/prompt_builder.cjs")
 
         const promptMessages = buildCharacterEvolutionPromptMessages({
-            settings: {
-                username: "User",
-            },
+            settings,
             character: {
                 name: "Eva",
-                characterEvolution: {
-                    enabled: true,
-                    useGlobalDefaults: false,
-                    extractionProvider: "openrouter",
-                    extractionModel: "anthropic/claude-3.5-haiku",
-                    extractionMaxTokens: 2400,
-                    extractionPrompt: "prompt",
-                    sectionConfigs,
-                    privacy: {
-                        allowCharacterIntimatePreferences: false,
-                        allowUserIntimatePreferences: false,
-                    },
-                    currentStateVersion: 1,
-                    currentState: state,
-                    stateVersions: [],
-                },
+                characterEvolution,
             },
             chat: {
                 id: "chat-1",
@@ -290,31 +249,14 @@ describe("character evolution render", () => {
             { value: "fact-6", confidence: "suspected", status: "active", lastSeenAt: 5, updatedAt: 5, timesSeen: 1 },
             { value: "fact-7", confidence: "suspected", status: "active", lastSeenAt: 4, updatedAt: 4, timesSeen: 1 },
         ]
-        const sectionConfigs = createDefaultCharacterEvolutionSectionConfigs()
+        const { sectionConfigs, settings, characterEvolution } = createPromptBuilderArgs(state)
         const { buildCharacterEvolutionPromptMessages } = require("../../../server/node/llm/character_evolution/prompt_builder.cjs")
 
         const promptMessages = buildCharacterEvolutionPromptMessages({
-            settings: {
-                username: "User",
-            },
+            settings,
             character: {
                 name: "Eva",
-                characterEvolution: {
-                    enabled: true,
-                    useGlobalDefaults: false,
-                    extractionProvider: "openrouter",
-                    extractionModel: "anthropic/claude-3.5-haiku",
-                    extractionMaxTokens: 2400,
-                    extractionPrompt: "prompt",
-                    sectionConfigs,
-                    privacy: {
-                        allowCharacterIntimatePreferences: false,
-                        allowUserIntimatePreferences: false,
-                    },
-                    currentStateVersion: 1,
-                    currentState: state,
-                    stateVersions: [],
-                },
+                characterEvolution,
             },
             chat: {
                 id: "chat-1",

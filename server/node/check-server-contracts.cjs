@@ -332,7 +332,6 @@ async function runContracts() {
                     personality: 'personality',
                     characterEvolution: {
                         enabled: true,
-                        useGlobalDefaults: true,
                         currentStateVersion: 4,
                         currentState: {
                             activeThreads: [

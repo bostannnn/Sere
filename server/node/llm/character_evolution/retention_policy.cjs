@@ -1,5 +1,9 @@
 const { CHARACTER_EVOLUTION_ITEM_SECTION_KEYS } = require('./items.cjs');
-const { getCharacterEvolutionProjectionBucket } = require('./projection_policy.cjs');
+const { CHARACTER_EVOLUTION_PROJECTION_BUCKET_BY_SECTION } = require('./projection_policy.cjs');
+
+const CHARACTER_EVOLUTION_RETENTION_BUCKET_BY_SECTION = {
+    ...CHARACTER_EVOLUTION_PROJECTION_BUCKET_BY_SECTION,
+};
 
 const DEFAULT_CHARACTER_EVOLUTION_RETENTION_POLICY = {
     thresholds: {
@@ -7,11 +11,13 @@ const DEFAULT_CHARACTER_EVOLUTION_RETENTION_POLICY = {
             fast: 2,
             medium: 5,
             slow: 8,
+            permanent: Number.POSITIVE_INFINITY,
         },
         deleteNonActive: {
             fast: 6,
             medium: 12,
             slow: 24,
+            permanent: Number.POSITIVE_INFINITY,
         },
         deleteConfirmedSlow: 36,
     },
@@ -28,6 +34,9 @@ const DEFAULT_CHARACTER_EVOLUTION_RETENTION_POLICY = {
             active: 6,
             nonActive: 8,
         },
+    },
+    sectionBuckets: {
+        ...CHARACTER_EVOLUTION_RETENTION_BUCKET_BY_SECTION,
     },
 };
 
@@ -53,7 +62,23 @@ function normalizeBucketThresholdRecord(raw, fallback) {
         fast: normalizeThresholdValue(source.fast, fallback.fast),
         medium: normalizeThresholdValue(source.medium, fallback.medium),
         slow: normalizeThresholdValue(source.slow, fallback.slow),
+        permanent: Number.POSITIVE_INFINITY,
     };
+}
+
+function normalizeSectionBucket(value, fallback) {
+    return value === 'fast' || value === 'medium' || value === 'slow' || value === 'permanent'
+        ? value
+        : fallback;
+}
+
+function normalizeSectionBuckets(raw, fallback) {
+    const source = (raw && typeof raw === 'object') ? raw : {};
+    const sectionBuckets = {};
+    for (const key of CHARACTER_EVOLUTION_ITEM_SECTION_KEYS) {
+        sectionBuckets[key] = normalizeSectionBucket(source[key], fallback[key]);
+    }
+    return sectionBuckets;
 }
 
 function normalizeSectionCap(raw, fallback) {
@@ -91,18 +116,24 @@ function normalizeCharacterEvolutionRetentionPolicy(raw) {
             deleteConfirmedSlow: normalizeThresholdValue(value.thresholds?.deleteConfirmedSlow, fallback.thresholds.deleteConfirmedSlow),
         },
         caps,
+        sectionBuckets: normalizeSectionBuckets(
+            value.sectionBuckets,
+            fallback.sectionBuckets || CHARACTER_EVOLUTION_RETENTION_BUCKET_BY_SECTION
+        ),
     };
 }
 
-function getCharacterEvolutionRetentionBucket(sectionKey) {
-    return getCharacterEvolutionProjectionBucket(sectionKey);
+function getCharacterEvolutionRetentionBucket(sectionKey, retentionPolicy = null) {
+    return retentionPolicy?.sectionBuckets?.[sectionKey]
+        || CHARACTER_EVOLUTION_RETENTION_BUCKET_BY_SECTION[sectionKey];
 }
 
 function createCharacterEvolutionRetentionPolicy() {
-    return JSON.parse(JSON.stringify(DEFAULT_CHARACTER_EVOLUTION_RETENTION_POLICY));
+    return structuredClone(DEFAULT_CHARACTER_EVOLUTION_RETENTION_POLICY);
 }
 
 module.exports = {
+    CHARACTER_EVOLUTION_RETENTION_BUCKET_BY_SECTION,
     DEFAULT_CHARACTER_EVOLUTION_RETENTION_POLICY,
     createCharacterEvolutionRetentionPolicy,
     getCharacterEvolutionRetentionBucket,

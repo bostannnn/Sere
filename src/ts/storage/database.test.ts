@@ -248,11 +248,6 @@ describe("character evolution model normalization", () => {
         {
           characterEvolution: {
             enabled: true,
-            useGlobalDefaults: false,
-            extractionProvider: "anthropic",
-            extractionModel: "anthropic/claude-3-5-haiku-latest",
-            extractionMaxTokens: 1200,
-            extractionPrompt: "prompt",
             currentStateVersion: 0,
             currentState: {},
             stateVersions: [],
@@ -270,20 +265,15 @@ describe("character evolution model normalization", () => {
     });
 
     expect((db.characterEvolutionDefaults as { extractionModel?: string }).extractionModel).toBe("gpt-4.1-mini");
-    expect(((db.characters[0] as { characterEvolution?: { extractionModel?: string } }).characterEvolution?.extractionModel)).toBe("claude-3-5-haiku-latest");
+    expect("extractionModel" in ((db.characters[0] as { characterEvolution?: Record<string, unknown> }).characterEvolution ?? {})).toBe(false);
   });
 
-  it("preserves legacy lastChatEnded section config overrides under lastInteractionEnded", () => {
+  it("drops legacy per-character section config overrides from stored evolution state", () => {
     const db = applySetDatabase({
       characters: [
         {
           characterEvolution: {
             enabled: true,
-            useGlobalDefaults: false,
-            extractionProvider: "openrouter",
-            extractionModel: "anthropic/claude-3.5-haiku",
-            extractionMaxTokens: 1200,
-            extractionPrompt: "prompt",
             sectionConfigs: [
               {
                 key: "lastChatEnded",
@@ -303,16 +293,7 @@ describe("character evolution model normalization", () => {
       ],
     });
 
-    const normalizedSection = (db.characters[0] as { characterEvolution?: { sectionConfigs?: Array<{ key: string; label: string; enabled: boolean; includeInPrompt: boolean; instruction: string }> } })
-      .characterEvolution?.sectionConfigs?.find((section) => section.key === "lastInteractionEnded");
-
-    expect(normalizedSection).toEqual(expect.objectContaining({
-      key: "lastInteractionEnded",
-      label: "Legacy Last Chat Ended",
-      enabled: false,
-      includeInPrompt: false,
-      instruction: "Legacy instruction",
-    }));
+    expect("sectionConfigs" in ((db.characters[0] as { characterEvolution?: Record<string, unknown> }).characterEvolution ?? {})).toBe(false);
   });
 
   it("keeps the client and server default evolution prompts aligned to range semantics", () => {

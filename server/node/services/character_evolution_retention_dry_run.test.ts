@@ -55,7 +55,6 @@ describe("character evolution retention dry-run service", () => {
         personality: "personality",
         characterEvolution: {
           enabled: true,
-          useGlobalDefaults: true,
           currentStateVersion: 4,
           currentState: {
             activeThreads: [
@@ -87,7 +86,6 @@ describe("character evolution retention dry-run service", () => {
         personality: "personality",
         characterEvolution: {
           enabled: true,
-          useGlobalDefaults: true,
           currentStateVersion: 2,
           currentState: {},
           stateVersions: [],

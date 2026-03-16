@@ -34,7 +34,6 @@ describe("evolution routes versioning", () => {
         personality: "personality",
         characterEvolution: {
           enabled: true,
-          useGlobalDefaults: true,
           currentStateVersion: 1,
           currentState: {
             relationship: {
@@ -197,7 +196,7 @@ describe("evolution routes versioning", () => {
     }));
   });
 
-  it("preserves disabled-section state when accepting a proposal", async () => {
+  it("preserves omitted canonical userFacts when accepting a proposal", async () => {
     const dataDirs = getDataDirs();
     writeJson(path.join(dataDirs.characters, characterId, "character.json"), {
       character: {
@@ -208,7 +207,6 @@ describe("evolution routes versioning", () => {
         personality: "personality",
         characterEvolution: {
           enabled: true,
-          useGlobalDefaults: false,
           extractionProvider: "openrouter",
           extractionModel: "anthropic/claude-3.5-haiku",
           extractionMaxTokens: 2400,
@@ -297,12 +295,13 @@ describe("evolution routes versioning", () => {
           dynamic: "warmer after the last exchange",
         },
         userFacts: [
-          {
+          expect.objectContaining({
             value: "User works nights",
             confidence: "confirmed",
             note: "from an earlier accepted chat",
             status: "active",
-          },
+            unseenAcceptedHandoffs: 1,
+          }),
         ],
       }),
     }));
@@ -319,7 +318,6 @@ describe("evolution routes versioning", () => {
         personality: "personality",
         characterEvolution: {
           enabled: true,
-          useGlobalDefaults: false,
           extractionProvider: "openrouter",
           extractionModel: "anthropic/claude-3.5-haiku",
           extractionMaxTokens: 2400,
@@ -406,7 +404,6 @@ describe("evolution routes versioning", () => {
         personality: "personality",
         characterEvolution: {
           enabled: true,
-          useGlobalDefaults: false,
           extractionProvider: "openrouter",
           extractionModel: "anthropic/claude-3.5-haiku",
           extractionMaxTokens: 2400,

@@ -3,8 +3,8 @@ import type {
     CharacterEvolutionItem,
     CharacterEvolutionPrivacySettings,
     CharacterEvolutionProposalState,
+    CharacterEvolutionRuntimeSettings,
     CharacterEvolutionSectionConfig,
-    CharacterEvolutionSettings,
     CharacterEvolutionState,
     Database,
     character,
@@ -261,13 +261,8 @@ export function normalizeCharacterEvolutionDefaults(raw: unknown): CharacterEvol
     }
 }
 
-export function normalizeCharacterEvolutionSettings(raw: unknown): CharacterEvolutionSettings {
-    const defaults = createDefaultCharacterEvolutionDefaults()
+export function normalizeCharacterEvolutionSettings(raw: unknown): CharacterEvolutionRuntimeSettings {
     const value = (raw && typeof raw === "object") ? raw as Record<string, unknown> : {}
-    const extractionMaxTokens = Number(value.extractionMaxTokens)
-    const extractionProvider = typeof value.extractionProvider === "string" && value.extractionProvider.trim()
-        ? value.extractionProvider.trim()
-        : defaults.extractionProvider
     const pendingProposal = value.pendingProposal && typeof value.pendingProposal === "object"
         ? {
             proposalId: typeof (value.pendingProposal as Record<string, unknown>).proposalId === "string"
@@ -293,7 +288,7 @@ export function normalizeCharacterEvolutionSettings(raw: unknown): CharacterEvol
                                 : [],
                         }
                     })
-                    .filter((change): change is NonNullable<CharacterEvolutionSettings["pendingProposal"]>["changes"][number] => !!change && !!change.sectionKey)
+                    .filter((change): change is NonNullable<CharacterEvolutionRuntimeSettings["pendingProposal"]>["changes"][number] => !!change && !!change.sectionKey)
                 : [],
             createdAt: Number.isFinite(Number((value.pendingProposal as Record<string, unknown>).createdAt))
                 ? Number((value.pendingProposal as Record<string, unknown>).createdAt)
@@ -315,7 +310,7 @@ export function normalizeCharacterEvolutionSettings(raw: unknown): CharacterEvol
                     ...(range ? { range } : {}),
                 }
             })
-            .filter((entry): entry is NonNullable<CharacterEvolutionSettings["stateVersions"][number]> => !!entry)
+            .filter((entry): entry is NonNullable<CharacterEvolutionRuntimeSettings["stateVersions"][number]> => !!entry)
         : []
     const processedRanges = Array.isArray(value.processedRanges)
         ? value.processedRanges
@@ -331,7 +326,7 @@ export function normalizeCharacterEvolutionSettings(raw: unknown): CharacterEvol
                     range,
                 }
             })
-            .filter((entry): entry is NonNullable<CharacterEvolutionSettings["processedRanges"]>[number] => !!entry)
+            .filter((entry): entry is NonNullable<CharacterEvolutionRuntimeSettings["processedRanges"]>[number] => !!entry)
         : stateVersions
             .filter((entry) => !!entry.range)
             .map((entry) => ({
@@ -360,15 +355,6 @@ export function normalizeCharacterEvolutionSettings(raw: unknown): CharacterEvol
     const autoHandoffBatchSizeRaw = Number(value.autoHandoffBatchSize)
     return {
         enabled: value.enabled === true,
-        useGlobalDefaults: value.useGlobalDefaults !== false,
-        extractionProvider,
-        extractionModel: normalizeCharacterEvolutionExtractionModel(extractionProvider, value.extractionModel),
-        extractionMaxTokens: Number.isFinite(extractionMaxTokens) && extractionMaxTokens > 0
-            ? Math.max(64, Math.floor(extractionMaxTokens))
-            : defaults.extractionMaxTokens,
-        extractionPrompt: normalizeExtractionPrompt(value.extractionPrompt),
-        sectionConfigs: normalizeCharacterEvolutionSectionConfigs(value.sectionConfigs),
-        privacy: normalizeCharacterEvolutionPrivacy(value.privacy),
         currentStateVersion: Number.isFinite(Number(value.currentStateVersion)) ? Math.max(0, Math.floor(Number(value.currentStateVersion))) : 0,
         currentState: normalizeCharacterEvolutionState(value.currentState),
         pendingProposal,
@@ -394,7 +380,7 @@ export function ensureDatabaseEvolutionDefaults(db: Database): CharacterEvolutio
     return normalized
 }
 
-export function ensureCharacterEvolution(char: character | groupChat): CharacterEvolutionSettings {
+export function ensureCharacterEvolution(char: character | groupChat): CharacterEvolutionRuntimeSettings {
     const normalized = normalizeCharacterEvolutionSettings(char.characterEvolution)
     if (!jsonEqual(char.characterEvolution, normalized)) {
         char.characterEvolution = normalized

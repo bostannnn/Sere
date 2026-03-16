@@ -184,7 +184,6 @@ beforeEach(() => {
       personality: "Personality text",
       characterEvolution: {
         enabled: true,
-        useGlobalDefaults: true,
         currentStateVersion: 0,
         currentState: {},
         stateVersions: [],

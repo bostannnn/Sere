@@ -1,5 +1,5 @@
 import type {
-  CharacterEvolutionSettings,
+  CharacterEvolutionRuntimeSettings,
   Chat,
   ChatFolder,
   character,
@@ -43,7 +43,7 @@ export function readCharacterExportBundle(raw: unknown): RisuCharacterExportBund
     selectedChatId: typeof bundle.selectedChatId === "string" || bundle.selectedChatId === null
       ? (bundle.selectedChatId as string | null)
       : undefined,
-    characterEvolution: bundle.characterEvolution as CharacterEvolutionSettings | undefined,
+    characterEvolution: bundle.characterEvolution as CharacterEvolutionRuntimeSettings | undefined,
   };
 }
 

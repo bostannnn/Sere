@@ -5,7 +5,14 @@ import type {
     CharacterEvolutionRetentionSectionCap,
 } from "../storage/database.types"
 import { CHARACTER_EVOLUTION_ITEM_SECTION_KEYS } from "./items"
-import { getCharacterEvolutionProjectionBucket } from "./projectionPolicy"
+import { CHARACTER_EVOLUTION_PROJECTION_BUCKET_BY_SECTION } from "./projectionPolicy"
+
+export const CHARACTER_EVOLUTION_RETENTION_BUCKET_BY_SECTION: Record<
+    CharacterEvolutionProjectedItemSectionKey,
+    CharacterEvolutionRetentionBucket
+> = {
+    ...CHARACTER_EVOLUTION_PROJECTION_BUCKET_BY_SECTION,
+}
 
 export const DEFAULT_CHARACTER_EVOLUTION_RETENTION_POLICY: CharacterEvolutionRetentionPolicy = {
     thresholds: {
@@ -13,11 +20,13 @@ export const DEFAULT_CHARACTER_EVOLUTION_RETENTION_POLICY: CharacterEvolutionRet
             fast: 2,
             medium: 5,
             slow: 8,
+            permanent: Number.POSITIVE_INFINITY,
         },
         deleteNonActive: {
             fast: 6,
             medium: 12,
             slow: 24,
+            permanent: Number.POSITIVE_INFINITY,
         },
         deleteConfirmedSlow: 36,
     },
@@ -34,6 +43,9 @@ export const DEFAULT_CHARACTER_EVOLUTION_RETENTION_POLICY: CharacterEvolutionRet
             active: 6,
             nonActive: 8,
         },
+    },
+    sectionBuckets: {
+        ...CHARACTER_EVOLUTION_RETENTION_BUCKET_BY_SECTION,
     },
 }
 
@@ -62,7 +74,31 @@ function normalizeBucketThresholdRecord(
         fast: normalizeThresholdValue(source.fast, fallback.fast),
         medium: normalizeThresholdValue(source.medium, fallback.medium),
         slow: normalizeThresholdValue(source.slow, fallback.slow),
+        permanent: Number.POSITIVE_INFINITY,
     }
+}
+
+function normalizeSectionBucket(
+    value: unknown,
+    fallback: CharacterEvolutionRetentionBucket,
+): CharacterEvolutionRetentionBucket {
+    return value === "fast" || value === "medium" || value === "slow" || value === "permanent"
+        ? value
+        : fallback
+}
+
+function normalizeSectionBuckets(
+    raw: unknown,
+    fallback: Record<CharacterEvolutionProjectedItemSectionKey, CharacterEvolutionRetentionBucket>,
+): Record<CharacterEvolutionProjectedItemSectionKey, CharacterEvolutionRetentionBucket> {
+    const source = (raw && typeof raw === "object") ? raw as Record<string, unknown> : {}
+    const sectionBuckets = {} as Record<CharacterEvolutionProjectedItemSectionKey, CharacterEvolutionRetentionBucket>
+
+    for (const key of CHARACTER_EVOLUTION_ITEM_SECTION_KEYS as readonly CharacterEvolutionProjectedItemSectionKey[]) {
+        sectionBuckets[key] = normalizeSectionBucket(source[key], fallback[key])
+    }
+
+    return sectionBuckets
 }
 
 function normalizeSectionCap(
@@ -113,13 +149,22 @@ export function normalizeCharacterEvolutionRetentionPolicy(raw: unknown): Charac
             ),
         },
         caps,
+        sectionBuckets: normalizeSectionBuckets(
+            value.sectionBuckets,
+            {
+                ...CHARACTER_EVOLUTION_RETENTION_BUCKET_BY_SECTION,
+                ...(fallback.sectionBuckets ?? {}),
+            },
+        ),
     }
 }
 
 export function getCharacterEvolutionRetentionBucket(
     sectionKey: CharacterEvolutionProjectedItemSectionKey,
+    retentionPolicy?: CharacterEvolutionRetentionPolicy | null,
 ): CharacterEvolutionRetentionBucket {
-    return getCharacterEvolutionProjectionBucket(sectionKey)
+    return retentionPolicy?.sectionBuckets?.[sectionKey]
+        ?? CHARACTER_EVOLUTION_RETENTION_BUCKET_BY_SECTION[sectionKey]
 }
 
 export function createCharacterEvolutionRetentionPolicy(): CharacterEvolutionRetentionPolicy {

@@ -87,7 +87,6 @@ function createSetupCharacter(): { characterEvolution: CharacterEvolutionSetting
     return {
         characterEvolution: {
             enabled: true,
-            useGlobalDefaults: true,
             extractionProvider: "openrouter",
             extractionModel: "mistralai/mistral-large-2512",
             extractionMaxTokens: 16000,
@@ -131,14 +130,11 @@ describe("evolution panels", () => {
         const target = mountIntoBody(EvolutionSetupPanel, {
             characterEntry: createSetupCharacter(),
             evolutionSettings: createSetupCharacter().characterEvolution,
-            usingGlobalDefaults: true,
             effectiveProvider: "openrouter",
             effectiveModel: "mistralai/mistral-large-2512",
             hasTemplateSlot: true,
             activeChatId: "chat-1",
             activeChatMessageCount: 300,
-            revealCharacterOverrides: false,
-            onToggleRevealCharacterOverrides: vi.fn(),
             onOpenGlobalDefaults: vi.fn(),
             manualRangeAvailable: true,
             manualRangeBlockedReason: "",

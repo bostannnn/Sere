@@ -33,7 +33,6 @@ function createState(overrides: Partial<CharacterEvolutionState> = {}): Characte
     characterLikes: [],
     characterDislikes: [],
     characterHabits: [],
-    characterBoundariesPreferences: [],
     userFacts: [],
     userRead: [],
     userLikes: [],

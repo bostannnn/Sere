@@ -33,7 +33,6 @@ describe("evolution routes phase 5 decay", () => {
         personality: "personality",
         characterEvolution: {
           enabled: true,
-          useGlobalDefaults: false,
           extractionProvider: "openrouter",
           extractionModel: "anthropic/claude-3.5-haiku",
           extractionMaxTokens: 2400,
@@ -126,7 +125,6 @@ describe("evolution routes phase 5 decay", () => {
                 characterLikes: 2,
                 characterDislikes: 2,
                 characterHabits: 2,
-                characterBoundariesPreferences: 2,
                 userFacts: 2,
                 userRead: 2,
                 userLikes: 2,
@@ -141,7 +139,6 @@ describe("evolution routes phase 5 decay", () => {
                 characterLikes: 2,
                 characterDislikes: 2,
                 characterHabits: 2,
-                characterBoundariesPreferences: 2,
                 userFacts: 2,
                 userRead: 2,
                 userLikes: 2,
@@ -164,7 +161,6 @@ describe("evolution routes phase 5 decay", () => {
         personality: "personality",
         characterEvolution: {
           enabled: true,
-          useGlobalDefaults: true,
           currentStateVersion: 1,
           currentState: {
             relationship: {
@@ -260,7 +256,6 @@ describe("evolution routes phase 5 decay", () => {
         personality: "personality",
         characterEvolution: {
           enabled: true,
-          useGlobalDefaults: false,
           extractionProvider: "openrouter",
           extractionModel: "anthropic/claude-3.5-haiku",
           extractionMaxTokens: 2400,
@@ -354,7 +349,6 @@ describe("evolution routes phase 5 decay", () => {
         personality: "personality",
         characterEvolution: {
           enabled: true,
-          useGlobalDefaults: false,
           extractionProvider: "openrouter",
           extractionModel: "anthropic/claude-3.5-haiku",
           extractionMaxTokens: 2400,
@@ -429,7 +423,6 @@ describe("evolution routes phase 5 decay", () => {
         personality: "personality",
         characterEvolution: {
           enabled: true,
-          useGlobalDefaults: false,
           extractionProvider: "openrouter",
           extractionModel: "anthropic/claude-3.5-haiku",
           extractionMaxTokens: 2400,
@@ -521,7 +514,6 @@ describe("evolution routes phase 5 decay", () => {
         personality: "personality",
         characterEvolution: {
           enabled: true,
-          useGlobalDefaults: false,
           extractionProvider: "openrouter",
           extractionModel: "anthropic/claude-3.5-haiku",
           extractionMaxTokens: 2400,

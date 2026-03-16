@@ -32,6 +32,7 @@
         fast: "Fast bucket",
         medium: "Medium bucket",
         slow: "Slow bucket",
+        permanent: "Permanent bucket",
     }
 
     const rankFieldLabels: Record<CharacterEvolutionProjectionRankField, string> = {
@@ -103,7 +104,7 @@
         <section class="evolution-projection-card">
             <span class="ds-settings-label">Ranking By Bucket</span>
             <span class="ds-settings-label-muted-sm">
-                Fast, medium, and slow sections each rank active memory with their own ordered priority list.
+                Each bucket ranks active memory with its own ordered priority list.
             </span>
 
             {#each CHARACTER_EVOLUTION_PROJECTION_BUCKETS as bucket (bucket)}

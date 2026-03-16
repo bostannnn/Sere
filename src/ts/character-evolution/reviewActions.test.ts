@@ -92,7 +92,6 @@ function createCharacter(): character {
         characterLikes: [],
         characterDislikes: [],
         characterHabits: [],
-        characterBoundariesPreferences: [],
         userFacts: [],
         userRead: [],
         userLikes: [],

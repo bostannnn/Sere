@@ -66,7 +66,6 @@ describe("server prompt template slots", () => {
         name: "Chronicle Bot",
         characterEvolution: {
           enabled: true,
-          useGlobalDefaults: false,
           extractionMaxTokens: 2400,
           currentState: {
             relationship: {
@@ -127,7 +126,6 @@ describe("server prompt template slots", () => {
         name: "Chronicle Bot",
         characterEvolution: {
           enabled: true,
-          useGlobalDefaults: false,
           extractionMaxTokens: 2400,
           currentState: {
             userFacts: [
@@ -226,7 +224,6 @@ describe("server prompt template slots", () => {
         personality: "Dry wit.",
         characterEvolution: {
           enabled: true,
-          useGlobalDefaults: false,
           extractionMaxTokens: 2400,
           currentState: {
             relationship: {

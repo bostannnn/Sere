@@ -22,23 +22,24 @@ export const CHARACTER_EVOLUTION_PROJECTION_BUCKET_BY_SECTION: Record<
     CharacterEvolutionProjectionBucket
 > = {
     activeThreads: "fast",
-    runningJokes: "fast",
-    keyMoments: "fast",
+    runningJokes: "medium",
+    keyMoments: "slow",
     userRead: "medium",
-    characterHabits: "medium",
+    characterHabits: "slow",
     userFacts: "slow",
-    characterLikes: "slow",
-    characterDislikes: "slow",
-    userLikes: "slow",
-    userDislikes: "slow",
-    characterIntimatePreferences: "slow",
-    userIntimatePreferences: "slow",
+    characterLikes: "permanent",
+    characterDislikes: "permanent",
+    userLikes: "permanent",
+    userDislikes: "permanent",
+    characterIntimatePreferences: "permanent",
+    userIntimatePreferences: "permanent",
 }
 
 export const CHARACTER_EVOLUTION_PROJECTION_BUCKETS = [
     "fast",
     "medium",
     "slow",
+    "permanent",
 ] as const satisfies readonly CharacterEvolutionProjectionBucket[]
 
 export const CHARACTER_EVOLUTION_PROJECTION_RANK_FIELDS = [
@@ -53,6 +54,7 @@ export const DEFAULT_CHARACTER_EVOLUTION_PROMPT_PROJECTION_POLICY: CharacterEvol
         fast: ["lastSeenAt", "updatedAt", "timesSeen", "confidence"],
         medium: ["lastSeenAt", "timesSeen", "confidence", "updatedAt"],
         slow: ["confidence", "timesSeen", "lastSeenAt", "updatedAt"],
+        permanent: ["confidence", "timesSeen", "lastSeenAt", "updatedAt"],
     },
     limits: {
         generation: {
@@ -163,6 +165,10 @@ export function normalizeCharacterEvolutionPromptProjectionPolicy(raw: unknown):
             slow: normalizeRankingOrder(
                 (value.rankings as Record<string, unknown> | undefined)?.slow,
                 DEFAULT_CHARACTER_EVOLUTION_PROMPT_PROJECTION_POLICY.rankings.slow,
+            ),
+            permanent: normalizeRankingOrder(
+                (value.rankings as Record<string, unknown> | undefined)?.permanent,
+                DEFAULT_CHARACTER_EVOLUTION_PROMPT_PROJECTION_POLICY.rankings.permanent,
             ),
         },
         limits: {

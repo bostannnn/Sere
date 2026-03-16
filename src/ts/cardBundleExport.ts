@@ -1,5 +1,5 @@
 import type {
-  CharacterEvolutionSettings,
+  CharacterEvolutionRuntimeSettings,
   Chat,
   ChatFolder,
   character,
@@ -11,7 +11,7 @@ export type RisuCharacterExportBundleV1 = {
   chats?: Chat[];
   chatFolders?: ChatFolder[];
   selectedChatId?: string | null;
-  characterEvolution?: CharacterEvolutionSettings;
+  characterEvolution?: CharacterEvolutionRuntimeSettings;
 };
 
 export function buildCharacterExportBundle(

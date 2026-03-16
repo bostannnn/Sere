@@ -33,7 +33,6 @@ describe("evolution routes versioning history edits", () => {
         personality: "personality",
         characterEvolution: {
           enabled: true,
-          useGlobalDefaults: false,
           extractionProvider: "openrouter",
           extractionModel: "anthropic/claude-3.5-haiku",
           extractionMaxTokens: 2400,
@@ -150,7 +149,6 @@ describe("evolution routes versioning history edits", () => {
         personality: "personality",
         characterEvolution: {
           enabled: true,
-          useGlobalDefaults: false,
           extractionProvider: "openrouter",
           extractionModel: "anthropic/claude-3.5-haiku",
           extractionMaxTokens: 2400,
@@ -267,7 +265,6 @@ describe("evolution routes versioning history edits", () => {
         personality: "personality",
         characterEvolution: {
           enabled: true,
-          useGlobalDefaults: false,
           extractionProvider: "openrouter",
           extractionModel: "anthropic/claude-3.5-haiku",
           extractionMaxTokens: 2400,

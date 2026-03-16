@@ -8,23 +8,24 @@ const CHARACTER_EVOLUTION_CONFIDENCE_RANK = {
 
 const CHARACTER_EVOLUTION_PROJECTION_BUCKET_BY_SECTION = {
     activeThreads: 'fast',
-    runningJokes: 'fast',
-    keyMoments: 'fast',
+    runningJokes: 'medium',
+    keyMoments: 'slow',
     userRead: 'medium',
-    characterHabits: 'medium',
+    characterHabits: 'slow',
     userFacts: 'slow',
-    characterLikes: 'slow',
-    characterDislikes: 'slow',
-    userLikes: 'slow',
-    userDislikes: 'slow',
-    characterIntimatePreferences: 'slow',
-    userIntimatePreferences: 'slow',
+    characterLikes: 'permanent',
+    characterDislikes: 'permanent',
+    userLikes: 'permanent',
+    userDislikes: 'permanent',
+    characterIntimatePreferences: 'permanent',
+    userIntimatePreferences: 'permanent',
 };
 
 const CHARACTER_EVOLUTION_PROJECTION_BUCKETS = [
     'fast',
     'medium',
     'slow',
+    'permanent',
 ];
 
 const CHARACTER_EVOLUTION_PROJECTION_RANK_FIELDS = [
@@ -39,6 +40,7 @@ const DEFAULT_CHARACTER_EVOLUTION_PROMPT_PROJECTION_POLICY = {
         fast: ['lastSeenAt', 'updatedAt', 'timesSeen', 'confidence'],
         medium: ['lastSeenAt', 'timesSeen', 'confidence', 'updatedAt'],
         slow: ['confidence', 'timesSeen', 'lastSeenAt', 'updatedAt'],
+        permanent: ['confidence', 'timesSeen', 'lastSeenAt', 'updatedAt'],
     },
     limits: {
         generation: {
@@ -137,6 +139,10 @@ function normalizeCharacterEvolutionPromptProjectionPolicy(raw) {
                 value.rankings?.slow,
                 DEFAULT_CHARACTER_EVOLUTION_PROMPT_PROJECTION_POLICY.rankings.slow
             ),
+            permanent: normalizeRankingOrder(
+                value.rankings?.permanent,
+                DEFAULT_CHARACTER_EVOLUTION_PROMPT_PROJECTION_POLICY.rankings.permanent
+            ),
         },
         limits: {
             generation: normalizeSectionLimits(
@@ -172,7 +178,7 @@ function getCharacterEvolutionPromptProjectionPolicy(settings) {
 }
 
 function createCharacterEvolutionPromptProjectionPolicy() {
-    return JSON.parse(JSON.stringify(DEFAULT_CHARACTER_EVOLUTION_PROMPT_PROJECTION_POLICY));
+    return structuredClone(DEFAULT_CHARACTER_EVOLUTION_PROMPT_PROJECTION_POLICY);
 }
 
 module.exports = {

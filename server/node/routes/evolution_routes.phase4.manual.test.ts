@@ -28,6 +28,22 @@ describe("evolution routes phase 4 manual smoke", () => {
     it("walks a mixed handoff and accept workflow without leaking corrected or archived items into prompt state", async () => {
         const dataDirs = getDataDirs()
         const characterFile = path.join(dataDirs.characters, characterId, "character.json")
+        writeJson(path.join(dataDirs.root, "settings.json"), {
+            data: {
+                username: "Andrew",
+                characterEvolutionDefaults: {
+                    extractionProvider: "openrouter",
+                    extractionModel: "anthropic/claude-3.5-haiku",
+                    extractionMaxTokens: 2400,
+                    extractionPrompt: "Facts about {{user}} as seen by {{char}}.",
+                    sectionConfigs: createDefaultCharacterEvolutionSectionConfigs(),
+                    privacy: {
+                        allowCharacterIntimatePreferences: false,
+                        allowUserIntimatePreferences: false,
+                    },
+                },
+            },
+        })
 
         writeJson(characterFile, {
             character: {
@@ -38,7 +54,6 @@ describe("evolution routes phase 4 manual smoke", () => {
                 personality: "personality",
                 characterEvolution: {
                     enabled: true,
-                    useGlobalDefaults: false,
                     extractionProvider: "openrouter",
                     extractionModel: "anthropic/claude-3.5-haiku",
                     extractionMaxTokens: 2400,
@@ -238,11 +253,6 @@ describe("evolution routes phase 4 manual smoke", () => {
             }),
         ])
         expect(handoffRes.payload.proposal.proposedState.characterLikes).toEqual([
-            expect.objectContaining({
-                value: "user likes dark fantasy books",
-                status: "active",
-                confidence: "likely",
-            }),
             expect.objectContaining({
                 value: "user likes dark fantasy movies",
                 status: "active",

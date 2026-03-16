@@ -1,17 +1,10 @@
 <script lang="ts">
     import Button from "src/lib/UI/GUI/Button.svelte"
     import CheckInput from "src/lib/UI/GUI/CheckInput.svelte"
-    import NumberInput from "src/lib/UI/GUI/NumberInput.svelte"
-    import OpenRouterModelSelect from "src/lib/UI/GUI/OpenRouterModelSelect.svelte"
-    import TextAreaInput from "src/lib/UI/GUI/TextAreaInput.svelte"
-    import TextInput from "src/lib/UI/GUI/TextInput.svelte"
-    import ModelList from "src/lib/UI/ModelList.svelte"
+    import EvolutionAcceptedCoverageCard from "./EvolutionAcceptedCoverageCard.svelte"
     import {
-        getCharacterEvolutionModelSuggestions,
         getLastProcessedMessageIndexForChat,
-        normalizeCharacterEvolutionExtractionModel,
     } from "src/ts/characterEvolution"
-    import { DEFAULT_EXTRACTION_PROMPT } from "src/ts/character-evolution/constants"
     import type {
         CharacterEvolutionProcessedRange,
         CharacterEvolutionSettings,
@@ -22,14 +15,11 @@
         characterEntry: CharacterEntry
         evolutionSettings: CharacterEvolutionSettings
         processedRanges?: CharacterEvolutionProcessedRange[]
-        usingGlobalDefaults: boolean
         effectiveProvider: string
         effectiveModel: string
         hasTemplateSlot: boolean
         activeChatId?: string | null
         activeChatMessageCount?: number
-        revealCharacterOverrides: boolean
-        onToggleRevealCharacterOverrides: () => void
         onOpenGlobalDefaults: () => void
         manualRangeAvailable?: boolean
         manualRangeBlockedReason?: string
@@ -50,14 +40,11 @@
         characterEntry,
         evolutionSettings,
         processedRanges = [],
-        usingGlobalDefaults,
         effectiveProvider,
         effectiveModel,
         hasTemplateSlot,
         activeChatId = null,
         activeChatMessageCount = 0,
-        revealCharacterOverrides,
-        onToggleRevealCharacterOverrides,
         onOpenGlobalDefaults,
         manualRangeAvailable = false,
         manualRangeBlockedReason = "",
@@ -78,12 +65,8 @@
     let manualRangeEnd = $state(1)
     let manualRangeChatKey = $state("")
 
-    function usesOpenRouterModelSelector(provider: string) {
-        return provider.trim().toLowerCase() === "openrouter"
-    }
-
     function setEvolutionFlag(
-        key: "enabled" | "useGlobalDefaults",
+        key: "enabled",
         value: boolean,
     ) {
         characterEntry.characterEvolution = {
@@ -91,23 +74,6 @@
             [key]: value,
         }
     }
-
-    function setPrivacyFlag(
-        key: "allowCharacterIntimatePreferences" | "allowUserIntimatePreferences",
-        value: boolean,
-    ) {
-        characterEntry.characterEvolution = {
-            ...characterEntry.characterEvolution,
-            privacy: {
-                ...characterEntry.characterEvolution.privacy,
-                [key]: value,
-            },
-        }
-    }
-
-    const modelSuggestions = $derived(
-        getCharacterEvolutionModelSuggestions(characterEntry.characterEvolution.extractionProvider)
-    )
     const manualRangeMax = $derived(Math.max(1, Number(activeChatMessageCount) || 1))
     const activeChatProcessedRanges = $derived.by(() => {
         const chatId = activeChatId?.trim()
@@ -134,20 +100,6 @@
             ? getLastProcessedMessageIndexForChat(evolutionSettings, activeChatId)
             : -1
     ))
-
-    function formatProcessedRange(range: CharacterEvolutionProcessedRange["range"]) {
-        return `Messages ${range.startMessageIndex + 1}-${range.endMessageIndex + 1}`
-    }
-
-    $effect(() => {
-        const normalizedModel = normalizeCharacterEvolutionExtractionModel(
-            characterEntry.characterEvolution.extractionProvider,
-            characterEntry.characterEvolution.extractionModel,
-        )
-        if (characterEntry.characterEvolution.extractionModel !== normalizedModel) {
-            characterEntry.characterEvolution.extractionModel = normalizedModel
-        }
-    })
 
     $effect(() => {
         const nextChatKey = activeChatId ?? ""
@@ -193,8 +145,6 @@
             autoHandoffBatchSize: clamped,
         }
     }
-
-    let showDefaultPrompt = $state(false)
 </script>
 
 <div class="ds-settings-card evolution-setup-panel">
@@ -206,19 +156,12 @@
             onChange={(value) => setEvolutionFlag("enabled", value)}
             name="Enable Character Evolution"
         />
-        <CheckInput
-            bare={true}
-            className="evolution-toggle-row"
-            check={characterEntry.characterEvolution.useGlobalDefaults}
-            onChange={(value) => setEvolutionFlag("useGlobalDefaults", value)}
-            name="Use Global Defaults"
-        />
     </div>
 
     <div class="ds-settings-section evolution-runtime-summary">
         <div class="evolution-runtime-header">
             <span class="ds-settings-label">Extraction Runtime</span>
-            <span class="evolution-runtime-source">{usingGlobalDefaults ? "Global defaults" : "Character override"}</span>
+            <span class="evolution-runtime-source">Global defaults</span>
         </div>
         <div class="evolution-runtime-list">
             <div class="ds-settings-list-row evolution-runtime-row">
@@ -234,74 +177,10 @@
                 <span class="ds-settings-text-medium evolution-runtime-value">{evolutionSettings.extractionMaxTokens || 2400}</span>
             </div>
         </div>
+        <span class="ds-settings-label-muted-sm">
+            Extraction configuration, sections, privacy, prompt projection, and retention are managed globally.
+        </span>
     </div>
-
-    {#if !usingGlobalDefaults || revealCharacterOverrides}
-        <div class="ds-settings-section">
-            <span class="ds-settings-label">{usingGlobalDefaults ? "Character Override Provider" : "Extraction Provider"}</span>
-            <ModelList bind:value={characterEntry.characterEvolution.extractionProvider} mode="provider" disabled={usingGlobalDefaults} />
-
-            {#if usesOpenRouterModelSelector(characterEntry.characterEvolution.extractionProvider)}
-                <OpenRouterModelSelect
-                    bind:value={characterEntry.characterEvolution.extractionModel}
-                    label={usingGlobalDefaults ? "Character Override Model" : "Extraction Model"}
-                    disabled={usingGlobalDefaults}
-                />
-            {:else}
-                <span class="ds-settings-label">{usingGlobalDefaults ? "Character Override Model" : "Extraction Model"}</span>
-                <TextInput
-                    bind:value={characterEntry.characterEvolution.extractionModel}
-                    placeholder={modelSuggestions[0] ?? "Model id"}
-                    disabled={usingGlobalDefaults}
-                    list="character-evolution-model-options"
-                />
-            {/if}
-
-            <span class="ds-settings-label">{usingGlobalDefaults ? "Character Override Max Response Tokens" : "Extraction Max Response Tokens"}</span>
-            <NumberInput bind:value={characterEntry.characterEvolution.extractionMaxTokens} min={64} disabled={usingGlobalDefaults} placeholder="2400" />
-
-            <span class="ds-settings-label-muted-sm">
-                Caps only the extractor response. Evolution does not currently enforce a separate transcript/context limit.
-            </span>
-
-            <span class="ds-settings-label">{usingGlobalDefaults ? "Character Override Prompt" : "Extraction Prompt Override"}</span>
-            <TextAreaInput bind:value={characterEntry.characterEvolution.extractionPrompt} height="32" disabled={usingGlobalDefaults} placeholder="Leave empty to use built-in default prompt" />
-
-            <span class="ds-settings-label-muted-sm">
-                This prompt is used only for the extraction/update pass, not for live roleplay prompting.
-            </span>
-            {#if !characterEntry.characterEvolution.extractionPrompt && !usingGlobalDefaults}
-                <span class="ds-settings-label-muted-sm">Using built-in default prompt.</span>
-                <button class="evolution-toggle-link" onclick={() => showDefaultPrompt = !showDefaultPrompt}>
-                    {showDefaultPrompt ? "Hide default prompt" : "Show default prompt"}
-                </button>
-                {#if showDefaultPrompt}
-                    <pre class="evolution-prompt-preview">{DEFAULT_EXTRACTION_PROMPT}</pre>
-                {/if}
-            {/if}
-
-            <div class="ds-settings-grid-two">
-                <CheckInput
-                    check={characterEntry.characterEvolution.privacy.allowCharacterIntimatePreferences}
-                    onChange={(value) => setPrivacyFlag("allowCharacterIntimatePreferences", value)}
-                    name="Allow Character Intimate Preferences"
-                    disabled={usingGlobalDefaults}
-                />
-                <CheckInput
-                    check={characterEntry.characterEvolution.privacy.allowUserIntimatePreferences}
-                    onChange={(value) => setPrivacyFlag("allowUserIntimatePreferences", value)}
-                    name="Allow User Intimate Preferences"
-                    disabled={usingGlobalDefaults}
-                />
-            </div>
-
-            {#if usingGlobalDefaults}
-                <span class="ds-settings-label-muted-sm">
-                    Turn off `Use Global Defaults` to edit these character-specific fields.
-                </span>
-            {/if}
-        </div>
-    {/if}
 
     <div class="ds-settings-section">
         {#if characterEntry.characterEvolution.enabled && !hasTemplateSlot}
@@ -417,42 +296,17 @@
                 />
             </div>
 
-            <div class="evolution-accepted-coverage">
-                <div class="evolution-manual-range-header">
-                    <span class="ds-settings-label">Accepted Coverage</span>
-                    <span class="ds-settings-label-muted-sm">{activeChatProcessedRanges.length} accepted range{activeChatProcessedRanges.length === 1 ? "" : "s"}</span>
-                </div>
-
-                {#if activeChatProcessedRanges.length > 0}
-                    <div class="evolution-accepted-coverage-list">
-                        {#each activeChatProcessedRanges as entry (entry.version + ":" + entry.range.chatId + ":" + entry.range.startMessageIndex + ":" + entry.range.endMessageIndex)}
-                            <div class="ds-settings-list-row evolution-accepted-coverage-row">
-                                <span class="ds-settings-label-muted-sm">v{entry.version}</span>
-                                <span class="ds-settings-text-medium">{formatProcessedRange(entry.range)}</span>
-                            </div>
-                        {/each}
-                    </div>
-                    <span class="ds-settings-label-muted-sm">Next unprocessed message: {nextUnprocessedMessageNumber}</span>
-                {:else if activeChatProcessedCursor >= 0}
-                    <span class="ds-settings-label-muted-sm">
-                        Accepted coverage exists through message {activeChatProcessedCursor + 1}, but detailed range history is unavailable for this chat.
-                    </span>
-                    <span class="ds-settings-label-muted-sm">Next unprocessed message: {activeChatProcessedCursor + 2}</span>
-                {:else}
-                    <span class="ds-settings-label-muted-sm">No accepted handoffs for the current chat yet.</span>
-                {/if}
-            </div>
+            <EvolutionAcceptedCoverageCard
+                {activeChatProcessedRanges}
+                {activeChatProcessedCursor}
+                {nextUnprocessedMessageNumber}
+            />
         {/if}
 
         <div class="evolution-setup-actions-stack">
-            {#if usingGlobalDefaults}
-                <Button size="sm" styled="outlined" className="ds-ui-fill-width" onclick={onOpenGlobalDefaults}>
-                    Open Global Defaults
-                </Button>
-                <Button size="sm" styled="outlined" className="ds-ui-fill-width" onclick={onToggleRevealCharacterOverrides}>
-                    {revealCharacterOverrides ? "Hide Character Overrides" : "Show Character Overrides"}
-                </Button>
-            {/if}
+            <Button size="sm" styled="outlined" className="ds-ui-fill-width" onclick={onOpenGlobalDefaults}>
+                Open Global Defaults
+            </Button>
             {#if replayCurrentChatAvailable}
                 <Button size="sm" styled="outlined" className="ds-ui-fill-width" onclick={onReplayCurrentChat} disabled={replayCurrentChatBusy}>
                     {replayCurrentChatBusy ? "Replaying Accepted Chat" : "Replay Accepted Chat"}
@@ -461,12 +315,6 @@
         </div>
     </div>
 </div>
-
-<datalist id="character-evolution-model-options">
-    {#each modelSuggestions as model (model)}
-        <option value={model}></option>
-    {/each}
-</datalist>
 
 <style>
     .evolution-setup-panel {
@@ -593,55 +441,6 @@
         max-width: 80px;
     }
 
-    .evolution-accepted-coverage {
-        display: flex;
-        flex-direction: column;
-        gap: var(--ds-space-2);
-        margin-bottom: var(--ds-space-3);
-    }
-
-    .evolution-accepted-coverage-list {
-        display: flex;
-        flex-direction: column;
-        gap: var(--ds-space-2);
-    }
-
-    .evolution-accepted-coverage-row {
-        justify-content: space-between;
-        align-items: center;
-        gap: var(--ds-space-3);
-        min-height: 0;
-        padding: 0;
-    }
-
-    .evolution-toggle-link {
-        all: unset;
-        cursor: pointer;
-        color: var(--ds-text-link, var(--ds-text-secondary));
-        font-size: var(--ds-font-size-sm);
-        text-decoration: underline;
-        text-underline-offset: 2px;
-    }
-
-    .evolution-toggle-link:hover {
-        color: var(--ds-text-primary);
-    }
-
-    .evolution-prompt-preview {
-        margin: 0;
-        padding: var(--ds-space-3);
-        border: 1px solid var(--ds-border-subtle);
-        border-radius: var(--ds-radius-sm, 4px);
-        background: var(--ds-surface-secondary, rgba(0,0,0,0.05));
-        color: var(--ds-text-secondary);
-        font-size: var(--ds-font-size-sm);
-        line-height: 1.5;
-        white-space: pre-wrap;
-        word-break: break-word;
-        max-height: 24rem;
-        overflow-y: auto;
-    }
-
     @media (max-width: 640px) {
         .evolution-runtime-row {
             flex-direction: column;
@@ -649,11 +448,6 @@
 
         .evolution-runtime-value {
             text-align: left;
-        }
-
-        .evolution-accepted-coverage-row {
-            flex-direction: column;
-            align-items: flex-start;
         }
     }
 </style>

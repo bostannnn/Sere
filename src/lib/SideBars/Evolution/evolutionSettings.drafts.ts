@@ -9,6 +9,7 @@ import {
 } from "src/ts/character-evolution/workflow"
 import type {
     CharacterEvolutionPrivacySettings,
+    CharacterEvolutionRuntimeSettings,
     CharacterEvolutionSectionConfig,
     CharacterEvolutionSettings,
     CharacterEvolutionState,
@@ -34,10 +35,6 @@ export function getSectionDraftHydrationKey({
         return null
     }
 
-    if (!characterEntry.characterEvolution.useGlobalDefaults) {
-        return `${characterEntry.chaId}:local`
-    }
-
     return `${characterEntry.chaId}:global:${JSON.stringify(evolutionSettings?.sectionConfigs ?? [])}:${JSON.stringify(evolutionSettings?.privacy ?? {})}`
 }
 
@@ -52,20 +49,11 @@ export function createSectionDraftSnapshot({
         }
     }
 
-    if (characterEntry.characterEvolution.useGlobalDefaults) {
-        return {
-            sectionConfigDraft: cloneEvolutionSettingsSections(
-                evolutionSettings?.sectionConfigs ?? createDefaultCharacterEvolutionSectionConfigs(),
-            ),
-            privacyDraft: clonePrivacy(evolutionSettings?.privacy),
-        }
-    }
-
     return {
         sectionConfigDraft: cloneEvolutionSettingsSections(
-            characterEntry.characterEvolution.sectionConfigs,
+            evolutionSettings?.sectionConfigs ?? createDefaultCharacterEvolutionSectionConfigs(),
         ),
-        privacyDraft: clonePrivacy(characterEntry.characterEvolution.privacy),
+        privacyDraft: clonePrivacy(evolutionSettings?.privacy),
     }
 }
 
@@ -95,16 +83,16 @@ interface BuildEvolutionSyncSettingsArgs {
 export function buildEvolutionSyncSettings({
     baseCharacter,
     currentStateDraft,
-    sectionConfigDraft,
-    privacyDraft,
-}: BuildEvolutionSyncSettingsArgs): CharacterEvolutionSettings | null {
+    sectionConfigDraft: _sectionConfigDraft,
+    privacyDraft: _privacyDraft,
+}: BuildEvolutionSyncSettingsArgs): CharacterEvolutionRuntimeSettings | null {
     const baseEvolution = baseCharacter.characterEvolution
     if (!baseEvolution) {
         return null
     }
 
     let changed = false
-    const nextEvolution: CharacterEvolutionSettings = {
+    const nextEvolution: CharacterEvolutionRuntimeSettings = {
         ...baseEvolution,
     }
 
@@ -112,21 +100,6 @@ export function buildEvolutionSyncSettings({
         const normalizedState = normalizeCharacterEvolutionState(currentStateDraft)
         if (!jsonEqual(baseEvolution.currentState, normalizedState)) {
             nextEvolution.currentState = structuredClone(normalizedState)
-            changed = true
-        }
-    }
-
-    if (!baseEvolution.useGlobalDefaults) {
-        const normalizedSections = normalizeCharacterEvolutionSectionConfigs(sectionConfigDraft)
-        const normalizedPrivacy = clonePrivacy(privacyDraft)
-
-        if (!jsonEqual(baseEvolution.sectionConfigs, normalizedSections)) {
-            nextEvolution.sectionConfigs = structuredClone(normalizedSections)
-            changed = true
-        }
-
-        if (!jsonEqual(baseEvolution.privacy, normalizedPrivacy)) {
-            nextEvolution.privacy = structuredClone(normalizedPrivacy)
             changed = true
         }
     }

@@ -64,7 +64,6 @@ describe("character evolution retention apply service", () => {
         personality: "personality",
         characterEvolution: {
           enabled: true,
-          useGlobalDefaults: true,
           currentStateVersion: 10,
           currentState: {
             activeThreads: [
@@ -167,7 +166,6 @@ describe("character evolution retention apply service", () => {
         personality: "personality",
         characterEvolution: {
           enabled: true,
-          useGlobalDefaults: true,
           currentStateVersion: 10,
           currentState: {
             activeThreads: [
@@ -254,7 +252,6 @@ describe("character evolution retention apply service", () => {
         personality: "personality",
         characterEvolution: {
           enabled: true,
-          useGlobalDefaults: true,
           currentStateVersion: 3,
           currentState: {},
           pendingProposal: {

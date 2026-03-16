@@ -9,9 +9,6 @@ import {
 export function getEffectiveCharacterEvolutionSettings(db: Database, char: character | groupChat): CharacterEvolutionSettings {
     const defaults = normalizeCharacterEvolutionDefaults(db.characterEvolutionDefaults)
     const settings = normalizeCharacterEvolutionSettings(char.characterEvolution)
-    if (!settings.useGlobalDefaults) {
-        return settings
-    }
     return {
         ...settings,
         extractionProvider: defaults.extractionProvider,

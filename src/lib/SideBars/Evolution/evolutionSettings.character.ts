@@ -4,11 +4,12 @@ import type {
   CharacterEvolutionSectionConfig,
   CharacterEvolutionState,
   character,
+  groupChat,
 } from "src/ts/storage/database.types"
 import { buildEvolutionSyncSettings } from "./evolutionSettings.drafts"
 
 export function commitEvolutionCharacter(
-  characters: Array<character | Record<string, unknown>>,
+  characters: Array<character | groupChat>,
   characterEntry: character,
 ): void {
   replaceCharacterById(characters, characterEntry)
@@ -46,16 +47,4 @@ export function syncEvolutionCharacterDrafts(args: {
     ...baseCharacter,
     characterEvolution: nextEvolution,
   })
-}
-
-export function setCharacterUseGlobalEvolutionDefaults(
-  characterEntry: character,
-  nextValue: boolean,
-  commitCharacter: (characterEntry: character) => void,
-): void {
-  characterEntry.characterEvolution = {
-    ...characterEntry.characterEvolution,
-    useGlobalDefaults: nextValue,
-  }
-  commitCharacter(characterEntry)
 }

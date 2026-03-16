@@ -6,6 +6,8 @@ import {
 import type {
   CharacterEvolutionProcessedRange,
   CharacterEvolutionPrivacySettings,
+  CharacterEvolutionRetentionDryRunReport,
+  CharacterEvolutionRuntimeSettings,
   CharacterEvolutionSectionConfig,
   CharacterEvolutionSettings,
   CharacterEvolutionState,
@@ -89,7 +91,7 @@ export function mergeEvolutionVersionMetas(
 }
 
 export function deriveMergedProcessedRanges(args: {
-  evolutionSettings: CharacterEvolutionSettings | null | undefined;
+  evolutionSettings: CharacterEvolutionRuntimeSettings | null | undefined;
   mergedStateVersions: CharacterEvolutionVersionMeta[] | null | undefined;
 }): CharacterEvolutionProcessedRange[] {
   const { evolutionSettings, mergedStateVersions } = args;
@@ -116,6 +118,105 @@ export function deriveMergedProcessedRanges(args: {
     }
     return left.range.startMessageIndex - right.range.startMessageIndex;
   });
+}
+
+export function deriveLastProcessedMessageIndexByChat(
+  processedRanges: NonNullable<character["characterEvolution"]["processedRanges"]>,
+): Record<string, number> {
+  const cursors: Record<string, number> = {};
+
+  for (const entry of processedRanges) {
+    const chatId = entry?.range?.chatId?.trim();
+    if (!chatId) {
+      continue;
+    }
+    cursors[chatId] = Math.max(cursors[chatId] ?? -1, entry.range.endMessageIndex);
+  }
+
+  return cursors;
+}
+
+export function formatEvolutionRetentionDryRun(
+  report: CharacterEvolutionRetentionDryRunReport,
+): string {
+  const changedSections = Object.entries(report.sections)
+    .filter(([, section]) => (
+      section.archivedByDecay > 0
+      || section.deletedByDecay > 0
+      || section.archivedByCap > 0
+      || section.deletedByCap > 0
+    ))
+    .map(([sectionKey, section]) => {
+      const parts: string[] = [];
+      if (section.archivedByDecay > 0) {
+        parts.push(`archived ${section.archivedByDecay} by decay`);
+      }
+      if (section.deletedByDecay > 0) {
+        parts.push(`deleted ${section.deletedByDecay} by decay`);
+      }
+      if (section.archivedByCap > 0) {
+        parts.push(`archived ${section.archivedByCap} by cap`);
+      }
+      if (section.deletedByCap > 0) {
+        parts.push(`deleted ${section.deletedByCap} by cap`);
+      }
+      return `${sectionKey}: ${parts.join(", ")}`;
+    });
+
+  if (changedSections.length === 0) {
+    return `Retention dry run for v${report.currentStateVersion} -> v${report.simulatedAcceptedVersion}: no canonical-state cleanup would occur on the next accepted handoff.`;
+  }
+
+  const removedTotal = Math.max(0, report.totals.before.total - report.totals.after.total);
+  return [
+    `Retention dry run for v${report.currentStateVersion} -> v${report.simulatedAcceptedVersion}`,
+    `Items before: ${report.totals.before.total}. After: ${report.totals.after.total}. Removed: ${removedTotal}.`,
+    ...changedSections,
+  ].join("\n");
+}
+
+export function applyEvolutionVersionMutationPayload(args: {
+  characterId: string;
+  payload: Record<string, unknown>;
+  findCharacterById: (characterId: string) => character | null;
+  commitCharacter: (characterEntry: character) => void;
+  setRefreshedVersionMetas: (versions: CharacterEvolutionVersionMeta[]) => void;
+  setSelectedVersion: (version: number | null) => void;
+  setSelectedVersionFile: (file: CharacterEvolutionVersionFile | null) => void;
+}): void {
+  const characterEntry = args.findCharacterById(args.characterId);
+  if (!characterEntry) {
+    return;
+  }
+
+  const nextVersions = Array.isArray(args.payload.versions)
+    ? args.payload.versions as CharacterEvolutionVersionMeta[]
+    : [];
+  const nextProcessedRanges = Array.isArray(args.payload.processedRanges)
+    ? args.payload.processedRanges as CharacterEvolutionProcessedRange[]
+    : [];
+  const nextCurrentStateVersion = Number.isFinite(Number(args.payload.currentStateVersion))
+    ? Math.max(0, Math.floor(Number(args.payload.currentStateVersion)))
+    : characterEntry.characterEvolution.currentStateVersion;
+
+  characterEntry.characterEvolution = {
+    ...characterEntry.characterEvolution,
+    currentStateVersion: nextCurrentStateVersion,
+    currentState: (args.payload.state as CharacterEvolutionState | undefined)
+      ?? characterEntry.characterEvolution.currentState,
+    pendingProposal: null,
+    stateVersions: nextVersions,
+    processedRanges: nextProcessedRanges,
+    lastProcessedChatId: [...nextProcessedRanges]
+      .sort((left, right) => (left?.version ?? 0) - (right?.version ?? 0))
+      .at(-1)?.range.chatId ?? null,
+    lastProcessedMessageIndexByChat: deriveLastProcessedMessageIndexByChat(nextProcessedRanges),
+  };
+
+  args.commitCharacter(characterEntry);
+  args.setRefreshedVersionMetas(nextVersions);
+  args.setSelectedVersion(null);
+  args.setSelectedVersionFile(null);
 }
 
 export function versionSectionHasData(

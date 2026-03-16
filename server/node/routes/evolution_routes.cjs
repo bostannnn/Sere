@@ -370,8 +370,7 @@ function registerEvolutionRoutes(arg = {}) {
             proposedState: proposedStateDraft,
             sectionConfigs: effectiveEvolution.sectionConfigs,
         });
-        const shouldPreserveDisabledSections = !Object.prototype.hasOwnProperty.call(body, 'proposedState')
-            && storedEvolution.useGlobalDefaults === false;
+        const shouldPreserveDisabledSections = false;
         const evolutionDefaults = normalizeCharacterEvolutionDefaults(settings.characterEvolutionDefaults);
         const proposalValidationError = getCharacterEvolutionProposalValidationError({
             proposedState: shouldPreserveDisabledSections

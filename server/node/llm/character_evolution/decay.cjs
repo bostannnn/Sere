@@ -4,7 +4,10 @@ const {
     compareCharacterEvolutionItemsForProjection,
     normalizeCharacterEvolutionPromptProjectionPolicy,
 } = require('./projection_policy.cjs');
-const { normalizeCharacterEvolutionRetentionPolicy } = require('./retention_policy.cjs');
+const {
+    getCharacterEvolutionRetentionBucket,
+    normalizeCharacterEvolutionRetentionPolicy,
+} = require('./retention_policy.cjs');
 const { createDefaultCharacterEvolutionState } = require('./schema.cjs');
 
 function normalizeUnseenAcceptedHandoffs(item) {
@@ -18,16 +21,6 @@ function isReinforcedOnAcceptedHandoff(item, acceptedVersion) {
     return Number.isFinite(item?.lastSeenVersion)
         && Number(item.lastSeenVersion) === acceptedVersion
         && (item?.status || 'active') === 'active';
-}
-
-function getBucketKeyForSection(sectionKey) {
-    if (sectionKey === 'activeThreads' || sectionKey === 'runningJokes' || sectionKey === 'keyMoments') {
-        return 'fast';
-    }
-    if (sectionKey === 'userRead' || sectionKey === 'characterHabits') {
-        return 'medium';
-    }
-    return 'slow';
 }
 
 function normalizeVersionNumber(value) {
@@ -82,7 +75,7 @@ function shouldArchiveAfterDecay(sectionKey, item, unseenAcceptedHandoffs, reten
     if ((item?.status || 'active') !== 'active') {
         return false;
     }
-    const bucket = getBucketKeyForSection(sectionKey);
+    const bucket = getCharacterEvolutionRetentionBucket(sectionKey, retentionPolicy);
     const threshold = retentionPolicy.thresholds.archive[bucket];
     const confidence = item?.confidence || 'suspected';
     if (bucket === 'slow' && confidence === 'confirmed') {
@@ -96,20 +89,27 @@ function shouldDeleteAfterDecay(sectionKey, item, unseenAcceptedHandoffs, retent
     if (status === 'active') {
         return false;
     }
+    const bucket = getCharacterEvolutionRetentionBucket(sectionKey, retentionPolicy);
+    if (bucket === 'permanent') {
+        return false;
+    }
     const confidence = item?.confidence || 'suspected';
     const isSlowConfirmed = (
-        sectionKey === 'userFacts'
-        || sectionKey === 'characterLikes'
-        || sectionKey === 'characterDislikes'
-        || sectionKey === 'userLikes'
-        || sectionKey === 'userDislikes'
-        || sectionKey === 'characterIntimatePreferences'
-        || sectionKey === 'userIntimatePreferences'
+        bucket === 'slow'
+        && (
+            sectionKey === 'userFacts'
+            || sectionKey === 'characterLikes'
+            || sectionKey === 'characterDislikes'
+            || sectionKey === 'userLikes'
+            || sectionKey === 'userDislikes'
+            || sectionKey === 'characterIntimatePreferences'
+            || sectionKey === 'userIntimatePreferences'
+        )
     ) && confidence === 'confirmed';
     if (isSlowConfirmed) {
         return unseenAcceptedHandoffs >= retentionPolicy.thresholds.deleteConfirmedSlow;
     }
-    return unseenAcceptedHandoffs >= retentionPolicy.thresholds.deleteNonActive[getBucketKeyForSection(sectionKey)];
+    return unseenAcceptedHandoffs >= retentionPolicy.thresholds.deleteNonActive[bucket];
 }
 
 function sortItemsByProjectionRank(sectionKey, items, promptProjectionPolicy) {

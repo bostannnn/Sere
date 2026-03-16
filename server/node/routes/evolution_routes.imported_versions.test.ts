@@ -41,7 +41,6 @@ describe("evolution routes imported version history", () => {
         personality: "personality",
         characterEvolution: {
           enabled: true,
-          useGlobalDefaults: true,
           currentStateVersion: 6,
           currentState: {
             relationship: {
@@ -139,7 +138,6 @@ describe("evolution routes imported version history", () => {
         personality: "personality",
         characterEvolution: {
           enabled: true,
-          useGlobalDefaults: true,
           currentStateVersion: 3,
           currentState: {
             relationship: {

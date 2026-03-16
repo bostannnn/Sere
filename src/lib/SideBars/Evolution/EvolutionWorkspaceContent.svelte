@@ -3,6 +3,7 @@
         CharacterEvolutionPrivacySettings,
         CharacterEvolutionProcessedRange,
         CharacterEvolutionSectionConfig,
+        CharacterEvolutionSettings,
         CharacterEvolutionState,
         CharacterEvolutionVersionMeta,
         character,
@@ -25,18 +26,15 @@
     interface Props {
         hasGroupSelection: boolean
         currentCharacter: character | null
-        evolutionSettings: character["characterEvolution"] | null
+        evolutionSettings: CharacterEvolutionSettings | null
         selectedWorkspaceTab: EvolutionWorkspaceTabId
         onSelectWorkspaceTab: (tab: EvolutionWorkspaceTabId) => void
         displayedProcessedRanges: CharacterEvolutionProcessedRange[]
-        usingGlobalDefaults: boolean
         effectiveProvider: string
         effectiveModel: string
         hasTemplateSlot: boolean
         activeChatId: string | null
         activeChatMessageCount: number
-        revealCharacterOverrides: boolean
-        onToggleRevealCharacterOverrides: () => void
         onOpenGlobalDefaults: () => void
         manualRangeAvailable: boolean
         manualRangeBlockedReason: string
@@ -53,7 +51,6 @@
         onReplayCurrentChat: () => void | Promise<void>
         sectionConfigDraft: CharacterEvolutionSectionConfig[]
         privacyDraft: CharacterEvolutionPrivacySettings
-        onUseGlobalDefaultsChange: (nextValue: boolean) => void
         currentPendingProposal: character["characterEvolution"]["pendingProposal"] | null
         reviewActionBusy: boolean
         onOpenFullscreenReview: () => void
@@ -82,14 +79,11 @@
         selectedWorkspaceTab,
         onSelectWorkspaceTab,
         displayedProcessedRanges,
-        usingGlobalDefaults,
         effectiveProvider,
         effectiveModel,
         hasTemplateSlot,
         activeChatId,
         activeChatMessageCount,
-        revealCharacterOverrides,
-        onToggleRevealCharacterOverrides,
         onOpenGlobalDefaults,
         manualRangeAvailable,
         manualRangeBlockedReason,
@@ -106,7 +100,6 @@
         onReplayCurrentChat,
         sectionConfigDraft = $bindable(),
         privacyDraft = $bindable(),
-        onUseGlobalDefaultsChange,
         currentPendingProposal,
         reviewActionBusy,
         onOpenFullscreenReview,
@@ -158,14 +151,11 @@
                     characterEntry={currentCharacter}
                     {evolutionSettings}
                     processedRanges={displayedProcessedRanges}
-                    {usingGlobalDefaults}
                     {effectiveProvider}
                     {effectiveModel}
                     {hasTemplateSlot}
                     {activeChatId}
                     {activeChatMessageCount}
-                    {revealCharacterOverrides}
-                    {onToggleRevealCharacterOverrides}
                     {onOpenGlobalDefaults}
                     {manualRangeAvailable}
                     manualRangeBlockedReason={manualRangeBlockedReason}
@@ -184,10 +174,8 @@
             </div>
         {:else if selectedWorkspaceTab === EVOLUTION_SECTIONS_TAB}
             <EvolutionSectionsPanel
-                {usingGlobalDefaults}
                 bind:sectionConfigDraft
                 bind:privacyDraft
-                onUseGlobalDefaultsChange={onUseGlobalDefaultsChange}
                 onOpenGlobalDefaults={onOpenGlobalDefaults}
             />
         {:else if selectedWorkspaceTab === EVOLUTION_REVIEW_TAB}

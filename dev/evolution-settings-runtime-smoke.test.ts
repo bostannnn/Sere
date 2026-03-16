@@ -119,16 +119,6 @@ vi.mock(import("src/ts/stores.svelte"), async () => {
     exampleMessage: "",
     characterEvolution: {
       enabled: true,
-      useGlobalDefaults: false,
-      extractionProvider: "openrouter",
-      extractionModel: "openrouter/auto",
-      extractionMaxTokens: 2400,
-      extractionPrompt: "prompt",
-      sectionConfigs: createSectionConfigs(),
-      privacy: {
-        allowCharacterIntimatePreferences: false,
-        allowUserIntimatePreferences: false,
-      },
       currentStateVersion: 0,
       currentState: {
         relationship: { trustLevel: "", dynamic: "" },
@@ -137,7 +127,6 @@ vi.mock(import("src/ts/stores.svelte"), async () => {
         characterLikes: [],
         characterDislikes: [],
         characterHabits: [],
-        characterBoundariesPreferences: [],
         userFacts: [],
         userRead: [],
         userLikes: [],
@@ -157,7 +146,6 @@ vi.mock(import("src/ts/stores.svelte"), async () => {
           characterLikes: [],
           characterDislikes: [],
           characterHabits: [],
-          characterBoundariesPreferences: [],
           userFacts: [],
           userRead: [],
           userLikes: [],
@@ -285,14 +273,6 @@ describe("evolution settings runtime smoke", () => {
         allowUserIntimatePreferences: false,
       },
     };
-    DBState.db.characters[0].characterEvolution.useGlobalDefaults = false;
-    DBState.db.characters[0].characterEvolution.sectionConfigs = structuredClone(
-      DBState.db.characterEvolutionDefaults.sectionConfigs,
-    );
-    DBState.db.characters[0].characterEvolution.privacy = {
-      allowCharacterIntimatePreferences: false,
-      allowUserIntimatePreferences: false,
-    };
     DBState.db.characters[0].characterEvolution.currentStateVersion = 0;
     DBState.db.characters[0].characterEvolution.currentState = {
       relationship: { trustLevel: "", dynamic: "" },
@@ -301,7 +281,6 @@ describe("evolution settings runtime smoke", () => {
       characterLikes: [],
       characterDislikes: [],
       characterHabits: [],
-      characterBoundariesPreferences: [],
       userFacts: [],
       userRead: [],
       userLikes: [],
@@ -321,7 +300,6 @@ describe("evolution settings runtime smoke", () => {
         characterLikes: [],
         characterDislikes: [],
         characterHabits: [],
-        characterBoundariesPreferences: [],
         userFacts: [],
         userRead: [],
         userLikes: [],
@@ -342,14 +320,6 @@ describe("evolution settings runtime smoke", () => {
     };
     DBState.db.characters[0].characterEvolution.lastProcessedChatId = null;
     DBState.db.characters[0].characterEvolution.stateVersions = [];
-    DBState.db.characters[1].characterEvolution.useGlobalDefaults = false;
-    DBState.db.characters[1].characterEvolution.sectionConfigs = structuredClone(
-      DBState.db.characterEvolutionDefaults.sectionConfigs,
-    );
-    DBState.db.characters[1].characterEvolution.privacy = {
-      allowCharacterIntimatePreferences: false,
-      allowUserIntimatePreferences: false,
-    };
     DBState.db.characters[1].characterEvolution.pendingProposal = {
       proposalId: "proposal-2",
       sourceChatId: "char-2-chat",
@@ -360,7 +330,6 @@ describe("evolution settings runtime smoke", () => {
         characterLikes: [],
         characterDislikes: [],
         characterHabits: [],
-        characterBoundariesPreferences: [],
         userFacts: [],
         userRead: [],
         userLikes: [],
@@ -445,12 +414,7 @@ describe("evolution settings runtime smoke", () => {
     expect(mocks.alertError).toHaveBeenCalledWith("Error: refresh failed");
   });
 
-  it("shows effective global sections in the sections tab and exposes a local override toggle", async () => {
-    DBState.db.characters[0].characterEvolution.useGlobalDefaults = true;
-    DBState.db.characters[0].characterEvolution.privacy = {
-      allowCharacterIntimatePreferences: false,
-      allowUserIntimatePreferences: false,
-    };
+  it("shows global sections and privacy in the sections tab", async () => {
     DBState.db.characterEvolutionDefaults!.privacy = {
       allowCharacterIntimatePreferences: true,
       allowUserIntimatePreferences: true,
@@ -472,32 +436,15 @@ describe("evolution settings runtime smoke", () => {
     sectionsTab!.click();
     await flushUi();
 
-    expect(target.textContent).toContain("Sections and privacy are inherited from global evolution defaults.");
+    expect(target.textContent).toContain("Sections and privacy are managed globally.");
     expect(target.textContent).toContain("Global Sections");
     expect(target.textContent).not.toContain("Disabled by privacy settings.");
-
-    const toggle = target.querySelector('input[aria-label="Use Global Defaults For Sections And Privacy"]') as HTMLInputElement | null;
-    expect(toggle).not.toBeNull();
-    toggle!.click();
-    await flushUi();
-
-    expect(DBState.db.characters[0].characterEvolution.useGlobalDefaults).toBe(false);
-    await unmount(app!);
-    app = mount(EvolutionSettings, { target });
-    await flushUi();
-
-    const sectionsTabAgain = target.querySelector('[aria-label="Sections"]') as HTMLButtonElement | null;
-    expect(sectionsTabAgain).not.toBeNull();
-    sectionsTabAgain!.click();
-    await flushUi();
-
-    expect(target.textContent).toContain("These section and privacy settings are specific to this character.");
-    expect(target.querySelector('input[aria-label="Allow Character Intimate Preferences"]')).not.toBeNull();
-    expect(target.querySelector('input[aria-label="Allow User Intimate Preferences"]')).not.toBeNull();
+    expect(target.textContent).toContain("Character intimate preferences: Allowed");
+    expect(target.textContent).toContain("User intimate preferences: Allowed");
+    expect(target.querySelector('input[aria-label="Use Global Defaults For Sections And Privacy"]')).toBeNull();
   });
 
   it("persists intimate preference state edits when global settings allow them", async () => {
-    DBState.db.characters[0].characterEvolution.useGlobalDefaults = true;
     DBState.db.characters[0].characterEvolution.pendingProposal = null;
     DBState.db.characterEvolutionDefaults!.privacy = {
       allowCharacterIntimatePreferences: true,

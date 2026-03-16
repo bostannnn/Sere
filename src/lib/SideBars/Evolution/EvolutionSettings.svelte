@@ -1,29 +1,19 @@
 <script lang="ts">
-    import { alertError, alertNormal } from "src/ts/alert"
     import { ensureCharacterEvolution, getEffectiveCharacterEvolutionSettings, hasCharacterStateTemplateBlock } from "src/ts/characterEvolution"
-    import { getCharacterEvolutionErrorMessage } from "src/ts/evolution"
     import { DBState, evolutionReviewOpenRequest, selectedCharID } from "src/ts/stores.svelte"
-    import type { CharacterEvolutionRetentionDryRunReport, CharacterEvolutionSectionConfig, CharacterEvolutionPrivacySettings, CharacterEvolutionState, CharacterEvolutionVersionMeta, CharacterEvolutionVersionFile, character } from "src/ts/storage/database.types"
+    import type { CharacterEvolutionPrivacySettings, CharacterEvolutionSectionConfig, CharacterEvolutionState, CharacterEvolutionVersionFile, CharacterEvolutionVersionMeta, character } from "src/ts/storage/database.types"
     import EvolutionWorkspaceContent from "./EvolutionWorkspaceContent.svelte"
-    import { acceptEvolutionReviewFlow, hasAcceptedEvolutionForChat, rejectEvolutionReviewFlow, runEvolutionHandoffFlow } from "src/ts/character-evolution/reviewFlow"
-    import { getPendingProposalSourceRange } from "src/ts/character-evolution/pendingProposal"
+    import { hasAcceptedEvolutionForChat } from "src/ts/character-evolution/reviewFlow"
     import { findSingleCharacterById } from "src/ts/storage/characterList"
-    import { sleep } from "src/ts/util"
     import {
-        clearEvolutionCoverageAction,
-        deleteEvolutionVersionAction,
-        loadEvolutionWorkspaceVersion,
         openEvolutionGlobalDefaults,
         persistEvolutionCharacter,
-        previewEvolutionRetentionAction,
-        refreshEvolutionWorkspaceVersions,
-        revertEvolutionVersionAction,
     } from "./evolutionSettings.actions"
-    import { EVOLUTION_HISTORY_TAB, EVOLUTION_REVIEW_TAB, EVOLUTION_SETUP_TAB, type EvolutionWorkspaceTabId } from "./evolutionSettingsTabs"
+    import { createEvolutionSettingsOperations } from "./evolutionSettings.operations"
+    import { EVOLUTION_REVIEW_TAB, EVOLUTION_SETUP_TAB, type EvolutionWorkspaceTabId } from "./evolutionSettingsTabs"
     import { createCurrentStateDraft, createSectionDraftSnapshot, getCurrentStateDraftHydrationKey, getSectionDraftHydrationKey } from "./evolutionSettings.drafts"
-    import { commitEvolutionCharacter, setCharacterUseGlobalEvolutionDefaults, syncEvolutionCharacterDrafts } from "./evolutionSettings.character"
-    import { deriveSelectedVersionPrivacy, deriveSelectedVersionSectionConfigs, deriveMergedProcessedRanges, isSingleCharacter, mergeEvolutionVersionMetas } from "./evolutionSettings.helpers"
-    import { buildClearCoveragePreview, buildDeleteVersionPreview, buildRevertVersionPreview } from "./evolutionSettings.versionPreview"
+    import { commitEvolutionCharacter, syncEvolutionCharacterDrafts } from "./evolutionSettings.character"
+    import { deriveMergedProcessedRanges, deriveSelectedVersionPrivacy, deriveSelectedVersionSectionConfigs, isSingleCharacter, mergeEvolutionVersionMetas } from "./evolutionSettings.helpers"
 
     let loadingVersions = $state(false)
     let reviewActionBusy = $state(false)
@@ -32,7 +22,6 @@
     let refreshedVersionMetas = $state<CharacterEvolutionVersionMeta[]>([])
     let activeProposalId = $state<string | null>(null)
     let versionCharacterId = $state<string | null>(null)
-    let revealCharacterOverrides = $state(false)
     let selectedWorkspaceTab = $state<EvolutionWorkspaceTabId>(EVOLUTION_SETUP_TAB)
     let sectionConfigDraft = $state<CharacterEvolutionSectionConfig[]>([])
     let privacyDraft = $state<CharacterEvolutionPrivacySettings>({
@@ -83,7 +72,6 @@
     }))
 
     const hasTemplateSlot = $derived(hasCharacterStateTemplateBlock(DBState.db))
-    const usingGlobalDefaults = $derived(currentCharacter?.characterEvolution.useGlobalDefaults ?? true)
     const effectiveProvider = $derived(evolutionSettings?.extractionProvider ?? "")
     const effectiveModel = $derived(evolutionSettings?.extractionModel ?? "")
     const currentPendingProposal = $derived(currentCharacter?.characterEvolution.pendingProposal ?? null)
@@ -141,96 +129,6 @@
         commitEvolutionCharacter(DBState.db.characters, characterEntry)
     }
 
-    function deriveLastProcessedMessageIndexByChat(processedRanges: NonNullable<character["characterEvolution"]["processedRanges"]>) {
-        const cursors: Record<string, number> = {}
-        for (const entry of processedRanges) {
-            const chatId = entry?.range?.chatId?.trim()
-            if (!chatId) {
-                continue
-            }
-            cursors[chatId] = Math.max(cursors[chatId] ?? -1, entry.range.endMessageIndex)
-        }
-        return cursors
-    }
-
-    function formatRetentionDryRun(report: CharacterEvolutionRetentionDryRunReport): string {
-        const changedSections = Object.entries(report.sections)
-            .filter(([, section]) => (
-                section.archivedByDecay > 0
-                || section.deletedByDecay > 0
-                || section.archivedByCap > 0
-                || section.deletedByCap > 0
-            ))
-            .map(([sectionKey, section]) => {
-                const parts: string[] = []
-                if (section.archivedByDecay > 0) {
-                    parts.push(`archived ${section.archivedByDecay} by decay`)
-                }
-                if (section.deletedByDecay > 0) {
-                    parts.push(`deleted ${section.deletedByDecay} by decay`)
-                }
-                if (section.archivedByCap > 0) {
-                    parts.push(`archived ${section.archivedByCap} by cap`)
-                }
-                if (section.deletedByCap > 0) {
-                    parts.push(`deleted ${section.deletedByCap} by cap`)
-                }
-                return `${sectionKey}: ${parts.join(", ")}`
-            })
-
-        if (changedSections.length === 0) {
-            return `Retention dry run for v${report.currentStateVersion} -> v${report.simulatedAcceptedVersion}: no canonical-state cleanup would occur on the next accepted handoff.`
-        }
-
-        const removedTotal = Math.max(0, report.totals.before.total - report.totals.after.total)
-        return [
-            `Retention dry run for v${report.currentStateVersion} -> v${report.simulatedAcceptedVersion}`,
-            `Items before: ${report.totals.before.total}. After: ${report.totals.after.total}. Removed: ${removedTotal}.`,
-            ...changedSections,
-        ].join("\n")
-    }
-
-    function applyVersionMutationPayload(characterId: string, payload: Record<string, unknown>) {
-        const characterEntry = findCharacterById(characterId)
-        if (!characterEntry) {
-            return
-        }
-        const nextVersions = Array.isArray(payload.versions)
-            ? payload.versions as CharacterEvolutionVersionMeta[]
-            : []
-        const nextProcessedRanges = Array.isArray(payload.processedRanges)
-            ? payload.processedRanges as typeof characterEntry.characterEvolution.processedRanges
-            : []
-        const nextCurrentStateVersion = Number.isFinite(Number(payload.currentStateVersion))
-            ? Math.max(0, Math.floor(Number(payload.currentStateVersion)))
-            : characterEntry.characterEvolution.currentStateVersion
-        characterEntry.characterEvolution = {
-            ...characterEntry.characterEvolution,
-            currentStateVersion: nextCurrentStateVersion,
-            currentState: (payload.state as CharacterEvolutionState | undefined) ?? characterEntry.characterEvolution.currentState,
-            pendingProposal: null,
-            stateVersions: nextVersions,
-            processedRanges: nextProcessedRanges,
-            lastProcessedChatId: [...(nextProcessedRanges ?? [])]
-                .sort((left, right) => (left?.version ?? 0) - (right?.version ?? 0))
-                .at(-1)?.range.chatId ?? null,
-            lastProcessedMessageIndexByChat: deriveLastProcessedMessageIndexByChat(nextProcessedRanges ?? []),
-        }
-        commitCharacter(characterEntry)
-        refreshedVersionMetas = nextVersions
-        selectedVersion = null
-        selectedVersionFile = null
-    }
-
-    function setUseGlobalDefaults(nextValue: boolean) {
-        const characterEntry = currentCharacter
-        if (!characterEntry) {
-            return
-        }
-
-        setCharacterUseGlobalEvolutionDefaults(characterEntry, nextValue, commitCharacter)
-    }
-
     $effect(() => {
         const characterEntry = currentCharacter
         if (!characterEntry) {
@@ -257,22 +155,6 @@
         })
         sectionConfigDraft = nextDrafts.sectionConfigDraft
         privacyDraft = nextDrafts.privacyDraft
-    })
-
-    $effect(() => {
-        const characterEntry = currentCharacter
-        if (!characterEntry || characterEntry.characterEvolution.useGlobalDefaults) {
-            return
-        }
-
-        syncEvolutionCharacterDrafts({
-            characterEntry,
-            currentStateDraft,
-            sectionConfigDraft,
-            privacyDraft,
-            resolveCharacterById: findCharacterById,
-            commitCharacter,
-        })
     })
 
     $effect(() => {
@@ -319,387 +201,57 @@
         await persistEvolutionCharacter(DBState.db, characterEntry.chaId)
     }
 
-    async function handleRefreshVersions(characterId = currentCharacter?.chaId ?? null) {
-        if (!characterId) {
-            return
-        }
-
-        loadingVersions = true
-        if (currentCharacter?.chaId === characterId) {
-            selectedVersionFile = null
-        }
-        try {
-            await refreshEvolutionWorkspaceVersions({
-                characterId,
-                selectedVersion,
-                currentCharacterId: currentCharacter?.chaId ?? null,
-                findCharacterById,
-                commitCharacter,
-                setRefreshedVersionMetas: (versions) => {
-                    refreshedVersionMetas = versions
-                },
-                setSelectedVersionFile: (file) => {
-                    selectedVersionFile = file
-                },
-            })
-        } catch (error) {
-            if (currentCharacter?.chaId === characterId) {
-                refreshedVersionMetas = []
-                selectedVersionFile = null
-            }
-            alertError(getCharacterEvolutionErrorMessage(error))
-        } finally {
-            loadingVersions = false
-        }
-    }
-
-    async function loadVersion(version: number) {
-        const characterEntry = currentCharacter
-        if (!characterEntry?.chaId) {
-            return
-        }
-        const characterId = characterEntry.chaId
-
-        loadingVersions = true
-        selectedVersionFile = null
-        try {
-            selectedWorkspaceTab = EVOLUTION_HISTORY_TAB
-            selectedVersion = version
-            await loadEvolutionWorkspaceVersion({
-                characterId,
-                version,
-                currentCharacterId: currentCharacter?.chaId ?? null,
-                setSelectedVersionFile: (file) => {
-                    selectedVersionFile = file
-                },
-            })
-        } catch (error) {
-            if (currentCharacter?.chaId === characterId) {
-                selectedVersionFile = null
-            }
-            alertError(getCharacterEvolutionErrorMessage(error))
-        } finally {
-            loadingVersions = false
-        }
-    }
-
-    async function clearCoverage(versionMeta: CharacterEvolutionVersionMeta): Promise<boolean> {
-        const characterEntry = currentCharacter
-        if (!characterEntry?.chaId || !versionMeta.range) {
-            return false
-        }
-        const clearPreview = buildClearCoveragePreview({
-            versions: displayedStateVersions,
-            targetVersion: versionMeta.version,
-            range: versionMeta.range,
-            pendingProposal: currentPendingProposal,
-        })
-        if (typeof window !== "undefined" && !window.confirm(clearPreview.summary)) {
-            return false
-        }
-
-        loadingVersions = true
-        try {
-            const payload = await clearEvolutionCoverageAction(characterEntry.chaId, versionMeta.range)
-            applyVersionMutationPayload(characterEntry.chaId, payload)
-            alertNormal(`Cleared accepted evolution coverage for messages ${versionMeta.range.startMessageIndex + 1}-${versionMeta.range.endMessageIndex + 1}.`)
-            return true
-        } catch (error) {
-            alertError(getCharacterEvolutionErrorMessage(error))
-            return false
-        } finally {
-            loadingVersions = false
-        }
-    }
-
-    async function revertVersion(version: number) {
-        const characterEntry = currentCharacter
-        if (!characterEntry?.chaId) {
-            return
-        }
-        const revertPreview = buildRevertVersionPreview({
-            versions: displayedStateVersions,
-            targetVersion: version,
-            pendingProposal: currentPendingProposal,
-        })
-        if (typeof window !== "undefined" && !window.confirm(revertPreview.summary)) {
-            return
-        }
-
-        loadingVersions = true
-        try {
-            const payload = await revertEvolutionVersionAction(characterEntry.chaId, version)
-            applyVersionMutationPayload(characterEntry.chaId, payload)
-            alertNormal(`Reverted evolution state to version v${version}.`)
-        } catch (error) {
-            alertError(getCharacterEvolutionErrorMessage(error))
-        } finally {
-            loadingVersions = false
-        }
-    }
-
-    async function deleteVersion(version: number) {
-        const characterEntry = currentCharacter
-        if (!characterEntry?.chaId) {
-            return
-        }
-        const deletePreview = buildDeleteVersionPreview({
-            versions: displayedStateVersions,
-            targetVersion: version,
-            pendingProposal: currentPendingProposal,
-        })
-        if (typeof window !== "undefined" && !window.confirm(deletePreview.summary)) {
-            return
-        }
-
-        loadingVersions = true
-        try {
-            const payload = await deleteEvolutionVersionAction(characterEntry.chaId, version)
-            applyVersionMutationPayload(characterEntry.chaId, payload)
-            alertNormal(`Deleted evolution version v${version}.`)
-        } catch (error) {
-            alertError(getCharacterEvolutionErrorMessage(error))
-        } finally {
-            loadingVersions = false
-        }
-    }
-
-    async function previewRetention() {
-        const characterEntry = currentCharacter
-        if (!characterEntry?.chaId) {
-            return
-        }
-
-        loadingVersions = true
-        try {
-            const report = await previewEvolutionRetentionAction(characterEntry.chaId)
-            if (!report) {
-                alertNormal("Retention dry run returned no report.")
-                return
-            }
-            alertNormal(formatRetentionDryRun(report))
-        } catch (error) {
-            alertError(getCharacterEvolutionErrorMessage(error))
-        } finally {
-            loadingVersions = false
-        }
-    }
-
-    async function rerunFromVersion(versionMeta: CharacterEvolutionVersionMeta) {
-        if (!versionMeta.range) {
-            return
-        }
-        const cleared = await clearCoverage(versionMeta)
-        if (!cleared) {
-            return
-        }
-        selectedWorkspaceTab = EVOLUTION_SETUP_TAB
-        await runManualRangeHandoff(
-            versionMeta.range.startMessageIndex + 1,
-            versionMeta.range.endMessageIndex + 1,
-        )
-    }
-
-    async function rejectProposal() {
-        const characterEntry = currentCharacter
-        if (!characterEntry?.chaId) {
-            return
-        }
-
-        reviewActionBusy = true
-        try {
-            commitCharacter(await rejectEvolutionReviewFlow(characterEntry))
-            alertNormal("Evolution proposal rejected.")
-        } catch (error) {
-            alertError(getCharacterEvolutionErrorMessage(error))
-        } finally {
-            reviewActionBusy = false
-        }
-    }
-
-    async function replayAcceptedChat() {
-        const characterEntry = currentCharacter
-        const chatId = characterEntry?.chats?.[characterEntry.chatPage]?.id ?? null
-        if (!characterEntry?.chaId || !chatId || !replayCurrentChatAvailable) {
-            return
-        }
-        if (!hasAcceptedEvolutionForChat(characterEntry, chatId)) {
-            return
-        }
-        if (typeof window !== "undefined" && !window.confirm("This chat was already accepted for evolution. Replay handoff for recovery?")) {
-            return
-        }
-
-        replayingAcceptedChat = true
-        try {
-            const result = await runEvolutionHandoffFlow({
-                characterEntry,
-                chatId,
-                chatMessageCount: activeChatMessageCount,
-                forceReplay: true,
-                resolveCharacterById: findCharacterById,
-            })
-            if (!result.nextCharacter) {
-                return
-            }
-            commitCharacter(result.nextCharacter)
-            alertNormal("Evolution proposal was regenerated for the accepted chat.")
-        } catch (error) {
-            alertError(getCharacterEvolutionErrorMessage(error))
-        } finally {
-            replayingAcceptedChat = false
-        }
-    }
-
-    async function runManualRangeHandoff(startMessageNumber: number, endMessageNumber: number) {
-        const characterEntry = currentCharacter
-        const chatId = activeChatId
-        const maxCount = activeChatMessageCount
-        if (!characterEntry?.chaId || !chatId) {
-            alertError("Cannot run ranged evolution handoff without a saved character and chat.")
-            return
-        }
-
-        if (
-            !Number.isInteger(startMessageNumber)
-            || !Number.isInteger(endMessageNumber)
-            || startMessageNumber < 1
-            || endMessageNumber < startMessageNumber
-            || endMessageNumber > maxCount
-        ) {
-            alertError(`Invalid range. Use values between 1 and ${Math.max(1, maxCount)}, and keep Start less than or equal to End.`)
-            return
-        }
-
-        runningManualRangeHandoff = true
-        try {
-            const result = await runEvolutionHandoffFlow({
-                characterEntry,
-                chatId,
-                chatMessageCount: maxCount,
-                sourceRange: {
-                    chatId,
-                    startMessageIndex: startMessageNumber - 1,
-                    endMessageIndex: endMessageNumber - 1,
-                },
-                resolveCharacterById: findCharacterById,
-            })
-            if (!result.nextCharacter) {
-                return
-            }
-            commitCharacter(result.nextCharacter)
-            alertNormal(`Evolution proposal is ready for review for messages ${startMessageNumber}-${endMessageNumber}.`)
-        } catch (error) {
-            alertError(getCharacterEvolutionErrorMessage(error))
-        } finally {
-            runningManualRangeHandoff = false
-        }
-    }
-
-    function cancelAutoProcess() {
-        autoProcessCancelled = true
-    }
-
-    async function runAutoProcess() {
-        const characterEntry = currentCharacter
-        const chatId = activeChatId
-        if (!characterEntry?.chaId || !chatId) {
-            alertError("Cannot run auto process without a saved character and chat.")
-            return
-        }
-
-        const batchSize = Math.max(1, Math.floor(autoHandoffBatchSize || 10))
-        const totalMessages = activeChatMessageCount
-
-        let nextStart = nextUnprocessedMessageNumber
-
-        // Count full batches available
-        let batchCount = 0
-        let tempStart = nextStart
-        while (tempStart + batchSize - 1 <= totalMessages) {
-            batchCount++
-            tempStart += batchSize
-        }
-
-        if (batchCount === 0) return
-
-        autoProcessing = true
-        autoProcessCancelled = false
-        autoProcessedBatches = 0
-        autoProcessTotalBatches = batchCount
-
-        try {
-            while (true) {
-                if (autoProcessCancelled) break
-
-                const batchEnd = nextStart + batchSize - 1
-                if (batchEnd > totalMessages) break
-
-                const freshEntry = findCharacterById(characterEntry.chaId)
-                if (!freshEntry) break
-
-                const sourceRange = {
-                    chatId,
-                    startMessageIndex: nextStart - 1,
-                    endMessageIndex: batchEnd - 1,
-                }
-
-                let handoffResult: Awaited<ReturnType<typeof runEvolutionHandoffFlow>>
-                try {
-                    handoffResult = await runEvolutionHandoffFlow({
-                        characterEntry: freshEntry,
-                        chatId,
-                        chatMessageCount: totalMessages,
-                        sourceRange,
-                        resolveCharacterById: findCharacterById,
-                    })
-                } catch (error) {
-                    alertError(getCharacterEvolutionErrorMessage(error))
-                    break
-                }
-
-                if (!handoffResult.nextCharacter) break
-                commitCharacter(handoffResult.nextCharacter)
-
-                if (autoProcessCancelled) {
-                    const charWithProposal = findCharacterById(characterEntry.chaId)
-                    if (charWithProposal?.characterEvolution.pendingProposal) {
-                        try {
-                            commitCharacter(await rejectEvolutionReviewFlow(charWithProposal))
-                        } catch (rejectError) {
-                            alertError(getCharacterEvolutionErrorMessage(rejectError))
-                        }
-                    }
-                    break
-                }
-
-                const freshForAccept = findCharacterById(characterEntry.chaId) ?? handoffResult.nextCharacter
-                const proposalDraft = handoffResult.proposalDraft
-                if (!proposalDraft) break
-
-                try {
-                    const { nextCharacter } = await acceptEvolutionReviewFlow({
-                        characterEntry: freshForAccept,
-                        proposedState: JSON.parse(JSON.stringify(proposalDraft)),
-                        sourceRange,
-                        resolveCharacterById: findCharacterById,
-                    })
-                    commitCharacter(nextCharacter)
-                } catch (error) {
-                    alertError(getCharacterEvolutionErrorMessage(error))
-                    break
-                }
-
-                autoProcessedBatches++
-                nextStart = batchEnd + 1
-
-                if (nextStart + batchSize - 1 > totalMessages) break
-                await sleep(500)
-            }
-        } finally {
-            autoProcessing = false
-        }
-    }
+    const operations = createEvolutionSettingsOperations({
+        getCurrentCharacter: () => currentCharacter,
+        getCurrentCharacterId: () => currentCharacter?.chaId ?? null,
+        getSelectedVersion: () => selectedVersion,
+        getDisplayedStateVersions: () => displayedStateVersions,
+        getCurrentPendingProposal: () => currentPendingProposal,
+        getActiveChatId: () => activeChatId,
+        getActiveChatMessageCount: () => activeChatMessageCount,
+        getReplayCurrentChatAvailable: () => replayCurrentChatAvailable,
+        getAutoHandoffBatchSize: () => autoHandoffBatchSize,
+        getNextUnprocessedMessageNumber: () => nextUnprocessedMessageNumber,
+        getAutoProcessCancelled: () => autoProcessCancelled,
+        findCharacterById,
+        commitCharacter,
+        setLoadingVersions: (value) => {
+            loadingVersions = value
+        },
+        setReviewActionBusy: (value) => {
+            reviewActionBusy = value
+        },
+        setSelectedVersion: (value) => {
+            selectedVersion = value
+        },
+        setSelectedVersionFile: (value) => {
+            selectedVersionFile = value
+        },
+        setRefreshedVersionMetas: (value) => {
+            refreshedVersionMetas = value
+        },
+        setSelectedWorkspaceTab: (value) => {
+            selectedWorkspaceTab = value
+        },
+        setReplayingAcceptedChat: (value) => {
+            replayingAcceptedChat = value
+        },
+        setRunningManualRangeHandoff: (value) => {
+            runningManualRangeHandoff = value
+        },
+        setAutoProcessing: (value) => {
+            autoProcessing = value
+        },
+        setAutoProcessCancelled: (value) => {
+            autoProcessCancelled = value
+        },
+        setAutoProcessedBatches: (value) => {
+            autoProcessedBatches = value
+        },
+        setAutoProcessTotalBatches: (value) => {
+            autoProcessTotalBatches = value
+        },
+    })
 
     function openFullscreenReview() {
         const characterId = currentCharacter?.chaId
@@ -743,7 +295,7 @@
         refreshedVersionMetas = []
         selectedVersion = null
         selectedVersionFile = null
-        void handleRefreshVersions()
+        void operations.handleRefreshVersions()
     })
 
     const selectedVersionState = $derived(selectedVersionFile?.state ?? null)
@@ -781,37 +333,31 @@
             selectedWorkspaceTab = tab
         }}
         {displayedProcessedRanges}
-        {usingGlobalDefaults}
         {effectiveProvider}
         {effectiveModel}
         {hasTemplateSlot}
         {activeChatId}
         {activeChatMessageCount}
-        {revealCharacterOverrides}
-        onToggleRevealCharacterOverrides={() => {
-            revealCharacterOverrides = !revealCharacterOverrides
-        }}
         onOpenGlobalDefaults={openEvolutionGlobalDefaults}
         {manualRangeAvailable}
         manualRangeBlockedReason={manualRangeBlockedReason}
         {runningManualRangeHandoff}
-        onRunManualRange={runManualRangeHandoff}
+        onRunManualRange={operations.runManualRangeHandoff}
         {autoProcessAvailable}
         {autoProcessing}
         {autoProcessedBatches}
         {autoProcessTotalBatches}
-        onRunAutoProcess={runAutoProcess}
-        onCancelAutoProcess={cancelAutoProcess}
+        onRunAutoProcess={operations.runAutoProcess}
+        onCancelAutoProcess={operations.cancelAutoProcess}
         {replayCurrentChatAvailable}
         {replayingAcceptedChat}
-        onReplayCurrentChat={replayAcceptedChat}
+        onReplayCurrentChat={operations.replayAcceptedChat}
         bind:sectionConfigDraft
         bind:privacyDraft
-        onUseGlobalDefaultsChange={setUseGlobalDefaults}
         {currentPendingProposal}
         {reviewActionBusy}
         onOpenFullscreenReview={openFullscreenReview}
-        onRejectProposal={rejectProposal}
+        onRejectProposal={operations.rejectProposal}
         bind:currentStateDraft
         onPersist={persistCharacter}
         {displayedStateVersions}
@@ -820,12 +366,12 @@
         {selectedVersionState}
         {selectedVersionSectionConfigs}
         {selectedVersionPrivacy}
-        onRefreshVersions={() => handleRefreshVersions()}
-        onPreviewRetention={previewRetention}
-        onLoadVersion={loadVersion}
-        onRevertVersion={revertVersion}
-        onDeleteVersion={deleteVersion}
-        onClearCoverage={clearCoverage}
-        onRerunFromHere={rerunFromVersion}
+        onRefreshVersions={() => operations.handleRefreshVersions()}
+        onPreviewRetention={operations.previewRetention}
+        onLoadVersion={operations.loadVersion}
+        onRevertVersion={operations.revertVersion}
+        onDeleteVersion={operations.deleteVersion}
+        onClearCoverage={operations.clearCoverage}
+        onRerunFromHere={operations.rerunFromVersion}
     />
 {/if}

@@ -201,7 +201,6 @@ export function setupEvolutionRouteTest() {
       personality: "personality",
       characterEvolution: {
         enabled: true,
-        useGlobalDefaults: true,
         currentStateVersion: 0,
         currentState: {},
         stateVersions: [],

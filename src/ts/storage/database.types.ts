@@ -474,7 +474,7 @@ export type CharacterEvolutionProjectedItemSectionKey = Exclude<
     'relationship' | 'lastInteractionEnded'
 >
 export type CharacterEvolutionProjectionSurface = 'generation' | 'extraction'
-export type CharacterEvolutionProjectionBucket = 'fast' | 'medium' | 'slow'
+export type CharacterEvolutionProjectionBucket = 'fast' | 'medium' | 'slow' | 'permanent'
 export type CharacterEvolutionProjectionRankField = 'confidence' | 'timesSeen' | 'lastSeenAt' | 'updatedAt'
 export type CharacterEvolutionRetentionBucket = CharacterEvolutionProjectionBucket
 
@@ -589,15 +589,8 @@ export interface CharacterEvolutionVersionFile {
     privacy?: CharacterEvolutionPrivacySettings
 }
 
-export interface CharacterEvolutionSettings {
+export interface CharacterEvolutionRuntimeSettings {
     enabled: boolean
-    useGlobalDefaults: boolean
-    extractionProvider: string
-    extractionModel: string
-    extractionMaxTokens: number
-    extractionPrompt: string
-    sectionConfigs: CharacterEvolutionSectionConfig[]
-    privacy: CharacterEvolutionPrivacySettings
     currentStateVersion: number
     currentState: CharacterEvolutionState
     pendingProposal?: CharacterEvolutionPendingProposal | null
@@ -608,6 +601,15 @@ export interface CharacterEvolutionSettings {
     autoHandoffEnabled?: boolean
     autoHandoffBatchSize?: number
     autoHandoffAutoAccept?: boolean
+}
+
+export interface CharacterEvolutionSettings extends CharacterEvolutionRuntimeSettings {
+    extractionProvider: string
+    extractionModel: string
+    extractionMaxTokens: number
+    extractionPrompt: string
+    sectionConfigs: CharacterEvolutionSectionConfig[]
+    privacy: CharacterEvolutionPrivacySettings
 }
 
 export interface CharacterEvolutionDefaults {
@@ -626,6 +628,8 @@ export interface CharacterEvolutionPromptProjectionPolicy {
     limits: Record<CharacterEvolutionProjectionSurface, Record<CharacterEvolutionProjectedItemSectionKey, number>>
 }
 
+export const CHARACTER_EVOLUTION_ALL_BUCKETS = ['fast', 'medium', 'slow', 'permanent'] as const
+
 export interface CharacterEvolutionRetentionThresholds {
     archive: Record<CharacterEvolutionRetentionBucket, number>
     deleteNonActive: Record<CharacterEvolutionRetentionBucket, number>
@@ -640,6 +644,7 @@ export interface CharacterEvolutionRetentionSectionCap {
 export interface CharacterEvolutionRetentionPolicy {
     thresholds: CharacterEvolutionRetentionThresholds
     caps: Partial<Record<CharacterEvolutionProjectedItemSectionKey, CharacterEvolutionRetentionSectionCap>>
+    sectionBuckets?: Partial<Record<CharacterEvolutionProjectedItemSectionKey, CharacterEvolutionRetentionBucket>>
 }
 
 export interface CharacterEvolutionRetentionDryRunCounts {
@@ -817,7 +822,7 @@ export interface character{
     memoryPromptOverride?: MemoryPromptOverride
     modules?:string[]
     gameState?: Record<string, any>
-    characterEvolution?: CharacterEvolutionSettings
+    characterEvolution?: CharacterEvolutionRuntimeSettings
 }
 
 
@@ -907,7 +912,7 @@ export interface groupChat{
     memoryPromptOverride?: MemoryPromptOverride
     modules?:string[]
     gameState?: Record<string, any>
-    characterEvolution?: CharacterEvolutionSettings
+    characterEvolution?: CharacterEvolutionRuntimeSettings
 }
 
 export interface botPreset{

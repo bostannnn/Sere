@@ -86,7 +86,6 @@ describe("evolution routes recovery", () => {
         personality: "personality",
         characterEvolution: {
           enabled: true,
-          useGlobalDefaults: true,
           currentStateVersion: 2,
           currentState: versionTwo.state,
           stateVersions: [],
@@ -150,7 +149,6 @@ describe("evolution routes recovery", () => {
         personality: "personality",
         characterEvolution: {
           enabled: true,
-          useGlobalDefaults: true,
           currentStateVersion: 2,
           currentState: {},
           stateVersions: [],

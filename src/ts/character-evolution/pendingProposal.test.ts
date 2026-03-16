@@ -47,7 +47,6 @@ describe("pending proposal source range", () => {
             characterLikes: [],
             characterDislikes: [],
             characterHabits: [],
-            characterBoundariesPreferences: [],
             userFacts: [],
             userRead: [],
             userLikes: [],
