@@ -90,58 +90,23 @@
         width: 100%;
         max-width: 100%;
         box-sizing: border-box;
-        align-items: center;
-        gap: 2px;
-        padding: 4px;
-        border: 1px solid var(--ds-border-subtle);
-        border-radius: var(--ds-radius-md);
-        background: var(--ds-surface-2);
+        align-items: stretch;
         overflow: hidden;
     }
 
     :global(.ds-settings-tab.evolution-subtab) {
         width: 100%;
         min-width: 0;
-        height: 32px;
-        min-height: 32px;
+        height: var(--ds-settings-tab-height);
+        min-height: var(--ds-settings-tab-height);
         padding: 0;
-        border: 0;
-        border-radius: var(--ds-radius-sm);
-        color: var(--ds-text-secondary);
-        background: transparent;
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        transition:
-            color var(--ds-motion-fast) var(--ds-ease-standard),
-            background-color var(--ds-motion-fast) var(--ds-ease-standard),
-            border-color var(--ds-motion-fast) var(--ds-ease-standard);
-    }
-
-    :global(.ds-settings-tab.evolution-subtab:hover) {
-        color: var(--ds-text-primary);
-        background: var(--ds-surface-active);
-    }
-
-    :global(.ds-settings-tab.evolution-subtab.active) {
-        color: var(--ds-text-primary);
-        background: var(--ds-surface-active);
     }
 
     :global(.ds-settings-tab.evolution-subtab svg) {
-        width: 16px;
-        height: 16px;
-    }
-
-    @media (min-width: 1400px) {
-        :global(.ds-settings-tab.evolution-subtab) {
-            height: 36px;
-            min-height: 36px;
-        }
-
-        :global(.ds-settings-tab.evolution-subtab svg) {
-            width: 20px;
-            height: 20px;
-        }
+        width: 18px;
+        height: 18px;
     }
 </style>

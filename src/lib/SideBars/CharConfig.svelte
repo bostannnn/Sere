@@ -1923,19 +1923,25 @@
         overflow-x: hidden;
     }
 
-    .char-config-tabs {
+    .char-config-tabs,
+    .char-config-subtabs {
         display: grid;
-        grid-auto-flow: column;
-        grid-auto-columns: minmax(0, 1fr);
         width: 100%;
-        max-width: 100%;
-        box-sizing: border-box;
-        align-items: center;
-        gap: 2px;
-        padding: 4px;
+        margin-top: 0;
+        margin-bottom: 0;
+        gap: 0;
         border: 1px solid var(--ds-border-subtle);
         border-radius: var(--ds-radius-md);
-        background: var(--ds-surface-2);
+        background: transparent;
+        overflow: hidden;
+    }
+
+    .char-config-tabs {
+        grid-auto-flow: column;
+        grid-auto-columns: minmax(0, 1fr);
+        max-width: 100%;
+        box-sizing: border-box;
+        align-items: stretch;
         overflow-x: hidden;
         overflow-y: hidden;
         flex-wrap: nowrap;
@@ -1949,20 +1955,26 @@
 
     .char-config-tab {
         width: 100%;
-        height: 24px;
         min-width: 0;
-        min-height: 24px;
+        height: var(--ds-settings-tab-height);
+        min-height: var(--ds-settings-tab-height);
         padding: 0;
         border: 0;
-        border-radius: var(--ds-radius-sm);
+        border-right: 1px solid var(--ds-border-subtle);
+        border-radius: 0;
         color: var(--ds-text-secondary);
         background: transparent;
         display: inline-flex;
         align-items: center;
         justify-content: center;
+        line-height: 1.2;
         transition: color var(--ds-motion-fast) var(--ds-ease-standard),
             background-color var(--ds-motion-fast) var(--ds-ease-standard),
             border-color var(--ds-motion-fast) var(--ds-ease-standard);
+    }
+
+    .char-config-tab:last-child {
+        border-right: 0;
     }
 
     .char-config-tab:hover {
@@ -2112,22 +2124,13 @@
     }
 
     .char-config-subtabs {
-        display: grid;
         grid-template-columns: repeat(3, minmax(0, 1fr));
-        width: 100%;
-        margin-top: 0;
-        margin-bottom: 0;
-        gap: 0;
-        border: 1px solid var(--ds-border-subtle);
-        border-radius: var(--ds-radius-md);
-        background: var(--ds-surface-2);
-        overflow: hidden;
     }
 
     .char-config-subtab {
         min-width: 0;
-        min-height: var(--ds-height-control-sm);
-        padding: var(--ds-space-2);
+        min-height: var(--ds-settings-tab-height);
+        padding: 0 var(--ds-settings-tab-padding-x);
         border: 0;
         border-right: 1px solid var(--ds-border-subtle);
         border-radius: 0;
@@ -2137,6 +2140,7 @@
         align-items: center;
         justify-content: center;
         text-align: center;
+        line-height: 1.2;
         transition: color var(--ds-motion-fast) var(--ds-ease-standard),
             background-color var(--ds-motion-fast) var(--ds-ease-standard);
     }
