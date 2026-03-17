@@ -18,6 +18,7 @@ function createCharacterEvolutionRetentionApplyService(arg = {}) {
     const compactCurrentState = typeof arg.compactCharacterEvolutionCurrentState === 'function'
         ? arg.compactCharacterEvolutionCurrentState
         : compactCharacterEvolutionCurrentState;
+    const characterEvolutionSemanticRecallService = arg.characterEvolutionSemanticRecallService || null;
 
     function isSafeCharacterId(value) {
         return typeof value === 'string' && /^[a-zA-Z0-9._-]+$/.test(value);
@@ -114,6 +115,27 @@ function createCharacterEvolutionRetentionApplyService(arg = {}) {
             ...(result.report ? { report: result.report } : {}),
             ...(result.backupPath ? { backupPath: result.backupPath } : {}),
         };
+    }
+
+    async function markSemanticRecallDirtyForCharacter(result) {
+        if (!characterEvolutionSemanticRecallService || result?.status !== 'changed') {
+            return;
+        }
+        const evolution = normalizeEvolutionSettings(result?.nextDocument?.character?.characterEvolution ?? result?.nextDocument?.characterEvolution);
+        const chatIds = new Set();
+        for (const entry of Array.isArray(evolution?.stateVersions) ? evolution.stateVersions : []) {
+            if (typeof entry?.chatId === 'string' && entry.chatId) {
+                chatIds.add(entry.chatId);
+            }
+            if (typeof entry?.range?.chatId === 'string' && entry.range.chatId) {
+                chatIds.add(entry.range.chatId);
+            }
+        }
+        await characterEvolutionSemanticRecallService.markDirtyChats({
+            characterDir: path.dirname(result.characterPath),
+            chatIds: [...chatIds],
+            reason: 'retention_apply',
+        });
     }
 
     async function readDefaults() {
@@ -272,6 +294,7 @@ function createCharacterEvolutionRetentionApplyService(arg = {}) {
                 const backupPath = path.join(backupsDirectory, `${result.characterId}.character.json`);
                 await fs.writeFile(backupPath, result.documentText, 'utf-8');
                 await fs.writeFile(result.characterPath, JSON.stringify(result.nextDocument, null, 2), 'utf-8');
+                await markSemanticRecallDirtyForCharacter(result);
                 result.backupPath = backupPath;
             } catch (error) {
                 result.status = 'error';

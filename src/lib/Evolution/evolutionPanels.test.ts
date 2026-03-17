@@ -8,8 +8,10 @@ import type {
     CharacterEvolutionSettings,
     CharacterEvolutionState,
 } from "src/ts/storage/database.types";
+import EvolutionSemanticRecallPanel from "src/lib/SideBars/Evolution/EvolutionSemanticRecallPanel.svelte";
 import EvolutionSetupPanel from "src/lib/SideBars/Evolution/EvolutionSetupPanel.svelte";
 import EvolutionStatePanel from "src/lib/SideBars/Evolution/EvolutionStatePanel.svelte";
+import EvolutionWorkspaceTabs from "src/lib/SideBars/Evolution/EvolutionWorkspaceTabs.svelte";
 import ReviewWorkspace from "./ReviewWorkspace.svelte";
 
 vi.mock("src/ts/gui/guisize", () => ({
@@ -166,6 +168,46 @@ describe("evolution panels", () => {
         await Promise.resolve();
 
         expect(onRunManualRange).toHaveBeenCalledWith(25, 48);
+    });
+
+    it("shows a semantic recall workspace tab and forwards tab selection", async () => {
+        const onSelect = vi.fn();
+        const target = mountIntoBody(EvolutionWorkspaceTabs, {
+            selectedTab: 0,
+            onSelect,
+        });
+
+        const semanticRecallButton = Array.from(target.querySelectorAll("button")).find((button) =>
+            button.getAttribute("aria-label") === "Semantic Recall"
+        ) as HTMLButtonElement | undefined;
+
+        expect(semanticRecallButton).toBeDefined();
+        semanticRecallButton!.click();
+        await Promise.resolve();
+
+        expect(onSelect).toHaveBeenCalledWith(5);
+    });
+
+    it("shows a per-chat semantic recall rebuild control in the dedicated panel and forwards the click", async () => {
+        const onRebuildSemanticRecall = vi.fn();
+        const target = mountIntoBody(EvolutionSemanticRecallPanel, {
+            activeChatId: "chat-1",
+            rebuildingSemanticRecall: false,
+            handoffBusy: false,
+            autoProcessing: false,
+            onRebuildSemanticRecall,
+        });
+
+        expect(target.textContent).toContain("Semantic Recall Index");
+        const rebuildButton = Array.from(target.querySelectorAll("button")).find((button) =>
+            button.textContent?.includes("Rebuild Semantic Recall for Current Chat")
+        ) as HTMLButtonElement | undefined;
+
+        expect(rebuildButton).toBeDefined();
+        rebuildButton!.click();
+        await Promise.resolve();
+
+        expect(onRebuildSemanticRecall).toHaveBeenCalledTimes(1);
     });
 
     it("shows the accepted state in read-only mode while a pending proposal exists", () => {

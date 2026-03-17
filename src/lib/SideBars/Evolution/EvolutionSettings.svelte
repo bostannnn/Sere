@@ -33,6 +33,7 @@
     let currentStateDraftKey = $state<string | null>(null)
     let replayingAcceptedChat = $state(false)
     let runningManualRangeHandoff = $state(false)
+    let rebuildingSemanticRecall = $state(false)
     let autoProcessing = $state(false)
     let autoProcessCancelled = $state(false)
     let autoProcessedBatches = $state(0)
@@ -237,6 +238,9 @@
         setRunningManualRangeHandoff: (value) => {
             runningManualRangeHandoff = value
         },
+        setRebuildingSemanticRecall: (value) => {
+            rebuildingSemanticRecall = value
+        },
         setAutoProcessing: (value) => {
             autoProcessing = value
         },
@@ -340,6 +344,8 @@
         {manualRangeAvailable}
         manualRangeBlockedReason={manualRangeBlockedReason}
         {runningManualRangeHandoff}
+        {rebuildingSemanticRecall}
+        onRebuildSemanticRecall={operations.rebuildSemanticRecallForActiveChat}
         onRunManualRange={operations.runManualRangeHandoff}
         {autoProcessAvailable}
         {autoProcessing}

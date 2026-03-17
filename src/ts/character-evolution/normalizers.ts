@@ -21,8 +21,10 @@ import {
 import {
     clone,
     createDefaultCharacterEvolutionDefaults,
+    createDefaultCharacterEvolutionSemanticRecallSettings,
     createDefaultCharacterEvolutionSectionConfigs,
     createDefaultCharacterEvolutionState,
+    CHARACTER_EVOLUTION_SEMANTIC_RECALL_SECTION_KEYS,
 } from "./schema"
 import { normalizeCharacterEvolutionItemSourceRange } from "./items"
 import { normalizeCharacterEvolutionPromptProjectionPolicy } from "./projectionPolicy"
@@ -59,6 +61,9 @@ function normalizeItem(raw: unknown): CharacterEvolutionItem | null {
         : undefined
     if (!value) return null
     return {
+        id: typeof item.id === "string" && item.id.trim()
+            ? item.id.trim()
+            : undefined,
         value,
         confidence: item.confidence === "suspected" || item.confidence === "likely" || item.confidence === "confirmed"
             ? item.confidence
@@ -82,6 +87,45 @@ function normalizeItem(raw: unknown): CharacterEvolutionItem | null {
         unseenAcceptedHandoffs: Number.isFinite(Number(item.unseenAcceptedHandoffs)) && Number(item.unseenAcceptedHandoffs) >= 0
             ? Math.max(0, Math.floor(Number(item.unseenAcceptedHandoffs)))
             : undefined,
+    }
+}
+
+function normalizeCharacterEvolutionSemanticRecallSettings(raw: unknown): NonNullable<CharacterEvolutionDefaults["semanticRecall"]> {
+    const defaults = createDefaultCharacterEvolutionSemanticRecallSettings()
+    const value = (raw && typeof raw === "object") ? raw as Record<string, unknown> : {}
+    const sectionsRaw = (value.sections && typeof value.sections === "object") ? value.sections as Record<string, unknown> : {}
+    const sections = Object.fromEntries(
+        CHARACTER_EVOLUTION_SEMANTIC_RECALL_SECTION_KEYS.map((key) => [
+            key,
+            sectionsRaw[key] === undefined ? defaults.sections[key] : sectionsRaw[key] === true,
+        ]),
+    ) as NonNullable<CharacterEvolutionDefaults["semanticRecall"]>["sections"]
+    const sectionLimitsRaw = (value.sectionLimits && typeof value.sectionLimits === "object")
+        ? value.sectionLimits as Record<string, unknown>
+        : {}
+    const sectionLimits = Object.fromEntries(
+        CHARACTER_EVOLUTION_SEMANTIC_RECALL_SECTION_KEYS.map((key) => {
+            const parsed = Number(sectionLimitsRaw[key])
+            return [
+                key,
+                Number.isFinite(parsed) ? Math.max(0, Math.floor(parsed)) : defaults.sectionLimits[key],
+            ]
+        }),
+    ) as NonNullable<CharacterEvolutionDefaults["semanticRecall"]>["sectionLimits"]
+    const minScore = Number(value.minScore)
+    const maxItems = Number(value.maxItems)
+    const queryMessageWindow = Number(value.queryMessageWindow)
+    const embeddingModel = typeof value.embeddingModel === "string" && value.embeddingModel.trim()
+        ? value.embeddingModel.trim()
+        : defaults.embeddingModel
+    return {
+        enabled: value.enabled === true,
+        embeddingModel: embeddingModel as NonNullable<CharacterEvolutionDefaults["semanticRecall"]>["embeddingModel"],
+        minScore: Number.isFinite(minScore) ? Math.max(0, Math.min(1, minScore)) : defaults.minScore,
+        maxItems: Number.isFinite(maxItems) ? Math.max(1, Math.floor(maxItems)) : defaults.maxItems,
+        queryMessageWindow: Number.isFinite(queryMessageWindow) ? Math.max(1, Math.floor(queryMessageWindow)) : defaults.queryMessageWindow,
+        sections,
+        sectionLimits,
     }
 }
 
@@ -258,6 +302,7 @@ export function normalizeCharacterEvolutionDefaults(raw: unknown): CharacterEvol
         privacy: normalizeCharacterEvolutionPrivacy(value.privacy),
         promptProjection: normalizeCharacterEvolutionPromptProjectionPolicy(value.promptProjection),
         retention: normalizeCharacterEvolutionRetentionPolicy(value.retention),
+        semanticRecall: normalizeCharacterEvolutionSemanticRecallSettings(value.semanticRecall),
     }
 }
 

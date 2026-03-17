@@ -18,13 +18,17 @@ function sortProjectedItems(
     policy: CharacterEvolutionPromptProjectionPolicy,
 ) {
     return [...items]
-        .sort((left, right) => compareCharacterEvolutionItemsForProjection({
-            sectionKey,
-            left,
-            right,
-            policy,
-        }))
-        .map((item) => ({ ...item }))
+        .map((item, index) => ({ item, index }))
+        .sort((left, right) => {
+            const comparison = compareCharacterEvolutionItemsForProjection({
+                sectionKey,
+                left: left.item,
+                right: right.item,
+                policy,
+            })
+            return comparison !== 0 ? comparison : left.index - right.index
+        })
+        .map(({ item }) => ({ ...item }))
 }
 
 export function projectCharacterEvolutionStateForPrompt(

@@ -31,6 +31,7 @@ describe("character evolution normalizers", () => {
         const input = {
             activeThreads: [
                 {
+                    id: "  item-1  ",
                     value: "keep the lighthouse trip alive",
                     sourceChatId: "  chat-2  ",
                     sourceRange: {
@@ -49,6 +50,7 @@ describe("character evolution normalizers", () => {
         const normalizedCjs = normalizeCharacterEvolutionStateCjs(input)
 
         expect(normalized.activeThreads[0]).toEqual(expect.objectContaining({
+            id: "item-1",
             value: "keep the lighthouse trip alive",
             status: "active",
             sourceChatId: "chat-2",
@@ -293,6 +295,59 @@ describe("character evolution normalizers", () => {
         expect(normalized.retention?.sectionBuckets?.keyMoments).toBe("medium")
         expect(normalized.retention?.sectionBuckets?.userFacts).toBe("permanent")
         expect(normalized.retention?.sectionBuckets?.userLikes).toBe("permanent")
+        expect(normalizedCjs).toEqual(normalized)
+    })
+
+    it("normalizes semantic recall defaults and section toggles", () => {
+        const input = {
+            semanticRecall: {
+                enabled: true,
+                embeddingModel: " multiMiniLM ",
+                minScore: "0.7",
+                maxItems: "5.9",
+                queryMessageWindow: "6",
+                sections: {
+                    userFacts: true,
+                    keyMoments: true,
+                    userLikes: true,
+                },
+                sectionLimits: {
+                    userFacts: "5.9",
+                    userLikes: "3.2",
+                    keyMoments: "-1",
+                },
+            },
+        }
+
+        const normalized = normalizeCharacterEvolutionDefaults(input)
+        const { normalizeCharacterEvolutionDefaults: normalizeCharacterEvolutionDefaultsCjs } = require("../../../server/node/llm/character_evolution/normalizers.cjs")
+        const normalizedCjs = normalizeCharacterEvolutionDefaultsCjs(input)
+
+        expect(normalized.semanticRecall).toEqual({
+            enabled: true,
+            embeddingModel: "multiMiniLM",
+            minScore: 0.7,
+            maxItems: 5,
+            queryMessageWindow: 6,
+            sections: {
+                characterLikes: false,
+                characterDislikes: false,
+                characterHabits: false,
+                userFacts: true,
+                userLikes: true,
+                userDislikes: false,
+                keyMoments: true,
+            },
+            sectionLimits: {
+                characterLikes: 0,
+                characterDislikes: 0,
+                characterHabits: 0,
+                userFacts: 5,
+                userLikes: 3,
+                userDislikes: 0,
+                keyMoments: 0,
+            },
+        })
         expect(normalizedCjs).toEqual(normalized)
     })
 

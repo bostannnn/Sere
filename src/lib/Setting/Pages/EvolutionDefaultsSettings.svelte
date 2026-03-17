@@ -1,6 +1,8 @@
 <script lang="ts">
     import { DBState, EvolutionDefaultsSettingsTabIndex } from "src/ts/stores.svelte";
     import {
+        BUILTIN_SECTION_DEFS,
+        CHARACTER_EVOLUTION_SEMANTIC_RECALL_SECTION_KEYS,
         ensureDatabaseEvolutionDefaults,
         getCharacterEvolutionModelSuggestions,
         normalizeCharacterEvolutionExtractionModel,
@@ -8,6 +10,7 @@
     import { DEFAULT_EXTRACTION_PROMPT } from "src/ts/character-evolution/constants";
     import CheckInput from "src/lib/UI/GUI/CheckInput.svelte";
     import ModelList from "src/lib/UI/ModelList.svelte";
+    import EmbeddingModelSelect from "src/lib/UI/GUI/EmbeddingModelSelect.svelte";
     import OpenRouterModelSelect from "src/lib/UI/GUI/OpenRouterModelSelect.svelte";
     import TextAreaInput from "src/lib/UI/GUI/TextAreaInput.svelte";
     import TextInput from "src/lib/UI/GUI/TextInput.svelte";
@@ -21,6 +24,7 @@
         { id: 0, label: "Global Defaults" },
         { id: 1, label: "Prompt Projection" },
         { id: 2, label: "Retention" },
+        { id: 3, label: "Semantic Recall" },
     ] as const;
 
     let selectedTab = $state(0);
@@ -49,7 +53,7 @@
         if (requestedTab === null) {
             return
         }
-        if ((requestedTab === 0 || requestedTab === 1 || requestedTab === 2) && selectedTab !== requestedTab) {
+        if ((requestedTab === 0 || requestedTab === 1 || requestedTab === 2 || requestedTab === 3) && selectedTab !== requestedTab) {
             selectedTab = requestedTab
         }
         EvolutionDefaultsSettingsTabIndex.set(null)
@@ -78,6 +82,12 @@
 
     const modelSuggestions = $derived(
         getCharacterEvolutionModelSuggestions(DBState.db.characterEvolutionDefaults?.extractionProvider ?? "openrouter")
+    );
+    const semanticRecallSections = $derived(
+        CHARACTER_EVOLUTION_SEMANTIC_RECALL_SECTION_KEYS.map((key) => ({
+            key,
+            label: BUILTIN_SECTION_DEFS.find((section) => section.key === key)?.label ?? key,
+        }))
     );
 
     let showDefaultPrompt = $state(false);
@@ -173,12 +183,77 @@
                 </span>
                 <ProjectionPolicyEditor bind:value={DBState.db.characterEvolutionDefaults.promptProjection} />
             </div>
-        {:else}
+        {:else if selectedTab === 2}
             <div class="evolution-defaults-panel">
                 <span class="ds-settings-label-muted-sm evolution-defaults-panel-copy">
                     Retention controls accepted-state lifecycle in canonical storage: archive timing, stale non-active deletion, and optional stored caps.
                 </span>
                 <RetentionPolicyEditor bind:value={DBState.db.characterEvolutionDefaults.retention} />
+            </div>
+        {:else}
+            <div class="evolution-defaults-panel">
+                <span class="ds-settings-label-muted-sm evolution-defaults-panel-copy">
+                    Semantic recall retrieves archived Character Evolution facts from accepted history at generation time. V1 is server-authoritative, chat-scoped, and archived-only.
+                </span>
+
+                <div class="ds-settings-section">
+                    <CheckInput
+                        bare={true}
+                        className="evolution-defaults-toggle-row"
+                        check={DBState.db.characterEvolutionDefaults.semanticRecall.enabled}
+                        onChange={(value) => {
+                            DBState.db.characterEvolutionDefaults.semanticRecall.enabled = value;
+                        }}
+                        name="Enable Semantic Recall"
+                    />
+
+                    <span class="ds-settings-label">Embedding Model</span>
+                    <EmbeddingModelSelect bind:value={DBState.db.characterEvolutionDefaults.semanticRecall.embeddingModel} />
+
+                    <span class="ds-settings-label">Minimum Similarity Score</span>
+                    <NumberInput bind:value={DBState.db.characterEvolutionDefaults.semanticRecall.minScore} min={0} max={1} />
+
+                    <span class="ds-settings-label">Max Recalled Items Per Prompt</span>
+                    <NumberInput bind:value={DBState.db.characterEvolutionDefaults.semanticRecall.maxItems} min={1} />
+
+                    <span class="ds-settings-label">Query Message Window</span>
+                    <NumberInput bind:value={DBState.db.characterEvolutionDefaults.semanticRecall.queryMessageWindow} min={1} />
+                </div>
+
+                <div class="ds-settings-divider"></div>
+
+                <div class="ds-settings-section">
+                    <span class="ds-settings-label">Semantic Recall Sections</span>
+                    <span class="ds-settings-label-muted-sm">
+                        These categories are eligible for archived semantic recall. Active canon still comes from the normal `characterState` block. Optional per-section limits let you cap how many recalled items each category may contribute.
+                    </span>
+                    <div class="evolution-defaults-toggle-list">
+                        {#each semanticRecallSections as section (section.key)}
+                            <div class="evolution-semantic-recall-section-row">
+                                <CheckInput
+                                    bare={true}
+                                    className="evolution-defaults-toggle-row"
+                                    check={DBState.db.characterEvolutionDefaults.semanticRecall.sections[section.key]}
+                                    onChange={(value) => {
+                                        DBState.db.characterEvolutionDefaults.semanticRecall.sections[section.key] = value;
+                                    }}
+                                    name={section.label}
+                                />
+                                <div class="evolution-semantic-recall-limit">
+                                    <span class="ds-settings-label-muted-sm">Per-section max</span>
+                                    <NumberInput
+                                        bind:value={DBState.db.characterEvolutionDefaults.semanticRecall.sectionLimits[section.key]}
+                                        min={0}
+                                        disabled={!DBState.db.characterEvolutionDefaults.semanticRecall.sections[section.key]}
+                                    />
+                                </div>
+                            </div>
+                        {/each}
+                    </div>
+                    <span class="ds-settings-label-muted-sm">
+                        Set `0` to keep the default balancing behavior for that section.
+                    </span>
+                </div>
             </div>
         {/if}
     </div>
@@ -232,6 +307,19 @@
         gap: var(--ds-space-3);
     }
 
+    .evolution-semantic-recall-section-row {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 140px;
+        gap: var(--ds-space-3);
+        align-items: center;
+    }
+
+    .evolution-semantic-recall-limit {
+        display: flex;
+        flex-direction: column;
+        gap: var(--ds-space-1);
+    }
+
     :global(.evolution-defaults-toggle-row) {
         width: 100%;
         min-height: var(--ds-height-control-sm);
@@ -264,5 +352,11 @@
         word-break: break-word;
         max-height: 24rem;
         overflow-y: auto;
+    }
+
+    @media (max-width: 640px) {
+        .evolution-semantic-recall-section-row {
+            grid-template-columns: 1fr;
+        }
     }
 </style>

@@ -19,6 +19,7 @@ function registerEvolutionVersionRoutes(arg = {}) {
         safeResolve,
         sendJson,
         toStringOrEmpty,
+        characterEvolutionSemanticRecallService = null,
         versionHistory,
         withAsyncRoute,
     } = arg;
@@ -64,6 +65,38 @@ function registerEvolutionVersionRoutes(arg = {}) {
             });
         const last = ordered[ordered.length - 1];
         return normalizeCharacterEvolutionRangeRef(last?.range)?.chatId ?? null;
+    }
+
+    function collectSemanticRecallChatIds(versions, extraChatIds = []) {
+        const chatIds = new Set();
+        for (const entry of Array.isArray(versions) ? versions : []) {
+            const directChatId = toStringOrEmpty(entry?.chatId);
+            const rangeChatId = toStringOrEmpty(entry?.range?.chatId);
+            if (directChatId) {
+                chatIds.add(directChatId);
+            }
+            if (rangeChatId) {
+                chatIds.add(rangeChatId);
+            }
+        }
+        for (const chatId of Array.isArray(extraChatIds) ? extraChatIds : []) {
+            const normalized = toStringOrEmpty(chatId);
+            if (normalized) {
+                chatIds.add(normalized);
+            }
+        }
+        return [...chatIds];
+    }
+
+    async function markSemanticRecallDirty(characterDir, versions, extraChatIds, reason) {
+        if (!characterEvolutionSemanticRecallService) {
+            return;
+        }
+        await characterEvolutionSemanticRecallService.markDirtyChats({
+            characterDir,
+            chatIds: collectSemanticRecallChatIds(versions, extraChatIds),
+            reason,
+        });
     }
 
     async function loadCharacterAndSettingsWithHistory(characterId) {
@@ -181,6 +214,20 @@ function registerEvolutionVersionRoutes(arg = {}) {
         };
         await replaceCharacterWithRetry(characterId, nextCharacter, source);
         await removeVersionFiles(charDir, invalidatedVersions);
+        try {
+            await markSemanticRecallDirty(
+                charDir,
+                evolution.stateVersions,
+                [restoredPayload?.chatId, restoredPayload?.range?.chatId],
+                source,
+            );
+        } catch (dirtyError) {
+            console.warn('[character-evolution] Failed to mark semantic recall dirty after version mutation.', {
+                characterId,
+                source,
+                error: dirtyError instanceof Error ? dirtyError.message : String(dirtyError),
+            });
+        }
         return nextCharacter.characterEvolution;
     }
 
@@ -284,6 +331,37 @@ function registerEvolutionVersionRoutes(arg = {}) {
                     ? { privacy: normalizeCharacterEvolutionPrivacy(payload.privacy) }
                     : {}),
             },
+        });
+    }));
+
+    app.post('/data/character-evolution/:charId/semantic-recall/:chatId/rebuild', withAsyncRoute('character_evolution_semantic_recall_rebuild', async (req, res) => {
+        if (typeof requirePasswordAuth === 'function' && !requirePasswordAuth(req, res)) {
+            return;
+        }
+        if (!characterEvolutionSemanticRecallService) {
+            throw new LLMHttpError(501, 'SEMANTIC_RECALL_UNAVAILABLE', 'Semantic recall rebuild is unavailable on this runtime path.');
+        }
+        const characterId = toStringOrEmpty(req.params?.charId);
+        const chatId = toStringOrEmpty(req.params?.chatId);
+        if (!characterId || !isSafePathSegment(characterId)) {
+            throw new LLMHttpError(400, 'INVALID_CHARACTER_ID', 'charId is required and must be a safe id.');
+        }
+        if (!chatId || !isSafePathSegment(chatId)) {
+            throw new LLMHttpError(400, 'INVALID_CHAT_ID', 'chatId is required and must be a safe id.');
+        }
+        const { settings, character, charDir } = await loadCharacterAndSettingsWithHistory(characterId);
+        const rebuilt = await characterEvolutionSemanticRecallService.rebuildIndex({
+            characterId,
+            chatId,
+            characterDir: charDir,
+            character,
+            settings,
+        });
+        sendJson(res, 200, {
+            ok: true,
+            chatId,
+            generatedAt: rebuilt?.index?.generatedAt || 0,
+            itemCount: Array.isArray(rebuilt?.index?.items) ? rebuilt.index.items.length : 0,
         });
     }));
 

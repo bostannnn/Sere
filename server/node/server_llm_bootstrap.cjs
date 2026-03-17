@@ -32,6 +32,7 @@ function createServerLlmBootstrap(arg = {}) {
         readJsonWithEtag,
         readStateLastEventId,
         applyStateCommands,
+        buildCharacterEvolutionSemanticRecall,
         logLLMExecutionStart,
         logLLMExecutionEnd,
         toLLMErrorResponse,
@@ -86,6 +87,7 @@ function createServerLlmBootstrap(arg = {}) {
         applyPeriodicMemorySummary,
         generateSummaryEmbedding,
         buildServerMemoryMessages,
+        buildCharacterEvolutionSemanticRecall,
         applyStateCommands,
     });
 

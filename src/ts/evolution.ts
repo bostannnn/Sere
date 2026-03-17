@@ -90,6 +90,12 @@ export interface CharacterEvolutionVersionMutationResult extends Record<string, 
     processedRanges?: CharacterEvolutionProcessedRange[]
 }
 
+export interface CharacterEvolutionSemanticRecallRebuildResult extends Record<string, unknown> {
+    chatId?: string
+    generatedAt?: number
+    itemCount?: number
+}
+
 export async function clearCharacterEvolutionCoverage(characterId: string, range: CharacterEvolutionRangeRef): Promise<CharacterEvolutionVersionMutationResult> {
     return await postJson(`/data/character-evolution/${encodeURIComponent(characterId)}/coverage/clear`, {
         range,
@@ -109,6 +115,16 @@ export async function previewCharacterEvolutionRetention(characterId: string): P
     return payload.report && typeof payload.report === "object"
         ? payload.report as CharacterEvolutionRetentionDryRunReport
         : null;
+}
+
+export async function rebuildCharacterEvolutionSemanticRecall(
+    characterId: string,
+    chatId: string,
+): Promise<CharacterEvolutionSemanticRecallRebuildResult> {
+    return await postJson(
+        `/data/character-evolution/${encodeURIComponent(characterId)}/semantic-recall/${encodeURIComponent(chatId)}/rebuild`,
+        {},
+    ) as CharacterEvolutionSemanticRecallRebuildResult;
 }
 
 export function getCharacterEvolutionErrorMessage(error: unknown): string {

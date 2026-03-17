@@ -6,6 +6,7 @@ import {
     persistEvolutionCharacter,
     previewEvolutionRetentionAction,
     refreshEvolutionVersions,
+    rebuildEvolutionSemanticRecallAction,
     revertEvolutionVersionAction,
     rejectEvolutionProposalAction,
 } from "src/ts/character-evolution/actions"
@@ -22,6 +23,7 @@ export {
     persistEvolutionCharacter,
     previewEvolutionRetentionAction,
     refreshEvolutionVersions,
+    rebuildEvolutionSemanticRecallAction,
     revertEvolutionVersionAction,
     rejectEvolutionProposalAction,
 }

@@ -7,6 +7,7 @@ import {
     fetchCharacterEvolutionVersion,
     listCharacterEvolutionVersions,
     previewCharacterEvolutionRetention,
+    rebuildCharacterEvolutionSemanticRecall,
     rejectCharacterEvolutionProposal,
     revertCharacterEvolutionVersion,
 } from "src/ts/evolution"
@@ -37,6 +38,12 @@ export interface CharacterEvolutionVersionMutationPayload extends Record<string,
     state?: CharacterEvolutionState
     versions?: CharacterEvolutionVersionMeta[]
     processedRanges?: CharacterEvolutionProcessedRange[]
+}
+
+export interface CharacterEvolutionSemanticRecallRebuildPayload extends Record<string, unknown> {
+    chatId?: string
+    generatedAt?: number | string
+    itemCount?: number | string
 }
 
 function toErrorMessage(error: unknown): string {
@@ -118,6 +125,13 @@ export async function previewEvolutionRetentionAction(
     characterId: string,
 ): Promise<CharacterEvolutionRetentionDryRunReport | null> {
     return await previewCharacterEvolutionRetention(characterId)
+}
+
+export async function rebuildEvolutionSemanticRecallAction(
+    characterId: string,
+    chatId: string,
+): Promise<CharacterEvolutionSemanticRecallRebuildPayload> {
+    return await rebuildCharacterEvolutionSemanticRecall(characterId, chatId)
 }
 
 export async function rejectEvolutionProposalAction(

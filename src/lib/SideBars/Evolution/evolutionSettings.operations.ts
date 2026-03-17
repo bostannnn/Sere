@@ -19,6 +19,7 @@ import {
     loadEvolutionWorkspaceVersion,
     previewEvolutionRetentionAction,
     refreshEvolutionWorkspaceVersions,
+    rebuildEvolutionSemanticRecallAction,
     revertEvolutionVersionAction,
 } from "./evolutionSettings.actions"
 import {
@@ -58,6 +59,7 @@ interface EvolutionSettingsOperationsArgs {
     setSelectedWorkspaceTab: (value: EvolutionWorkspaceTabId) => void
     setReplayingAcceptedChat: (value: boolean) => void
     setRunningManualRangeHandoff: (value: boolean) => void
+    setRebuildingSemanticRecall: (value: boolean) => void
     setAutoProcessing: (value: boolean) => void
     setAutoProcessCancelled: (value: boolean) => void
     setAutoProcessedBatches: (value: number) => void
@@ -245,6 +247,30 @@ export function createEvolutionSettingsOperations(args: EvolutionSettingsOperati
             alertError(getCharacterEvolutionErrorMessage(error))
         } finally {
             args.setLoadingVersions(false)
+        }
+    }
+
+    async function rebuildSemanticRecallForActiveChat() {
+        const characterEntry = args.getCurrentCharacter()
+        const chatId = args.getActiveChatId()
+        if (!characterEntry?.chaId || !chatId) {
+            alertError("Open a saved chat before rebuilding semantic recall.")
+            return
+        }
+
+        args.setRebuildingSemanticRecall(true)
+        try {
+            const payload = await rebuildEvolutionSemanticRecallAction(characterEntry.chaId, chatId)
+            const itemCount = Number(payload?.itemCount)
+            alertNormal(
+                Number.isFinite(itemCount)
+                    ? `Semantic recall rebuilt for this chat with ${Math.max(0, Math.floor(itemCount))} indexed items.`
+                    : "Semantic recall rebuilt for this chat."
+            )
+        } catch (error) {
+            alertError(getCharacterEvolutionErrorMessage(error))
+        } finally {
+            args.setRebuildingSemanticRecall(false)
         }
     }
 
@@ -485,6 +511,7 @@ export function createEvolutionSettingsOperations(args: EvolutionSettingsOperati
         handleRefreshVersions,
         loadVersion,
         previewRetention,
+        rebuildSemanticRecallForActiveChat,
         rejectProposal,
         replayAcceptedChat,
         rerunFromVersion,

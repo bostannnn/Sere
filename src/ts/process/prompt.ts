@@ -33,7 +33,7 @@ export interface PromptItemChatML {
 }
 
 export interface PromptItemTyped {
-    type: 'persona'|'description'|'lorebook'|'postEverything'|'rulebookRag'|'gameState'|'characterState'
+    type: 'persona'|'description'|'lorebook'|'postEverything'|'rulebookRag'|'gameState'|'characterState'|'semanticRecall'
     innerFormat?: string,
     name?: string
 }
@@ -87,7 +87,8 @@ export async function tokenizePreset(prompts:PromptItem[], consti:boolean = fals
             case 'authornote':
             case 'memory':
             case 'gameState':
-            case 'characterState':{
+            case 'characterState':
+            case 'semanticRecall':{
                 if(prompt.innerFormat){
                     total += await tokenizeAccurate(prompt.innerFormat, consti)
                 }

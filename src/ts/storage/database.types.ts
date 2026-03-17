@@ -477,8 +477,17 @@ export type CharacterEvolutionProjectionSurface = 'generation' | 'extraction'
 export type CharacterEvolutionProjectionBucket = 'fast' | 'medium' | 'slow' | 'permanent'
 export type CharacterEvolutionProjectionRankField = 'confidence' | 'timesSeen' | 'lastSeenAt' | 'updatedAt'
 export type CharacterEvolutionRetentionBucket = CharacterEvolutionProjectionBucket
+export type CharacterEvolutionSemanticRecallSectionKey =
+    | 'characterLikes'
+    | 'characterDislikes'
+    | 'characterHabits'
+    | 'userFacts'
+    | 'userLikes'
+    | 'userDislikes'
+    | 'keyMoments'
 
 export interface CharacterEvolutionItem {
+    id?: string
     value: string
     confidence?: CharacterEvolutionConfidence
     note?: string
@@ -621,6 +630,17 @@ export interface CharacterEvolutionDefaults {
     privacy: CharacterEvolutionPrivacySettings
     promptProjection?: CharacterEvolutionPromptProjectionPolicy
     retention?: CharacterEvolutionRetentionPolicy
+    semanticRecall?: CharacterEvolutionSemanticRecallSettings
+}
+
+export interface CharacterEvolutionSemanticRecallSettings {
+    enabled: boolean
+    embeddingModel: EmbeddingModel
+    minScore: number
+    maxItems: number
+    queryMessageWindow: number
+    sections: Record<CharacterEvolutionSemanticRecallSectionKey, boolean>
+    sectionLimits: Record<CharacterEvolutionSemanticRecallSectionKey, number>
 }
 
 export interface CharacterEvolutionPromptProjectionPolicy {

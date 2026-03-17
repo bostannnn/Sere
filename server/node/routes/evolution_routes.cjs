@@ -19,6 +19,7 @@ function registerEvolutionRoutes(arg = {}) {
         applyLastInteractionEndedOverwrite = require('../llm/character_evolution/decay.cjs').applyLastInteractionEndedOverwrite,
         createCharacterEvolutionRepository = require('../services/character_evolution_repository.cjs').createCharacterEvolutionRepository,
         createCharacterEvolutionHistoryResolver = require('../services/character_evolution_history_resolver.cjs').createCharacterEvolutionHistoryResolver,
+        createCharacterEvolutionSemanticRecallService = require('../services/character_evolution_semantic_recall_indexer.cjs').createCharacterEvolutionSemanticRecallService,
         createCharacterEvolutionVersionStore = require('../services/character_evolution_version_store.cjs').createCharacterEvolutionVersionStore,
         createEvolutionRouteHelpers = require('../evolution_route_helpers.cjs').createEvolutionRouteHelpers,
         buildCharacterEvolutionPromptMessages = require('../llm/character_evolution.cjs').buildCharacterEvolutionPromptMessages,
@@ -88,6 +89,10 @@ function registerEvolutionRoutes(arg = {}) {
     const versionStore = createCharacterEvolutionVersionStore({
         existsSync,
         fs,
+    });
+    const characterEvolutionSemanticRecallService = arg.characterEvolutionSemanticRecallService || createCharacterEvolutionSemanticRecallService({
+        fs,
+        existsSync,
     });
     const { loadCharacterAndSettings, loadChat, replaceCharacterWithRetry } = repository;
     const {
@@ -511,6 +516,19 @@ function registerEvolutionRoutes(arg = {}) {
             throw error;
         }
         await finalizeVersionFile(versionFile);
+        try {
+            await characterEvolutionSemanticRecallService.markDirtyChat({
+                characterDir: charDir,
+                chatId: pendingProposal.sourceChatId || sourceRange?.chatId,
+                reason: 'accepted_version',
+            });
+        } catch (dirtyError) {
+            console.warn('[character-evolution] Failed to mark semantic recall dirty after accept.', {
+                characterId,
+                chatId: pendingProposal.sourceChatId || sourceRange?.chatId || null,
+                error: dirtyError instanceof Error ? dirtyError.message : String(dirtyError),
+            });
+        }
         const payload = {
             ok: true,
             version: nextVersion,
@@ -594,6 +612,7 @@ function registerEvolutionRoutes(arg = {}) {
         safeResolve,
         sendJson,
         toStringOrEmpty,
+        characterEvolutionSemanticRecallService,
         versionHistory: evolutionHistory,
         withAsyncRoute,
     };

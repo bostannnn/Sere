@@ -550,6 +550,7 @@ export async function sendChat(chatProcessIndex = -1,arg:{
         'rulebookRag':([] as OpenAIChat[]),
         'gameState':([] as OpenAIChat[]),
         'characterState':([] as OpenAIChat[]),
+        'semanticRecall':([] as OpenAIChat[]),
         'globalNote':([] as OpenAIChat[]),
         'authorNote':([] as OpenAIChat[]),
         'lastChat':([] as OpenAIChat[]),
@@ -922,6 +923,16 @@ export async function sendChat(chatProcessIndex = -1,arg:{
                 }
                 case 'characterState':{
                     const pmt = safeStructuredClone(unformated.characterState)
+                    if(card.innerFormat && pmt.length > 0){
+                        for(let i=0;i<pmt.length;i++){
+                            pmt[i].content = risuChatParser(positionParser(card.innerFormat, card.type), {chara: currentChar}).replace('{{slot}}', pmt[i].content)
+                        }
+                    }
+                    await tokenizeChatArray(pmt)
+                    break
+                }
+                case 'semanticRecall':{
+                    const pmt = safeStructuredClone(unformated.semanticRecall)
                     if(card.innerFormat && pmt.length > 0){
                         for(let i=0;i<pmt.length;i++){
                             pmt[i].content = risuChatParser(positionParser(card.innerFormat, card.type), {chara: currentChar}).replace('{{slot}}', pmt[i].content)
@@ -1643,6 +1654,18 @@ export async function sendChat(chatProcessIndex = -1,arg:{
                 case 'characterState':{
                     const pmt = applyPromptInnerFormat(
                         safeStructuredClone(unformated.characterState),
+                        card.innerFormat,
+                        (innerFormat, slotContent) => risuChatParser(innerFormat, {chara: currentChar}).replace('{{slot}}', slotContent),
+                    )
+                    for(const item of pmt){
+                        addPromptBlock(resolvePromptTemplateBlockTitle(card), item.role, item.content)
+                    }
+                    pushPrompts(pmt)
+                    break
+                }
+                case 'semanticRecall':{
+                    const pmt = applyPromptInnerFormat(
+                        safeStructuredClone(unformated.semanticRecall),
                         card.innerFormat,
                         (innerFormat, slotContent) => risuChatParser(innerFormat, {chara: currentChar}).replace('{{slot}}', slotContent),
                     )

@@ -149,6 +149,53 @@ function normalizeCharacterEvolutionItemMatchValue(valueRaw: string): string {
         .replace(/\s+/g, " ")
 }
 
+function hashCharacterEvolutionItemIdSource(source: string): string {
+    let hash = 0x811c9dc5
+    for (let index = 0; index < source.length; index += 1) {
+        hash ^= source.charCodeAt(index)
+        hash = Math.imul(hash, 0x01000193)
+    }
+    return (hash >>> 0).toString(36)
+}
+
+export function mintCharacterEvolutionItemId(args: {
+    sectionKey: CharacterEvolutionItemSectionKey
+    item: CharacterEvolutionItem
+    sourceChatId?: string
+    sourceRange?: CharacterEvolutionItem["sourceRange"]
+    acceptedVersion?: number
+    timestamp?: number
+}): string {
+    const source = [
+        args.sectionKey,
+        args.sourceChatId ?? args.item.sourceChatId ?? "",
+        String(args.sourceRange?.startMessageIndex ?? args.item.sourceRange?.startMessageIndex ?? ""),
+        String(args.sourceRange?.endMessageIndex ?? args.item.sourceRange?.endMessageIndex ?? ""),
+        String(args.acceptedVersion ?? args.item.lastSeenVersion ?? ""),
+        String(args.timestamp ?? args.item.updatedAt ?? args.item.lastSeenAt ?? ""),
+        getCharacterEvolutionItemExactMatchKey(args.item),
+    ].join("|")
+    return `cei_${hashCharacterEvolutionItemIdSource(source)}`
+}
+
+export function mintLegacyCharacterEvolutionItemId(args: {
+    sectionKey: CharacterEvolutionItemSectionKey
+    resolvedChatId: string
+    item: CharacterEvolutionItem
+    firstSeenVersion: number
+    sourceRange?: CharacterEvolutionItem["sourceRange"]
+}): string {
+    const source = [
+        args.sectionKey,
+        args.resolvedChatId,
+        getCharacterEvolutionItemNormalizedMatchKey(args.item),
+        String(Math.max(1, Math.floor(args.firstSeenVersion))),
+        String(args.sourceRange?.startMessageIndex ?? args.item.sourceRange?.startMessageIndex ?? ""),
+        String(args.sourceRange?.endMessageIndex ?? args.item.sourceRange?.endMessageIndex ?? ""),
+    ].join("|")
+    return `cei_legacy_${hashCharacterEvolutionItemIdSource(source)}`
+}
+
 export function getCharacterEvolutionItemExactMatchKey(item: CharacterEvolutionItem | string): string {
     return normalizeCharacterEvolutionItemMatchValue(typeof item === "string" ? item : item.value)
 }
@@ -497,8 +544,14 @@ function createMergedMatchedItem(
     const nextSourceRange = shouldReinforce
         ? proposedItem.sourceRange ?? currentItem.sourceRange
         : currentItem.sourceRange
+    const nextId = typeof currentItem.id === "string" && currentItem.id.trim()
+        ? currentItem.id.trim()
+        : typeof proposedItem.id === "string" && proposedItem.id.trim()
+            ? proposedItem.id.trim()
+            : undefined
 
     return {
+        ...(nextId ? { id: nextId } : {}),
         value: proposedItem.value,
         status: nextStatus,
         ...(nextConfidence ? { confidence: nextConfidence } : {}),
@@ -611,6 +664,20 @@ export function applyCharacterEvolutionItemMetadata(args: {
                 const baseMatch = findMatchingBaseItem(key, baseItems, item)
                 if (baseMatch) {
                     return {
+                        ...(typeof item.id === "string" && item.id.trim()
+                            ? { id: item.id.trim() }
+                            : typeof baseMatch.id === "string" && baseMatch.id.trim()
+                                ? { id: baseMatch.id.trim() }
+                                : {
+                                    id: mintCharacterEvolutionItemId({
+                                        sectionKey: key,
+                                        item,
+                                        sourceChatId,
+                                        sourceRange,
+                                        acceptedVersion,
+                                        timestamp,
+                                    }),
+                                }),
                         ...(sourceChatId && args.overwriteNewItemTimestamps
                             ? { sourceChatId }
                             : baseMatch.sourceChatId && !item.sourceChatId
@@ -639,6 +706,18 @@ export function applyCharacterEvolutionItemMetadata(args: {
                     }
                 }
                 return {
+                    ...(typeof item.id === "string" && item.id.trim()
+                        ? { id: item.id.trim() }
+                        : {
+                            id: mintCharacterEvolutionItemId({
+                                sectionKey: key,
+                                item,
+                                sourceChatId,
+                                sourceRange,
+                                acceptedVersion,
+                                timestamp,
+                            }),
+                        }),
                     ...(sourceChatId && !item.sourceChatId ? { sourceChatId } : {}),
                     ...(sourceRange && !item.sourceRange ? { sourceRange: { ...sourceRange } } : {}),
                     ...(timestamp !== undefined && (args.overwriteNewItemTimestamps || item.updatedAt === undefined) ? { updatedAt: timestamp } : {}),

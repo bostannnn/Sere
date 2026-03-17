@@ -1,7 +1,9 @@
 const {
     createDefaultCharacterEvolutionDefaults,
+    createDefaultCharacterEvolutionSemanticRecallSettings,
     createDefaultCharacterEvolutionSectionConfigs,
     createDefaultCharacterEvolutionState,
+    CHARACTER_EVOLUTION_SEMANTIC_RECALL_SECTION_KEYS,
     isBuiltinExtractionPrompt,
     isBuiltinSectionInstruction,
     normalizeCharacterEvolutionExtractionModel,
@@ -25,6 +27,7 @@ function normalizeItem(raw) {
         : undefined;
     if (!value) return null;
     return {
+        id: toTrimmedString(raw.id) || undefined,
         value,
         confidence: raw.confidence === 'suspected' || raw.confidence === 'likely' || raw.confidence === 'confirmed'
             ? raw.confidence
@@ -46,6 +49,40 @@ function normalizeItem(raw) {
         unseenAcceptedHandoffs: Number.isFinite(Number(raw.unseenAcceptedHandoffs)) && Number(raw.unseenAcceptedHandoffs) >= 0
             ? Math.max(0, Math.floor(Number(raw.unseenAcceptedHandoffs)))
             : undefined,
+    };
+}
+
+function normalizeCharacterEvolutionSemanticRecallSettings(raw) {
+    const defaults = createDefaultCharacterEvolutionSemanticRecallSettings();
+    const value = (raw && typeof raw === 'object') ? raw : {};
+    const sectionsRaw = (value.sections && typeof value.sections === 'object') ? value.sections : {};
+    const sections = Object.fromEntries(
+        CHARACTER_EVOLUTION_SEMANTIC_RECALL_SECTION_KEYS.map((key) => [
+            key,
+            sectionsRaw[key] === undefined ? defaults.sections[key] : sectionsRaw[key] === true,
+        ])
+    );
+    const sectionLimitsRaw = (value.sectionLimits && typeof value.sectionLimits === 'object') ? value.sectionLimits : {};
+    const sectionLimits = Object.fromEntries(
+        CHARACTER_EVOLUTION_SEMANTIC_RECALL_SECTION_KEYS.map((key) => {
+            const parsed = Number(sectionLimitsRaw[key]);
+            return [
+                key,
+                Number.isFinite(parsed) ? Math.max(0, Math.floor(parsed)) : defaults.sectionLimits[key],
+            ];
+        })
+    );
+    const minScore = Number(value.minScore);
+    const maxItems = Number(value.maxItems);
+    const queryMessageWindow = Number(value.queryMessageWindow);
+    return {
+        enabled: value.enabled === true,
+        embeddingModel: toTrimmedString(value.embeddingModel) || defaults.embeddingModel,
+        minScore: Number.isFinite(minScore) ? Math.max(0, Math.min(1, minScore)) : defaults.minScore,
+        maxItems: Number.isFinite(maxItems) ? Math.max(1, Math.floor(maxItems)) : defaults.maxItems,
+        queryMessageWindow: Number.isFinite(queryMessageWindow) ? Math.max(1, Math.floor(queryMessageWindow)) : defaults.queryMessageWindow,
+        sections,
+        sectionLimits,
     };
 }
 
@@ -190,6 +227,7 @@ function normalizeCharacterEvolutionDefaults(raw) {
         privacy: normalizeCharacterEvolutionPrivacy(value.privacy),
         promptProjection: normalizeCharacterEvolutionPromptProjectionPolicy(value.promptProjection),
         retention: normalizeCharacterEvolutionRetentionPolicy(value.retention),
+        semanticRecall: normalizeCharacterEvolutionSemanticRecallSettings(value.semanticRecall),
     };
 }
 

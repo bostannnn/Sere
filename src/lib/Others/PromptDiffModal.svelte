@@ -356,7 +356,8 @@
             item.type === 'postEverything' ||
             item.type === 'rulebookRag' ||
             item.type === 'gameState' ||
-            item.type === 'characterState'
+            item.type === 'characterState' ||
+            item.type === 'semanticRecall'
 
         const isPromptItemMemory = (item: PromptItem): item is PromptItemMemory =>
             item.type === 'memory'

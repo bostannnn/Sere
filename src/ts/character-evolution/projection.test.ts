@@ -60,7 +60,7 @@ describe("character evolution prompt projection", () => {
         ]
 
         const promptProjection = createCharacterEvolutionPromptProjectionPolicy()
-        promptProjection.rankings.slow = ["lastSeenAt", "confidence", "timesSeen", "updatedAt"]
+        promptProjection.rankings.permanent = ["lastSeenAt", "confidence", "timesSeen", "updatedAt"]
         promptProjection.limits.generation.userLikes = 1
 
         const projected = projectCharacterEvolutionStateForPrompt(state, "generation", promptProjection)
@@ -69,5 +69,24 @@ describe("character evolution prompt projection", () => {
 
         expect(projected.userLikes.map((item) => item.value)).toEqual(["fresh-but-weak"])
         expect(projectedCjs.userLikes.map((item: { value: string }) => item.value)).toEqual(["fresh-but-weak"])
+    })
+
+    it("preserves original order when projection ranks tie completely", () => {
+        const state = createDefaultCharacterEvolutionState()
+        state.userFacts = [
+            { value: "zeta", confidence: "likely", status: "active", lastSeenAt: 100, updatedAt: 100, timesSeen: 2 },
+            { value: "alpha", confidence: "likely", status: "active", lastSeenAt: 100, updatedAt: 100, timesSeen: 2 },
+            { value: "beta", confidence: "likely", status: "active", lastSeenAt: 100, updatedAt: 100, timesSeen: 2 },
+        ]
+
+        const promptProjection = createCharacterEvolutionPromptProjectionPolicy()
+        promptProjection.limits.generation.userFacts = 2
+
+        const projected = projectCharacterEvolutionStateForPrompt(state, "generation", promptProjection)
+        const { projectCharacterEvolutionStateForPrompt: projectCharacterEvolutionStateForPromptCjs } = require("../../../server/node/llm/character_evolution/projection.cjs")
+        const projectedCjs = projectCharacterEvolutionStateForPromptCjs(state, "generation", promptProjection)
+
+        expect(projected.userFacts.map((item) => item.value)).toEqual(["zeta", "alpha"])
+        expect(projectedCjs.userFacts.map((item: { value: string }) => item.value)).toEqual(["zeta", "alpha"])
     })
 })

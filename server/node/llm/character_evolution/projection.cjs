@@ -7,13 +7,17 @@ const {
 
 function sortProjectedItems(sectionKey, items, policy) {
     return [...(Array.isArray(items) ? items : [])]
-        .sort((left, right) => compareCharacterEvolutionItemsForProjection({
-            sectionKey,
-            left,
-            right,
-            policy,
-        }))
-        .map((item) => ({ ...item }));
+        .map((item, index) => ({ item, index }))
+        .sort((left, right) => {
+            const comparison = compareCharacterEvolutionItemsForProjection({
+                sectionKey,
+                left: left.item,
+                right: right.item,
+                policy,
+            });
+            return comparison !== 0 ? comparison : left.index - right.index;
+        })
+        .map(({ item }) => ({ ...item }));
 }
 
 function projectCharacterEvolutionStateForPrompt(stateRaw, surface = 'generation', promptProjectionRaw = null) {

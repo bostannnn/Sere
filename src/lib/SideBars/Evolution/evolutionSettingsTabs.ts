@@ -1,14 +1,16 @@
-export type EvolutionWorkspaceTabId = 0 | 1 | 2 | 3 | 4
+export type EvolutionWorkspaceTabId = 0 | 1 | 2 | 3 | 4 | 5
 
 export const EVOLUTION_SETUP_TAB = 0 as const
 export const EVOLUTION_SECTIONS_TAB = 1 as const
 export const EVOLUTION_REVIEW_TAB = 2 as const
 export const EVOLUTION_STATE_TAB = 3 as const
 export const EVOLUTION_HISTORY_TAB = 4 as const
+export const EVOLUTION_SEMANTIC_RECALL_TAB = 5 as const
 
 export const EVOLUTION_TAB_ORDER: EvolutionWorkspaceTabId[] = [
     EVOLUTION_SETUP_TAB,
     EVOLUTION_SECTIONS_TAB,
+    EVOLUTION_SEMANTIC_RECALL_TAB,
     EVOLUTION_REVIEW_TAB,
     EVOLUTION_STATE_TAB,
     EVOLUTION_HISTORY_TAB,
@@ -17,6 +19,7 @@ export const EVOLUTION_TAB_ORDER: EvolutionWorkspaceTabId[] = [
 export const EVOLUTION_TAB_LABELS: Record<EvolutionWorkspaceTabId, string> = {
     [EVOLUTION_SETUP_TAB]: "Setup",
     [EVOLUTION_SECTIONS_TAB]: "Sections",
+    [EVOLUTION_SEMANTIC_RECALL_TAB]: "Semantic Recall",
     [EVOLUTION_REVIEW_TAB]: "Review",
     [EVOLUTION_STATE_TAB]: "State",
     [EVOLUTION_HISTORY_TAB]: "History",

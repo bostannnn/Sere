@@ -1,9 +1,10 @@
 <script lang="ts">
-    import { Clock3Icon, ClipboardCheckIcon, FileStackIcon, Settings2Icon, SlidersHorizontalIcon } from "@lucide/svelte"
+    import { Clock3Icon, ClipboardCheckIcon, FileStackIcon, SearchIcon, Settings2Icon, SlidersHorizontalIcon } from "@lucide/svelte"
     import SettingsSubTabs, { type SettingsSubTabItem } from "src/lib/Setting/SettingsSubTabs.svelte"
     import {
         EVOLUTION_HISTORY_TAB,
         EVOLUTION_REVIEW_TAB,
+        EVOLUTION_SEMANTIC_RECALL_TAB,
         EVOLUTION_SECTIONS_TAB,
         EVOLUTION_SETUP_TAB,
         EVOLUTION_STATE_TAB,
@@ -36,6 +37,16 @@
             buttonId: "evolution-subtab-1",
             controls: "evolution-panel-sections",
             icon: SlidersHorizontalIcon,
+            iconSize: 18,
+            hideLabel: true,
+        },
+        {
+            id: EVOLUTION_SEMANTIC_RECALL_TAB,
+            label: EVOLUTION_TAB_LABELS[EVOLUTION_SEMANTIC_RECALL_TAB],
+            ariaLabel: EVOLUTION_TAB_LABELS[EVOLUTION_SEMANTIC_RECALL_TAB],
+            buttonId: "evolution-subtab-5",
+            controls: "evolution-panel-semantic-recall",
+            icon: SearchIcon,
             iconSize: 18,
             hideLabel: true,
         },
@@ -86,7 +97,7 @@
 <style>
     :global(.ds-settings-tabs.evolution-subtabs) {
         display: grid;
-        grid-template-columns: repeat(5, minmax(0, 1fr));
+        grid-template-columns: repeat(6, minmax(0, 1fr));
         width: 100%;
         max-width: 100%;
         box-sizing: border-box;

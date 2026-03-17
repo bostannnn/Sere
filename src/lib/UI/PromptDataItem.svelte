@@ -154,6 +154,9 @@
                 if (promptItem.type === 'characterState'){
                     return "Character State"
                 }
+                if (promptItem.type === 'semanticRecall'){
+                    return "Semantic Recall"
+                }
                 if (promptItem.type === 'memory'){
                     return language.formating.memory
                 }
@@ -316,6 +319,7 @@
             <OptionInput value="rulebookRag">Rulebook RAG</OptionInput>
             <OptionInput value="gameState">Game State</OptionInput>
             <OptionInput value="characterState">Character State</OptionInput>
+            <OptionInput value="semanticRecall">Semantic Recall</OptionInput>
             <OptionInput value="memory">{language.formating.memory}</OptionInput>
             <OptionInput value="postEverything">{language.formating.postEverything}</OptionInput>
             <OptionInput value="chatML">chatML</OptionInput>
@@ -357,9 +361,9 @@
                 <OptionInput value="system">{language.systemPrompt}</OptionInput>
             </SelectInput>
         {/if}
-        {#if promptItem.type === 'characterState'}
+        {#if promptItem.type === 'characterState' || promptItem.type === 'semanticRecall'}
             <span>{language.format}</span>
-            <TextAreaInput highlight bind:value={promptItem.innerFormat} placeholder={"Wrap current character evolution state with {{slot}} if needed."} />
+            <TextAreaInput highlight bind:value={promptItem.innerFormat} placeholder={promptItem.type === 'semanticRecall' ? "Wrap semantic recall with {{slot}} if needed." : "Wrap current character evolution state with {{slot}} if needed."} />
         {/if}
         {#if promptItem.type === 'chat' || promptItem.type === 'memory'}
             {@const showRangeInputs = promptItem.type === 'memory' || hasExplicitRange(promptItem)}
@@ -394,10 +398,10 @@
             <span>{language.defaultPrompt}</span>
             <TextInput bind:value={promptItem.defaultText} />
         {/if}
-        {#if promptItem.type === 'persona' || promptItem.type === 'description' || promptItem.type === 'authornote' || promptItem.type === 'memory' || promptItem.type === 'rulebookRag' || promptItem.type === 'gameState'}
+        {#if promptItem.type === 'persona' || promptItem.type === 'description' || promptItem.type === 'authornote' || promptItem.type === 'memory' || promptItem.type === 'rulebookRag' || promptItem.type === 'gameState' || promptItem.type === 'semanticRecall'}
             {#if !promptItem.innerFormat}
                 <CheckInput name={language.customInnerFormat} check={false} className="ds-input-margin-top-sm" onChange={() => {
-                    if(promptItem.type === 'persona' || promptItem.type === 'description' || promptItem.type === 'authornote' || promptItem.type === 'memory' || promptItem.type === 'rulebookRag' || promptItem.type === 'gameState'){
+                    if(promptItem.type === 'persona' || promptItem.type === 'description' || promptItem.type === 'authornote' || promptItem.type === 'memory' || promptItem.type === 'rulebookRag' || promptItem.type === 'gameState' || promptItem.type === 'semanticRecall'){
                         promptItem.innerFormat = "{{slot}}"
                     }
                 }} />
@@ -405,7 +409,7 @@
                 <span>{language.innerFormat}</span>
                 <TextAreaInput highlight bind:value={promptItem.innerFormat}/>
                 <CheckInput name={language.customInnerFormat} check={true} className="ds-input-margin-top-sm" onChange={() => {
-                    if(promptItem.type === 'persona' || promptItem.type === 'description' || promptItem.type === 'authornote' || promptItem.type === 'memory' || promptItem.type === 'rulebookRag' || promptItem.type === 'gameState'){
+                    if(promptItem.type === 'persona' || promptItem.type === 'description' || promptItem.type === 'authornote' || promptItem.type === 'memory' || promptItem.type === 'rulebookRag' || promptItem.type === 'gameState' || promptItem.type === 'semanticRecall'){
                         promptItem.innerFormat = null
                     }
                 }} />

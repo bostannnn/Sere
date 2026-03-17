@@ -67,6 +67,7 @@ const { configureServerHttpApp } = require('./server_http_setup.cjs');
 const { registerServerRoutes } = require('./server_route_bootstrap.cjs');
 const { createServerLlmBootstrap } = require('./server_llm_bootstrap.cjs');
 const { createServerPaths } = require('./server_paths.cjs');
+const { createCharacterEvolutionSemanticRecallService } = require('./services/character_evolution_semantic_recall_indexer.cjs');
 const { createResourceLocks } = require('./state/resource_locks.cjs');
 const { createEventJournal } = require('./state/event_journal.cjs');
 const { createSnapshotService } = require('./state/snapshot_service.cjs');
@@ -253,6 +254,11 @@ const applyStateCommands = createInternalStateCommandApplier({
     applyCommands: commandService.applyCommands.bind(commandService),
     readLastEventId: eventJournal.readLastEventId.bind(eventJournal),
 });
+const characterEvolutionSemanticRecallService = createCharacterEvolutionSemanticRecallService({
+    fs,
+    existsSync,
+    generateEmbeddings,
+});
 
 // Server-first storage API
 installDataApiMiddleware();
@@ -298,6 +304,14 @@ const {
     applyPeriodicMemorySummary,
     generateSummaryEmbedding,
     buildServerMemoryMessages,
+    buildCharacterEvolutionSemanticRecall: ({ characterId, chatId, character, chat, settings }) => characterEvolutionSemanticRecallService.buildPromptBlock({
+        characterId,
+        chatId,
+        characterDir: path.join(dataDirs.characters, characterId),
+        character,
+        chat,
+        settings,
+    }),
     resolveMemorySettings,
     cleanSummaryOutput,
     appendLLMAudit,
@@ -305,6 +319,7 @@ const {
     readJsonWithEtag,
     readStateLastEventId: eventJournal.readLastEventId.bind(eventJournal),
     applyStateCommands,
+    characterEvolutionSemanticRecallService,
     logLLMExecutionStart,
     logLLMExecutionEnd,
     toLLMErrorResponse,
@@ -368,6 +383,7 @@ registerServerRoutes({
     previewLLMExecution,
     handleLLMExecutePost,
     buildGenerateExecutionPayload,
+    characterEvolutionSemanticRecallService,
     buildExecutionAuditRequest,
     sendSSE,
     assembleLLMServerPrompt,

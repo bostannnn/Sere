@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { buildGeneratePromptMessages, buildMessagesFromPromptTemplate } from "./prompt.cjs";
+import { buildGeneratePromptMessages, buildMessagesFromPromptTemplate, buildPromptTrace } from "./prompt.cjs";
 
 function createMemoryBuilder(summaryItems: string[], content?: string) {
   const renderedContent = content ?? `<Past Events Summary>\n${summaryItems.join("\n\n")}\n</Past Events Summary>`;
@@ -118,6 +118,118 @@ describe("server prompt template slots", () => {
 
     expect(assembled?.messages?.some((entry: Record<string, unknown>) => String(entry.content || "").includes("Trust level: high"))).toBe(true);
     expect(assembled?.promptBlocks?.some((entry: Record<string, unknown>) => entry.title === "Character State")).toBe(true);
+  });
+
+  it("renders semanticRecall blocks with trace metadata when the server callback provides recalled items", async () => {
+    const assembled = await buildMessagesFromPromptTemplate(
+      {
+        name: "Chronicle Bot",
+      },
+      {
+        id: "chat-1",
+        message: [{ role: "user", data: "do you remember the move?" }],
+      },
+      {
+        promptTemplate: [
+          { type: "semanticRecall", innerFormat: "{{slot}}" },
+        ],
+      },
+      {
+        buildCharacterEvolutionSemanticRecall: async () => ({
+          content: "<SemanticRecall>\n<SemanticUserFacts>\n- user moved to Moscow [confirmed]\n</SemanticUserFacts>\n</SemanticRecall>",
+          metadata: {
+            recalledItems: [
+              {
+                sectionKey: "userFacts",
+                itemId: "cei_123",
+                similarity: 0.88,
+                snapshotVersion: 4,
+                sourceChatId: "chat-1",
+              },
+            ],
+            suppressedCandidates: [],
+          },
+        }),
+      },
+    );
+
+    expect(String(assembled?.messages?.[0]?.content || "")).toContain("user moved to Moscow");
+    expect(assembled?.promptBlocks?.[0]).toMatchObject({
+      title: "Semantic Recall",
+      metadata: expect.objectContaining({
+        recalledItems: [
+          expect.objectContaining({
+            itemId: "cei_123",
+          }),
+        ],
+      }),
+    });
+
+    const traced = buildPromptTrace({
+      request: {
+        messages: assembled?.messages,
+      },
+      promptBlocks: assembled?.promptBlocks,
+    });
+
+    expect(traced[0]).toMatchObject({
+      title: "Semantic Recall",
+      metadata: expect.objectContaining({
+        recalledItems: [
+          expect.objectContaining({
+            itemId: "cei_123",
+          }),
+        ],
+      }),
+    });
+  });
+
+  it("skips semanticRecall blocks safely when the server callback throws", async () => {
+    const assembled = await buildMessagesFromPromptTemplate(
+      {
+        name: "Chronicle Bot",
+      },
+      {
+        id: "chat-1",
+        message: [{ role: "user", data: "do you remember the move?" }],
+      },
+      {
+        promptTemplate: [
+          { type: "semanticRecall", innerFormat: "{{slot}}" },
+        ],
+      },
+      {
+        buildCharacterEvolutionSemanticRecall: async () => {
+          throw new Error("semantic recall service unavailable");
+        },
+      },
+    );
+
+    expect(assembled?.messages ?? []).toHaveLength(0);
+    expect(assembled?.promptBlocks?.[0]).toMatchObject({
+      title: "Semantic Recall",
+      skipped: true,
+      reason: "semantic_recall_failed",
+      metadata: expect.objectContaining({
+        error: "semantic recall service unavailable",
+      }),
+    });
+
+    const traced = buildPromptTrace({
+      request: {
+        messages: assembled?.messages,
+      },
+      promptBlocks: assembled?.promptBlocks,
+    });
+
+    expect(traced[0]).toMatchObject({
+      title: "Semantic Recall",
+      skipped: true,
+      reason: "semantic_recall_failed",
+      metadata: expect.objectContaining({
+        error: "semantic recall service unavailable",
+      }),
+    });
   });
 
   it("uses global prompt projection policy for characterState rendering", async () => {

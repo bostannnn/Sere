@@ -137,6 +137,40 @@ function normalizeCharacterEvolutionItemMatchValue(valueRaw) {
         .replace(/\s+/g, ' ');
 }
 
+function hashCharacterEvolutionItemIdSource(source) {
+    let hash = 0x811c9dc5;
+    for (let index = 0; index < source.length; index += 1) {
+        hash ^= source.charCodeAt(index);
+        hash = Math.imul(hash, 0x01000193);
+    }
+    return (hash >>> 0).toString(36);
+}
+
+function mintCharacterEvolutionItemId(arg = {}) {
+    const source = [
+        arg.sectionKey || '',
+        arg.sourceChatId || arg.item?.sourceChatId || '',
+        String(arg.sourceRange?.startMessageIndex ?? arg.item?.sourceRange?.startMessageIndex ?? ''),
+        String(arg.sourceRange?.endMessageIndex ?? arg.item?.sourceRange?.endMessageIndex ?? ''),
+        String(arg.acceptedVersion ?? arg.item?.lastSeenVersion ?? ''),
+        String(arg.timestamp ?? arg.item?.updatedAt ?? arg.item?.lastSeenAt ?? ''),
+        getCharacterEvolutionItemExactMatchKey(arg.item || ''),
+    ].join('|');
+    return `cei_${hashCharacterEvolutionItemIdSource(source)}`;
+}
+
+function mintLegacyCharacterEvolutionItemId(arg = {}) {
+    const source = [
+        arg.sectionKey || '',
+        arg.resolvedChatId || '',
+        getCharacterEvolutionItemNormalizedMatchKey(arg.item || ''),
+        String(Math.max(1, Math.floor(Number(arg.firstSeenVersion) || 1))),
+        String(arg.sourceRange?.startMessageIndex ?? arg.item?.sourceRange?.startMessageIndex ?? ''),
+        String(arg.sourceRange?.endMessageIndex ?? arg.item?.sourceRange?.endMessageIndex ?? ''),
+    ].join('|');
+    return `cei_legacy_${hashCharacterEvolutionItemIdSource(source)}`;
+}
+
 function getCharacterEvolutionItemExactMatchKey(item) {
     return normalizeCharacterEvolutionItemMatchValue(typeof item === 'string' ? item : item?.value);
 }
@@ -444,8 +478,12 @@ function createMergedMatchedItem(currentItem, proposedItem) {
     const nextSourceRange = shouldReinforce
         ? proposedItem.sourceRange ?? currentItem.sourceRange
         : currentItem.sourceRange;
+    const nextId = typeof currentItem?.id === 'string' && currentItem.id.trim()
+        ? currentItem.id.trim()
+        : (typeof proposedItem?.id === 'string' && proposedItem.id.trim() ? proposedItem.id.trim() : undefined);
 
     return {
+        ...(nextId ? { id: nextId } : {}),
         value: proposedItem.value,
         status: nextStatus,
         ...(nextConfidence ? { confidence: nextConfidence } : {}),
@@ -546,6 +584,20 @@ function applyCharacterEvolutionItemMetadata(arg = {}) {
                 const baseMatch = findMatchingBaseItem(key, baseItems, item);
                 if (baseMatch) {
                     return {
+                        ...(typeof item?.id === 'string' && item.id.trim()
+                            ? { id: item.id.trim() }
+                            : typeof baseMatch?.id === 'string' && baseMatch.id.trim()
+                                ? { id: baseMatch.id.trim() }
+                                : {
+                                    id: mintCharacterEvolutionItemId({
+                                        sectionKey: key,
+                                        item,
+                                        sourceChatId,
+                                        sourceRange,
+                                        acceptedVersion,
+                                        timestamp,
+                                    }),
+                                }),
                         ...(sourceChatId && arg.overwriteNewItemTimestamps
                             ? { sourceChatId }
                             : baseMatch.sourceChatId && !item?.sourceChatId
@@ -574,6 +626,18 @@ function applyCharacterEvolutionItemMetadata(arg = {}) {
                     };
                 }
                 return {
+                    ...(typeof item?.id === 'string' && item.id.trim()
+                        ? { id: item.id.trim() }
+                        : {
+                            id: mintCharacterEvolutionItemId({
+                                sectionKey: key,
+                                item,
+                                sourceChatId,
+                                sourceRange,
+                                acceptedVersion,
+                                timestamp,
+                            }),
+                        }),
                     ...(sourceChatId && !item?.sourceChatId ? { sourceChatId } : {}),
                     ...(sourceRange && !item?.sourceRange ? { sourceRange: clone(sourceRange) } : {}),
                     ...(timestamp !== undefined && (arg.overwriteNewItemTimestamps || item?.updatedAt === undefined) ? { updatedAt: timestamp } : {}),
@@ -714,6 +778,8 @@ module.exports = {
     filterActiveCharacterEvolutionItems,
     filterActiveCharacterEvolutionState,
     getCharacterEvolutionItemExactMatchKey,
+    mintCharacterEvolutionItemId,
+    mintLegacyCharacterEvolutionItemId,
     getCharacterEvolutionItemNormalizedMatchKey,
     isCharacterEvolutionItemSection,
     isCharacterEvolutionObjectSection,

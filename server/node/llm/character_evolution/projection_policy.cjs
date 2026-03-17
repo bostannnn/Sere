@@ -170,7 +170,7 @@ function compareCharacterEvolutionItemsForProjection(arg = {}) {
             return comparison;
         }
     }
-    return String(arg.left?.value || '').localeCompare(String(arg.right?.value || ''));
+    return 0;
 }
 
 function getCharacterEvolutionPromptProjectionPolicy(settings) {

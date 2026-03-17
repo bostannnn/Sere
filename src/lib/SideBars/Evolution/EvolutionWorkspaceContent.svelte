@@ -10,6 +10,7 @@
     } from "src/ts/storage/database.types"
     import EvolutionHistoryPanel from "./EvolutionHistoryPanel.svelte"
     import EvolutionReviewPanel from "./EvolutionReviewPanel.svelte"
+    import EvolutionSemanticRecallPanel from "./EvolutionSemanticRecallPanel.svelte"
     import EvolutionSectionsPanel from "./EvolutionSectionsPanel.svelte"
     import EvolutionSetupPanel from "./EvolutionSetupPanel.svelte"
     import EvolutionStatePanel from "./EvolutionStatePanel.svelte"
@@ -17,6 +18,7 @@
     import {
         EVOLUTION_HISTORY_TAB,
         EVOLUTION_REVIEW_TAB,
+        EVOLUTION_SEMANTIC_RECALL_TAB,
         EVOLUTION_SECTIONS_TAB,
         EVOLUTION_SETUP_TAB,
         EVOLUTION_STATE_TAB,
@@ -39,6 +41,8 @@
         manualRangeAvailable: boolean
         manualRangeBlockedReason: string
         runningManualRangeHandoff: boolean
+        rebuildingSemanticRecall: boolean
+        onRebuildSemanticRecall: () => void | Promise<void>
         onRunManualRange: (startMessageNumber: number, endMessageNumber: number) => void | Promise<void>
         autoProcessAvailable: boolean
         autoProcessing: boolean
@@ -86,6 +90,8 @@
         manualRangeAvailable,
         manualRangeBlockedReason,
         runningManualRangeHandoff,
+        rebuildingSemanticRecall,
+        onRebuildSemanticRecall,
         onRunManualRange,
         autoProcessAvailable,
         autoProcessing,
@@ -173,6 +179,14 @@
                 bind:sectionConfigDraft
                 bind:privacyDraft
                 onOpenGlobalDefaults={onOpenGlobalDefaults}
+            />
+        {:else if selectedWorkspaceTab === EVOLUTION_SEMANTIC_RECALL_TAB}
+            <EvolutionSemanticRecallPanel
+                {activeChatId}
+                rebuildingSemanticRecall={rebuildingSemanticRecall}
+                handoffBusy={runningManualRangeHandoff}
+                {autoProcessing}
+                onRebuildSemanticRecall={onRebuildSemanticRecall}
             />
         {:else if selectedWorkspaceTab === EVOLUTION_REVIEW_TAB}
             <EvolutionReviewPanel

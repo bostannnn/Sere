@@ -66,6 +66,7 @@
             hasMountedLibraryWorkspace = true;
         }
     });
+
 </script>
 
 <div class="ds-app-v2-stage">

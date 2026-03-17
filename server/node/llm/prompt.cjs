@@ -102,6 +102,14 @@ function applyGlobalNoteOverride(baseGlobalNote, character) {
     return override.replaceAll('{{original}}', original);
 }
 
+function getPromptBuilderErrorMessage(error) {
+    if (error && typeof error === 'object' && typeof error.message === 'string' && error.message.trim()) {
+        return error.message.trim();
+    }
+    const fallback = toStringOrEmpty(error);
+    return fallback || 'Unknown prompt builder error.';
+}
+
 function buildServerDescriptionPrompt(character) {
     const chunks = [];
     const desc = toStringOrEmpty(character?.desc);
@@ -127,7 +135,7 @@ function buildServerDescriptionPrompt(character) {
     return chunks.join('\n\n').trim();
 }
 
-function pushPromptMessagesWithTitle(targetMessages, promptBlocks, newMessages, title, source = 'template') {
+function pushPromptMessagesWithTitle(targetMessages, promptBlocks, newMessages, title, source = 'template', blockExtras = null) {
     if (!Array.isArray(targetMessages) || !Array.isArray(newMessages) || newMessages.length === 0) {
         return;
     }
@@ -143,6 +151,7 @@ function pushPromptMessagesWithTitle(targetMessages, promptBlocks, newMessages, 
             role: msg?.role || 'system',
             title,
             source,
+            ...(blockExtras && typeof blockExtras === 'object' ? blockExtras : {}),
         });
     }
 }
@@ -206,6 +215,7 @@ function convertStoredChatToOpenAIMessages(storedMessages, arg = {}) {
 async function buildMessagesFromPromptTemplate(character, chat, settings, arg = {}) {
     const template = Array.isArray(settings?.promptTemplate) ? settings.promptTemplate : [];
     if (template.length === 0) return null;
+    const hasSemanticRecallBlock = template.some((card) => toStringOrEmpty(card?.type) === 'semanticRecall');
 
     const chats = convertStoredChatToOpenAIMessages(chat?.message, {
         limit: arg.historyLimit,
@@ -246,6 +256,26 @@ async function buildMessagesFromPromptTemplate(character, chat, settings, arg = 
         chat,
         settings,
     });
+    const semanticRecallBuilder = typeof arg.buildCharacterEvolutionSemanticRecall === 'function'
+        ? arg.buildCharacterEvolutionSemanticRecall
+        : null;
+    let semanticRecall = null;
+    if (hasSemanticRecallBlock && semanticRecallBuilder) {
+        try {
+            semanticRecall = await semanticRecallBuilder({
+                character,
+                chat,
+                settings,
+            });
+        } catch (error) {
+            semanticRecall = {
+                skippedReason: 'semantic_recall_failed',
+                metadata: {
+                    error: getPromptBuilderErrorMessage(error),
+                },
+            };
+        }
+    }
 
     const unformatted = {
         chats,
@@ -254,6 +284,7 @@ async function buildMessagesFromPromptTemplate(character, chat, settings, arg = 
         lorebook,
         memory,
         characterState: characterState ? [{ role: 'system', content: characterState }] : [],
+        semanticRecall: semanticRecall?.content ? [{ role: 'system', content: semanticRecall.content }] : [],
         postEverything: [],
         authorNote: authorNote ? [{ role: 'system', content: authorNote }] : [],
     };
@@ -417,6 +448,42 @@ async function buildMessagesFromPromptTemplate(character, chat, settings, arg = 
                 }
                 break;
             }
+            case 'semanticRecall': {
+                const source = unformatted.semanticRecall.length > 0
+                    ? unformatted.semanticRecall
+                    : [];
+                if (source.length === 0) {
+                    promptBlocks.push({
+                        role: 'system',
+                        title: blockTitle,
+                        source: 'template',
+                        skipped: true,
+                        reason: semanticRecallBuilder
+                            ? (toStringOrEmpty(semanticRecall?.skippedReason) || 'no_semantic_recall')
+                            : 'server_authoritative_only',
+                        ...(semanticRecall?.metadata && typeof semanticRecall.metadata === 'object'
+                            ? { metadata: semanticRecall.metadata }
+                            : {}),
+                    });
+                    break;
+                }
+                for (const item of source) {
+                    if (!item || typeof item !== 'object') continue;
+                    const rendered = renderTemplateSlot(card.innerFormat, toStringOrEmpty(item.content), character, settings);
+                    const parsed = parsePromptAsMessages(rendered, character, settings, normalizeTemplateRole(item.role));
+                    pushPromptMessagesWithTitle(
+                        messages,
+                        promptBlocks,
+                        parsed,
+                        blockTitle,
+                        'template',
+                        semanticRecall?.metadata && typeof semanticRecall.metadata === 'object'
+                            ? { metadata: semanticRecall.metadata }
+                            : null,
+                    );
+                }
+                break;
+            }
             case 'rulebookRag':
             case 'gameState': {
                 // Template slots are placeholders anchored to the next message index.
@@ -481,6 +548,7 @@ async function buildGeneratePromptMessages(arg = {}) {
         historyLimit: arg.historyLimit,
         userMessage: arg.userMessage,
         buildServerMemoryMessages: arg.buildServerMemoryMessages,
+        buildCharacterEvolutionSemanticRecall: arg.buildCharacterEvolutionSemanticRecall,
     });
     const messages = Array.isArray(assembledFromTemplate?.messages) ? assembledFromTemplate.messages : [];
     const promptBlocks = Array.isArray(assembledFromTemplate?.promptBlocks) ? assembledFromTemplate.promptBlocks : [];
@@ -734,6 +802,7 @@ function buildPromptTrace(payload) {
             title: baseTitle,
             source: baseSource,
             content,
+            ...(head?.metadata && typeof head.metadata === 'object' ? { metadata: head.metadata } : {}),
         };
     });
 
@@ -746,6 +815,7 @@ function buildPromptTrace(payload) {
             content: '',
             skipped: true,
             reason: toStringOrEmpty(block.reason) || 'skipped',
+            ...(block?.metadata && typeof block.metadata === 'object' ? { metadata: block.metadata } : {}),
         });
     }
     return traced;

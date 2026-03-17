@@ -193,6 +193,7 @@ function registerServerRoutes(arg = {}) {
             executeInternalLLMTextCompletion: arg.executeInternalLLMTextCompletion,
             applyStateCommands: arg.applyStateCommands,
             readStateLastEventId: arg.readStateLastEventId,
+            characterEvolutionSemanticRecallService: arg.characterEvolutionSemanticRecallService,
         });
         if (typeof registerEvolutionVersionRoutes === 'function' && evolutionRouteContext) {
             registerEvolutionVersionRoutes(evolutionRouteContext);

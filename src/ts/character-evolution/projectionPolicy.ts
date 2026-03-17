@@ -203,7 +203,7 @@ export function compareCharacterEvolutionItemsForProjection(args: {
             return comparison
         }
     }
-    return args.left.value.localeCompare(args.right.value)
+    return 0
 }
 
 export function getCharacterEvolutionPromptProjectionPolicy(

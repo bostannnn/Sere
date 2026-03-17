@@ -61,6 +61,9 @@ function createGenerateHelpers(arg = {}) {
     const readStateLastEventId = typeof arg.readStateLastEventId === 'function'
         ? arg.readStateLastEventId
         : (async () => 0);
+    const buildCharacterEvolutionSemanticRecall = typeof arg.buildCharacterEvolutionSemanticRecall === 'function'
+        ? arg.buildCharacterEvolutionSemanticRecall
+        : null;
 
     const generateSupportedProviders = arg.generateSupportedProviders instanceof Set
         ? arg.generateSupportedProviders
@@ -756,6 +759,15 @@ function createGenerateHelpers(arg = {}) {
             historyLimit: rawBody.historyLimit,
             userMessage,
             buildServerMemoryMessages,
+            buildCharacterEvolutionSemanticRecall: buildCharacterEvolutionSemanticRecall
+                ? ({ character, chat, settings }) => buildCharacterEvolutionSemanticRecall({
+                    characterId,
+                    chatId,
+                    character,
+                    chat,
+                    settings,
+                })
+                : null,
         });
         const messages = Array.isArray(assembled?.messages) ? assembled.messages : [];
         const promptBlocks = Array.isArray(assembled?.promptBlocks) ? assembled.promptBlocks : [];

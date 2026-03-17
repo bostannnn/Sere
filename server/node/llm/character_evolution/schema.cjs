@@ -2,6 +2,16 @@ const { clone, toTrimmedString } = require('./utils.cjs');
 const { createCharacterEvolutionPromptProjectionPolicy } = require('./projection_policy.cjs');
 const { createCharacterEvolutionRetentionPolicy } = require('./retention_policy.cjs');
 
+const CHARACTER_EVOLUTION_SEMANTIC_RECALL_SECTION_KEYS = [
+    'characterLikes',
+    'characterDislikes',
+    'characterHabits',
+    'userFacts',
+    'userLikes',
+    'userDislikes',
+    'keyMoments',
+];
+
 const DEFAULT_EXTRACTION_PROMPT = [
     'You update a character evolution state from the current processed roleplay transcript range.',
     '',
@@ -255,6 +265,34 @@ function createDefaultCharacterEvolutionSectionConfigs() {
     }));
 }
 
+function createDefaultCharacterEvolutionSemanticRecallSettings() {
+    return {
+        enabled: false,
+        embeddingModel: 'MiniLM',
+        minScore: 0.42,
+        maxItems: 3,
+        queryMessageWindow: 4,
+        sections: {
+            characterLikes: false,
+            characterDislikes: false,
+            characterHabits: false,
+            userFacts: true,
+            userLikes: false,
+            userDislikes: false,
+            keyMoments: false,
+        },
+        sectionLimits: {
+            characterLikes: 0,
+            characterDislikes: 0,
+            characterHabits: 0,
+            userFacts: 0,
+            userLikes: 0,
+            userDislikes: 0,
+            keyMoments: 0,
+        },
+    };
+}
+
 function createDefaultCharacterEvolutionDefaults() {
     return {
         extractionProvider: 'openrouter',
@@ -268,15 +306,18 @@ function createDefaultCharacterEvolutionDefaults() {
         }),
         promptProjection: createCharacterEvolutionPromptProjectionPolicy(),
         retention: createCharacterEvolutionRetentionPolicy(),
+        semanticRecall: createDefaultCharacterEvolutionSemanticRecallSettings(),
     };
 }
 
 module.exports = {
     BUILTIN_SECTION_DEFS,
+    CHARACTER_EVOLUTION_SEMANTIC_RECALL_SECTION_KEYS,
     DEFAULT_EXTRACTION_PROMPT,
     MODEL_PREFIX_BY_PROVIDER,
     MODEL_PREFIXES,
     createDefaultCharacterEvolutionDefaults,
+    createDefaultCharacterEvolutionSemanticRecallSettings,
     createDefaultCharacterEvolutionSectionConfigs,
     createDefaultCharacterEvolutionState,
     isBuiltinExtractionPrompt,
