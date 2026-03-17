@@ -39,6 +39,7 @@ interface requestDataArgument{
     imageResponse?:boolean
     previewBody?:boolean
     staticModel?: string
+    openrouterModelOverride?: string
     escape?:boolean
     tools?: MCPTool[]
 }
@@ -92,6 +93,9 @@ export async function requestChatData(arg:requestDataArgument, model:ModelModeEx
     const db = getDatabase()
     const explicitStaticModel = typeof arg.staticModel === 'string' && arg.staticModel.trim().length > 0
         ? arg.staticModel.trim()
+        : ''
+    const explicitOpenRouterModelOverride = typeof arg.openrouterModelOverride === 'string' && arg.openrouterModelOverride.trim().length > 0
+        ? arg.openrouterModelOverride.trim()
         : ''
     if (typeof arg.chatId !== 'string' || arg.chatId.trim().length === 0) {
         const activeChatId = getCurrentChat()?.id;
@@ -160,6 +164,7 @@ export async function requestChatData(arg:requestDataArgument, model:ModelModeEx
             da = await requestChatDataMain({
                 ...arg,
                 staticModel: explicitStaticModel || fallBackModels[fallbackIndex],
+                openrouterModelOverride: explicitOpenRouterModelOverride,
                 tools: tools,
             }, model, abortSignal)
 

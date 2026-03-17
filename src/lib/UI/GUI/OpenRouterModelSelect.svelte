@@ -12,6 +12,8 @@
         disabled?: boolean;
         includeAutoOptions?: boolean;
         showMeta?: boolean;
+        blankLabel?: string;
+        onchange?: (value: string) => void;
     }
 
     interface ModelOption {
@@ -25,6 +27,8 @@
         disabled = false,
         includeAutoOptions = true,
         showMeta = false,
+        blankLabel = "",
+        onchange = () => {},
     }: Props = $props();
 
     let searchQuery = $state("");
@@ -78,6 +82,13 @@
             seenIds.push(option.id);
             next.push(option);
         };
+
+        if (blankLabel.trim()) {
+            next.push({
+                id: "",
+                name: blankLabel.trim(),
+            });
+        }
 
         if (includeAutoOptions) {
             for (const option of autoOptions) {
@@ -171,7 +182,7 @@
             {disabled}
         />
     {/if}
-    <SelectInput bind:value {disabled}>
+    <SelectInput bind:value {disabled} onchange={() => onchange(value)}>
         {#each displayedOptions as option (option.id)}
             <OptionInput value={option.id}>{option.name}</OptionInput>
         {/each}

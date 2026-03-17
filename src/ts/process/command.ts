@@ -365,7 +365,7 @@ async function processCommand(command:string, pipe:string):Promise<false | strin
             # /trigger [name]
             - Run trigger
             # /cw [trigger] [prompt]
-            - Run Comfy Commander template
+            - Run Image Generation preset
             - Alias: /comfy
             # /?
             - Show help

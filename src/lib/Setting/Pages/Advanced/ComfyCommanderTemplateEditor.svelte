@@ -3,6 +3,8 @@
     import { RUNPOD_MODELS } from "src/ts/integrations/comfy/runpodModels";
     import {
         COMFY_COMMANDER_RUNPOD_SCHEMA_PRESET_OPTIONS,
+        formatComfyCommanderImagePromptModel,
+        parseComfyCommanderImagePromptModel,
         resolveTemplateRunpodModel,
         templateUsesProvider,
     } from "src/ts/integrations/comfy/config";
@@ -13,6 +15,7 @@
     } from "src/ts/storage/database.svelte";
     import Button from "src/lib/UI/GUI/Button.svelte";
     import Check from "src/lib/UI/GUI/CheckInput.svelte";
+    import OpenRouterModelSelect from "src/lib/UI/GUI/OpenRouterModelSelect.svelte";
     import NumberInput from "src/lib/UI/GUI/NumberInput.svelte";
     import OptionInput from "src/lib/UI/GUI/OptionInput.svelte";
     import SelectInput from "src/lib/UI/GUI/SelectInput.svelte";
@@ -20,16 +23,9 @@
     import TextInput from "src/lib/UI/GUI/TextInput.svelte";
     import Accordion from "src/lib/UI/Accordion.svelte";
 
-    interface ModelOption {
-        id: string;
-        name?: string;
-        fullName?: string;
-    }
-
     interface Props {
         template: ComfyCommanderTemplate;
         index: number;
-        imagePromptModels: ModelOption[];
         workflows: ComfyCommanderWorkflow[];
         activeProvider: "comfyui" | "runpod";
         runpodConfig: ComfyCommanderRunpodConfig;
@@ -39,7 +35,6 @@
     let {
         template,
         index,
-        imagePromptModels,
         workflows,
         activeProvider,
         runpodConfig,
@@ -49,6 +44,27 @@
     const usesComfy = $derived(templateUsesProvider(template, activeProvider, "comfyui"));
     const usesRunpod = $derived(templateUsesProvider(template, activeProvider, "runpod"));
     const runpodModel = $derived(resolveTemplateRunpodModel(template, runpodConfig));
+    let openrouterPromptModel = $state("");
+
+    $effect(() => {
+        const parsed = parseComfyCommanderImagePromptModel(template.imagePromptModel);
+        const nextValue = parsed.mode === "openrouter"
+            ? parsed.model
+            : parsed.mode === "current"
+                ? ""
+                : (template.imagePromptModel || "");
+        if (openrouterPromptModel !== nextValue) {
+            openrouterPromptModel = nextValue;
+        }
+    });
+
+    function handlePromptModelChange(value: string) {
+        const trimmed = value.trim();
+        openrouterPromptModel = trimmed;
+        template.imagePromptModel = trimmed
+            ? formatComfyCommanderImagePromptModel("openrouter", trimmed)
+            : "";
+    }
 </script>
 
 <Accordion
@@ -100,15 +116,15 @@
                 </SelectInput>
             </label>
 
-            <label class="ds-comfy-field">
-                <span class="ds-settings-label">Prompt Model</span>
-                <SelectInput size="sm" bind:value={template.imagePromptModel}>
-                    <OptionInput value="">Use current chat model</OptionInput>
-                    {#each imagePromptModels as model}
-                        <OptionInput value={model.id}>{model.fullName || model.name}</OptionInput>
-                    {/each}
-                </SelectInput>
-            </label>
+            <div class="ds-comfy-field ds-comfy-field--wide">
+                <OpenRouterModelSelect
+                    bind:value={openrouterPromptModel}
+                    label="Prompt Model"
+                    blankLabel="Use current chat model"
+                    showMeta={true}
+                    onchange={handlePromptModelChange}
+                />
+            </div>
 
             <label class="ds-comfy-field">
                 <span class="ds-settings-label">Context Message Count</span>
@@ -301,6 +317,11 @@
         display: flex;
         flex-direction: column;
         gap: var(--ds-space-1);
+        min-width: 0;
+    }
+
+    :global(.ds-comfy-field .ds-settings-section) {
+        margin: 0;
         min-width: 0;
     }
 </style>

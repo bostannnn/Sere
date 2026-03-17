@@ -625,7 +625,7 @@ export const languageEnglish = {
     frequencyPenalty: "Frequency Penalty",
     presensePenalty: "Presense Penalty",
     advancedSettings: "Advanced Settings",
-    comfyCommander: "Comfy Commander",
+    comfyCommander: "Image Generation",
     logs: "Logs",
     advancedSettingsWarn: "Warn: If you don't know what the option does, don't change it!",
     authorNote: "Author's Note",

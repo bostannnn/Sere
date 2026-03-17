@@ -12,6 +12,7 @@ import { resolveRunpodModelDefinition, type RunpodModelDefinition } from "./runp
 import { normalizeComfyBaseUrl } from "./types";
 
 export const COMFY_COMMANDER_DEFAULT_BASE_URL = "http://127.0.0.1:8188";
+export const COMFY_COMMANDER_OPENROUTER_MODEL_PREFIX = "openrouter:";
 
 export const COMFY_COMMANDER_DEFAULT_IMAGE_PROMPT_TEMPLATE = `You are a scene-to-image prompt translator. Read the recent roleplay chat and produce a single image generation prompt for the Qwen image model.
 
@@ -155,6 +156,48 @@ export function createEmptyComfyCommanderWorkflow(): ComfyCommanderWorkflow {
         name: "Workflow",
         workflow: "",
     };
+}
+
+export type ComfyCommanderImagePromptModelSelection =
+    | { mode: "current"; model: "" }
+    | { mode: "native"; model: string }
+    | { mode: "openrouter"; model: string };
+
+export function parseComfyCommanderImagePromptModel(raw: string | null | undefined): ComfyCommanderImagePromptModelSelection {
+    const value = typeof raw === "string" ? raw.trim() : "";
+    if (!value) {
+        return { mode: "current", model: "" };
+    }
+    if (value.startsWith(COMFY_COMMANDER_OPENROUTER_MODEL_PREFIX)) {
+        return {
+            mode: "openrouter",
+            model: value.slice(COMFY_COMMANDER_OPENROUTER_MODEL_PREFIX.length),
+        };
+    }
+    if (value.includes("/")) {
+        return {
+            mode: "openrouter",
+            model: value,
+        };
+    }
+    return {
+        mode: "native",
+        model: value,
+    };
+}
+
+export function formatComfyCommanderImagePromptModel(
+    mode: ComfyCommanderImagePromptModelSelection["mode"],
+    model: string,
+): string {
+    const trimmedModel = model.trim();
+    if (mode === "current" || !trimmedModel) {
+        return "";
+    }
+    if (mode === "openrouter") {
+        return `${COMFY_COMMANDER_OPENROUTER_MODEL_PREFIX}${trimmedModel}`;
+    }
+    return trimmedModel;
 }
 
 export function resolveRunpodEndpointId(modelId: string, customEndpointId: string) {

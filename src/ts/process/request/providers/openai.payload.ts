@@ -196,6 +196,13 @@ export async function buildOpenAIRequestPayload(
     let openrouterRequestModel = useSubmodelOpenrouter
         ? (db.openrouterSubRequestModel || db.openrouterRequestModel)
         : db.openrouterRequestModel
+    const openrouterModelOverride = typeof arg.openrouterModelOverride === 'string'
+        ? arg.openrouterModelOverride.trim()
+        : ''
+
+    if (aiModel === 'openrouter' && openrouterModelOverride) {
+        openrouterRequestModel = openrouterModelOverride
+    }
 
     if (aiModel === 'openrouter' && openrouterRequestModel === 'risu/free') {
         openrouterRequestModel = await getFreeOpenRouterModel()

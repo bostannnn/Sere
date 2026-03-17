@@ -19,6 +19,7 @@ import { comfyProgressStore, selectedCharID } from "src/ts/stores.svelte";
 import { fetchComfyHistory, fetchComfyImageBlob, queueComfyPrompt } from "./proxy";
 import { generateRunpodImage } from "./runpod";
 import { findComfyTemplateById, findComfyWorkflowById, getComfyCommanderState } from "./store.svelte";
+import { parseComfyCommanderImagePromptModel } from "./config";
 import {
     applyTemplatePrompt,
     applyWorkflowMacros,
@@ -188,6 +189,7 @@ async function runMainLLMPromptOnly(options: {
     systemPrompt: string;
     userPrompt: string;
     staticModel?: string;
+    openrouterModelOverride?: string;
 }): Promise<string> {
     const formated: OpenAIChat[] = [];
     if (options.systemPrompt.trim()) {
@@ -207,6 +209,7 @@ async function runMainLLMPromptOnly(options: {
         useStreaming: false,
         noMultiGen: true,
         staticModel: options.staticModel,
+        openrouterModelOverride: options.openrouterModelOverride,
     }, "model", null);
 
     if (response.type === "success") {
@@ -331,10 +334,12 @@ function resolveTemplateImagePromptConfig(
     template: ComfyCommanderTemplate,
     config: ComfyCommanderConfig,
 ) {
+    const modelSelection = parseComfyCommanderImagePromptModel(template.imagePromptModel || config.imagePrompt.model);
     const promptTemplate = (template.prompt || "").trim()
         || (template.imagePromptUserPromptTemplate || config.imagePrompt.userPromptTemplate);
     return {
-        model: template.imagePromptModel || config.imagePrompt.model,
+        model: modelSelection.mode === "native" ? modelSelection.model : "",
+        openrouterModel: modelSelection.mode === "openrouter" ? modelSelection.model : "",
         promptTemplate,
         contextMessageCount: Math.max(1, template.imagePromptContextMessageCount || config.imagePrompt.contextMessageCount),
         maxContextChars: Math.max(200, template.imagePromptMaxContextChars || config.imagePrompt.maxContextChars),
@@ -388,7 +393,7 @@ async function resolveReferenceImageUrls(options: {
         throw new Error("Reference image store is not configured.");
     }
 
-    setComfyProgress("Comfy Commander: Reference Image");
+    setComfyProgress("Image Generation: Reference Image");
     const uploaded = await uploadReferenceImageToYandexDisk(options.referenceStore, portrait);
     return [uploaded.downloadHref];
 }
@@ -481,7 +486,7 @@ async function executeComfyUiGeneration(options: {
     referenceImageUrls: string[];
 }> {
     const workflow = resolveWorkflowOrThrow(options.state, options.template);
-    setComfyProgress("Comfy Commander: ComfyUI");
+    setComfyProgress("Image Generation: ComfyUI");
 
     const portrait = await getCharacterPortraitData(options.selected);
     if (options.template.useReferenceImage && options.template.referenceSource === "character-portrait" && !portrait) {
@@ -532,7 +537,7 @@ async function executeRunpodGeneration(options: {
         throw new Error("Reference image is required for this template.");
     }
 
-    setComfyProgress("Comfy Commander: Runpod");
+    setComfyProgress("Image Generation: Runpod");
     const endpoint = resolveRunpodEndpoint(options.template, options.state.config);
     const result = await generateRunpodImage(resolveTemplateRunpodConfig(options.template, options.state.config), {
         modelId: endpoint.modelId,
@@ -577,11 +582,12 @@ async function executeResolvedTemplate(template: ComfyCommanderTemplate, userPro
         }),
     });
 
-    setComfyProgress("Comfy Commander: LLM");
+    setComfyProgress("Image Generation: LLM");
     const llmRaw = await runMainLLMPromptOnly({
         systemPrompt: "Output only the final image prompt. No explanations, no markdown.",
         userPrompt: llmPrompt,
-        staticModel: imagePromptConfig.model || undefined,
+        staticModel: imagePromptConfig.openrouterModel ? "openrouter" : (imagePromptConfig.model || undefined),
+        openrouterModelOverride: imagePromptConfig.openrouterModel || undefined,
     });
     const positivePrompt = cleanLLMOutput(llmRaw);
     if (!positivePrompt) {
@@ -620,7 +626,7 @@ async function executeResolvedTemplate(template: ComfyCommanderTemplate, userPro
             llmRawOutput: llmRaw,
             finalPrompt: positivePrompt,
             userPrompt,
-            promptModel: imagePromptConfig.model || undefined,
+            promptModel: imagePromptConfig.openrouterModel || imagePromptConfig.model || undefined,
             provider,
             imageModel: generated.imageModel,
             mode: generated.mode,

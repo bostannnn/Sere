@@ -1,6 +1,5 @@
 <script lang="ts">
     import { PlusIcon, TrashIcon } from "@lucide/svelte";
-    import { getModelList } from "src/ts/model/modellist";
     import {
         createComfyCommanderTemplateDefaults,
         createDefaultComfyCommanderConfig,
@@ -20,8 +19,6 @@
     import Help from "src/lib/Others/Help.svelte";
     import Accordion from "src/lib/UI/Accordion.svelte";
     import ComfyCommanderTemplateEditor from "./ComfyCommanderTemplateEditor.svelte";
-
-    const imagePromptModels = getModelList({ groupedByProvider: false });
 
     function ensureComfyCommanderState() {
         const defaultConfig = createDefaultComfyCommanderConfig(DBState.db.comfyUiUrl || "http://127.0.0.1:8188");
@@ -168,7 +165,7 @@
             className="ds-comfy-accordion-panel"
         >
         <div class="ds-comfy-panel">
-            <div class="ds-settings-stack-col">
+            <div class="ds-settings-stack-col ds-comfy-stack">
                 {#if DBState.db.comfyCommander.templates.length === 0}
                     <div class="ds-settings-empty-state empty-state">No templates yet.</div>
                 {/if}
@@ -176,7 +173,6 @@
                     <ComfyCommanderTemplateEditor
                         {template}
                         {index}
-                        {imagePromptModels}
                         workflows={DBState.db.comfyCommander.workflows}
                         activeProvider={DBState.db.comfyCommander.config.activeProvider}
                         runpodConfig={DBState.db.comfyCommander.config.runpod}
@@ -195,7 +191,7 @@
         {#if DBState.db.comfyCommander.config.activeProvider === "comfyui"}
             <Accordion name="Workflows" styled={true} initialOpen={false} help="comfyWorkflow" className="ds-comfy-accordion-panel">
             <div class="ds-comfy-panel">
-                <div class="ds-settings-stack-col">
+                <div class="ds-settings-stack-col ds-comfy-stack">
                     {#if DBState.db.comfyCommander.workflows.length === 0}
                         <div class="ds-settings-empty-state empty-state">No workflows yet.</div>
                     {/if}
@@ -248,6 +244,10 @@
 
     .ds-comfy-panel {
         padding: var(--ds-space-1) 0;
+    }
+
+    .ds-comfy-stack {
+        gap: var(--ds-space-3);
     }
 
     .ds-comfy-panel-section + .ds-comfy-panel-section {
