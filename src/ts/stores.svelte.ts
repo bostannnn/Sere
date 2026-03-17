@@ -221,11 +221,6 @@ export const LoadingStatusState = $state({
     text: '',
 })
 
-export const QuickSettings = $state({
-    open: false,
-    index: 0
-})
-
 export const disableHighlight = writable(true)
 export const stateEditorActive = writable(false);
 export const popupStore = $state({

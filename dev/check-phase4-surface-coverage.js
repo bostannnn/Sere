@@ -72,22 +72,6 @@ const PHASE4_UNCOVERED_MATRIX = [
     ],
   },
   {
-    file: "src/lib/ChatScreens/EmotionBox.svelte",
-    classification: "infra",
-    owner: "ui-shell-contract",
-    rationale: "Emotion overlay tiles are render-only visual infrastructure and not interactive primitives.",
-    requiredPatterns: [
-      "class=\"emotion-box-layer\"",
-    ],
-  },
-  {
-    file: "src/lib/ChatScreens/Message.svelte",
-    classification: "infra",
-    owner: "ui-shell-contract",
-    rationale: "Legacy rewrite placeholder not mounted in active chat runtime.",
-    requiredPatterns: ["<!-- TODO -->"],
-  },
-  {
     file: "src/lib/ChatScreens/ResizeBox.svelte",
     classification: "migrate",
     owner: "chat-sidebar-contract",
@@ -366,15 +350,6 @@ const PHASE4_UNCOVERED_MATRIX = [
     rationale: "OptionInput is a low-level option tag helper and not a standalone primitive shell target.",
     requiredPatterns: [
       "class=\"ds-ui-option\"",
-    ],
-  },
-  {
-    file: "src/lib/UI/GUI/OptionalInput.svelte",
-    classification: "migrate",
-    owner: "ui-shell-contract",
-    rationale: "Optional input wrapper now includes control-field primitive marker.",
-    requiredPatterns: [
-      "class=\"ds-ui-optional-wrap control-field\"",
     ],
   },
   {

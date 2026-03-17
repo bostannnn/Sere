@@ -83,14 +83,6 @@ const checks = [
     ],
   },
   {
-    file: path.join(ROOT, "src/lib/Setting/Pages/OobaSettings.svelte"),
-    patterns: [
-      "class=\"ds-settings-inline-actions action-rail\"",
-      "class=\"ds-settings-inline-actions ds-settings-inline-actions-fluid action-rail\"",
-      "class=\"ds-settings-section ds-settings-card\"",
-    ],
-  },
-  {
     file: path.join(ROOT, "src/lib/Setting/Pages/OpenrouterSettings.svelte"),
     patterns: [
       "class=\"ds-settings-inline-actions action-rail\"",

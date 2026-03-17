@@ -42,10 +42,6 @@ vi.mock(import("src/lib/UI/GUI/OptionInput.svelte"), async () => ({
   default: (await import("./test-stubs/SimplePanelStub.svelte")).default,
 }));
 
-vi.mock(import("src/lib/UI/GUI/OptionalInput.svelte"), async () => ({
-  default: (await import("./test-stubs/BindableFieldStub.svelte")).default,
-}));
-
 vi.mock(import("src/lib/UI/GUI/CheckInput.svelte"), async () => ({
   default: (await import("./test-stubs/BindableFieldStub.svelte")).default,
 }));
@@ -64,7 +60,6 @@ vi.mock(import("src/ts/stores.svelte"), async () => {
 });
 
 import OpenrouterSettings from "src/lib/Setting/Pages/OpenrouterSettings.svelte";
-import OobaSettings from "src/lib/Setting/Pages/OobaSettings.svelte";
 import { DBState } from "src/ts/stores.svelte";
 
 let app: Record<string, unknown> | undefined;
@@ -128,43 +123,5 @@ describe("settings action-rail runtime smoke", () => {
     firstRailButtons[1]?.click();
     await flushUi();
     expect(DBState.db.openrouterProvider.order.length).toBe(1);
-  });
-
-  it("keeps Ooba stop-string controls on action-rail and fluid action-rail rows", async () => {
-    const target = document.createElement("div");
-    document.body.appendChild(target);
-    app = mount(OobaSettings, { target, props: { instructionMode: true } });
-    await flushUi();
-
-    const addRail = document.querySelector(
-      ".ds-settings-inline-actions.action-rail",
-    ) as HTMLElement | null;
-    expect(addRail).not.toBeNull();
-
-    const rowRail = document.querySelector(
-      ".ds-settings-inline-actions.ds-settings-inline-actions-fluid.action-rail",
-    ) as HTMLElement | null;
-    expect(rowRail).not.toBeNull();
-    const flatCard = document.querySelector(
-      ".ds-settings-section.ds-settings-card",
-    ) as HTMLElement | null;
-    expect(flatCard).not.toBeNull();
-    expect(flatCard?.classList.contains("panel-shell")).toBe(false);
-
-    const addButton = addRail?.querySelector(
-      "button.ds-settings-icon-action",
-    ) as HTMLButtonElement | null;
-    expect(addButton).not.toBeNull();
-    addButton?.click();
-    await flushUi();
-    expect(DBState.db.localStopStrings.length).toBe(2);
-
-    const removeButton = rowRail?.querySelector(
-      "button.ds-settings-icon-action",
-    ) as HTMLButtonElement | null;
-    expect(removeButton).not.toBeNull();
-    removeButton?.click();
-    await flushUi();
-    expect(DBState.db.localStopStrings.length).toBe(1);
   });
 });

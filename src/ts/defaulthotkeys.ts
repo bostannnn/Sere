@@ -100,11 +100,6 @@ export const defaultHotkeys: Hotkey[] = [
         action: 'quickMenu'
     },
     {
-        key: 'q',
-        ctrl: true,
-        action: 'quickSettings'
-    },
-    {
         key: 'v',
         ctrl: true,
         action: 'toggleVoice'

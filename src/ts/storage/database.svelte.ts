@@ -533,6 +533,11 @@ export function setDatabase(data:Database){
     data.modelTools ??= []
     data.enableScrollToActiveChar ??= true
     
+    // Drop legacy hotkeys whose UI/runtime path has been removed.
+    if (data.hotkeys) {
+        data.hotkeys = data.hotkeys.filter(h => h.action !== 'quickSettings')
+    }
+
     // Merge existing hotkeys with new default hotkeys
     if (!data.hotkeys) {
         data.hotkeys = safeStructuredClone(defaultHotkeys)

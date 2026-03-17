@@ -228,7 +228,6 @@ export interface Database{
     claudeCachingExperimental: boolean
     hideApiKey: boolean
     unformatQuotes: boolean
-    enableDevTools: boolean
     falToken: string
     falModel: string
     falLora: string
