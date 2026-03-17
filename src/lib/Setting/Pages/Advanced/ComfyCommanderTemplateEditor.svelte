@@ -44,23 +44,17 @@
     const usesComfy = $derived(templateUsesProvider(template, activeProvider, "comfyui"));
     const usesRunpod = $derived(templateUsesProvider(template, activeProvider, "runpod"));
     const runpodModel = $derived(resolveTemplateRunpodModel(template, runpodConfig));
-    let openrouterPromptModel = $state("");
-
-    $effect(() => {
+    const openrouterPromptModel = $derived.by(() => {
         const parsed = parseComfyCommanderImagePromptModel(template.imagePromptModel);
-        const nextValue = parsed.mode === "openrouter"
+        return parsed.mode === "openrouter"
             ? parsed.model
             : parsed.mode === "current"
                 ? ""
                 : (template.imagePromptModel || "");
-        if (openrouterPromptModel !== nextValue) {
-            openrouterPromptModel = nextValue;
-        }
     });
 
     function handlePromptModelChange(value: string) {
         const trimmed = value.trim();
-        openrouterPromptModel = trimmed;
         template.imagePromptModel = trimmed
             ? formatComfyCommanderImagePromptModel("openrouter", trimmed)
             : "";
@@ -118,7 +112,7 @@
 
             <div class="ds-comfy-field ds-comfy-field--wide">
                 <OpenRouterModelSelect
-                    bind:value={openrouterPromptModel}
+                    value={openrouterPromptModel}
                     label="Prompt Model"
                     blankLabel="Use current chat model"
                     showMeta={true}

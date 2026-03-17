@@ -139,6 +139,16 @@
         }
     }
 
+    function handleSelectChange(event: Event & {
+        currentTarget: EventTarget & HTMLSelectElement;
+    }) {
+        const nextValue = event.currentTarget.value;
+        if (value !== nextValue) {
+            value = nextValue;
+        }
+        onchange(nextValue);
+    }
+
     onMount(() => {
         void refreshModels();
     });
@@ -182,7 +192,7 @@
             {disabled}
         />
     {/if}
-    <SelectInput bind:value {disabled} onchange={() => onchange(value)}>
+    <SelectInput bind:value {disabled} onchange={handleSelectChange}>
         {#each displayedOptions as option (option.id)}
             <OptionInput value={option.id}>{option.name}</OptionInput>
         {/each}

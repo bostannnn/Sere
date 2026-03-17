@@ -1,6 +1,6 @@
 <option
     value={value}
-    selected={selected}
+    selected={selected || undefined}
     class="ds-ui-option"
 >
     {@render children?.()}
