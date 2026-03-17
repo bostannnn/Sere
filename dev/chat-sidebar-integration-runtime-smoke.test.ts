@@ -149,6 +149,7 @@ vi.mock(import("src/ts/globalApi.svelte"), () => ({
   changeChatTo: shared.changeChatTo,
   createChatCopyName: shared.chatCopyName,
   getFileSrc: async () => "",
+  queueServerAutosaveSelection: vi.fn(),
 }));
 
 vi.mock(import("src/ts/tokenizer"), () => ({

@@ -39,6 +39,7 @@ vi.mock(import("src/ts/characters"), () => ({
 vi.mock(import("src/ts/globalApi.svelte"), () => ({
   changeChatTo: mocks.changeChatTo,
   getFileSrc: async () => "",
+  queueServerAutosaveSelection: vi.fn(),
 }));
 
 vi.mock(import("src/ts/util"), () => ({

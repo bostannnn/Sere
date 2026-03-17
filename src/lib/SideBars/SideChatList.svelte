@@ -17,7 +17,8 @@
     import { findCharacterbyId, sleep, sortableOptions } from "src/ts/util";
     import { language } from "src/lang";
     import Toggles from "./Toggles.svelte";
-    import { changeChatTo, createChatCopyName } from "src/ts/globalApi.svelte";
+    import { changeChatTo, createChatCopyName, queueServerAutosaveSelection } from "src/ts/globalApi.svelte";
+    import { saveServerDatabase } from "src/ts/storage/serverDb";
 
     interface Props {
         chara: character|groupChat;
@@ -316,6 +317,15 @@
                             if (backgroundPickerChatId === getStableChatId(chat, chatIndex)) {
                                 backgroundPickerChatId = null
                             }
+                            const saveSelection = {
+                                character: [chara.chaId],
+                                chat: [],
+                                deleteChat: [[chara.chaId, chat.id] as [string, string]],
+                            }
+                            await saveServerDatabase(DBState.db, saveSelection).catch((error) => {
+                                queueServerAutosaveSelection(saveSelection)
+                                alertError(error)
+                            })
                         }
                     }}>
                         <TrashIcon size={18}/>

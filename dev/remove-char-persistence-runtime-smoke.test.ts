@@ -32,6 +32,7 @@ const mocks = vi.hoisted(() => {
     alertConfirmMock: vi.fn(async () => true),
     alertErrorMock: vi.fn(),
     saveServerDatabaseMock: vi.fn(async () => {}),
+    queueServerAutosaveSelectionMock: vi.fn(),
     selectedCharSetMock: vi.fn(),
   };
 });
@@ -84,6 +85,7 @@ vi.mock(import("src/ts/globalApi.svelte"), () => ({
   checkCharOrder: mocks.checkCharOrderMock,
   downloadFile: vi.fn(),
   getFileSrc: vi.fn(),
+  queueServerAutosaveSelection: mocks.queueServerAutosaveSelectionMock,
   requiresFullEncoderReload: { state: false },
 }));
 
@@ -142,6 +144,7 @@ describe("removeChar persistence runtime smoke", () => {
     mocks.alertConfirmMock.mockClear();
     mocks.alertErrorMock.mockClear();
     mocks.saveServerDatabaseMock.mockClear();
+    mocks.queueServerAutosaveSelectionMock.mockClear();
     mocks.selectedCharSetMock.mockClear();
     mocks.isDoingChatStore.set(false);
   });
@@ -157,7 +160,7 @@ describe("removeChar persistence runtime smoke", () => {
       expect.objectContaining({
         characters: expect.arrayContaining([expect.objectContaining({ chaId: "char-1" })]),
       }),
-      { settings: true, character: ["char-1"], chat: [] },
+      { settings: true, character: ["char-1"], chat: [], deleteCharacter: [] },
     );
   });
 
@@ -172,7 +175,7 @@ describe("removeChar persistence runtime smoke", () => {
       expect.objectContaining({
         characters: expect.arrayContaining([expect.objectContaining({ chaId: "char-2" })]),
       }),
-      { settings: true, character: ["char-1"], chat: [] },
+      { settings: true, character: ["char-1"], chat: [], deleteCharacter: ["char-1"] },
     );
   });
 
@@ -191,5 +194,20 @@ describe("removeChar persistence runtime smoke", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it("queues delete selection for autosave retry when permanent delete save fails", async () => {
+    mocks.saveServerDatabaseMock.mockRejectedValueOnce(new Error("save failed"));
+    const { removeChar } = await import("src/ts/characters");
+
+    await removeChar(0, "Alpha", "permanent");
+
+    expect(mocks.queueServerAutosaveSelectionMock).toHaveBeenCalledWith({
+      settings: true,
+      character: ["char-1"],
+      chat: [],
+      deleteCharacter: ["char-1"],
+    });
+    expect(mocks.alertErrorMock).toHaveBeenCalled();
   });
 });

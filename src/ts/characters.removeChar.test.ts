@@ -73,6 +73,7 @@ vi.mock("./globalApi.svelte", () => ({
   checkCharOrder: mocks.checkCharOrder,
   downloadFile: vi.fn(),
   getFileSrc: vi.fn(),
+  queueServerAutosaveSelection: vi.fn(),
   requiresFullEncoderReload: { state: false },
 }));
 
@@ -153,6 +154,7 @@ describe("removeChar", () => {
         settings: true,
         character: ["char-1"],
         chat: [],
+        deleteCharacter: ["char-1"],
       }),
     );
   });

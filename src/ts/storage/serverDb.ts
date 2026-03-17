@@ -10,7 +10,9 @@ import {
     withApplyingServerSnapshot,
     type StateSnapshot,
     type StateCommand,
+    type StateCommandsResponse,
 } from "./serverStateClient";
+import { createServerSaveConflictError } from "./serverSaveDiagnostics";
 
 declare const safeStructuredClone: <T>(obj: T) => T;
 
@@ -21,6 +23,8 @@ type SaveSelection = {
     settings?: boolean;
     character: string[];
     chat: [string, string][];
+    deleteCharacter?: string[];
+    deleteChat?: [string, string][];
 };
 
 type BaselineState = {
@@ -28,6 +32,7 @@ type BaselineState = {
     settingsHash: string;
     characterOrderSignature: string;
     characterHashes: Map<string, string>;
+    characterChatOrders: Map<string, string[]>;
     chatHashes: Map<string, Map<string, string>>;
 };
 
@@ -36,6 +41,7 @@ const baseline: BaselineState = {
     settingsHash: '',
     characterOrderSignature: '',
     characterHashes: new Map(),
+    characterChatOrders: new Map(),
     chatHashes: new Map(),
 };
 
@@ -44,6 +50,52 @@ let refreshInFlight = false;
 let refreshQueued = false;
 let refreshRetryTimer: ReturnType<typeof setTimeout> | null = null;
 let saveQueue: Promise<void> = Promise.resolve();
+
+function getDeletedCharacterIdsForDatabase(db: Database) {
+    const localCharIds = new Set(
+        (db.characters || [])
+            .filter((entry): entry is character | groupChat => (
+                !!entry && typeof entry === 'object' && typeof entry.chaId === 'string' && entry.chaId.length > 0
+            ))
+            .map((entry) => entry.chaId),
+    );
+    const deletedCharacterIds: string[] = [];
+    for (const serverCharId of baseline.characterHashes.keys()) {
+        if (!localCharIds.has(serverCharId)) {
+            deletedCharacterIds.push(serverCharId);
+        }
+    }
+    return deletedCharacterIds;
+}
+
+function getDeletedChatTargetsForDatabase(db: Database): [string, string][] {
+    const localChars = (db.characters || []).filter((entry): entry is character | groupChat => (
+        !!entry && typeof entry === 'object' && typeof entry.chaId === 'string' && entry.chaId.length > 0
+    ));
+    const localCharsById = new Map(localChars.map((entry) => [entry.chaId, entry] as const));
+    const deletedChatTargets: [string, string][] = [];
+
+    for (const [charId, serverChats] of baseline.chatHashes.entries()) {
+        const localChar = localCharsById.get(charId);
+        if (!localChar) {
+            continue;
+        }
+        const localChatIds = new Set(
+            (localChar.chats || [])
+                .filter((chat): chat is Chat => (
+                    !!chat && typeof chat === 'object' && typeof chat.id === 'string' && chat.id.length > 0
+                ))
+                .map((chat) => chat.id),
+        );
+        for (const serverChatId of serverChats.keys()) {
+            if (!localChatIds.has(serverChatId)) {
+                deletedChatTargets.push([charId, serverChatId]);
+            }
+        }
+    }
+
+    return deletedChatTargets;
+}
 
 function stableHash(value: unknown) {
     return JSON.stringify(value ?? null);
@@ -110,13 +162,17 @@ function normalizeCharacterList(
     return normalized;
 }
 
-function characterWithoutChats(char: character | groupChat) {
+function characterWithoutChats(char: character | groupChat, options: { chatOrderOverride?: string[] } = {}) {
     const next = safeStructuredClone(char) as character | groupChat;
-    const chatOrder = Array.isArray(char?.chats)
-        ? char.chats
-            .map((entry) => (typeof entry?.id === 'string' ? entry.id : ''))
-            .filter((entry) => entry.length > 0)
-        : [];
+    const chatOrder = Array.isArray(options.chatOrderOverride)
+        ? options.chatOrderOverride.filter((entry): entry is string => typeof entry === 'string' && entry.length > 0)
+        : (
+            Array.isArray(char?.chats)
+                ? char.chats
+                    .map((entry) => (typeof entry?.id === 'string' ? entry.id : ''))
+                    .filter((entry) => entry.length > 0)
+                : []
+        );
     (next as (character | groupChat) & { chatOrder?: string[] }).chatOrder = chatOrder;
     next.chats = [];
     delete (next as character | groupChat & { chatPage?: number }).chatPage;
@@ -135,18 +191,27 @@ function resetBaseline() {
     baseline.settingsHash = '';
     baseline.characterOrderSignature = '';
     baseline.characterHashes = new Map();
+    baseline.characterChatOrders = new Map();
     baseline.chatHashes = new Map();
 }
 
 function setBaselineFromDatabase(db: Database) {
     const settings = stripCharacters(db);
     const characterHashes = new Map<string, string>();
+    const characterChatOrders = new Map<string, string[]>();
     const chatHashes = new Map<string, Map<string, string>>();
 
     for (const char of db.characters || []) {
         const charId = typeof char?.chaId === 'string' ? char.chaId : '';
         if (!charId) continue;
-        characterHashes.set(charId, stableHash(characterWithoutChats(char)));
+        const charWithoutChats = characterWithoutChats(char);
+        characterHashes.set(charId, stableHash(charWithoutChats));
+        characterChatOrders.set(
+            charId,
+            Array.isArray((charWithoutChats as { chatOrder?: unknown }).chatOrder)
+                ? ((charWithoutChats as { chatOrder?: unknown }).chatOrder as string[]).filter((entry) => typeof entry === 'string' && entry.length > 0)
+                : [],
+        );
         const chatsForChar = new Map<string, string>();
         for (const chat of char.chats || []) {
             const chatId = typeof chat?.id === 'string' ? chat.id : '';
@@ -160,6 +225,7 @@ function setBaselineFromDatabase(db: Database) {
     baseline.settingsHash = stableHash(settings);
     baseline.characterOrderSignature = getCharacterOrderSignature(db.characters || []);
     baseline.characterHashes = characterHashes;
+    baseline.characterChatOrders = characterChatOrders;
     baseline.chatHashes = chatHashes;
 }
 
@@ -226,12 +292,20 @@ function buildCommands(db: Database, _selection: SaveSelection): StateCommand[] 
     ));
     const localCharsById = new Map(localChars.map((entry) => [entry.chaId, entry] as const));
     const explicitCharacterIds = new Set<string>();
+    const explicitCharacterDeletes = new Set<string>();
     const targetCharacterIds = new Set<string>();
     const targetChatsByCharacter = new Map<string, Set<string>>();
+    const explicitChatDeletesByCharacter = new Map<string, Set<string>>();
 
     for (const charId of selection.character) {
         if (charId) {
             explicitCharacterIds.add(charId);
+            targetCharacterIds.add(charId);
+        }
+    }
+    for (const charId of selection.deleteCharacter || []) {
+        if (charId) {
+            explicitCharacterDeletes.add(charId);
             targetCharacterIds.add(charId);
         }
     }
@@ -242,6 +316,16 @@ function buildCommands(db: Database, _selection: SaveSelection): StateCommand[] 
         if (!chats) {
             chats = new Set<string>();
             targetChatsByCharacter.set(charId, chats);
+        }
+        chats.add(chatId);
+    }
+    for (const [charId, chatId] of selection.deleteChat || []) {
+        if (!charId || !chatId) continue;
+        targetCharacterIds.add(charId);
+        let chats = explicitChatDeletesByCharacter.get(charId);
+        if (!chats) {
+            chats = new Set<string>();
+            explicitChatDeletesByCharacter.set(charId, chats);
         }
         chats.add(chatId);
     }
@@ -257,7 +341,7 @@ function buildCommands(db: Database, _selection: SaveSelection): StateCommand[] 
         const char = localCharsById.get(charId);
         const currentCharHash = baseline.characterHashes.get(charId);
         if (!char) {
-            if (currentCharHash) {
+            if (currentCharHash && explicitCharacterDeletes.has(charId)) {
                 commands.push({
                     type: 'character.delete',
                     charId,
@@ -266,13 +350,14 @@ function buildCommands(db: Database, _selection: SaveSelection): StateCommand[] 
             continue;
         }
 
-        const nextCharPayload = characterWithoutChats(char);
-        const nextCharHash = stableHash(nextCharPayload);
         const isNewCharacter = !currentCharHash;
         let hasChatStructureChange = false;
+        let suppressedMissingServerChats = false;
         const processAllChatsForCharacter = isFullSave || explicitCharacterIds.has(charId);
+        const explicitChatDeletes = explicitChatDeletesByCharacter.get(charId) || new Set<string>();
 
         if (isNewCharacter) {
+            const nextCharPayload = characterWithoutChats(char);
             commands.push({
                 type: 'character.create',
                 charId,
@@ -314,6 +399,10 @@ function buildCommands(db: Database, _selection: SaveSelection): StateCommand[] 
 
             for (const serverChatId of serverChats.keys()) {
                 if (localChatIds.has(serverChatId)) continue;
+                if (!explicitChatDeletes.has(serverChatId)) {
+                    suppressedMissingServerChats = true;
+                    continue;
+                }
                 hasChatStructureChange = true;
                 commands.push({
                     type: 'chat.delete',
@@ -326,13 +415,15 @@ function buildCommands(db: Database, _selection: SaveSelection): StateCommand[] 
                 const localChat = localChatsById.get(chatId);
                 const currentChatHash = serverChats.get(chatId);
                 if (!localChat) {
-                    if (currentChatHash) {
+                    if (currentChatHash && explicitChatDeletes.has(chatId)) {
                         hasChatStructureChange = true;
                         commands.push({
                             type: 'chat.delete',
                             charId,
                             chatId,
                         });
+                    } else if (currentChatHash) {
+                        suppressedMissingServerChats = true;
                     }
                     continue;
                 }
@@ -356,6 +447,13 @@ function buildCommands(db: Database, _selection: SaveSelection): StateCommand[] 
             }
         }
 
+        const nextCharPayload = characterWithoutChats(char, {
+            chatOrderOverride: (!isNewCharacter && suppressedMissingServerChats && !hasChatStructureChange)
+                ? baseline.characterChatOrders.get(charId)
+                : undefined,
+        });
+        const nextCharHash = stableHash(nextCharPayload);
+
         if (!isNewCharacter && (currentCharHash !== nextCharHash || hasChatStructureChange)) {
             commands.push({
                 type: 'character.replace',
@@ -370,10 +468,12 @@ function buildCommands(db: Database, _selection: SaveSelection): StateCommand[] 
 
         for (const serverCharId of baseline.characterHashes.keys()) {
             if (localCharIds.has(serverCharId)) continue;
-            commands.push({
-                type: 'character.delete',
-                charId: serverCharId,
-            });
+            if (explicitCharacterDeletes.has(serverCharId)) {
+                commands.push({
+                    type: 'character.delete',
+                    charId: serverCharId,
+                });
+            }
         }
 
         const nextOrderSignature = getCharacterOrderSignature(localChars);
@@ -449,7 +549,7 @@ export async function loadServerDatabase() {
     return await applySnapshotToDatabase(snapshot);
 }
 
-async function saveServerDatabaseOnce(toSave: SaveSelection) {
+async function saveServerDatabaseOnce(desiredDb: Database, toSave: SaveSelection) {
     if (!isNodeServer) return;
 
     if (!baseline.initialized) {
@@ -460,15 +560,16 @@ async function saveServerDatabaseOnce(toSave: SaveSelection) {
     let lastError: Error | null = null;
 
     for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
-        const dbForAttempt = safeStructuredClone(getDatabase()) as Database;
+        const dbForAttempt = safeStructuredClone(desiredDb) as Database;
         const commands = buildCommands(dbForAttempt, toSave);
         if (commands.length === 0) {
             return;
         }
+        const baseEventId = getServerStateLastEventId();
         const mutationId = uuidv4();
         const response = await enqueueCommand({
             clientMutationId: mutationId,
-            baseEventId: getServerStateLastEventId(),
+            baseEventId,
             commands,
         });
 
@@ -491,7 +592,12 @@ async function saveServerDatabaseOnce(toSave: SaveSelection) {
             : false;
 
         if (!staleBase || attempt >= maxRetries) {
-            lastError = new Error(`POST /data/state/commands rejected with conflicts: ${JSON.stringify(response.conflicts || [])}`);
+            lastError = createServerSaveConflictError({
+                response: response as StateCommandsResponse,
+                commands,
+                baseEventId,
+                attempt,
+            });
             break;
         }
 
@@ -505,9 +611,9 @@ async function saveServerDatabaseOnce(toSave: SaveSelection) {
 
 export async function saveServerDatabase(db: Database, toSave: SaveSelection) {
     if (!isNodeServer) return;
-    void db;
+    const desiredDb = safeStructuredClone(db) as Database;
     const run = async () => {
-        await saveServerDatabaseOnce(toSave);
+        await saveServerDatabaseOnce(desiredDb, toSave);
     };
     const queued = saveQueue.then(run, run);
     saveQueue = queued.catch(() => {});
@@ -538,9 +644,14 @@ export function updateCharacterEtag(_charId: string, _etag: string) {
 
 export async function exportServerStorage() {
     const db = getDatabase();
+    if (!baseline.initialized) {
+        await loadServerDatabase();
+    }
     await saveServerDatabase(db, {
         full: true,
         character: [],
         chat: [],
+        deleteCharacter: getDeletedCharacterIdsForDatabase(db),
+        deleteChat: getDeletedChatTargetsForDatabase(db),
     });
 }

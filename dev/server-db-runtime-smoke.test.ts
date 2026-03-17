@@ -37,7 +37,7 @@ describe("server db runtime smoke", () => {
     setDatabaseMock.mockClear();
   });
 
-  it("reconciles removed server characters through state command API", async () => {
+  it("persists explicit character deletes through state command API", async () => {
     let commandsRequest: {
       clientMutationId?: string;
       baseEventId?: number;
@@ -111,11 +111,77 @@ describe("server db runtime smoke", () => {
       {
         character: [],
         chat: [],
+        deleteCharacter: ["char-removed"],
       },
     );
 
     const postedCommands = Array.isArray(commandsRequest?.commands) ? commandsRequest.commands : [];
     expect(postedCommands.some((entry) => entry?.type === "character.delete" && entry?.charId === "char-removed")).toBe(true);
+  });
+
+  it("does not infer chat deletes without an explicit deleteChat selection", async () => {
+    let commandsRequest: {
+      commands?: Array<{ type?: string; charId?: string; chatId?: string }>;
+    } | null = null;
+
+    fetchWithServerAuthMock.mockImplementation(async (input: RequestInfo | URL, init: RequestInit = {}) => {
+      const url = typeof input === "string" ? input : input.toString();
+      const method = (init.method ?? "GET").toUpperCase();
+
+      if (url === "/data/state/snapshot" && method === "GET") {
+        return jsonResponse({
+          serverTime: Date.now(),
+          lastEventId: 8,
+          settings: {},
+          characters: [
+            { chaId: "char-keep", chatPage: 0, chatFolders: [], chatOrder: ["chat-a"] },
+          ],
+          chatsByCharacter: {
+            "char-keep": [
+              { id: "chat-a", name: "A", message: [] },
+            ],
+          },
+          revisions: {
+            settings: 1,
+            characters: { "char-keep": 1 },
+            chats: { "char-keep": { "chat-a": 1 } },
+          },
+        });
+      }
+
+      if (url === "/data/state/commands" && method === "POST") {
+        commandsRequest = JSON.parse(String(init.body ?? "{}"));
+        return jsonResponse({
+          ok: true,
+          lastEventId: 9,
+          applied: [],
+          conflicts: [],
+        });
+      }
+
+      throw new Error(`Unexpected request: ${method} ${url}`);
+    });
+
+    const { saveServerDatabase } = await import("src/ts/storage/serverDb");
+    await saveServerDatabase(
+      {
+        characters: [
+          {
+            chaId: "char-keep",
+            chats: [],
+            chatPage: 0,
+            chatFolders: [],
+          },
+        ],
+      } as never,
+      {
+        character: [],
+        chat: [],
+      },
+    );
+
+    const postedCommands = Array.isArray(commandsRequest?.commands) ? commandsRequest.commands : [];
+    expect(postedCommands.some((entry) => entry?.type === "chat.delete" && entry?.chatId === "chat-a")).toBe(false);
   });
 
   it("does not persist chat selection-only changes (chatPage) to server commands", async () => {

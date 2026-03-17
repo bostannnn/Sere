@@ -369,9 +369,14 @@ async function resolveReferenceImageUrls(options: {
     template: ComfyCommanderTemplate;
     referenceStore: ComfyCommanderReferenceStoreConfig;
     selected: character | { type: string; image?: string };
-}) {
+}): Promise<{
+    urls: string[];
+    startedAt?: number;
+    finishedAt?: number;
+    durationMs?: number;
+}> {
     if (!options.template.useReferenceImage || options.template.referenceSource === "none") {
-        return [];
+        return { urls: [] };
     }
 
     if (options.template.referenceSource !== "character-portrait") {
@@ -381,21 +386,29 @@ async function resolveReferenceImageUrls(options: {
     const portrait = await getCharacterPortraitData(options.selected);
     if (!portrait) {
         if (options.template.allowReferenceFallbackToText) {
-            return [];
+            return { urls: [] };
         }
         throw new Error("Character portrait is required for this template.");
     }
 
     if (options.referenceStore.provider !== "yandex-disk") {
         if (options.template.allowReferenceFallbackToText) {
-            return [];
+            return { urls: [] };
         }
         throw new Error("Reference image store is not configured.");
     }
 
     setComfyProgress("Image Generation: Reference Image");
+    const startedAt = Date.now();
+    const startedPerf = performance.now();
     const uploaded = await uploadReferenceImageToYandexDisk(options.referenceStore, portrait);
-    return [uploaded.downloadHref];
+    const finishedAt = Date.now();
+    return {
+        urls: [uploaded.downloadHref],
+        startedAt,
+        finishedAt,
+        durationMs: Math.round(performance.now() - startedPerf),
+    };
 }
 
 async function saveGeneratedImageToChat(options: {
@@ -405,7 +418,7 @@ async function saveGeneratedImageToChat(options: {
     selected: character | { type: string; chaId?: string };
     data: Uint8Array;
     fileName: string;
-    generationTrace: Omit<ImageGenerationTrace, "outputAssetPath" | "metadataPath">;
+    generationTrace: Omit<ImageGenerationTrace, "outputAssetPath" | "metadataPath" | "totalFinishedAt" | "totalDurationMs">;
 }) {
     const charId = typeof options.selected.chaId === "string" ? options.selected.chaId.trim() : "";
     const inlayId = charId
@@ -430,13 +443,16 @@ async function saveGeneratedImageToChat(options: {
             const imageFile = normalizedInlayPath.split('/').pop() || '';
             const imageId = imageFile.includes('.') ? imageFile.slice(0, imageFile.lastIndexOf('.')) : imageFile;
             if (imageId) {
+                const metadataTrace: ImageGenerationTrace = {
+                    ...options.generationTrace,
+                    outputAssetPath: normalizedInlayPath,
+                };
                 const metadata = {
                     version: 1,
                     characterId: charId,
                     chatId: options.activeChat.id || "",
-                    messageTime: options.generationTrace.createdAt,
-                    ...options.generationTrace,
-                    outputAssetPath: normalizedInlayPath,
+                    messageTime: metadataTrace.createdAt,
+                    ...metadataTrace,
                 };
                 if (isNodeServer) {
                     metadataPath = await saveServerCharacterImageFile(
@@ -455,14 +471,24 @@ async function saveGeneratedImageToChat(options: {
         }
     }
 
+    const totalFinishedAt = Date.now();
+    const totalDurationMs = Number.isFinite(options.generationTrace.totalStartedAt)
+        ? Math.max(0, totalFinishedAt - Number(options.generationTrace.totalStartedAt))
+        : undefined;
+    const finalizedTrace: ImageGenerationTrace = {
+        ...options.generationTrace,
+        totalFinishedAt,
+        totalDurationMs,
+    };
+
     options.activeChat.message.push({
         role: "char",
         data: `{{inlayed::${inlayId}}}`,
         time: Date.now(),
         generationInfo: {
-            model: options.generationTrace.imageModel || options.generationTrace.provider,
+            model: finalizedTrace.imageModel || finalizedTrace.provider,
             imageGeneration: {
-                ...options.generationTrace,
+                ...finalizedTrace,
                 outputAssetPath: inlayId,
                 metadataPath: metadataPath || undefined,
             },
@@ -484,9 +510,17 @@ async function executeComfyUiGeneration(options: {
     imageModel: string;
     mode: "text-to-image" | "image-edit";
     referenceImageUrls: string[];
+    referenceUploadStartedAt?: number;
+    referenceUploadFinishedAt?: number;
+    referenceUploadDurationMs?: number;
+    providerStartedAt: number;
+    providerFinishedAt: number;
+    providerDurationMs: number;
 }> {
     const workflow = resolveWorkflowOrThrow(options.state, options.template);
     setComfyProgress("Image Generation: ComfyUI");
+    const providerStartedAt = Date.now();
+    const providerStartedPerf = performance.now();
 
     const portrait = await getCharacterPortraitData(options.selected);
     if (options.template.useReferenceImage && options.template.referenceSource === "character-portrait" && !portrait) {
@@ -505,12 +539,19 @@ async function executeComfyUiGeneration(options: {
     const historyItem = await waitForComfyHistoryItem(promptId);
     const descriptor = extractFirstComfyImageDescriptor(historyItem);
     const blob = await fetchComfyImageBlob(options.state.config, descriptor);
+    const providerFinishedAt = Date.now();
     return {
         data: new Uint8Array(await blob.arrayBuffer()),
         fileName: descriptor.filename || `comfy-${Date.now()}.png`,
         imageModel: "comfyui",
         mode: options.template.modeDefault === "image-edit" ? "image-edit" : "text-to-image",
         referenceImageUrls: [] as string[],
+        referenceUploadStartedAt: undefined,
+        referenceUploadFinishedAt: undefined,
+        referenceUploadDurationMs: undefined,
+        providerStartedAt,
+        providerFinishedAt,
+        providerDurationMs: Math.round(performance.now() - providerStartedPerf),
     };
 }
 
@@ -525,12 +566,19 @@ async function executeRunpodGeneration(options: {
     imageModel: string;
     mode: "text-to-image" | "image-edit";
     referenceImageUrls: string[];
+    referenceUploadStartedAt?: number;
+    referenceUploadFinishedAt?: number;
+    referenceUploadDurationMs?: number;
+    providerStartedAt: number;
+    providerFinishedAt: number;
+    providerDurationMs: number;
 }> {
-    const referenceImageUrls = await resolveReferenceImageUrls({
+    const referenceResult = await resolveReferenceImageUrls({
         template: options.template,
         referenceStore: options.state.config.referenceStore,
         selected: options.selected,
     });
+    const referenceImageUrls = referenceResult.urls;
     const requestedMode = options.template.modeDefault === "image-edit" ? "image-edit" : "text-to-image";
     const mode = referenceImageUrls.length > 0 ? requestedMode : "text-to-image";
     if (requestedMode === "image-edit" && referenceImageUrls.length === 0 && !options.template.allowReferenceFallbackToText) {
@@ -538,6 +586,8 @@ async function executeRunpodGeneration(options: {
     }
 
     setComfyProgress("Image Generation: Runpod");
+    const providerStartedAt = Date.now();
+    const providerStartedPerf = performance.now();
     const endpoint = resolveRunpodEndpoint(options.template, options.state.config);
     const result = await generateRunpodImage(resolveTemplateRunpodConfig(options.template, options.state.config), {
         modelId: endpoint.modelId,
@@ -549,6 +599,7 @@ async function executeRunpodGeneration(options: {
         timeoutSec: options.state.config.timeoutSec,
         pollIntervalMs: options.state.config.pollIntervalMs,
     });
+    const providerFinishedAt = Date.now();
 
     return {
         data: result.bytes,
@@ -556,10 +607,17 @@ async function executeRunpodGeneration(options: {
         imageModel: endpoint.modelId,
         mode,
         referenceImageUrls,
+        referenceUploadStartedAt: referenceResult.startedAt,
+        referenceUploadFinishedAt: referenceResult.finishedAt,
+        referenceUploadDurationMs: referenceResult.durationMs,
+        providerStartedAt,
+        providerFinishedAt,
+        providerDurationMs: Math.round(performance.now() - providerStartedPerf),
     };
 }
 
 async function executeResolvedTemplate(template: ComfyCommanderTemplate, userPrompt: string) {
+    const totalStartedAt = Date.now();
     const state = getComfyCommanderState({ snapshot: true });
     const { db, selected, activeChat, currentCharIndex } = getActiveCharacterContext();
 
@@ -583,12 +641,16 @@ async function executeResolvedTemplate(template: ComfyCommanderTemplate, userPro
     });
 
     setComfyProgress("Image Generation: LLM");
+    const promptStartedAt = Date.now();
+    const promptStartedPerf = performance.now();
     const llmRaw = await runMainLLMPromptOnly({
         systemPrompt: "Output only the final image prompt. No explanations, no markdown.",
         userPrompt: llmPrompt,
         staticModel: imagePromptConfig.openrouterModel ? "openrouter" : (imagePromptConfig.model || undefined),
         openrouterModelOverride: imagePromptConfig.openrouterModel || undefined,
     });
+    const promptFinishedAt = Date.now();
+    const promptDurationMs = Math.round(performance.now() - promptStartedPerf);
     const positivePrompt = cleanLLMOutput(llmRaw);
     if (!positivePrompt) {
         throw new Error("LLM returned empty prompt.");
@@ -609,6 +671,36 @@ async function executeResolvedTemplate(template: ComfyCommanderTemplate, userPro
             selected: selected as character,
         });
 
+    const traceBase: Omit<ImageGenerationTrace, "outputAssetPath" | "metadataPath"> = {
+        source: "comfy-commander",
+        templateId: template.id,
+        templateName: template.buttonName || template.trigger || "Template",
+        llmSystemPrompt: "Output only the final image prompt. No explanations, no markdown.",
+        llmPromptTemplate: imagePromptConfig.promptTemplate,
+        llmInputPrompt: llmPrompt,
+        llmRawOutput: llmRaw,
+        finalPrompt: positivePrompt,
+        userPrompt,
+        promptModel: imagePromptConfig.openrouterModel || imagePromptConfig.model || undefined,
+        provider,
+        imageModel: generated.imageModel,
+        mode: generated.mode,
+        negativePrompt: template.negativePrompt || "",
+        referenceSource: template.referenceSource,
+        referenceImageUrls: generated.referenceImageUrls,
+        promptStartedAt,
+        promptFinishedAt,
+        promptDurationMs,
+        referenceUploadStartedAt: generated.referenceUploadStartedAt,
+        referenceUploadFinishedAt: generated.referenceUploadFinishedAt,
+        referenceUploadDurationMs: generated.referenceUploadDurationMs,
+        providerStartedAt: generated.providerStartedAt,
+        providerFinishedAt: generated.providerFinishedAt,
+        providerDurationMs: generated.providerDurationMs,
+        totalStartedAt,
+        createdAt: Date.now(),
+    };
+
     await saveGeneratedImageToChat({
         db,
         currentCharIndex,
@@ -616,25 +708,7 @@ async function executeResolvedTemplate(template: ComfyCommanderTemplate, userPro
         selected: selected as character,
         data: generated.data,
         fileName: generated.fileName,
-        generationTrace: {
-            source: "comfy-commander",
-            templateId: template.id,
-            templateName: template.buttonName || template.trigger || "Template",
-            llmSystemPrompt: "Output only the final image prompt. No explanations, no markdown.",
-            llmPromptTemplate: imagePromptConfig.promptTemplate,
-            llmInputPrompt: llmPrompt,
-            llmRawOutput: llmRaw,
-            finalPrompt: positivePrompt,
-            userPrompt,
-            promptModel: imagePromptConfig.openrouterModel || imagePromptConfig.model || undefined,
-            provider,
-            imageModel: generated.imageModel,
-            mode: generated.mode,
-            negativePrompt: template.negativePrompt || "",
-            referenceSource: template.referenceSource,
-            referenceImageUrls: generated.referenceImageUrls,
-            createdAt: Date.now(),
-        },
+        generationTrace: traceBase,
     });
 }
 

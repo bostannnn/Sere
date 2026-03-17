@@ -8,10 +8,11 @@
     import { exportChat, importChat, getNewChatFirstMessageIndex } from "../../ts/characters";
     import { findCharacterbyId } from "../../ts/util";
     import TextInput from "../UI/GUI/TextInput.svelte";
-    import { changeChatTo } from "src/ts/globalApi.svelte";
+    import { changeChatTo, queueServerAutosaveSelection } from "src/ts/globalApi.svelte";
     import { v4 } from "uuid";
     import ChatBackgroundPicker from "./ChatBackgroundPicker.svelte";
     import { resolveChatBackgroundMode } from "src/ts/storage/database.svelte";
+    import { saveServerDatabase } from "src/ts/storage/serverDb";
 
     let editMode = $state(false)
     let backgroundPickerChatId = $state(null)
@@ -129,12 +130,22 @@
                             const d = await alertConfirm(`${language.removeConfirm}${chat.name}`)
                             if(d){
                                 changeChatTo(0)
+                                const charId = DBState.db.characters[$selectedCharID].chaId
                                 const chats = DBState.db.characters[$selectedCharID].chats
                                 chats.splice(i, 1)
                                 DBState.db.characters[$selectedCharID].chats = chats
                                 if (backgroundPickerChatId === getStableChatId(chat, i)) {
                                     backgroundPickerChatId = null
                                 }
+                                const saveSelection = {
+                                    character: [charId],
+                                    chat: [],
+                                    deleteChat: [[charId, chat.id]],
+                                }
+                                await saveServerDatabase(DBState.db, saveSelection).catch((error) => {
+                                    queueServerAutosaveSelection(saveSelection)
+                                    alertError(error)
+                                })
                             }
                         }} title="Delete chat" aria-label="Delete chat">
                             <TrashIcon size={18}/>

@@ -23,6 +23,7 @@ type MockDb = {
 
 const shared = vi.hoisted(() => {
   let currentDb: MockDb | null = null;
+  let lastEventId = 0;
   const enqueueCommandMock = vi.fn(async () => ({
     ok: true,
     lastEventId: 7,
@@ -79,12 +80,19 @@ const shared = vi.hoisted(() => {
     currentDb = db;
   };
 
+  const getLastEventId = () => lastEventId;
+  const setLastEventId = (next: number) => {
+    lastEventId = next;
+  };
+
   return {
     enqueueCommandMock,
     fetchServerStateSnapshotMock,
     getDatabaseMock,
     setDatabaseMock,
     setCurrentDb,
+    getLastEventId,
+    setLastEventId,
   };
 });
 
@@ -106,8 +114,8 @@ vi.mock("src/ts/storage/database.svelte", () => ({
 vi.mock("src/ts/storage/serverStateClient", () => ({
   enqueueCommand: shared.enqueueCommandMock,
   fetchServerStateSnapshot: shared.fetchServerStateSnapshotMock,
-  getServerStateLastEventId: vi.fn(() => 0),
-  setServerStateLastEventId: vi.fn(),
+  getServerStateLastEventId: vi.fn(() => shared.getLastEventId()),
+  setServerStateLastEventId: vi.fn((next: number) => shared.setLastEventId(next)),
   startServerStateEventStream: vi.fn(),
   withApplyingServerSnapshot: vi.fn(async (run: () => Promise<unknown>) => await run()),
 }));
@@ -158,6 +166,7 @@ describe("saveServerDatabase partial selection", () => {
     shared.getDatabaseMock.mockClear();
     shared.setDatabaseMock.mockClear();
     shared.setCurrentDb(createLocalDb());
+    shared.setLastEventId(0);
     const mod = await import("src/ts/storage/serverDb");
     mod.resetServerBaseline();
   });
@@ -195,6 +204,29 @@ describe("saveServerDatabase partial selection", () => {
     );
   });
 
+  it("does not infer chat.delete from a targeted save when the local chat is missing", async () => {
+    const mod = await import("src/ts/storage/serverDb");
+    await mod.loadServerDatabase();
+    const db = createLocalDb();
+    db.characters[0].chats = [];
+    shared.setCurrentDb(db);
+
+    await mod.saveServerDatabase(db as never, {
+      settings: false,
+      character: [],
+      chat: [["char-1", "chat-1"]],
+    });
+
+    const commands = getFirstCommandBatch();
+    expect(commands).not.toContainEqual(
+      expect.objectContaining({
+        type: "chat.delete",
+        charId: "char-1",
+        chatId: "chat-1",
+      }),
+    );
+  });
+
   it("supports settings-only partial saves without diffing characters", async () => {
     const mod = await import("src/ts/storage/serverDb");
     await mod.loadServerDatabase();
@@ -228,6 +260,7 @@ describe("saveServerDatabase partial selection", () => {
       settings: false,
       character: ["char-1"],
       chat: [],
+      deleteCharacter: ["char-1"],
     });
 
     const commands = getFirstCommandBatch();
@@ -246,6 +279,243 @@ describe("saveServerDatabase partial selection", () => {
       expect.objectContaining({
         type: "character.order.replace",
       }),
+    );
+  });
+
+  it("does not infer character.delete from a targeted save when the local character is missing", async () => {
+    const mod = await import("src/ts/storage/serverDb");
+    await mod.loadServerDatabase();
+    const db = createLocalDb();
+    db.characters = db.characters.filter((entry) => entry.chaId !== "char-1");
+    db.characterOrder = ["char-2"];
+    shared.setCurrentDb(db);
+
+    await mod.saveServerDatabase(db as never, {
+      settings: false,
+      character: ["char-1"],
+      chat: [],
+    });
+
+    expect(shared.enqueueCommandMock).toHaveBeenCalledTimes(0);
+  });
+
+  it("uses the db snapshot passed to saveServerDatabase instead of later global state", async () => {
+    const mod = await import("src/ts/storage/serverDb");
+    await mod.loadServerDatabase();
+
+    const intendedDb = createLocalDb();
+    intendedDb.characters[0].name = "Updated Alpha";
+
+    const unrelatedDb = createLocalDb();
+    unrelatedDb.characters = unrelatedDb.characters.filter((entry) => entry.chaId !== "char-1");
+    unrelatedDb.characterOrder = ["char-2"];
+    shared.setCurrentDb(unrelatedDb);
+
+    await mod.saveServerDatabase(intendedDb as never, {
+      settings: false,
+      character: ["char-1"],
+      chat: [],
+    });
+
+    const commands = getFirstCommandBatch();
+    expect(commands).toContainEqual(
+      expect.objectContaining({
+        type: "character.replace",
+        charId: "char-1",
+      }),
+    );
+    expect(commands).not.toContainEqual(
+      expect.objectContaining({
+        type: "character.delete",
+        charId: "char-1",
+      }),
+    );
+  });
+
+  it("does not infer character.delete during full saves when the local character is missing", async () => {
+    const mod = await import("src/ts/storage/serverDb");
+    await mod.loadServerDatabase();
+
+    const db = createLocalDb();
+    db.characters = db.characters.filter((entry) => entry.chaId !== "char-1");
+    db.characterOrder = ["char-2"];
+    shared.setCurrentDb(db);
+
+    await mod.saveServerDatabase(db as never, {
+      full: true,
+      character: [],
+      chat: [],
+    });
+
+    const commands = getFirstCommandBatch();
+    expect(commands).not.toContainEqual(
+      expect.objectContaining({
+        type: "character.delete",
+        charId: "char-1",
+      }),
+    );
+  });
+
+  it("allows explicit character.delete during full saves when requested", async () => {
+    const mod = await import("src/ts/storage/serverDb");
+    await mod.loadServerDatabase();
+
+    const db = createLocalDb();
+    db.characters = db.characters.filter((entry) => entry.chaId !== "char-1");
+    db.characterOrder = ["char-2"];
+    shared.setCurrentDb(db);
+
+    await mod.saveServerDatabase(db as never, {
+      full: true,
+      character: [],
+      chat: [],
+      deleteCharacter: ["char-1"],
+    });
+
+    const commands = getFirstCommandBatch();
+    expect(commands).toContainEqual(
+      expect.objectContaining({
+        type: "character.delete",
+        charId: "char-1",
+      }),
+    );
+  });
+
+  it("does not infer chat.delete during full saves when the local chat is missing", async () => {
+    const mod = await import("src/ts/storage/serverDb");
+    await mod.loadServerDatabase();
+
+    const db = createLocalDb();
+    db.characters[0].chats = [];
+    shared.setCurrentDb(db);
+
+    await mod.saveServerDatabase(db as never, {
+      full: true,
+      character: [],
+      chat: [],
+    });
+
+    const commands = getFirstCommandBatch();
+    expect(commands).not.toContainEqual(
+      expect.objectContaining({
+        type: "chat.delete",
+        charId: "char-1",
+        chatId: "chat-1",
+      }),
+    );
+  });
+
+  it("allows explicit chat.delete when requested", async () => {
+    const mod = await import("src/ts/storage/serverDb");
+    await mod.loadServerDatabase();
+
+    const db = createLocalDb();
+    db.characters[0].chats = [];
+    shared.setCurrentDb(db);
+
+    await mod.saveServerDatabase(db as never, {
+      character: ["char-1"],
+      chat: [],
+      deleteChat: [["char-1", "chat-1"]],
+    });
+
+    const commands = getFirstCommandBatch();
+    expect(commands).toContainEqual(
+      expect.objectContaining({
+        type: "chat.delete",
+        charId: "char-1",
+        chatId: "chat-1",
+      }),
+    );
+  });
+
+  it("exportServerStorage includes explicit deletes for characters missing locally", async () => {
+    const mod = await import("src/ts/storage/serverDb");
+    await mod.loadServerDatabase();
+
+    const db = createLocalDb();
+    db.characters = db.characters.filter((entry) => entry.chaId !== "char-1");
+    db.characterOrder = ["char-2"];
+    shared.setCurrentDb(db);
+
+    await mod.exportServerStorage();
+
+    const commands = getFirstCommandBatch();
+    expect(commands).toContainEqual(
+      expect.objectContaining({
+        type: "character.delete",
+        charId: "char-1",
+      }),
+    );
+  });
+
+  it("exportServerStorage includes explicit deletes for chats missing locally", async () => {
+    const mod = await import("src/ts/storage/serverDb");
+    await mod.loadServerDatabase();
+
+    const db = createLocalDb();
+    db.characters[0].chats = [];
+    shared.setCurrentDb(db);
+
+    await mod.exportServerStorage();
+
+    const commands = getFirstCommandBatch();
+    expect(commands).toContainEqual(
+      expect.objectContaining({
+        type: "chat.delete",
+        charId: "char-1",
+        chatId: "chat-1",
+      }),
+    );
+  });
+
+  it("throws a structured conflict error with the rejected command batch", async () => {
+    shared.enqueueCommandMock.mockReset();
+    shared.enqueueCommandMock.mockImplementation(async () => ({
+      ok: false,
+      lastEventId: 9,
+      applied: [],
+      conflicts: [
+        {
+          index: -1,
+          code: "STALE_BASE_EVENT",
+          details: {
+            baseEventId: 3,
+            currentLastEventId: 9,
+          },
+        },
+      ],
+    }));
+
+    const mod = await import("src/ts/storage/serverDb");
+    await mod.loadServerDatabase();
+    const db = createLocalDb();
+    db.characters = db.characters.filter((entry) => entry.chaId !== "char-1");
+    db.characterOrder = ["char-2"];
+    shared.setCurrentDb(db);
+
+    let thrown: unknown = null;
+    try {
+      await mod.saveServerDatabase(db as never, {
+        settings: true,
+        character: ["char-1"],
+        chat: [],
+        deleteCharacter: ["char-1"],
+      });
+    } catch (error) {
+      thrown = error;
+    }
+
+    expect(shared.enqueueCommandMock).toHaveBeenCalledTimes(3);
+    expect(thrown).toBeInstanceOf(Error);
+    expect((thrown as Error).message).toContain("STALE_BASE_EVENT");
+    expect((thrown as { status?: number }).status).toBe(409);
+    expect((thrown as { result?: { baseEventId?: number } }).result?.baseEventId).toBe(3);
+    expect((thrown as { result?: { commands?: Array<{ type?: string; charId?: string }> } }).result?.commands).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ type: "settings.replace" }),
+        expect.objectContaining({ type: "character.delete", charId: "char-1" }),
+      ]),
     );
   });
 });

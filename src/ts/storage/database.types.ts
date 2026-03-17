@@ -1222,6 +1222,18 @@ export interface ImageGenerationTrace {
     negativePrompt?: string
     referenceSource?: 'none' | 'character-portrait'
     referenceImageUrls?: string[]
+    promptStartedAt?: number
+    promptFinishedAt?: number
+    promptDurationMs?: number
+    referenceUploadStartedAt?: number
+    referenceUploadFinishedAt?: number
+    referenceUploadDurationMs?: number
+    providerStartedAt?: number
+    providerFinishedAt?: number
+    providerDurationMs?: number
+    totalStartedAt?: number
+    totalFinishedAt?: number
+    totalDurationMs?: number
     outputAssetPath?: string
     metadataPath?: string
     createdAt: number

@@ -5,7 +5,7 @@ import { language } from "../lang";
 import { checkNullish, findCharacterbyId, getUserName, selectMultipleFile, selectSingleFile, sleep } from "./util";
 import { v4 as uuidv4, v4 } from 'uuid';
 import { selectedCharID } from "./stores.svelte";
-import { AppendableBuffer, changeChatTo, checkCharOrder, downloadFile, getFileSrc, requiresFullEncoderReload } from "./globalApi.svelte";
+import { AppendableBuffer, changeChatTo, checkCharOrder, downloadFile, getFileSrc, queueServerAutosaveSelection, requiresFullEncoderReload } from "./globalApi.svelte";
 import { updateInlayScreen } from "./process/inlayScreen";
 import { checkImageType, parseMarkdownSafe } from "./parser.svelte";
 import { translateHTML } from "./translator/translator";
@@ -870,10 +870,12 @@ export async function removeChar(index:number,name:string, type:'normal'|'perman
     selectedCharID.set(-1)
 
     if (isNodeServer) {
+        const isPermanentDelete = type !== 'normal'
         const savePayload = {
             settings: true,
             character: targetCharId ? [targetCharId] : [],
             chat: [] as [string, string][],
+            deleteCharacter: (isPermanentDelete && targetCharId) ? [targetCharId] : [],
         }
         try {
             if (get(isDoingChat)) {
@@ -888,12 +890,14 @@ export async function removeChar(index:number,name:string, type:'normal'|'perman
                     // Ensure deletion/trash is persisted even if generation does not settle quickly.
                     await saveServerDatabase(getDatabase(), savePayload)
                 })().catch((error) => {
+                    queueServerAutosaveSelection(savePayload)
                     alertError(error)
                 })
             } else {
                 await saveServerDatabase(db, savePayload)
             }
         } catch (error) {
+            queueServerAutosaveSelection(savePayload)
             alertError(error)
         }
     }

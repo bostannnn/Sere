@@ -14,6 +14,7 @@ import { saveServerDatabase } from "./storage/serverDb";
 import { loadServerAsset, saveServerAsset } from "./storage/serverStorage";
 import { fetchWithServerAuth, getServerAuthClientId, resolveServerAuthToken } from "./storage/serverAuth";
 import { isApplyingServerSnapshot } from "./storage/serverStateClient";
+import { formatServerSaveFailureMessage, getServerSaveFailureLogDetails } from "./storage/serverSaveDiagnostics";
 import { getMimeFromAssetPath } from "./assets/fileTypes";
 
 export const forageStorage = new AutoStorage()
@@ -279,6 +280,8 @@ type SaveSelection = {
     settings?: boolean
     character: string[]
     chat: [string, string][]
+    deleteCharacter?: string[]
+    deleteChat?: [string, string][]
 }
 
 type ServerAutosaveDirtyState = {
@@ -286,6 +289,8 @@ type ServerAutosaveDirtyState = {
     settings: boolean
     characters: Set<string>
     chats: Map<string, Set<string>>
+    deletedCharacters: Set<string>
+    deletedChats: Map<string, Set<string>>
 }
 
 const CHAT_AUTOSAVE_TRANSIENT_KEYS = new Set<keyof Chat>(['isStreaming'])
@@ -296,14 +301,26 @@ function createServerAutosaveDirtyState(): ServerAutosaveDirtyState {
         settings: false,
         characters: new Set<string>(),
         chats: new Map<string, Set<string>>(),
+        deletedCharacters: new Set<string>(),
+        deletedChats: new Map<string, Set<string>>(),
     }
 }
 
 function hasPendingServerAutosaveDirtyState(dirtyState: ServerAutosaveDirtyState) {
-    if (dirtyState.full || dirtyState.settings || dirtyState.characters.size > 0) {
+    if (
+        dirtyState.full
+        || dirtyState.settings
+        || dirtyState.characters.size > 0
+        || dirtyState.deletedCharacters.size > 0
+    ) {
         return true
     }
     for (const chats of dirtyState.chats.values()) {
+        if (chats.size > 0) {
+            return true
+        }
+    }
+    for (const chats of dirtyState.deletedChats.values()) {
         if (chats.size > 0) {
             return true
         }
@@ -326,6 +343,13 @@ function markServerAutosaveCharacterDirty(dirtyState: ServerAutosaveDirtyState, 
     dirtyState.characters.add(charId)
 }
 
+function markServerAutosaveCharacterDeleteDirty(dirtyState: ServerAutosaveDirtyState, charId: string | undefined | null) {
+    if (!charId) {
+        return
+    }
+    dirtyState.deletedCharacters.add(charId)
+}
+
 function markServerAutosaveChatDirty(
     dirtyState: ServerAutosaveDirtyState,
     charId: string | undefined | null,
@@ -342,22 +366,58 @@ function markServerAutosaveChatDirty(
     chats.add(chatId)
 }
 
+function markServerAutosaveChatDeleteDirty(
+    dirtyState: ServerAutosaveDirtyState,
+    charId: string | undefined | null,
+    chatId: string | undefined | null,
+) {
+    if (!charId || !chatId) {
+        return
+    }
+    let chats = dirtyState.deletedChats.get(charId)
+    if (!chats) {
+        chats = new Set<string>()
+        dirtyState.deletedChats.set(charId, chats)
+    }
+    chats.add(chatId)
+}
+
+function cloneSaveSelection(selection: SaveSelection): SaveSelection {
+    return {
+        full: selection.full,
+        settings: selection.settings,
+        character: Array.isArray(selection.character) ? [...selection.character] : [],
+        chat: Array.isArray(selection.chat) ? selection.chat.map(([charId, chatId]) => [charId, chatId]) : [],
+        deleteCharacter: Array.isArray(selection.deleteCharacter) ? [...selection.deleteCharacter] : [],
+        deleteChat: Array.isArray(selection.deleteChat) ? selection.deleteChat.map(([charId, chatId]) => [charId, chatId]) : [],
+    }
+}
+
 function consumeServerAutosaveSelection(dirtyState: ServerAutosaveDirtyState): SaveSelection {
     const selection: SaveSelection = {
         full: dirtyState.full,
         settings: dirtyState.settings,
         character: Array.from(dirtyState.characters),
         chat: [],
+        deleteCharacter: Array.from(dirtyState.deletedCharacters),
+        deleteChat: [],
     }
     for (const [charId, chats] of dirtyState.chats.entries()) {
         for (const chatId of chats) {
             selection.chat.push([charId, chatId])
         }
     }
+    for (const [charId, chats] of dirtyState.deletedChats.entries()) {
+        for (const chatId of chats) {
+            selection.deleteChat?.push([charId, chatId])
+        }
+    }
     dirtyState.full = false
     dirtyState.settings = false
     dirtyState.characters.clear()
     dirtyState.chats.clear()
+    dirtyState.deletedCharacters.clear()
+    dirtyState.deletedChats.clear()
     return selection
 }
 
@@ -374,6 +434,28 @@ function mergeServerAutosaveSelection(dirtyState: ServerAutosaveDirtyState, sele
     for (const [charId, chatId] of selection.chat) {
         markServerAutosaveChatDirty(dirtyState, charId, chatId)
     }
+    for (const charId of selection.deleteCharacter || []) {
+        markServerAutosaveCharacterDeleteDirty(dirtyState, charId)
+    }
+    for (const [charId, chatId] of selection.deleteChat || []) {
+        markServerAutosaveChatDeleteDirty(dirtyState, charId, chatId)
+    }
+}
+
+let queueServerAutosaveSelectionInternal: ((selection: SaveSelection) => void) | null = null
+const pendingServerAutosaveSelections: SaveSelection[] = []
+
+export function queueServerAutosaveSelection(selection: SaveSelection) {
+    if (!isNodeServer) {
+        return
+    }
+    const nextSelection = cloneSaveSelection(selection)
+    if (queueServerAutosaveSelectionInternal) {
+        queueServerAutosaveSelectionInternal(nextSelection)
+        return
+    }
+    pendingServerAutosaveSelections.push(nextSelection)
+    void saveDb()
 }
 
 function snapshotServerAutosaveSettings(db: Database) {
@@ -484,28 +566,14 @@ export async function saveDb() {
         return 2500
     }
 
-    const extractHttpStatusFromError = (error: unknown): number | null => {
-        const message = `${(error as Error | undefined)?.message ?? error ?? ''}`
-        const match = message.match(/\((\d{3})\)/)
-        if (!match) {
-            return null
-        }
-        return parseInt(match[1])
-    }
-
     const notifyServerAutosaveFailure = (error: unknown) => {
         const now = Date.now()
         if ((now - lastServerAutosaveAlertAt) < SERVER_AUTOSAVE_ALERT_COOLDOWN_MS) {
             return
         }
         lastServerAutosaveAlertAt = now
-        const status = extractHttpStatusFromError(error)
-        let message = 'Live save failed. Recent changes may be lost after refresh.'
-        if (status === 429) {
-            message = 'Live save blocked by authentication rate-limit. Recent changes may be lost.'
-        } else if (status === 401 || status === 403) {
-            message = 'Live save requires re-authentication. Recent changes may be lost.'
-        }
+        const message = formatServerSaveFailureMessage(error)
+        console.error('[ServerAutosave] Live save failed', getServerSaveFailureLogDetails(error))
         alertError(message)
     }
 
@@ -525,6 +593,19 @@ export async function saveDb() {
             saveTimer = null
             void flushServerSave()
         }, 250)
+    }
+
+    const queueSelectionForAutosaveRetry = (selection: SaveSelection) => {
+        mergeServerAutosaveSelection(dirtyState, selection)
+        scheduleServerSave()
+    }
+    queueServerAutosaveSelectionInternal = queueSelectionForAutosaveRetry
+    while (pendingServerAutosaveSelections.length > 0) {
+        const pendingSelection = pendingServerAutosaveSelections.shift()
+        if (!pendingSelection) {
+            continue
+        }
+        queueSelectionForAutosaveRetry(pendingSelection)
     }
 
     const flushServerSave = async () => {
@@ -657,6 +738,7 @@ export async function saveDb() {
         }
         disposeEffects()
         serverSaveRuntimeInitialized = false
+        queueServerAutosaveSelectionInternal = null
         disposeServerSaveRuntime = null
         saving.state = false
     }
