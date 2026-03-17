@@ -1,9 +1,8 @@
 import type {
     CharacterEvolutionItem,
-    CharacterEvolutionRetentionCompactionReport,
     CharacterEvolutionPromptProjectionPolicy,
     CharacterEvolutionProposalState,
-    CharacterEvolutionRetentionDryRunCounts,
+    CharacterEvolutionRetentionCompactionReport,
     CharacterEvolutionRetentionDryRunReport,
     CharacterEvolutionRetentionDryRunSectionReport,
     CharacterEvolutionRetentionPolicy,
@@ -16,9 +15,27 @@ import {
     CHARACTER_EVOLUTION_ITEM_SECTION_KEYS,
     type CharacterEvolutionItemSectionKey,
 } from "./items"
+import {
+    applyStoredCapsToSection,
+    buildRetentionTotals,
+    createEmptySectionReport,
+    createRetentionCounts,
+    createRetentionDecision,
+    createTraceSectionReport,
+    normalizeVersionNumber,
+    type CharacterEvolutionDecayTraceReport,
+    type CharacterEvolutionDecayTraceSectionReport,
+    type CharacterEvolutionRetentionDecisionReason,
+} from "./decayShared"
 import { normalizeCharacterEvolutionSectionConfigs } from "./normalizers"
-import { compareCharacterEvolutionItemsForProjection, normalizeCharacterEvolutionPromptProjectionPolicy } from "./projectionPolicy"
+import { normalizeCharacterEvolutionPromptProjectionPolicy } from "./projectionPolicy"
 import { getCharacterEvolutionRetentionBucket, normalizeCharacterEvolutionRetentionPolicy } from "./retentionPolicy"
+export type {
+    CharacterEvolutionDecayTraceReport,
+    CharacterEvolutionDecayTraceSectionReport,
+    CharacterEvolutionRetentionDecision,
+    CharacterEvolutionRetentionDecisionReason,
+} from "./decayShared"
 
 function normalizeUnseenAcceptedHandoffs(item: CharacterEvolutionItem): number {
     if (!Number.isFinite(Number(item.unseenAcceptedHandoffs)) || Number(item.unseenAcceptedHandoffs) < 0) {
@@ -84,44 +101,6 @@ function shouldDeleteAfterDecay(
     return unseenAcceptedHandoffs >= retentionPolicy.thresholds.deleteNonActive[bucket]
 }
 
-function normalizeVersionNumber(value: unknown): number | null {
-    const numericValue = Number(value)
-    if (!Number.isFinite(numericValue) || numericValue < 0) {
-        return null
-    }
-    return Math.floor(numericValue)
-}
-
-function buildRetentionTotals(
-    sections: Record<CharacterEvolutionItemSectionKey, CharacterEvolutionRetentionDryRunSectionReport>,
-): CharacterEvolutionRetentionCompactionReport["totals"] {
-    return CHARACTER_EVOLUTION_ITEM_SECTION_KEYS.reduce<CharacterEvolutionRetentionCompactionReport["totals"]>((acc, key) => {
-        const section = sections[key]
-        acc.before.total += section.before.total
-        acc.before.active += section.before.active
-        acc.before.archived += section.before.archived
-        acc.before.corrected += section.before.corrected
-        acc.after.total += section.after.total
-        acc.after.active += section.after.active
-        acc.after.archived += section.after.archived
-        acc.after.corrected += section.after.corrected
-        return acc
-    }, {
-        before: {
-            total: 0,
-            active: 0,
-            archived: 0,
-            corrected: 0,
-        },
-        after: {
-            total: 0,
-            active: 0,
-            archived: 0,
-            corrected: 0,
-        },
-    })
-}
-
 function getEffectiveCompactionUnseenAcceptedHandoffs(
     item: CharacterEvolutionItem,
     currentStateVersion: number,
@@ -137,141 +116,16 @@ function getEffectiveCompactionUnseenAcceptedHandoffs(
     return Math.max(storedUnseenAcceptedHandoffs, currentStateVersion - lastSeenVersion)
 }
 
-function sortItemsByProjectionRank(
-    sectionKey: CharacterEvolutionItemSectionKey,
-    items: CharacterEvolutionItem[],
-    promptProjectionPolicy: CharacterEvolutionPromptProjectionPolicy,
-): CharacterEvolutionItem[] {
-    return [...items].sort((left, right) => compareCharacterEvolutionItemsForProjection({
-        sectionKey,
-        left,
-        right,
-        policy: promptProjectionPolicy,
-    }))
-}
-
-function createRetentionCounts(items: CharacterEvolutionItem[]): CharacterEvolutionRetentionDryRunCounts {
-    const counts: CharacterEvolutionRetentionDryRunCounts = {
-        total: 0,
-        active: 0,
-        archived: 0,
-        corrected: 0,
-    }
-
-    for (const item of items) {
-        const status = item.status ?? "active"
-        counts.total += 1
-        if (status === "archived") {
-            counts.archived += 1
-            continue
-        }
-        if (status === "corrected") {
-            counts.corrected += 1
-            continue
-        }
-        counts.active += 1
-    }
-
-    return counts
-}
-
-function createEmptySectionReport(items: CharacterEvolutionItem[]): CharacterEvolutionRetentionDryRunSectionReport {
-    return {
-        before: createRetentionCounts(items),
-        after: {
-            total: 0,
-            active: 0,
-            archived: 0,
-            corrected: 0,
-        },
-        archivedByDecay: 0,
-        deletedByDecay: 0,
-        archivedByCap: 0,
-        deletedByCap: 0,
-    }
-}
-
-function applyStoredCapsToSection(args: {
-    sectionKey: CharacterEvolutionItemSectionKey
-    items: CharacterEvolutionItem[]
-    protectedNonActiveItems?: Set<CharacterEvolutionItem>
-    retentionPolicy: CharacterEvolutionRetentionPolicy
-    promptProjectionPolicy: CharacterEvolutionPromptProjectionPolicy
-}): {
-    items: CharacterEvolutionItem[]
-    archivedByCap: number
-    deletedByCap: number
-} {
-    const cap = args.retentionPolicy.caps[args.sectionKey]
-    if (!cap) {
-        return {
-            items: args.items.map((item) => ({ ...item })),
-            archivedByCap: 0,
-            deletedByCap: 0,
-        }
-    }
-
-    const activeItems = args.items.filter((item) => (item.status ?? "active") === "active")
-    const nonActiveItems = args.items.filter((item) => (item.status ?? "active") !== "active")
-    const protectedNonActiveItems = nonActiveItems.filter((item) => args.protectedNonActiveItems?.has(item))
-    const trimmableNonActiveItems = nonActiveItems.filter((item) => !args.protectedNonActiveItems?.has(item))
-
-    const keptActive = new Set(
-        sortItemsByProjectionRank(args.sectionKey, activeItems, args.promptProjectionPolicy)
-            .slice(0, cap.active),
-    )
-    const archivedOverflowByItem = new Map(
-        activeItems
-            .filter((item) => !keptActive.has(item))
-            .map((item) => [item, {
-                ...item,
-                status: "archived" as const,
-            }] as const),
-    )
-    const archivedOverflow = [...archivedOverflowByItem.values()]
-    const trimmableNonActiveCapacity = Math.max(0, cap.nonActive - protectedNonActiveItems.length - archivedOverflow.length)
-    const keptTrimmableNonActive = sortItemsByProjectionRank(
-        args.sectionKey,
-        trimmableNonActiveItems,
-        args.promptProjectionPolicy,
-    ).slice(0, trimmableNonActiveCapacity)
-    const keptNonActiveSet = new Set([
-        ...protectedNonActiveItems,
-        ...keptTrimmableNonActive,
-    ])
-
-    return {
-        items: args.items.flatMap((item) => {
-            const status = item.status ?? "active"
-            if (status === "active") {
-                if (keptActive.has(item)) {
-                    return [{ ...item }]
-                }
-                const archivedOverflowItem = archivedOverflowByItem.get(item)
-                if (archivedOverflowItem) {
-                    return [{ ...archivedOverflowItem }]
-                }
-                return []
-            }
-            if (keptNonActiveSet.has(item)) {
-                return [{ ...item }]
-            }
-            return []
-        }),
-        archivedByCap: archivedOverflow.length,
-        deletedByCap: Math.max(0, trimmableNonActiveItems.length - keptTrimmableNonActive.length),
-    }
-}
-
 function applyDecayToSection(args: {
     sectionKey: CharacterEvolutionItemSectionKey
     items: CharacterEvolutionItem[]
     acceptedVersion: number
     retentionPolicy?: CharacterEvolutionRetentionPolicy | null
     promptProjectionPolicy?: CharacterEvolutionPromptProjectionPolicy | null
+    includeTrace?: boolean
 }): {
     items: CharacterEvolutionItem[]
-    report: CharacterEvolutionRetentionDryRunSectionReport
+    report: CharacterEvolutionRetentionDryRunSectionReport | CharacterEvolutionDecayTraceSectionReport
 } {
     const {
         sectionKey,
@@ -281,7 +135,15 @@ function applyDecayToSection(args: {
     const retentionPolicy = normalizeCharacterEvolutionRetentionPolicy(args.retentionPolicy)
     const promptProjectionPolicy = normalizeCharacterEvolutionPromptProjectionPolicy(args.promptProjectionPolicy)
     const protectedNonActiveItems = new Set<CharacterEvolutionItem>()
-    const report = createEmptySectionReport(items)
+    const includeTrace = args.includeTrace === true
+    const traceReport = includeTrace
+        ? createTraceSectionReport(sectionKey, items, retentionPolicy)
+        : null
+    const report = traceReport ?? createEmptySectionReport(items)
+    const pendingDecisionsByItem = new Map<CharacterEvolutionItem, {
+        beforeItem: CharacterEvolutionItem
+        keepReason: Extract<CharacterEvolutionRetentionDecisionReason, "reinforced"> | null
+    }>()
 
     const decayedItems = items.flatMap((item) => {
         const status = item.status ?? "active"
@@ -303,18 +165,43 @@ function applyDecayToSection(args: {
             }
             if (shouldDeleteAfterDecay(sectionKey, archivedItem, nextUnseenAcceptedHandoffs, retentionPolicy)) {
                 report.deletedByDecay += 1
+                if (traceReport) {
+                    traceReport.decisions.push(createRetentionDecision({
+                        beforeItem: item,
+                        reason: "decay_delete",
+                    }))
+                }
                 return []
             }
             report.archivedByDecay += 1
             protectedNonActiveItems.add(archivedItem)
+            if (traceReport) {
+                traceReport.decisions.push(createRetentionDecision({
+                    beforeItem: item,
+                    afterItem: archivedItem,
+                    reason: "decay_archive",
+                }))
+            }
             return [archivedItem]
         }
 
         if (shouldDeleteAfterDecay(sectionKey, nextItem, nextUnseenAcceptedHandoffs, retentionPolicy)) {
             report.deletedByDecay += 1
+            if (traceReport) {
+                traceReport.decisions.push(createRetentionDecision({
+                    beforeItem: item,
+                    reason: "decay_delete",
+                }))
+            }
             return []
         }
 
+        if (includeTrace) {
+            pendingDecisionsByItem.set(nextItem, {
+                beforeItem: item,
+                keepReason: reinforced ? "reinforced" : null,
+            })
+        }
         return [nextItem]
     })
 
@@ -328,6 +215,36 @@ function applyDecayToSection(args: {
     report.archivedByCap = cappedResult.archivedByCap
     report.deletedByCap = cappedResult.deletedByCap
     report.after = createRetentionCounts(cappedResult.items)
+
+    if (traceReport) {
+        for (const [item, pendingDecision] of pendingDecisionsByItem.entries()) {
+            const archivedOverflowItem = cappedResult.archivedOverflowBySource.get(item)
+            if (archivedOverflowItem) {
+                traceReport.decisions.push(createRetentionDecision({
+                    beforeItem: pendingDecision.beforeItem,
+                    afterItem: archivedOverflowItem,
+                    reason: "cap_archive",
+                }))
+                continue
+            }
+            if (cappedResult.deletedOverflowItems.has(item)) {
+                traceReport.decisions.push(createRetentionDecision({
+                    beforeItem: pendingDecision.beforeItem,
+                    reason: "cap_delete",
+                }))
+                continue
+            }
+            if (cappedResult.keptItems.has(item)) {
+                if (pendingDecision.keepReason) {
+                    traceReport.decisions.push(createRetentionDecision({
+                        beforeItem: pendingDecision.beforeItem,
+                        afterItem: item,
+                        reason: pendingDecision.keepReason,
+                    }))
+                }
+            }
+        }
+    }
 
     return {
         items: cappedResult.items,
@@ -362,19 +279,42 @@ export function applyCharacterEvolutionDecay(args: {
     retentionPolicy?: CharacterEvolutionRetentionPolicy | null
     promptProjectionPolicy?: CharacterEvolutionPromptProjectionPolicy | null
 }): CharacterEvolutionState {
+    return applyCharacterEvolutionDecayWithReport(args).state
+}
+
+export function applyCharacterEvolutionDecayWithReport(args: {
+    state: CharacterEvolutionState
+    acceptedVersion: number
+    retentionPolicy?: CharacterEvolutionRetentionPolicy | null
+    promptProjectionPolicy?: CharacterEvolutionPromptProjectionPolicy | null
+}): {
+    state: CharacterEvolutionState
+    report: CharacterEvolutionDecayTraceReport
+} {
     const nextState = structuredClone(args.state)
+    const sections = {} as CharacterEvolutionDecayTraceReport["sections"]
 
     for (const key of CHARACTER_EVOLUTION_ITEM_SECTION_KEYS) {
-        nextState[key] = applyDecayToSection({
+        const result = applyDecayToSection({
             sectionKey: key,
             items: Array.isArray(nextState[key]) ? nextState[key] as CharacterEvolutionItem[] : [],
             acceptedVersion: args.acceptedVersion,
             retentionPolicy: args.retentionPolicy,
             promptProjectionPolicy: args.promptProjectionPolicy,
-        }).items as never
+            includeTrace: true,
+        })
+        nextState[key] = result.items as never
+        sections[key] = result.report as CharacterEvolutionDecayTraceSectionReport
     }
 
-    return nextState
+    return {
+        state: nextState,
+        report: {
+            acceptedVersion: Math.max(0, Math.floor(Number(args.acceptedVersion) || 0)),
+            totals: buildRetentionTotals(sections),
+            sections,
+        },
+    }
 }
 
 export function previewCharacterEvolutionRetentionDryRun(args: {

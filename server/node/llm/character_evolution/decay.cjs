@@ -1,7 +1,6 @@
 const { CHARACTER_EVOLUTION_ITEM_SECTION_KEYS } = require('./items.cjs');
 const { normalizeCharacterEvolutionSectionConfigs } = require('./normalizers.cjs');
 const {
-    compareCharacterEvolutionItemsForProjection,
     normalizeCharacterEvolutionPromptProjectionPolicy,
 } = require('./projection_policy.cjs');
 const {
@@ -9,6 +8,15 @@ const {
     normalizeCharacterEvolutionRetentionPolicy,
 } = require('./retention_policy.cjs');
 const { createDefaultCharacterEvolutionState } = require('./schema.cjs');
+const {
+    applyStoredCapsToSection,
+    buildRetentionTotals,
+    createEmptySectionReport,
+    createRetentionCounts,
+    createRetentionDecision,
+    createTraceSectionReport,
+    normalizeVersionNumber,
+} = require('./decay_shared.cjs');
 
 function normalizeUnseenAcceptedHandoffs(item) {
     if (!Number.isFinite(Number(item?.unseenAcceptedHandoffs)) || Number(item?.unseenAcceptedHandoffs) < 0) {
@@ -21,42 +29,6 @@ function isReinforcedOnAcceptedHandoff(item, acceptedVersion) {
     return Number.isFinite(item?.lastSeenVersion)
         && Number(item.lastSeenVersion) === acceptedVersion
         && (item?.status || 'active') === 'active';
-}
-
-function normalizeVersionNumber(value) {
-    const numericValue = Number(value);
-    if (!Number.isFinite(numericValue) || numericValue < 0) {
-        return null;
-    }
-    return Math.floor(numericValue);
-}
-
-function buildRetentionTotals(sections) {
-    return CHARACTER_EVOLUTION_ITEM_SECTION_KEYS.reduce((acc, key) => {
-        const section = sections[key];
-        acc.before.total += section.before.total;
-        acc.before.active += section.before.active;
-        acc.before.archived += section.before.archived;
-        acc.before.corrected += section.before.corrected;
-        acc.after.total += section.after.total;
-        acc.after.active += section.after.active;
-        acc.after.archived += section.after.archived;
-        acc.after.corrected += section.after.corrected;
-        return acc;
-    }, {
-        before: {
-            total: 0,
-            active: 0,
-            archived: 0,
-            corrected: 0,
-        },
-        after: {
-            total: 0,
-            active: 0,
-            archived: 0,
-            corrected: 0,
-        },
-    });
 }
 
 function getEffectiveCompactionUnseenAcceptedHandoffs(item, currentStateVersion) {
@@ -112,119 +84,15 @@ function shouldDeleteAfterDecay(sectionKey, item, unseenAcceptedHandoffs, retent
     return unseenAcceptedHandoffs >= retentionPolicy.thresholds.deleteNonActive[bucket];
 }
 
-function sortItemsByProjectionRank(sectionKey, items, promptProjectionPolicy) {
-    return [...items].sort((left, right) => compareCharacterEvolutionItemsForProjection({
-        sectionKey,
-        left,
-        right,
-        policy: promptProjectionPolicy,
-    }));
-}
-
-function createRetentionCounts(items) {
-    const counts = {
-        total: 0,
-        active: 0,
-        archived: 0,
-        corrected: 0,
-    };
-    for (const item of items) {
-        const status = item?.status || 'active';
-        counts.total += 1;
-        if (status === 'archived') {
-            counts.archived += 1;
-            continue;
-        }
-        if (status === 'corrected') {
-            counts.corrected += 1;
-            continue;
-        }
-        counts.active += 1;
-    }
-    return counts;
-}
-
-function createEmptySectionReport(items) {
-    return {
-        before: createRetentionCounts(items),
-        after: {
-            total: 0,
-            active: 0,
-            archived: 0,
-            corrected: 0,
-        },
-        archivedByDecay: 0,
-        deletedByDecay: 0,
-        archivedByCap: 0,
-        deletedByCap: 0,
-    };
-}
-
-function applyStoredCapsToSection(arg = {}) {
-    const cap = arg.retentionPolicy?.caps?.[arg.sectionKey];
-    if (!cap) {
-        return {
-            items: (Array.isArray(arg.items) ? arg.items : []).map((item) => ({ ...item })),
-            archivedByCap: 0,
-            deletedByCap: 0,
-        };
-    }
-
-    const activeItems = arg.items.filter((item) => (item?.status || 'active') === 'active');
-    const nonActiveItems = arg.items.filter((item) => (item?.status || 'active') !== 'active');
-    const protectedNonActiveItems = nonActiveItems.filter((item) => arg.protectedNonActiveItems?.has(item));
-    const trimmableNonActiveItems = nonActiveItems.filter((item) => !arg.protectedNonActiveItems?.has(item));
-    const keptActive = new Set(
-        sortItemsByProjectionRank(arg.sectionKey, activeItems, arg.promptProjectionPolicy).slice(0, cap.active)
-    );
-    const archivedOverflowByItem = new Map(
-        activeItems
-            .filter((item) => !keptActive.has(item))
-            .map((item) => [item, {
-                ...item,
-                status: 'archived',
-            }])
-    );
-    const archivedOverflow = [...archivedOverflowByItem.values()];
-    const trimmableNonActiveCapacity = Math.max(0, cap.nonActive - protectedNonActiveItems.length - archivedOverflow.length);
-    const keptTrimmableNonActive = sortItemsByProjectionRank(
-        arg.sectionKey,
-        trimmableNonActiveItems,
-        arg.promptProjectionPolicy
-    ).slice(0, trimmableNonActiveCapacity);
-    const keptNonActiveSet = new Set([
-        ...protectedNonActiveItems,
-        ...keptTrimmableNonActive,
-    ]);
-
-    return {
-        items: arg.items.flatMap((item) => {
-            const status = item?.status || 'active';
-            if (status === 'active') {
-                if (keptActive.has(item)) {
-                    return [{ ...item }];
-                }
-                const archivedOverflowItem = archivedOverflowByItem.get(item);
-                if (archivedOverflowItem) {
-                    return [{ ...archivedOverflowItem }];
-                }
-                return [];
-            }
-            if (keptNonActiveSet.has(item)) {
-                return [{ ...item }];
-            }
-            return [];
-        }),
-        archivedByCap: archivedOverflow.length,
-        deletedByCap: Math.max(0, trimmableNonActiveItems.length - keptTrimmableNonActive.length),
-    };
-}
-
 function applyDecayToSection(arg = {}) {
     const retentionPolicy = normalizeCharacterEvolutionRetentionPolicy(arg.retentionPolicy);
     const promptProjectionPolicy = normalizeCharacterEvolutionPromptProjectionPolicy(arg.promptProjectionPolicy);
     const protectedNonActiveItems = new Set();
-    const report = createEmptySectionReport(Array.isArray(arg.items) ? arg.items : []);
+    const includeTrace = arg.includeTrace === true;
+    const report = includeTrace
+        ? createTraceSectionReport(arg.sectionKey, Array.isArray(arg.items) ? arg.items : [], retentionPolicy)
+        : createEmptySectionReport(Array.isArray(arg.items) ? arg.items : []);
+    const pendingDecisionsByItem = new Map();
     const decayedItems = (Array.isArray(arg.items) ? arg.items : []).flatMap((item) => {
         const status = item?.status || 'active';
         const reinforced = status === 'active' && isReinforcedOnAcceptedHandoff(item, arg.acceptedVersion);
@@ -244,18 +112,43 @@ function applyDecayToSection(arg = {}) {
             };
             if (shouldDeleteAfterDecay(arg.sectionKey, archivedItem, nextUnseenAcceptedHandoffs, retentionPolicy)) {
                 report.deletedByDecay += 1;
+                if (includeTrace) {
+                    report.decisions.push(createRetentionDecision({
+                        beforeItem: item,
+                        reason: 'decay_delete',
+                    }));
+                }
                 return [];
             }
             report.archivedByDecay += 1;
             protectedNonActiveItems.add(archivedItem);
+            if (includeTrace) {
+                report.decisions.push(createRetentionDecision({
+                    beforeItem: item,
+                    afterItem: archivedItem,
+                    reason: 'decay_archive',
+                }));
+            }
             return [archivedItem];
         }
 
         if (shouldDeleteAfterDecay(arg.sectionKey, nextItem, nextUnseenAcceptedHandoffs, retentionPolicy)) {
             report.deletedByDecay += 1;
+            if (includeTrace) {
+                report.decisions.push(createRetentionDecision({
+                    beforeItem: item,
+                    reason: 'decay_delete',
+                }));
+            }
             return [];
         }
 
+        if (includeTrace) {
+            pendingDecisionsByItem.set(nextItem, {
+                beforeItem: item,
+                keepReason: reinforced ? 'reinforced' : null,
+            });
+        }
         return [nextItem];
     });
 
@@ -269,6 +162,35 @@ function applyDecayToSection(arg = {}) {
     report.archivedByCap = cappedResult.archivedByCap;
     report.deletedByCap = cappedResult.deletedByCap;
     report.after = createRetentionCounts(cappedResult.items);
+
+    if (includeTrace) {
+        for (const [item, pendingDecision] of pendingDecisionsByItem.entries()) {
+            if (cappedResult.archivedOverflowBySource?.has(item)) {
+                report.decisions.push(createRetentionDecision({
+                    beforeItem: pendingDecision.beforeItem,
+                    afterItem: cappedResult.archivedOverflowBySource.get(item),
+                    reason: 'cap_archive',
+                }));
+                continue;
+            }
+            if (cappedResult.deletedOverflowItems?.has(item)) {
+                report.decisions.push(createRetentionDecision({
+                    beforeItem: pendingDecision.beforeItem,
+                    reason: 'cap_delete',
+                }));
+                continue;
+            }
+            if (cappedResult.keptItems?.has(item)) {
+                if (pendingDecision.keepReason) {
+                    report.decisions.push(createRetentionDecision({
+                        beforeItem: pendingDecision.beforeItem,
+                        afterItem: item,
+                        reason: pendingDecision.keepReason,
+                    }));
+                }
+            }
+        }
+    }
 
     return {
         items: cappedResult.items,
@@ -295,19 +217,34 @@ function applyLastInteractionEndedOverwrite(arg = {}) {
 }
 
 function applyCharacterEvolutionDecay(arg = {}) {
+    return applyCharacterEvolutionDecayWithReport(arg).state;
+}
+
+function applyCharacterEvolutionDecayWithReport(arg = {}) {
     const nextState = structuredClone(arg.state || {});
+    const sections = {};
 
     for (const key of CHARACTER_EVOLUTION_ITEM_SECTION_KEYS) {
-        nextState[key] = applyDecayToSection({
+        const result = applyDecayToSection({
             sectionKey: key,
             items: Array.isArray(nextState[key]) ? nextState[key] : [],
             acceptedVersion: arg.acceptedVersion,
             retentionPolicy: arg.retentionPolicy,
             promptProjectionPolicy: arg.promptProjectionPolicy,
-        }).items;
+            includeTrace: true,
+        });
+        nextState[key] = result.items;
+        sections[key] = result.report;
     }
 
-    return nextState;
+    return {
+        state: nextState,
+        report: {
+            acceptedVersion: Math.max(0, Math.floor(Number(arg.acceptedVersion) || 0)),
+            totals: buildRetentionTotals(sections),
+            sections,
+        },
+    };
 }
 
 function previewCharacterEvolutionRetentionDryRun(arg = {}) {
@@ -426,6 +363,7 @@ function compactCharacterEvolutionCurrentState(arg = {}) {
 
 module.exports = {
     applyCharacterEvolutionDecay,
+    applyCharacterEvolutionDecayWithReport,
     applyLastInteractionEndedOverwrite,
     compactCharacterEvolutionCurrentState,
     previewCharacterEvolutionRetentionDryRun,

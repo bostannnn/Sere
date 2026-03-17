@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 
 import {
     applyLastInteractionEndedOverwrite,
+    applyCharacterEvolutionDecayWithReport,
     compactCharacterEvolutionCurrentState,
     previewCharacterEvolutionRetentionDryRun,
 } from "./decay"
@@ -9,6 +10,62 @@ import { createDefaultCharacterEvolutionSectionConfigs, createDefaultCharacterEv
 import { createCharacterEvolutionRetentionPolicy } from "./retentionPolicy"
 
 describe("character evolution decay compaction", () => {
+    it("returns per-item retention decisions for accept-time decay tracing", () => {
+        const state = createDefaultCharacterEvolutionState()
+        state.activeThreads = [
+            {
+                value: "book the train to Kazan",
+                status: "active",
+                confidence: "likely",
+                lastSeenVersion: 2,
+                unseenAcceptedHandoffs: 0,
+            },
+            {
+                value: "follow up on the old gallery invite",
+                status: "active",
+                confidence: "likely",
+                lastSeenVersion: 1,
+                unseenAcceptedHandoffs: 1,
+            },
+        ]
+
+        const result = applyCharacterEvolutionDecayWithReport({
+            state,
+            acceptedVersion: 2,
+        })
+        const { applyCharacterEvolutionDecayWithReport: applyCharacterEvolutionDecayWithReportCjs } = require("../../../server/node/llm/character_evolution/decay.cjs")
+        const resultCjs = applyCharacterEvolutionDecayWithReportCjs({
+            state,
+            acceptedVersion: 2,
+        })
+
+        expect(result.report.acceptedVersion).toBe(2)
+        expect(result.report.sections.activeThreads).toEqual(expect.objectContaining({
+            bucket: "fast",
+            archiveThreshold: 2,
+            decisions: expect.arrayContaining([
+                expect.objectContaining({
+                    reason: "reinforced",
+                    valuePreview: "book the train to Kazan",
+                    fromStatus: "active",
+                    toStatus: "active",
+                }),
+                expect.objectContaining({
+                    reason: "decay_archive",
+                    valuePreview: "follow up on the old gallery invite",
+                    fromStatus: "active",
+                    toStatus: "archived",
+                }),
+            ]),
+        }))
+        expect(result.report.sections.activeThreads.decisions).not.toEqual(expect.arrayContaining([
+            expect.objectContaining({
+                reason: "unchanged",
+            }),
+        ]))
+        expect(resultCjs).toEqual(result)
+    })
+
     it("builds retention dry-run stats from the same decay engine", () => {
         const state = createDefaultCharacterEvolutionState()
         state.activeThreads = [
