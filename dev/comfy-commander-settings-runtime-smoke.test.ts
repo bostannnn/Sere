@@ -59,6 +59,12 @@ function findButtonByText(label: string) {
   ) as HTMLButtonElement | undefined;
 }
 
+function clickAccordion(label: string) {
+  const trigger = findButtonByText(label);
+  trigger?.click();
+  return trigger;
+}
+
 describe("comfy commander settings runtime smoke", () => {
   beforeEach(() => {
     DBState.db = {};
@@ -80,10 +86,15 @@ describe("comfy commander settings runtime smoke", () => {
 
     expect(DBState.db.comfyCommander).toBeDefined();
     expect(DBState.db.comfyCommander.config.baseUrl).toBe("http://127.0.0.1:8188");
-    expect(document.querySelector(".accordion-trigger")).toBeNull();
+    expect(DBState.db.comfyCommander.config.activeProvider).toBe("comfyui");
+    expect(DBState.db.comfyCommander.config.runpod.modelId).toBe("z-image-turbo");
+    const accordions = Array.from(document.querySelectorAll(".accordion-trigger"));
+    expect(accordions.length).toBeGreaterThan(0);
 
-    const sections = Array.from(document.querySelectorAll(".ds-comfy-section"));
-    expect(sections.length).toBe(2);
+    clickAccordion("Templates");
+    clickAccordion("Workflows");
+    await flushUi();
+
     expect((document.body.textContent ?? "").includes("No workflows yet.")).toBe(true);
     expect((document.body.textContent ?? "").includes("No templates yet.")).toBe(true);
   });
@@ -92,6 +103,10 @@ describe("comfy commander settings runtime smoke", () => {
     const target = document.createElement("div");
     document.body.appendChild(target);
     app = mount(ComfyCommanderSettings, { target });
+    await flushUi();
+
+    clickAccordion("Templates");
+    clickAccordion("Workflows");
     await flushUi();
 
     const addWorkflowButton = findButtonByText("Add Workflow");
@@ -105,5 +120,8 @@ describe("comfy commander settings runtime smoke", () => {
 
     expect(DBState.db.comfyCommander.workflows.length).toBe(1);
     expect(DBState.db.comfyCommander.templates.length).toBe(1);
+    expect(DBState.db.comfyCommander.templates[0].providerOverride).toBe("none");
+    expect(DBState.db.comfyCommander.templates[0].imagePromptContextMessageCount).toBe(4);
+    expect(DBState.db.comfyCommander.templates[0].runpodSize).toBe("1024*1024");
   });
 });

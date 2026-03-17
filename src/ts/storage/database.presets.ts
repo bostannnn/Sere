@@ -189,6 +189,20 @@ function sanitizePresetForExport(preset: botPreset): botPreset {
   sanitized.forceReplaceUrl = '';
   sanitized.forceReplaceUrl2 = '';
   sanitized.proxyKey = '';
+  const comfyCommander = (sanitized as unknown as {
+    comfyCommander?: {
+      config?: {
+        runpod?: { apiKey?: string };
+        referenceStore?: { yandexDiskToken?: string };
+      };
+    };
+  }).comfyCommander;
+  if (comfyCommander?.config?.runpod) {
+    comfyCommander.config.runpod.apiKey = '';
+  }
+  if (comfyCommander?.config?.referenceStore) {
+    comfyCommander.config.referenceStore.yandexDiskToken = '';
+  }
   return sanitized;
 }
 

@@ -16,6 +16,7 @@ const shared = vi.hoisted(() => ({
   charXWrites: [] as Array<{ key: string; data: Uint8Array | string; level?: number }>,
   convertImageMock: vi.fn(async (data: Uint8Array) => data),
   readImageMock: vi.fn(async () => new Uint8Array([1, 2, 3])),
+  saveAssetMock: vi.fn(async (_data?: Uint8Array, _customId?: string, fileName?: string) => `asset-id${fileName ? `.${fileName}` : ""}`),
 }));
 
 vi.mock("src/lang", () => ({
@@ -76,7 +77,7 @@ vi.mock("src/ts/globalApi.svelte", () => ({
     async close() {}
   },
   readImage: shared.readImageMock,
-  saveAsset: async () => "asset-id",
+  saveAsset: shared.saveAssetMock,
   VirtualWriter: class VirtualWriter {
     writes: Uint8Array[] = [];
     write(data: Uint8Array) {
@@ -268,6 +269,8 @@ describe("character card memory compatibility", () => {
     shared.convertImageMock.mockImplementation(async (data: Uint8Array) => data);
     shared.readImageMock.mockReset();
     shared.readImageMock.mockImplementation(async () => new Uint8Array([1, 2, 3]));
+    shared.saveAssetMock.mockReset();
+    shared.saveAssetMock.mockImplementation(async (_data?: Uint8Array, _customId?: string, fileName?: string) => `asset-id${fileName ? `.${fileName}` : ""}`);
   });
 
   it("exports canonical memory prompt override without legacy prompt fields", async () => {
@@ -424,6 +427,49 @@ describe("character card memory compatibility", () => {
     };
     expect(importedChar.characterVersion).toBe("");
     expect(importedChar.additionalData.character_version).toBe("");
+  });
+
+  it("preserves the main portrait extension on import", async () => {
+    const { importCharacterCardSpec } = await import("src/ts/characterCards.importSpec");
+    shared.checkImageTypeMock.mockReturnValueOnce("JPEG");
+
+    const imported = await importCharacterCardSpec({
+      spec: "chara_card_v3",
+      spec_version: "3.0",
+      data: {
+        name: "Portrait ext",
+        description: "",
+        personality: "",
+        scenario: "",
+        first_mes: "",
+        mes_example: "",
+        creator_notes: "",
+        system_prompt: "",
+        post_history_instructions: "",
+        alternate_greetings: [],
+        character_book: {
+          scan_depth: 0,
+          token_budget: 0,
+          recursive_scanning: false,
+          extensions: {},
+          entries: [],
+        },
+        tags: [],
+        creator: "",
+        extensions: {
+          risuai: {},
+        },
+        group_only_greetings: [],
+        nickname: "",
+        source: [],
+        creation_date: 0,
+        modification_date: 0,
+        assets: [],
+      },
+    } as never, new Uint8Array([0xff, 0xd8, 0xff, 0xd9]));
+
+    expect(imported).toBe(true);
+    expect(shared.saveAssetMock).toHaveBeenCalledWith(expect.any(Uint8Array), "", "portrait.jpeg");
   });
 
   it("exports JSON asset data URIs with a detected image mime type", async () => {

@@ -31,16 +31,46 @@ function registerContentRoutes(arg = {}) {
         }
     };
 
+    function resolveStorageFolder(folder) {
+        if (folder === 'character-images') {
+            return path.join('characters', 'images');
+        }
+        if (['backgrounds', 'generated', 'other'].includes(folder)) {
+            return path.join('assets', folder);
+        }
+        return path.join('assets', 'other');
+    }
+
     app.post('/data/assets', withAsyncRoute('POST /data/assets', async (req, res) => {
         const folder = (req.query.folder || 'other').toString();
         const ext = (req.query.ext || '').toString().replace(/[^a-zA-Z0-9]/g, '');
-        const safeFolder = ['backgrounds', 'generated', 'other'].includes(folder) ? folder : 'other';
+        const safeFolder = ['backgrounds', 'generated', 'other', 'character-images'].includes(folder) ? folder : 'other';
         const rawId = (req.query.id || '').toString();
         const safeId = /^[a-zA-Z0-9_-]{6,128}$/.test(rawId) ? rawId : '';
         const id = safeId || crypto.randomUUID();
         const fileName = ext ? `${id}.${ext}` : id;
-        const relPath = path.join('assets', safeFolder, fileName);
+        const relPath = path.join(resolveStorageFolder(safeFolder), fileName);
         const absPath = safeResolve(dataDirs.root, relPath);
+        const buffer = Buffer.isBuffer(req.body)
+            ? req.body
+            : Buffer.from(typeof req.body === 'string' ? req.body : JSON.stringify(req.body || {}), 'utf-8');
+        await fs.writeFile(absPath, buffer);
+        res.status(201).send({ path: relPath.replace(/\\/g, '/') });
+    }));
+
+    app.post('/data/characters/:charId/images', withAsyncRoute('POST /data/characters/:charId/images', async (req, res) => {
+        const safeCharId = requireSafeSegment(res, req.params.charId, 'character id');
+        if (!safeCharId) return;
+        const ext = (req.query.ext || '').toString().replace(/[^a-zA-Z0-9]/g, '');
+        const rawId = (req.query.id || '').toString();
+        const safeId = /^[a-zA-Z0-9_-]{6,128}$/.test(rawId) ? rawId : '';
+        const id = safeId || crypto.randomUUID();
+        const fileName = ext ? `${id}.${ext}` : id;
+        const charDir = safeResolve(dataDirs.characters, safeCharId);
+        const imagesDir = safeResolve(charDir, 'images');
+        await fs.mkdir(imagesDir, { recursive: true });
+        const absPath = safeResolve(imagesDir, fileName);
+        const relPath = path.join('characters', safeCharId, 'images', fileName);
         const buffer = Buffer.isBuffer(req.body)
             ? req.body
             : Buffer.from(typeof req.body === 'string' ? req.body : JSON.stringify(req.body || {}), 'utf-8');
@@ -51,6 +81,35 @@ function registerContentRoutes(arg = {}) {
     app.get('/data/assets/*', withAsyncRoute('GET /data/assets/*', async (req, res) => {
         const relPath = req.path.replace(/^\/data\//, '');
         const absPath = safeResolve(dataDirs.root, relPath);
+        if (!existsSync(absPath)) {
+            res.status(404).send({ error: 'NOT_FOUND' });
+            return;
+        }
+        res.sendFile(absPath);
+    }));
+
+    app.get('/data/characters/images/*', withAsyncRoute('GET /data/characters/images/*', async (req, res) => {
+        const relPath = req.path.replace(/^\/data\//, '');
+        const absPath = safeResolve(dataDirs.root, relPath);
+        if (!existsSync(absPath)) {
+            res.status(404).send({ error: 'NOT_FOUND' });
+            return;
+        }
+        res.sendFile(absPath);
+    }));
+
+    app.get('/data/characters/:charId/images/*', withAsyncRoute('GET /data/characters/:charId/images/*', async (req, res) => {
+        const safeCharId = requireSafeSegment(res, req.params.charId, 'character id');
+        if (!safeCharId) return;
+        const relSuffix = (req.params[0] || '').toString();
+        const safeName = relSuffix.split('/').pop() || '';
+        if (!safeName || safeName.includes('/') || safeName.includes('\\')) {
+            res.status(400).send({ error: 'INVALID_PATH' });
+            return;
+        }
+        const charDir = safeResolve(dataDirs.characters, safeCharId);
+        const imagesDir = safeResolve(charDir, 'images');
+        const absPath = safeResolve(imagesDir, safeName);
         if (!existsSync(absPath)) {
             res.status(404).send({ error: 'NOT_FOUND' });
             return;

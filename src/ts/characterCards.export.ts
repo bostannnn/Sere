@@ -5,7 +5,7 @@ import { LocalWriter, readImage, downloadFile, BlankWriter, VirtualWriter, Appen
 import { sleep, isKnownUri } from "./util";
 import { language } from "src/lang";
 import { reencodeImage } from "./process/files/inlays";
-import { convertImage, checkImageType } from "./parser.svelte";
+import { checkImageType } from "./parser.svelte";
 import { PngChunk } from "./pngChunk";
 import { CharXWriter } from "./process/processzip";
 import { exportModule, type RisuModule } from "./process/modules";
@@ -163,13 +163,17 @@ async function writeV3Card(
 }
 
 async function writePngAsset(
-  asset: { uri: string },
+  asset: { uri: string; ext?: string },
   writer: BlankWriter | CharXWriter | InstanceType<typeof PngChunk.streamWriter>,
   rData: Uint8Array,
   assetIndex: number,
 ) {
   asset.uri = `__asset:${assetIndex}`;
-  await writer.write(`chara-ext-asset_:${assetIndex}`, Buffer.from(await convertImage(rData)).toString("base64"));
+  const ext = (asset.ext || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+  const key = ext
+    ? `chara-ext-asset_:${assetIndex}:${ext}`
+    : `chara-ext-asset_:${assetIndex}`;
+  await writer.write(key, Buffer.from(rData).toString("base64"));
 }
 
 async function writeCharXAsset(
@@ -303,10 +307,9 @@ function sanitizeFilename(name: string) {
 }
 
 async function encodeAssetForExport(ext: string, data: Uint8Array): Promise<{ data: Uint8Array; mime: string; ext: string }> {
-  const convertedData = await convertImage(data);
-  const encoding = getJsonAssetEncoding(ext, convertedData);
+  const encoding = getJsonAssetEncoding(ext, data);
   return {
-    data: convertedData,
+    data,
     mime: encoding.mime,
     ext: encoding.ext,
   };

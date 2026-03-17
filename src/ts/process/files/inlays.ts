@@ -5,7 +5,7 @@ import { checkImageType } from "../../parser.svelte";
 import { getModelInfo, LLMFlags } from "src/ts/model/modellist";
 import { asBuffer } from "../../util";
 import { isNodeServer } from "src/ts/platform";
-import { loadServerAsset, saveServerAsset } from "../../storage/serverStorage";
+import { loadServerAsset, saveServerAsset, saveServerCharacterImageFile } from "../../storage/serverStorage";
 
 export type InlayAsset = {
     data: string | Blob,
@@ -41,6 +41,11 @@ const inlayStorage = localforage.createInstance({
     storeName: 'inlay'
 })
 
+const inlayMetadataStorage = localforage.createInstance({
+    name: 'inlay-metadata',
+    storeName: 'inlay-metadata'
+})
+
 function normalizeServerInlayId(id: string) {
     if (id.startsWith('/data/')) {
         return id.slice('/data/'.length)
@@ -66,7 +71,14 @@ function inlayMimeType(type: InlayAsset['type'], ext: string) {
 }
 
 function isServerInlayId(id: string) {
-    return normalizeServerInlayId(id).startsWith('assets/')
+    const normalizedId = normalizeServerInlayId(id)
+    return normalizedId.startsWith('assets/')
+        || /^characters\/[^/]+\/images\//.test(normalizedId)
+        || normalizedId.startsWith('characters/images/')
+}
+
+function buildCharacterImagePath(characterId: string, fileName: string) {
+    return `characters/${characterId}/images/${fileName}`
 }
 
 async function getImageDimensions(blob: Blob): Promise<{ width: number, height: number }> {
@@ -78,6 +90,69 @@ async function getImageDimensions(blob: Blob): Promise<{ width: number, height: 
         return { width: image.width, height: image.height }
     } finally {
         URL.revokeObjectURL(url)
+    }
+}
+
+function resolveImageExtension(name?: string, ext?: string) {
+    const candidate = (ext || name?.split('.').at(-1) || 'png').toLowerCase()
+    return inlayImageExts.includes(candidate) ? candidate : 'png'
+}
+
+async function saveInlayImageBlob(blob: Blob, arg: { name?: string, ext?: string, id?: string } = {}) {
+    const ext = resolveImageExtension(arg.name, arg.ext)
+    const dims = await getImageDimensions(blob)
+    const imgid = arg.id ?? v4()
+    if (isNodeServer) {
+        const imageData = new Uint8Array(await blob.arrayBuffer())
+        return await saveServerAsset(imageData, imgid, `${imgid}.${ext}`, 'character-images')
+    }
+
+    await inlayStorage.setItem(imgid, {
+        name: arg.name ?? imgid,
+        data: blob,
+        ext,
+        height: dims.height,
+        width: dims.width,
+        type: 'image'
+    })
+
+    return `${imgid}`
+}
+
+async function saveCharacterInlayImageBlob(
+    characterId: string,
+    blob: Blob,
+    arg: { name?: string, ext?: string, id?: string } = {},
+) {
+    const ext = resolveImageExtension(arg.name, arg.ext)
+    const dims = await getImageDimensions(blob)
+    const imgid = arg.id ?? v4()
+    if (isNodeServer) {
+        const imageData = new Uint8Array(await blob.arrayBuffer())
+        const assetPath = await saveServerCharacterImageFile(characterId, imageData, imgid, `${imgid}.${ext}`)
+        return {
+            id: assetPath,
+            ext,
+            width: dims.width,
+            height: dims.height,
+        }
+    }
+
+    const pathId = buildCharacterImagePath(characterId, `${imgid}.${ext}`)
+    await inlayStorage.setItem(pathId, {
+        name: arg.name ?? imgid,
+        data: blob,
+        ext,
+        height: dims.height,
+        width: dims.width,
+        type: 'image'
+    })
+
+    return {
+        id: pathId,
+        ext,
+        width: dims.width,
+        height: dims.height,
     }
 }
 
@@ -146,12 +221,9 @@ export async function postInlayAsset(img:{
 }){
 
     const extention = (img.name.split('.').at(-1) || '').toLowerCase()
-    const imgObj = new Image()
 
     if(inlayImageExts.includes(extention)){
-        imgObj.src = URL.createObjectURL(new Blob([asBuffer(img.data)], {type: `image/${extention}`}))
-
-        return await writeInlayImage(imgObj, {
+        return await saveInlayImageBlob(new Blob([asBuffer(img.data)], {type: inlayMimeType('image', extention)}), {
             name: img.name,
             ext: extention
         })
@@ -194,6 +266,33 @@ export async function postInlayAsset(img:{
     return null
 }
 
+export async function postCharacterInlayAsset(img: {
+    name: string,
+    data: Uint8Array,
+    characterId: string,
+}) {
+    const extention = (img.name.split('.').at(-1) || '').toLowerCase()
+    if (!inlayImageExts.includes(extention)) {
+        return await postInlayAsset({ name: img.name, data: img.data })
+    }
+    const saved = await saveCharacterInlayImageBlob(
+        img.characterId,
+        new Blob([asBuffer(img.data)], { type: inlayMimeType('image', extention) }),
+        {
+            name: img.name,
+            ext: extention,
+        },
+    )
+    return saved.id
+}
+
+export function getDirectInlayAssetSrc(id: string): string | null {
+    if (!isNodeServer || !isServerInlayId(id)) {
+        return null
+    }
+    return `/data/${normalizeServerInlayId(id)}`
+}
+
 export async function writeInlayImage(imgObj:HTMLImageElement, arg:{name?:string, ext?:string, id?:string} = {}) {
 
     let drawHeight = 0
@@ -207,16 +306,6 @@ export async function writeInlayImage(imgObj:HTMLImageElement, arg:{name?:string
         imgObj.onload = () => {
             drawHeight = imgObj.height
             drawWidth = imgObj.width
-
-            //resize image to fit inlay, if total pixels exceed 1024*1024
-            const maxPixels = 1024 * 1024
-            const currentPixels = drawHeight * drawWidth
-            
-            if(currentPixels > maxPixels){
-                const scaleFactor = Math.sqrt(maxPixels / currentPixels)
-                drawWidth = Math.floor(drawWidth * scaleFactor)
-                drawHeight = Math.floor(drawHeight * scaleFactor)
-            }
 
             canvas.width = drawWidth
             canvas.height = drawHeight
@@ -233,24 +322,7 @@ export async function writeInlayImage(imgObj:HTMLImageElement, arg:{name?:string
             reject(new Error('Failed to encode image'))
         }, 'image/png')
     })
-
-
-    const imgid = arg.id ?? v4()
-    if (isNodeServer) {
-        const imageData = new Uint8Array(await imageBlob.arrayBuffer())
-        return await saveServerAsset(imageData, imgid, `${imgid}.png`, 'other')
-    }
-
-    await inlayStorage.setItem(imgid, {
-        name: arg.name ?? imgid,
-        data: imageBlob,
-        ext: 'png',
-        height: drawHeight,
-        width: drawWidth,
-        type: 'image'
-    })
-
-    return `${imgid}`
+    return await saveInlayImageBlob(imageBlob, { ...arg, ext: 'png' })
 }
 
 function base64ToBlob(b64: string): Blob {
@@ -326,6 +398,55 @@ export async function getInlayAssetBlob(id: string): Promise<InlayAssetBlob | nu
     return { ...img, data } as InlayAssetBlob
 }
 
+export async function prepareInlayImageForMultimodal(
+    asset: InlayAssetDataUrl,
+    maxPixels = 1024 * 1024,
+): Promise<{ base64: string; width: number; height: number }> {
+    if (asset.type !== 'image' || !asset.width || !asset.height) {
+        return {
+            base64: asset.data,
+            width: asset.width,
+            height: asset.height,
+        }
+    }
+
+    const currentPixels = asset.width * asset.height
+    if (currentPixels <= maxPixels) {
+        return {
+            base64: asset.data,
+            width: asset.width,
+            height: asset.height,
+        }
+    }
+
+    const scaleFactor = Math.sqrt(maxPixels / currentPixels)
+    const nextWidth = Math.max(1, Math.floor(asset.width * scaleFactor))
+    const nextHeight = Math.max(1, Math.floor(asset.height * scaleFactor))
+    const blob = base64ToBlob(asset.data)
+    const url = URL.createObjectURL(blob)
+    const image = new Image()
+    try {
+        image.src = url
+        await image.decode()
+        const canvas = document.createElement('canvas')
+        canvas.width = nextWidth
+        canvas.height = nextHeight
+        const ctx = canvas.getContext('2d')
+        if (!ctx) {
+            throw new Error('Failed to initialize canvas context')
+        }
+        ctx.drawImage(image, 0, 0, nextWidth, nextHeight)
+        const resizedBase64 = canvas.toDataURL('image/png')
+        return {
+            base64: resizedBase64,
+            width: nextWidth,
+            height: nextHeight,
+        }
+    } finally {
+        URL.revokeObjectURL(url)
+    }
+}
+
 export async function listInlayAssets(): Promise<[id: string, InlayAsset][]> {
     const assets: [id: string, InlayAsset][] = []
     await inlayStorage.iterate<InlayAsset, void>((value, key) => {
@@ -333,6 +454,14 @@ export async function listInlayAssets(): Promise<[id: string, InlayAsset][]> {
     })
 
     return assets
+}
+
+export async function saveInlayMetadata(path: string, metadata: unknown) {
+    await inlayMetadataStorage.setItem(path, metadata)
+}
+
+export async function getInlayMetadata<T>(path: string): Promise<T | null> {
+    return await inlayMetadataStorage.getItem<T>(path)
 }
 
 export async function setInlayAsset(id: string, img: InlayAsset){

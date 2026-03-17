@@ -2,12 +2,12 @@
     import type { language } from "src/lang";
     import Help from "../Others/Help.svelte";
 
-    let open = $state(false)
     interface Props {
         name?: string;
         styled?: boolean;
         help?: (keyof (typeof language.help))|'';
         disabled?: boolean;
+        initialOpen?: boolean;
         children?: import('svelte').Snippet;
         className?: string;
     }
@@ -17,9 +17,20 @@
         styled = false,
         help = '',
         disabled = false,
+        initialOpen = false,
         children,
         className = ""
     }: Props = $props();
+
+    let open = $state(false)
+    let initialized = $state(false)
+
+    $effect(() => {
+        if (!initialized) {
+            open = initialOpen
+            initialized = true
+        }
+    })
 
     const panelId = `accordion-panel-${Math.random().toString(36).slice(2, 10)}`;
 </script>

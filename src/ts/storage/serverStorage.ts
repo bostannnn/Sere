@@ -1,7 +1,7 @@
 import { hasher } from "../parser.svelte";
 import { fetchWithServerAuth } from "./serverAuth";
 
-export type AssetFolder = 'backgrounds' | 'generated' | 'other';
+export type AssetFolder = 'backgrounds' | 'generated' | 'other' | 'character-images';
 
 function getExtension(fileName: string) {
     if (!fileName) return 'png';
@@ -43,6 +43,48 @@ export async function saveServerAsset(data: Uint8Array, customId: string = '', f
     const payload = await res.json();
     if (!payload?.path) {
         throw new Error('saveServerAsset missing path');
+    }
+    return payload.path as string;
+}
+
+export async function saveServerCharacterImageFile(
+    characterId: string,
+    data: Uint8Array,
+    customId: string = '',
+    fileName: string = '',
+) {
+    const charId = (characterId || '').trim();
+    if (!charId) {
+        throw new Error('saveServerCharacterImageFile requires characterId');
+    }
+    let id = '';
+    if (customId) {
+        id = customId;
+    } else {
+        try {
+            id = await hasher(data);
+        } catch {
+            id = '';
+        }
+    }
+    const ext = getExtension(fileName);
+    const qs = new URLSearchParams({ ext });
+    if (id) {
+        qs.set('id', id);
+    }
+    const res = await fetchWithServerAuth(`/data/characters/${encodeURIComponent(charId)}/images?${qs.toString()}`, {
+        method: 'POST',
+        headers: {
+            'content-type': 'application/octet-stream',
+        },
+        body: data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength) as ArrayBuffer,
+    });
+    if (res.status < 200 || res.status >= 300) {
+        throw new Error(`saveServerCharacterImageFile failed (${res.status})`);
+    }
+    const payload = await res.json();
+    if (!payload?.path) {
+        throw new Error('saveServerCharacterImageFile missing path');
     }
     return payload.path as string;
 }

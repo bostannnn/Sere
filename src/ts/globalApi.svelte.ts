@@ -14,6 +14,7 @@ import { saveServerDatabase } from "./storage/serverDb";
 import { loadServerAsset, saveServerAsset } from "./storage/serverStorage";
 import { fetchWithServerAuth, getServerAuthClientId, resolveServerAuthToken } from "./storage/serverAuth";
 import { isApplyingServerSnapshot } from "./storage/serverStateClient";
+import { getMimeFromAssetPath } from "./assets/fileTypes";
 
 export const forageStorage = new AutoStorage()
 
@@ -81,25 +82,8 @@ type FileCacheValue = Uint8Array | 'loading' | 'done'
 const fileCache = new Map<string, FileCacheValue>()
 const pendingFileLoads = new Map<string, Promise<Uint8Array>>()
 
-function getMimeFromAssetPath(path: string) {
-    const ext = (path.split('.').pop() || '').toLowerCase()
-    switch (ext) {
-        case 'jpg':
-        case 'jpeg':
-            return 'image/jpeg'
-        case 'webp':
-            return 'image/webp'
-        case 'gif':
-            return 'image/gif'
-        case 'avif':
-            return 'image/avif'
-        case 'svg':
-            return 'image/svg+xml'
-        case 'bmp':
-            return 'image/bmp'
-        default:
-            return 'image/png'
-    }
+function isServerStoredFilePath(path: string) {
+    return path.startsWith('assets') || /^characters\/[^/]+\/images\//.test(path) || path.startsWith('characters/images')
 }
 
 /**
@@ -109,7 +93,7 @@ function getMimeFromAssetPath(path: string) {
  * @returns {Promise<string>} - A promise that resolves to the source URL of the file.
  */
 export async function getFileSrc(loc: string) {
-    if (isNodeServer && loc.startsWith('assets')) {
+    if (isNodeServer && isServerStoredFilePath(loc)) {
         try {
             const cached = fileCache.get(loc)
             if (cached instanceof Uint8Array) {
@@ -171,7 +155,7 @@ export async function getFileSrc(loc: string) {
         else {
             const cached = fileCache.get(loc)
             if (cached instanceof Uint8Array) {
-                return `data:image/png;base64,${Buffer.from(cached).toString('base64')}`
+                return `data:${getMimeFromAssetPath(loc)};base64,${Buffer.from(cached).toString('base64')}`
             }
             let pendingLoad = pendingFileLoads.get(loc)
             if (!pendingLoad) {
@@ -182,7 +166,7 @@ export async function getFileSrc(loc: string) {
             }
             const loaded = await pendingLoad
             fileCache.set(loc, loaded)
-            return `data:image/png;base64,${Buffer.from(loaded).toString('base64')}`
+            return `data:${getMimeFromAssetPath(loc)};base64,${Buffer.from(loaded).toString('base64')}`
         }
     } catch (error) {
         void error

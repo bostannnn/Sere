@@ -69,13 +69,14 @@ export function applyTemplatePrompt(
     fallbackUserPrompt: string,
     vars: ComfyPromptVariables,
 ): string {
-    const base = templatePrompt || fallbackUserPrompt;
-    return base
+    return (templatePrompt || fallbackUserPrompt)
+        .replaceAll("{{templatePrompt}}", vars.templatePrompt)
         .replaceAll("{{prompt}}", vars.prompt)
         .replaceAll("{{char}}", vars.char)
         .replaceAll("{{user}}", vars.user)
         .replaceAll("{{lastMessage}}", vars.lastMessage)
-        .replaceAll("{{lastCharMessage}}", vars.lastCharMessage);
+        .replaceAll("{{lastCharMessage}}", vars.lastCharMessage)
+        .replaceAll("{{chatContext}}", vars.chatContext);
 }
 
 function replaceMacroInString(value: string, args: ComfyWorkflowMacroArgs): string {

@@ -90,13 +90,18 @@ export { applyParameters, setObjectValue } from "./request.parameters";
 
 export async function requestChatData(arg:requestDataArgument, model:ModelModeExtended, abortSignal:AbortSignal=null):Promise<requestDataResponse> {
     const db = getDatabase()
+    const explicitStaticModel = typeof arg.staticModel === 'string' && arg.staticModel.trim().length > 0
+        ? arg.staticModel.trim()
+        : ''
     if (typeof arg.chatId !== 'string' || arg.chatId.trim().length === 0) {
         const activeChatId = getCurrentChat()?.id;
         if (typeof activeChatId === 'string' && activeChatId.trim().length > 0) {
             arg.chatId = activeChatId;
         }
     }
-    const fallBackModels:string[] = safeStructuredClone(db?.fallbackModels?.[model] ?? [])
+    const fallBackModels:string[] = explicitStaticModel
+        ? ['']
+        : safeStructuredClone(db?.fallbackModels?.[model] ?? [])
     const tools = await getTools()
     fallBackModels.push('')
     let da:requestDataResponse
@@ -154,7 +159,7 @@ export async function requestChatData(arg:requestDataArgument, model:ModelModeEx
     
             da = await requestChatDataMain({
                 ...arg,
-                staticModel: fallBackModels[fallbackIndex],
+                staticModel: explicitStaticModel || fallBackModels[fallbackIndex],
                 tools: tools,
             }, model, abortSignal)
 
@@ -196,7 +201,7 @@ export async function requestChatData(arg:requestDataArgument, model:ModelModeEx
             if(da.type !== 'fail' || da.noRetry){
                 return {
                     ...da,
-                    model: fallBackModels[fallbackIndex]
+                    model: explicitStaticModel || fallBackModels[fallbackIndex]
                 }
             }
     

@@ -1,29 +1,73 @@
 import { describe, expect, it } from "vitest";
+import type { ComfyCommanderTemplate } from "src/ts/storage/database.svelte";
 import {
+  applyTemplatePrompt,
   applyWorkflowMacros,
   cleanLLMOutput,
   resolveTemplate,
 } from "./template";
 
 describe("resolveTemplate", () => {
-  const templates = [
+  const templates: ComfyCommanderTemplate[] = [
     {
       id: "tpl-1",
       trigger: "pov",
       prompt: "",
       negativePrompt: "",
+      imagePromptModel: "",
+      imagePromptSystemPrompt: "",
+      imagePromptUserPromptTemplate: "",
+      imagePromptContextMessageCount: 4,
+      imagePromptMaxContextChars: 1400,
       workflowId: "wf-1",
       showInChatMenu: false,
       buttonName: "",
+      providerOverride: "none",
+      runpodModelId: "",
+      runpodEndpointId: "",
+      runpodSchemaPreset: "generic-text",
+      runpodOutputFormat: "png",
+      runpodWidth: 1024,
+      runpodHeight: 1024,
+      runpodSize: "1024*1024",
+      runpodNumInferenceSteps: 28,
+      runpodGuidance: 7,
+      runpodStrength: 0.8,
+      runpodEnableSafetyChecker: true,
+      modeDefault: "text-to-image",
+      useReferenceImage: false,
+      referenceSource: "none",
+      allowReferenceFallbackToText: false,
     },
     {
       id: "tpl-2",
       trigger: "pov wide",
       prompt: "",
       negativePrompt: "",
+      imagePromptModel: "",
+      imagePromptSystemPrompt: "",
+      imagePromptUserPromptTemplate: "",
+      imagePromptContextMessageCount: 4,
+      imagePromptMaxContextChars: 1400,
       workflowId: "wf-2",
       showInChatMenu: false,
       buttonName: "",
+      providerOverride: "none",
+      runpodModelId: "",
+      runpodEndpointId: "",
+      runpodSchemaPreset: "generic-text",
+      runpodOutputFormat: "png",
+      runpodWidth: 1024,
+      runpodHeight: 1024,
+      runpodSize: "1024*1024",
+      runpodNumInferenceSteps: 28,
+      runpodGuidance: 7,
+      runpodStrength: 0.8,
+      runpodEnableSafetyChecker: true,
+      modeDefault: "text-to-image",
+      useReferenceImage: false,
+      referenceSource: "none",
+      allowReferenceFallbackToText: false,
     },
   ];
 
@@ -119,5 +163,21 @@ describe("cleanLLMOutput", () => {
 
   it("trims outer quotes", () => {
     expect(cleanLLMOutput('"hello world"')).toBe("hello world");
+  });
+});
+
+describe("applyTemplatePrompt", () => {
+  it("fills chat context placeholders", () => {
+    const prompt = applyTemplatePrompt("{{templatePrompt}}\n{{chatContext}}", "fallback", {
+      templatePrompt: "scene",
+      prompt: "extra",
+      char: "Alice",
+      user: "Bob",
+      lastMessage: "last",
+      lastCharMessage: "reply",
+      chatContext: "Alice: hello",
+    });
+
+    expect(prompt).toBe("scene\nAlice: hello");
   });
 });

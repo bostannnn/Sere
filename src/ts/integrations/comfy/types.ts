@@ -1,11 +1,19 @@
 import type {
     ComfyCommanderConfig,
+    ComfyCommanderImagePromptConfig,
+    ComfyCommanderReferenceStoreConfig,
+    ComfyCommanderRunpodConfig,
+    ComfyCommanderRunpodSchemaPreset,
     ComfyCommanderTemplate,
     ComfyCommanderWorkflow,
 } from "src/ts/storage/database.svelte";
 
 export type {
     ComfyCommanderConfig,
+    ComfyCommanderImagePromptConfig,
+    ComfyCommanderReferenceStoreConfig,
+    ComfyCommanderRunpodConfig,
+    ComfyCommanderRunpodSchemaPreset,
     ComfyCommanderTemplate,
     ComfyCommanderWorkflow,
 };
@@ -17,10 +25,12 @@ export interface ComfyTemplateMatch {
 
 export interface ComfyPromptVariables {
     prompt: string;
+    templatePrompt: string;
     char: string;
     user: string;
     lastMessage: string;
     lastCharMessage: string;
+    chatContext: string;
 }
 
 export interface ComfyWorkflowMacroArgs {

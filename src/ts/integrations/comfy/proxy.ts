@@ -2,8 +2,6 @@ import type { ComfyCommanderConfig } from "src/ts/storage/database.svelte";
 import { normalizeComfyBaseUrl, type ComfyImageDescriptor } from "./types";
 import { fetchWithServerAuth } from "src/ts/storage/serverAuth";
 
-const comfyProxyLog = (..._args: unknown[]) => {};
-
 function toHeadersRecord(headers: HeadersInit | undefined): Record<string, string> {
     const record: Record<string, string> = {};
     if (!headers) {
@@ -109,13 +107,6 @@ export async function fetchComfyProxy(
     if (!response.ok) {
         const message = await parseComfyError(response);
         throw new Error(`${message} (${response.status})`);
-    }
-
-    if (config.debug) {
-        comfyProxyLog("[ComfyProxy] Request OK", {
-            path: normalizedPath,
-            status: response.status,
-        });
     }
 
     return response;

@@ -29,6 +29,7 @@ function createServerDataHelpers(arg = {}) {
     async function ensureDataDirs() {
         await ensureDir(dataDirs.root);
         await ensureDir(dataDirs.characters);
+        await ensureDir(`${dataDirs.characters}/images`);
         await ensureDir(dataDirs.assets);
         await ensureDir(`${dataDirs.assets}/backgrounds`);
         await ensureDir(`${dataDirs.assets}/generated`);

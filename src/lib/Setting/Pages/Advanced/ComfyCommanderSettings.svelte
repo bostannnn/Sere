@@ -1,48 +1,54 @@
 <script lang="ts">
     import { PlusIcon, TrashIcon } from "@lucide/svelte";
+    import { getModelList } from "src/ts/model/modellist";
+    import {
+        createComfyCommanderTemplateDefaults,
+        createDefaultComfyCommanderConfig,
+        createDefaultComfyCommanderImagePromptConfig,
+        createDefaultComfyCommanderReferenceStoreConfig,
+        createDefaultComfyCommanderRunpodConfig,
+        createEmptyComfyCommanderTemplate,
+        createEmptyComfyCommanderWorkflow,
+    } from "src/ts/integrations/comfy/config";
     import { DBState } from "src/ts/stores.svelte";
-    import { createComfyCommanderEntityId } from "src/ts/integrations/comfy/store.svelte";
     import Button from "src/lib/UI/GUI/Button.svelte";
-    import Check from "src/lib/UI/GUI/CheckInput.svelte";
     import NumberInput from "src/lib/UI/GUI/NumberInput.svelte";
     import OptionInput from "src/lib/UI/GUI/OptionInput.svelte";
     import SelectInput from "src/lib/UI/GUI/SelectInput.svelte";
     import TextAreaInput from "src/lib/UI/GUI/TextAreaInput.svelte";
     import TextInput from "src/lib/UI/GUI/TextInput.svelte";
     import Help from "src/lib/Others/Help.svelte";
+    import Accordion from "src/lib/UI/Accordion.svelte";
+    import ComfyCommanderTemplateEditor from "./ComfyCommanderTemplateEditor.svelte";
+
+    const imagePromptModels = getModelList({ groupedByProvider: false });
 
     function ensureComfyCommanderState() {
+        const defaultConfig = createDefaultComfyCommanderConfig(DBState.db.comfyUiUrl || "http://127.0.0.1:8188");
         DBState.db.comfyCommander ??= {
             version: 1,
-            config: {
-                baseUrl: DBState.db.comfyUiUrl || "http://127.0.0.1:8188",
-                debug: false,
-                timeoutSec: 120,
-                pollIntervalMs: 1000,
-            },
+            config: defaultConfig,
             workflows: [],
             templates: [],
         };
         DBState.db.comfyCommander.version = 1;
-        DBState.db.comfyCommander.config ??= {
-            baseUrl: DBState.db.comfyUiUrl || "http://127.0.0.1:8188",
-            debug: false,
-            timeoutSec: 120,
-            pollIntervalMs: 1000,
-        };
+        DBState.db.comfyCommander.config ??= defaultConfig;
+        DBState.db.comfyCommander.config.imagePrompt ??= createDefaultComfyCommanderImagePromptConfig();
+        DBState.db.comfyCommander.config.runpod ??= createDefaultComfyCommanderRunpodConfig();
+        DBState.db.comfyCommander.config.referenceStore ??= createDefaultComfyCommanderReferenceStoreConfig();
         DBState.db.comfyCommander.workflows ??= [];
         DBState.db.comfyCommander.templates ??= [];
+        DBState.db.comfyCommander.templates = DBState.db.comfyCommander.templates.map((template) => ({
+            ...createComfyCommanderTemplateDefaults(),
+            ...template,
+        }));
     }
 
     function addWorkflow() {
         ensureComfyCommanderState();
         DBState.db.comfyCommander.workflows = [
             ...DBState.db.comfyCommander.workflows,
-            {
-                id: createComfyCommanderEntityId("wf"),
-                name: "Workflow",
-                workflow: "",
-            },
+            createEmptyComfyCommanderWorkflow(),
         ];
     }
 
@@ -66,15 +72,7 @@
         ensureComfyCommanderState();
         DBState.db.comfyCommander.templates = [
             ...DBState.db.comfyCommander.templates,
-            {
-                id: createComfyCommanderEntityId("tpl"),
-                trigger: "new",
-                prompt: "",
-                negativePrompt: "",
-                workflowId: "",
-                showInChatMenu: false,
-                buttonName: "",
-            },
+            createEmptyComfyCommanderTemplate(),
         ];
     }
 
@@ -90,118 +88,100 @@
 
 {#snippet commanderContent()}
     <div class="ds-settings-stack-col ds-comfy-commander-settings">
-        <span class="ds-settings-label">Base URL</span>
-        <TextInput size="sm" bind:value={DBState.db.comfyCommander.config.baseUrl} />
+        <Accordion name="Infrastructure" styled={true} initialOpen={false} className="ds-comfy-accordion-panel">
+        <div class="ds-comfy-panel">
+            <div class="ds-comfy-panel-section">
+                <div class="ds-comfy-grid">
+                    <label class="ds-comfy-field ds-comfy-field--wide">
+                        <span class="ds-settings-label">ComfyUI Base URL</span>
+                        <TextInput size="sm" bind:value={DBState.db.comfyCommander.config.baseUrl} />
+                    </label>
 
-        <div class="ds-settings-renderer-check-row ds-settings-renderer-offset-sm">
-            <Check bind:check={DBState.db.comfyCommander.config.debug} name="Debug" />
+                    <label class="ds-comfy-field">
+                        <span class="ds-settings-label">Timeout (seconds)</span>
+                        <NumberInput size="sm" min={1} bind:value={DBState.db.comfyCommander.config.timeoutSec} />
+                    </label>
+
+                    <label class="ds-comfy-field">
+                        <span class="ds-settings-label">Poll Interval (ms)</span>
+                        <NumberInput size="sm" min={100} bind:value={DBState.db.comfyCommander.config.pollIntervalMs} />
+                    </label>
+
+                </div>
+            </div>
+
+            <div class="ds-comfy-panel-section">
+                <div class="ds-settings-inline-actions action-rail ds-comfy-section-header">
+                    <span class="ds-settings-label">Runpod Transport</span>
+                </div>
+
+                <div class="ds-comfy-grid">
+                    <label class="ds-comfy-field ds-comfy-field--wide">
+                        <span class="ds-settings-label">API Key</span>
+                        <TextInput size="sm" hideText={!!DBState.db.hideApiKey} bind:value={DBState.db.comfyCommander.config.runpod.apiKey} />
+                    </label>
+
+                    <label class="ds-comfy-field">
+                        <span class="ds-settings-label">Request Mode</span>
+                        <SelectInput size="sm" bind:value={DBState.db.comfyCommander.config.runpod.requestMode}>
+                            <OptionInput value="runsync">runsync</OptionInput>
+                            <OptionInput value="run">run</OptionInput>
+                        </SelectInput>
+                    </label>
+                </div>
+            </div>
+
+            <div class="ds-comfy-panel-section">
+                <div class="ds-settings-inline-actions action-rail ds-comfy-section-header">
+                    <span class="ds-settings-label">Reference Images</span>
+                </div>
+
+                <div class="ds-comfy-grid">
+                    <label class="ds-comfy-field">
+                        <span class="ds-settings-label">Store</span>
+                        <SelectInput size="sm" bind:value={DBState.db.comfyCommander.config.referenceStore.provider}>
+                            <OptionInput value="none">None</OptionInput>
+                            <OptionInput value="yandex-disk">Yandex Disk</OptionInput>
+                        </SelectInput>
+                    </label>
+
+                    {#if DBState.db.comfyCommander.config.referenceStore.provider === "yandex-disk"}
+                        <label class="ds-comfy-field ds-comfy-field--wide">
+                            <span class="ds-settings-label">Yandex OAuth Token</span>
+                            <TextInput size="sm" hideText={!!DBState.db.hideApiKey} bind:value={DBState.db.comfyCommander.config.referenceStore.yandexDiskToken} />
+                        </label>
+
+                        <label class="ds-comfy-field ds-comfy-field--wide">
+                            <span class="ds-settings-label">Yandex Temp Folder</span>
+                            <TextInput size="sm" bind:value={DBState.db.comfyCommander.config.referenceStore.yandexDiskFolder} />
+                        </label>
+                    {/if}
+                </div>
+            </div>
         </div>
+        </Accordion>
 
-        <span class="ds-settings-label">Timeout (seconds)</span>
-        <NumberInput size="sm" min={1} bind:value={DBState.db.comfyCommander.config.timeoutSec} />
-
-        <span class="ds-settings-label">Poll Interval (ms)</span>
-        <NumberInput size="sm" min={100} bind:value={DBState.db.comfyCommander.config.pollIntervalMs} />
-
-        <div class="ds-settings-card ds-comfy-section">
-            <div class="ds-settings-inline-actions action-rail ds-comfy-section-header">
-                <span class="ds-settings-label">Workflows</span>
-                <Help key="comfyWorkflow" />
-            </div>
-            <div class="ds-settings-stack-col">
-                {#if DBState.db.comfyCommander.workflows.length === 0}
-                    <div class="ds-settings-empty-state empty-state">No workflows yet.</div>
-                {/if}
-                {#each DBState.db.comfyCommander.workflows as workflow, index (workflow.id)}
-                    <div class="ds-comfy-entity">
-                        <div class="ds-settings-inline-actions action-rail ds-comfy-entity-header">
-                            <span class="ds-settings-label">Workflow {index + 1}</span>
-                            <Button
-                                size="sm"
-                                className="ds-settings-icon-action ds-settings-icon-action-compact icon-btn icon-btn--sm"
-                                styled="outlined"
-                                onclick={() => removeWorkflow(workflow.id)}
-                            >
-                                <TrashIcon />
-                            </Button>
-                        </div>
-
-                        <span class="ds-settings-label">Name</span>
-                        <TextInput size="sm" bind:value={workflow.name} />
-
-                        <span class="ds-settings-label">Workflow JSON</span>
-                        <TextAreaInput
-                            size="sm"
-                            height="24"
-                            margin="bottom"
-                            bind:value={workflow.workflow}
-                        />
-                    </div>
-                {/each}
-
-                <Button size="sm" styled="outlined" className="action-rail" onclick={addWorkflow}>
-                    <PlusIcon />
-                    Add Workflow
-                </Button>
-            </div>
-        </div>
-
-        <div class="ds-settings-card ds-comfy-section">
-            <div class="ds-settings-inline-actions action-rail ds-comfy-section-header">
-                <span class="ds-settings-label">Templates</span>
-            </div>
+        <Accordion
+            name={DBState.db.comfyCommander.config.activeProvider === "runpod" ? "Scene Presets" : "Templates"}
+            styled={true}
+            initialOpen={false}
+            className="ds-comfy-accordion-panel"
+        >
+        <div class="ds-comfy-panel">
             <div class="ds-settings-stack-col">
                 {#if DBState.db.comfyCommander.templates.length === 0}
                     <div class="ds-settings-empty-state empty-state">No templates yet.</div>
                 {/if}
                 {#each DBState.db.comfyCommander.templates as template, index (template.id)}
-                    <div class="ds-comfy-entity">
-                        <div class="ds-settings-inline-actions action-rail ds-comfy-entity-header">
-                            <span class="ds-settings-label">Template {index + 1}</span>
-                            <Button
-                                size="sm"
-                                className="ds-settings-icon-action ds-settings-icon-action-compact icon-btn icon-btn--sm"
-                                styled="outlined"
-                                onclick={() => removeTemplate(template.id)}
-                            >
-                                <TrashIcon />
-                            </Button>
-                        </div>
-
-                        <span class="ds-settings-label">Trigger</span>
-                        <TextInput size="sm" bind:value={template.trigger} />
-
-                        <span class="ds-settings-label">Prompt</span>
-                        <TextAreaInput
-                            size="sm"
-                            height="20"
-                            margin="bottom"
-                            bind:value={template.prompt}
-                        />
-
-                        <span class="ds-settings-label">Negative Prompt</span>
-                        <TextAreaInput
-                            size="sm"
-                            height="20"
-                            margin="bottom"
-                            bind:value={template.negativePrompt}
-                        />
-
-                        <span class="ds-settings-label">Workflow</span>
-                        <SelectInput size="sm" bind:value={template.workflowId}>
-                            <OptionInput value="">Select workflow</OptionInput>
-                            {#each DBState.db.comfyCommander.workflows as workflowOption (workflowOption.id)}
-                                <OptionInput value={workflowOption.id}>{workflowOption.name || "Workflow"}</OptionInput>
-                            {/each}
-                        </SelectInput>
-
-                        <div class="ds-settings-renderer-check-row ds-settings-renderer-offset-sm">
-                            <Check bind:check={template.showInChatMenu} name="Show in Chat Menu" />
-                        </div>
-
-                        <span class="ds-settings-label">Button Name</span>
-                        <TextInput size="sm" bind:value={template.buttonName} />
-                    </div>
+                    <ComfyCommanderTemplateEditor
+                        {template}
+                        {index}
+                        {imagePromptModels}
+                        workflows={DBState.db.comfyCommander.workflows}
+                        activeProvider={DBState.db.comfyCommander.config.activeProvider}
+                        runpodConfig={DBState.db.comfyCommander.config.runpod}
+                        onRemove={() => removeTemplate(template.id)}
+                    />
                 {/each}
 
                 <Button size="sm" styled="outlined" className="action-rail" onclick={addTemplate}>
@@ -210,22 +190,94 @@
                 </Button>
             </div>
         </div>
+        </Accordion>
+
+        {#if DBState.db.comfyCommander.config.activeProvider === "comfyui"}
+            <Accordion name="Workflows" styled={true} initialOpen={false} help="comfyWorkflow" className="ds-comfy-accordion-panel">
+            <div class="ds-comfy-panel">
+                <div class="ds-settings-stack-col">
+                    {#if DBState.db.comfyCommander.workflows.length === 0}
+                        <div class="ds-settings-empty-state empty-state">No workflows yet.</div>
+                    {/if}
+                    {#each DBState.db.comfyCommander.workflows as workflow, index (workflow.id)}
+                        <Accordion
+                            name={`Workflow ${index + 1}${workflow.name?.trim() ? ` · ${workflow.name.trim()}` : ""}`}
+                            styled={true}
+                            initialOpen={false}
+                            className="ds-comfy-accordion-panel"
+                        >
+                        <div class="ds-comfy-entity">
+                            <div class="ds-settings-inline-actions action-rail ds-comfy-entity-header">
+                                <span class="ds-settings-label">Workflow JSON</span>
+                                <Button
+                                    size="sm"
+                                    className="ds-settings-icon-action ds-settings-icon-action-compact icon-btn icon-btn--sm"
+                                    styled="outlined"
+                                    onclick={() => removeWorkflow(workflow.id)}
+                                >
+                                    <TrashIcon />
+                                </Button>
+                            </div>
+
+                            <span class="ds-settings-label">Name</span>
+                            <TextInput size="sm" bind:value={workflow.name} />
+
+                            <span class="ds-settings-label">Workflow JSON</span>
+                            <TextAreaInput size="sm" height="24" margin="bottom" bind:value={workflow.workflow} />
+                        </div>
+                        </Accordion>
+                    {/each}
+
+                    <Button size="sm" styled="outlined" className="action-rail" onclick={addWorkflow}>
+                        <PlusIcon />
+                        Add Workflow
+                    </Button>
+                </div>
+            </div>
+            </Accordion>
+        {/if}
     </div>
 {/snippet}
 
-<div class="ds-settings-card ds-comfy-standalone">
-    {@render commanderContent()}
-</div>
+{@render commanderContent()}
 
 <style>
     .ds-comfy-commander-settings {
         gap: var(--ds-space-3);
     }
 
-    .ds-comfy-entity {
+    .ds-comfy-panel {
+        padding: var(--ds-space-1) 0;
+    }
+
+    .ds-comfy-panel-section + .ds-comfy-panel-section {
+        margin-top: var(--ds-space-4);
+        padding-top: var(--ds-space-4);
+        border-top: 1px solid var(--ds-border-subtle);
+    }
+
+    .ds-comfy-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+        gap: var(--ds-space-3);
+        align-items: start;
+    }
+
+    .ds-comfy-field {
         display: flex;
         flex-direction: column;
         gap: var(--ds-space-2);
+        min-width: 0;
+    }
+
+    .ds-comfy-field--wide {
+        grid-column: 1 / -1;
+    }
+
+    .ds-comfy-entity {
+        display: flex;
+        flex-direction: column;
+        gap: var(--ds-space-3);
         padding: var(--ds-space-3);
         margin-bottom: var(--ds-space-2);
         border: 1px solid var(--ds-border-subtle);
@@ -238,17 +290,13 @@
         align-items: center;
     }
 
-    .ds-comfy-standalone {
-        padding: var(--ds-space-3);
-    }
-
-    .ds-comfy-section {
-        padding: var(--ds-space-3);
-        gap: var(--ds-space-2);
-    }
-
     .ds-comfy-section-header {
         justify-content: space-between;
         align-items: center;
+        margin-bottom: var(--ds-space-3);
+    }
+
+    :global(.ds-comfy-accordion-panel) {
+        background: color-mix(in srgb, var(--ds-surface-2) 88%, transparent);
     }
 </style>

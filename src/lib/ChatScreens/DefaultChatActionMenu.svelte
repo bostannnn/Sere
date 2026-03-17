@@ -4,6 +4,8 @@
     import type { character, groupChat } from "src/ts/storage/database.svelte";
     import { DBState } from "src/ts/stores.svelte";
     import { language } from "src/lang";
+    import OptionInput from "src/lib/UI/GUI/OptionInput.svelte";
+    import SelectInput from "src/lib/UI/GUI/SelectInput.svelte";
 
     type EvolutionSettings = {
         pendingProposal?: unknown;
@@ -68,6 +70,46 @@
         hasPendingProposal: !!currentEvolutionSettings?.pendingProposal,
         blockedForCurrentChat: evolutionHandoffBlockedForCurrentChat,
     });
+
+    DBState.db.comfyCommander ??= {
+        version: 1,
+        config: {
+            baseUrl: DBState.db.comfyUiUrl || "http://127.0.0.1:8188",
+            debug: false,
+            timeoutSec: 120,
+            pollIntervalMs: 1000,
+            activeProvider: "comfyui",
+            imagePrompt: {
+                model: "",
+                systemPrompt: "Write a single high-quality image prompt describing the visible scene. Output only the final prompt.",
+                userPromptTemplate: "Scene directive: {{templatePrompt}}\nUser addition: {{prompt}}\nCharacter: {{char}}\nUser: {{user}}\nLast message: {{lastMessage}}\nLast character message: {{lastCharMessage}}\nRecent chat context:\n{{chatContext}}",
+                contextMessageCount: 4,
+                maxContextChars: 1400,
+            },
+            runpod: {
+                apiKey: "",
+                modelId: "z-image-turbo",
+                requestMode: "runsync",
+                outputFormat: "png",
+                width: 1024,
+                height: 1024,
+                size: "1024*1024",
+                numInferenceSteps: 28,
+                guidance: 7,
+                strength: 0.8,
+                enableSafetyChecker: true,
+                customEndpointId: "",
+                customSchemaPreset: "generic-text",
+            },
+            referenceStore: {
+                provider: "none",
+                yandexDiskToken: "",
+                yandexDiskFolder: "/Apps/RisuAI/runpod-temp",
+            },
+        },
+        workflows: [],
+        templates: [],
+    };
 </script>
 
 <div
@@ -167,22 +209,31 @@
                 </button>
             {/if}
 
-            {#each comfyMenuTemplates as template (`comfy-template-${template.id}`)}
+            {#if comfyMenuTemplates.length > 0}
                 <div class="ds-chat-side-menu-divider"></div>
-                <button
-                    type="button"
-                    class="ds-chat-side-menu-item ds-ui-menu-item"
-                    title={template.buttonName || template.trigger}
-                    aria-label={template.buttonName || template.trigger}
-                    onclick={() => {
-                        onRunComfyTemplate(template.id);
-                        closeMenu();
-                    }}
-                >
-                    <ImagePlusIcon />
-                    <span class="ds-chat-side-menu-label">{template.buttonName || template.trigger}</span>
-                </button>
-            {/each}
+                <div class="ds-chat-side-menu-provider">
+                    <span class="ds-chat-side-menu-provider-label">Image Provider</span>
+                    <SelectInput size="sm" bind:value={DBState.db.comfyCommander.config.activeProvider}>
+                        <OptionInput value="comfyui">Local ComfyUI</OptionInput>
+                        <OptionInput value="runpod">Runpod</OptionInput>
+                    </SelectInput>
+                </div>
+                {#each comfyMenuTemplates as template (`comfy-template-${template.id}`)}
+                    <button
+                        type="button"
+                        class="ds-chat-side-menu-item ds-ui-menu-item"
+                        title={template.buttonName || template.trigger}
+                        aria-label={template.buttonName || template.trigger}
+                        onclick={() => {
+                            onRunComfyTemplate(template.id);
+                            closeMenu();
+                        }}
+                    >
+                        <ImagePlusIcon />
+                        <span class="ds-chat-side-menu-label">{template.buttonName || template.trigger}</span>
+                    </button>
+                {/each}
+            {/if}
 
             {#if DBState.db.translator !== ""}
                 <button
@@ -281,6 +332,18 @@
 </div>
 
 <style>
+    .ds-chat-side-menu-provider {
+        display: flex;
+        flex-direction: column;
+        gap: var(--ds-space-2);
+        padding: 0 var(--ds-space-2) var(--ds-space-2);
+    }
+
+    .ds-chat-side-menu-provider-label {
+        font-size: 0.85rem;
+        color: var(--ds-text-muted);
+    }
+
     .ds-chat-composer-menu-anchor {
         position: relative;
         display: inline-flex;

@@ -697,6 +697,45 @@ describe("preset helper unit coverage", () => {
           forceReplaceUrl: "https://proxy.example",
           forceReplaceUrl2: "https://proxy2.example",
           vertexAccessToken: "legacy-token",
+          comfyCommander: {
+            version: 1,
+            config: {
+              baseUrl: "http://127.0.0.1:8188",
+              debug: false,
+              timeoutSec: 120,
+              pollIntervalMs: 1000,
+              activeProvider: "runpod",
+              imagePrompt: {
+                model: "",
+                systemPrompt: "sys",
+                userPromptTemplate: "tpl",
+                contextMessageCount: 4,
+                maxContextChars: 1000,
+              },
+              runpod: {
+                apiKey: "runpod-secret",
+                modelId: "z-image-turbo",
+                requestMode: "runsync",
+                outputFormat: "png",
+                width: 1024,
+                height: 1024,
+                size: "1024*1024",
+                numInferenceSteps: 28,
+                guidance: 7,
+                strength: 0.8,
+                enableSafetyChecker: true,
+                customEndpointId: "",
+                customSchemaPreset: "generic-text",
+              },
+              referenceStore: {
+                provider: "yandex-disk",
+                yandexDiskToken: "yandex-secret",
+                yandexDiskFolder: "/Apps/RisuAI/runpod-temp",
+              },
+            },
+            workflows: [],
+            templates: [],
+          },
         },
       ],
     });
@@ -707,6 +746,16 @@ describe("preset helper unit coverage", () => {
     expect(exported.proxyKey).toBe("");
     expect(exported.forceReplaceUrl).toBe("");
     expect(exported.forceReplaceUrl2).toBe("");
+    const exportedComfyCommander = (exported as unknown as {
+      comfyCommander?: {
+        config?: {
+          runpod?: { apiKey?: string };
+          referenceStore?: { yandexDiskToken?: string };
+        };
+      };
+    }).comfyCommander;
+    expect(exportedComfyCommander?.config?.runpod?.apiKey).toBe("");
+    expect(exportedComfyCommander?.config?.referenceStore?.yandexDiskToken).toBe("");
     expect(exported).not.toHaveProperty("vertexAccessToken");
   });
 

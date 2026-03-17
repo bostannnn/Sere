@@ -31,7 +31,7 @@ import { groupOrder } from "./group";
 import { runTrigger } from "./triggers";
 import { EmbeddingProcessor } from "./memory/embeddings";
 import { additionalInformations } from "./embedding/addinfo";
-import { getInlayAsset } from "./files/inlays";
+import { getInlayAsset, prepareInlayImageForMultimodal } from "./files/inlays";
 import { getGenerationModelString } from "./models/modelString";
 import { saveServerDatabase } from "../storage/serverDb";
 import { fetchServerStateSnapshot } from "../storage/serverStateClient";
@@ -1083,11 +1083,12 @@ export async function sendChat(chatProcessIndex = -1,arg:{
                 const inlayData = await getInlayAsset(inlayName)
                 if(inlayData?.type === 'image'){
                     if(modelinfo.flags.includes(LLMFlags.hasImageInput)){
+                        const preparedInlay = await prepareInlayImageForMultimodal(inlayData)
                         multimodal.push({
                             type: 'image',
-                            base64: inlayData.data,
-                            width: inlayData.width,
-                            height: inlayData.height
+                            base64: preparedInlay.base64,
+                            width: preparedInlay.width,
+                            height: preparedInlay.height
                         })
                     }
                     else{

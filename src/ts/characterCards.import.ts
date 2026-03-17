@@ -13,6 +13,7 @@ import { CharXImporter, CharXSkippableChecker } from "./process/processzip";
 import { readModule } from "./process/modules";
 import { importCharacterCardSpec } from "./characterCards.importSpec";
 import { convertOffSpecCards, type CharacterCardV2Risu, type OldTavernChar } from "./cardSpecLegacy";
+import { getImportedImageFileName } from "./assets/fileTypes";
 
 export async function importCharacter() {
   try {
@@ -266,7 +267,9 @@ async function importPngCharacter(
       continue;
     }
     if (chunk.key.startsWith("chara-ext-asset_")) {
-      const assetIndex = chunk.key.replace("chara-ext-asset_:", "").replace("chara-ext-asset_", "");
+      const rawAssetKey = chunk.key.replace("chara-ext-asset_:", "").replace("chara-ext-asset_", "");
+      const [assetIndex, assetExtRaw] = rawAssetKey.split(":");
+      const assetExt = (assetExtRaw || "").toLowerCase().replace(/[^a-z0-9]/g, "");
       const assetData = Buffer.from(chunk.value, "base64");
       if (pngChunks === 0) {
         alertWait(`Loading... (Loaded ${readedPngChunks} Assets)`);
@@ -278,7 +281,9 @@ async function importPngCharacter(
         });
       }
       readedPngChunks += 1;
-      assets[assetIndex] = await saveAsset(assetData);
+      assets[assetIndex] = assetExt
+        ? await saveAsset(assetData, "", `asset.${assetExt}`)
+        : await saveAsset(assetData);
     }
   }
 
@@ -306,7 +311,7 @@ async function importPngCharacter(
   }
 
   if (parsed.spec !== "chara_card_v2" && parsed.spec !== "chara_card_v3") {
-    db.characters.push(convertOffSpecCards(parsed as OldTavernChar, await saveAsset(img)));
+    db.characters.push(convertOffSpecCards(parsed as OldTavernChar, await saveAsset(img, "", getImportedImageFileName(img))));
     setDatabaseLite(db);
     db.statics.imports += 1;
     alertNormal(language.importedCharacter);

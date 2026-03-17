@@ -11,7 +11,7 @@ import { get } from 'svelte/store';
 import css, { type CssAtRuleAST } from '@adobe/css-tools'
 import { calcString } from './process/infunctions';
 import { findCharacterbyId, getPersonaPrompt, getUserIcon, getUserName, pickHashRand, replaceAsync} from './util';
-import { getInlayAssetBlob } from './process/files/inlays';
+import { getInlayAsset, getInlayAssetBlob } from './process/files/inlays';
 import { getModuleLorebooks, getModules } from './process/modules';
 import hljs from 'highlight.js/lib/core'
 import 'highlight.js/styles/atom-one-dark.min.css'
@@ -20,6 +20,7 @@ import katex from 'katex'
 import { getModelInfo } from './model/modellist';
 import { registerCBS, type matcherArg, type RegisterCallback } from './cbs';
 import cssSelectorParser from 'postcss-selector-parser'
+import { getMimeFromAssetPath } from './assets/fileTypes';
 const parserLog = (..._args: unknown[]) => {};
 
 const markdownItOptions = {
@@ -675,13 +676,31 @@ async function parseInlayAssets(data:string){
             const id = inlay.substring(inlay.indexOf('::') + 2, inlay.length - 2)
             const prefix = inlayType !== 'inlay' ? `<div class="risu-inlay-image">` : ''
             const postfix = inlayType !== 'inlay' ? `</div>\n\n` : ''
-
-            const asset = await getInlayAssetBlob(id)
-            let url = blobUrlCache.get(id)
-            if(!url && asset?.data){
-                url = URL.createObjectURL(asset.data)
-                blobUrlCache.set(id, url)
-            } 
+            if (isNodeServer && /^(assets\/|characters\/[^/]+\/images\/|characters\/images\/)/.test(id)) {
+                const directSrc = await getFileSrc(id)
+                const lowerId = id.toLowerCase()
+                if (!directSrc) {
+                    data = data.replace(inlay, '')
+                    continue
+                }
+                if (DBState.db.hideAllImages && /\.(png|jpe?g|gif|webp|avif)$/.test(lowerId)) {
+                    data = data.replace(inlay, '')
+                    continue
+                }
+                if (/\.(png|jpe?g|gif|webp|avif)$/.test(lowerId)) {
+                    data = data.replace(inlay, `${prefix}<img src="${directSrc}"/>${postfix}`)
+                    continue
+                }
+                if (/\.(mp4|webm|mkv)$/.test(lowerId)) {
+                    data = data.replace(inlay, `${prefix}<video controls><source src="${directSrc}" type="${getMimeFromAssetPath(lowerId) || 'video/mp4'}"></video>${postfix}`)
+                    continue
+                }
+                if (/\.(mp3|wav|ogg|flac)$/.test(lowerId)) {
+                    data = data.replace(inlay, `${prefix}<audio controls><source src="${directSrc}" type="${getMimeFromAssetPath(lowerId) || 'audio/mpeg'}"></audio>${postfix}`)
+                    continue
+                }
+            }
+            const asset = await getInlayAsset(id)
             switch(asset?.type){
                 case 'image':
                     // Hide inlay images when hideAllImages is enabled
@@ -689,14 +708,24 @@ async function parseInlayAssets(data:string){
                         data = data.replace(inlay, '')
                         break
                     }
-                    data = data.replace(inlay, `${prefix}<img src="${url}"/>${postfix}`)
+                    data = data.replace(inlay, `${prefix}<img src="${asset.data}"/>${postfix}`)
                     break
                 case 'video':
-                    data = data.replace(inlay, `${prefix}<video controls><source src="${url}" type="video/mp4"></video>${postfix}`)
+                case 'audio': {
+                    const mediaAsset = await getInlayAssetBlob(id)
+                    let url = blobUrlCache.get(id)
+                    if(!url && mediaAsset?.data){
+                        url = URL.createObjectURL(mediaAsset.data)
+                        blobUrlCache.set(id, url)
+                    }
+                    if (asset.type === 'video') {
+                        data = data.replace(inlay, `${prefix}<video controls><source src="${url}" type="video/mp4"></video>${postfix}`)
+                    }
+                    else {
+                        data = data.replace(inlay, `${prefix}<audio controls><source src="${url}" type="audio/mpeg"></audio>${postfix}`)
+                    }
                     break
-                case 'audio':
-                    data = data.replace(inlay, `${prefix}<audio controls><source src="${url}" type="audio/mpeg"></audio>${postfix}`)
-                    break
+                }
             }
             
         }

@@ -16,7 +16,8 @@ const shared = vi.hoisted(() => {
     extractJson: "",
     seperateModelsForAxModels: false,
     useStreaming: false,
-    fallbackModels: {},
+    fallbackModels: { model: ["fallback-model"] },
+    requestRetrys: 0,
   }));
 
   return {
@@ -153,7 +154,7 @@ vi.mock("src/ts/process/request/request.routing", () => ({
   resolveServerStreaming: vi.fn((_provider: string, requested: boolean) => requested),
 }));
 
-import { requestChatDataMain } from "./request";
+import { requestChatData, requestChatDataMain } from "./request";
 
 describe("requestChatDataMain dispatch", () => {
   beforeEach(() => {
@@ -220,6 +221,29 @@ describe("requestChatDataMain dispatch", () => {
       type: "fail",
       noRetry: true,
       result: "HTTP Provider has been removed: reverse_proxy",
+    });
+  });
+
+  it("preserves an explicit static model in requestChatData instead of replacing it with fallback models", async () => {
+    shared.getModelInfoMock.mockImplementation((id?: string) => ({
+      id,
+      format: "OpenAICompatible",
+      flags: [],
+      parameters: [],
+    }));
+
+    const result = await requestChatData({
+      formated: [{ role: "user", content: "hello" }],
+      bias: {},
+      staticModel: "gpt-5.4",
+    }, "model");
+
+    expect(shared.requestOpenAIMock).toHaveBeenCalledTimes(1);
+    expect(shared.requestOpenAIMock.mock.calls[0][0].aiModel).toBe("gpt-5.4");
+    expect(result).toEqual({
+      type: "success",
+      result: "openai",
+      model: "gpt-5.4",
     });
   });
 });

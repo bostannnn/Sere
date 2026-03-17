@@ -1046,9 +1046,42 @@ interface ComfyConfig{
 
 export interface ComfyCommanderConfig {
     baseUrl: string
-    debug: boolean
     timeoutSec: number
     pollIntervalMs: number
+    activeProvider: 'comfyui' | 'runpod'
+    imagePrompt: ComfyCommanderImagePromptConfig
+    runpod: ComfyCommanderRunpodConfig
+    referenceStore: ComfyCommanderReferenceStoreConfig
+}
+
+export interface ComfyCommanderImagePromptConfig {
+    model: string
+    systemPrompt: string
+    userPromptTemplate: string
+    contextMessageCount: number
+    maxContextChars: number
+}
+
+export interface ComfyCommanderRunpodConfig {
+    apiKey: string
+    modelId: string
+    requestMode: 'run' | 'runsync'
+    outputFormat: string
+    width: number
+    height: number
+    size: string
+    numInferenceSteps: number
+    guidance: number
+    strength: number
+    enableSafetyChecker: boolean
+    customEndpointId: string
+    customSchemaPreset: ComfyCommanderRunpodSchemaPreset
+}
+
+export interface ComfyCommanderReferenceStoreConfig {
+    provider: 'none' | 'yandex-disk'
+    yandexDiskToken: string
+    yandexDiskFolder: string
 }
 
 export interface ComfyCommanderWorkflow {
@@ -1062,9 +1095,30 @@ export interface ComfyCommanderTemplate {
     trigger: string
     prompt: string
     negativePrompt: string
+    imagePromptModel: string
+    imagePromptSystemPrompt: string
+    imagePromptUserPromptTemplate: string
+    imagePromptContextMessageCount: number
+    imagePromptMaxContextChars: number
     workflowId: string
     showInChatMenu: boolean
     buttonName: string
+    providerOverride: 'none' | 'comfyui' | 'runpod'
+    runpodModelId: string
+    runpodEndpointId: string
+    runpodSchemaPreset: ComfyCommanderRunpodSchemaPreset
+    runpodOutputFormat: string
+    runpodWidth: number
+    runpodHeight: number
+    runpodSize: string
+    runpodNumInferenceSteps: number
+    runpodGuidance: number
+    runpodStrength: number
+    runpodEnableSafetyChecker: boolean
+    modeDefault: 'text-to-image' | 'image-edit'
+    useReferenceImage: boolean
+    referenceSource: 'none' | 'character-portrait'
+    allowReferenceFallbackToText: boolean
 }
 
 export interface ComfyCommanderState {
@@ -1073,6 +1127,14 @@ export interface ComfyCommanderState {
     workflows: ComfyCommanderWorkflow[]
     templates: ComfyCommanderTemplate[]
 }
+
+export type ComfyCommanderRunpodSchemaPreset =
+    | 'generic-text'
+    | 'generic-edit'
+    | 'flux'
+    | 'z-image'
+    | 'qwen-edit'
+    | 'qwen-edit-2511';
 
 export interface Chat{
     message: Message[]
@@ -1140,6 +1202,29 @@ export interface MessageGenerationInfo{
         score: number
         source: string
     }[]
+    imageGeneration?: ImageGenerationTrace
+}
+
+export interface ImageGenerationTrace {
+    source: 'comfy-commander'
+    templateId: string
+    templateName?: string
+    llmSystemPrompt: string
+    llmPromptTemplate: string
+    llmInputPrompt: string
+    llmRawOutput: string
+    finalPrompt: string
+    userPrompt?: string
+    promptModel?: string
+    provider: 'runpod' | 'comfyui'
+    imageModel?: string
+    mode: 'text-to-image' | 'image-edit'
+    negativePrompt?: string
+    referenceSource?: 'none' | 'character-portrait'
+    referenceImageUrls?: string[]
+    outputAssetPath?: string
+    metadataPath?: string
+    createdAt: number
 }
 
 export interface MessagePresetInfo{

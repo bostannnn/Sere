@@ -11,6 +11,7 @@ import { getHubResources } from "./characterCards.shared";
 import { applyCharacterExportBundle } from "./cardBundleImport";
 import { convertCharbook, type CharacterBook, type CharacterCardV2Risu } from "./cardSpecLegacy";
 import { applyImportedV3CardFields } from "./cardSpecV3";
+import { getImportedImageFileName } from "./assets/fileTypes";
 
 export async function importCharacterCardSpec(
   card: CharacterCardV2Risu | CharacterCardV3,
@@ -24,7 +25,7 @@ export async function importCharacterCardSpec(
   }
 
   const data = card.data;
-  let im = img ? await saveAsset(img) : undefined;
+  let im = img ? await saveAsset(img, "", getImportedImageFileName(img)) : undefined;
   const db = getDatabase();
   const risuext = safeStructuredClone(data.extensions?.risuai ?? {});
   const emotions: [string, string][] = [];
