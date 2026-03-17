@@ -3139,7 +3139,7 @@ body {
   z-index: var(--z-overlay, 110);
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
+  align-items: stretch;
   min-width: 10rem;
   gap: 4px;
   padding: var(--ds-space-4);
@@ -3942,7 +3942,10 @@ body {
 }
 
 .ds-chat-icon-label {
+  display: block;
+  flex: 1 1 auto;
   margin-inline-start: var(--ds-space-1);
+  min-width: 0;
 }
 
 .ds-chat-status-message {
@@ -4150,6 +4153,7 @@ body {
 
 .ds-overlay-menu .ds-chat-geninfo-panel {
   margin-top: 0;
+  align-items: stretch;
 }
 
 .ds-overlay-menu .ds-chat-geninfo-button.icon-btn.icon-btn--sm,
@@ -4157,6 +4161,13 @@ body {
 .ds-chat-mobile-menu-actions .ds-chat-icon-action.icon-btn--sm,
 .ds-chat-mobile-menu-actions .ds-chat-icon-action.ds-ui-menu-item {
   width: 100%;
+}
+
+.ds-overlay-menu .ds-chat-geninfo-button.icon-btn.icon-btn--sm,
+.ds-chat-mobile-menu-actions .ds-chat-icon-action.ds-ui-menu-item {
+  justify-content: flex-start;
+  max-width: 100%;
+  margin-inline-end: 0;
 }
 
 .ds-chat-mobile-menu-actions .ds-chat-page-indicator {
