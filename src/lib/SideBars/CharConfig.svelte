@@ -11,7 +11,7 @@
     } from "../../ts/storage/database.svelte";
     import { DBState } from 'src/ts/stores.svelte';
     import { tick, untrack } from 'svelte';
-    import { SvelteMap } from "svelte/reactivity";
+    import { SvelteMap, SvelteSet } from "svelte/reactivity";
     import { CharConfigSubMenu, MobileGUI, selectedCharID } from "../../ts/stores.svelte";
     import { PlusIcon, SmileIcon, TrashIcon, UserIcon, ActivityIcon, BookIcon, BookOpenCheckIcon, User, Braces, Volume2Icon, DownloadIcon, HardDriveUploadIcon, Share2Icon, ImageIcon, ImageOffIcon, ArrowUp, ArrowDown } from '@lucide/svelte'
     import Check from "../UI/GUI/CheckInput.svelte";
@@ -23,7 +23,7 @@
     import Help from "../Others/Help.svelte";
     import { exportChar } from "src/ts/characterCards";
     import { getElevenTTSVoices, getWebSpeechTTSVoices, getVOICEVOXVoices, oaiVoices, getNovelAIVoices } from "src/ts/process/tts";
-    import { getFileSrc } from "src/ts/globalApi.svelte";
+    import { getFileSrc, readImage } from "src/ts/globalApi.svelte";
     import { addGroupChar, rmCharFromGroup } from "src/ts/process/group";
     import { getCharacterMemoryPromptOverride, setCharacterMemoryPromptOverride } from "src/ts/process/memory/storage";
     import TextInput from "../UI/GUI/TextInput.svelte";
@@ -424,6 +424,153 @@
     const assetFileExtensions:string[] = $state([])
     const assetFilePath:string[] = $state([])
     const licensed = $derived(currentCharacter?.type === 'character' ? currentCharacter.license : '')
+    type ImageDimensions = {
+        width: number
+        height: number
+    }
+    const iconPreviewPathByUri = new SvelteMap<string, string>()
+    const iconPreviewDimensionsByUri = new SvelteMap<string, ImageDimensions>()
+    const iconPreviewBytesByUri = new SvelteMap<string, number>()
+    const iconPreviewPending = new SvelteSet<string>()
+    let iconPreviewOwnerKey = $state<string | null>(null)
+    let iconPreviewGeneration = 0
+
+    function formatImageSize(bytes: number) {
+        if (bytes <= 0) {
+            return ''
+        }
+        if (bytes < 1024) {
+            return `${bytes} B`
+        }
+        const kb = bytes / 1024
+        if (kb < 1024) {
+            return `${Math.round(kb)} KB`
+        }
+        const mb = kb / 1024
+        return `${mb.toFixed(mb >= 10 ? 0 : 1)} MB`
+    }
+
+    function getByteLengthFromDataUrl(src: string) {
+        const base64Marker = ';base64,'
+        const base64Index = src.indexOf(base64Marker)
+        if (base64Index === -1) {
+            return null
+        }
+        const base64 = src.slice(base64Index + base64Marker.length)
+        if (!base64) {
+            return 0
+        }
+        const padding = base64.endsWith('==') ? 2 : base64.endsWith('=') ? 1 : 0
+        return Math.floor((base64.length * 3) / 4) - padding
+    }
+
+    function getIconDimensionsLabel(uri: string) {
+        if (DBState.db.hideAllImages) {
+            return ''
+        }
+        const dimensions = iconPreviewDimensionsByUri.get(uri)
+        if (!dimensions) {
+            return ''
+        }
+        return `${dimensions.width}x${dimensions.height}`
+    }
+
+    function getIconSizeLabel(uri: string) {
+        if (DBState.db.hideAllImages) {
+            return ''
+        }
+        const size = iconPreviewBytesByUri.get(uri)
+        if (typeof size === 'number' && size > 0) {
+            return formatImageSize(size)
+        }
+        return ''
+    }
+
+    function getIconPreviewStyle(uri: string, isLarge: boolean) {
+        if (DBState.db.hideAllImages) {
+            return isLarge ? 'height: 10.66rem;' : ''
+        }
+        const previewPath = iconPreviewPathByUri.get(uri)
+        const heightStyle = isLarge ? 'height: 10.66rem;' : ''
+        if (!previewPath) {
+            return heightStyle
+        }
+        return `background-image: url("${previewPath}");background-size: cover;background-position: center;background-repeat: no-repeat;${heightStyle}`
+    }
+
+    async function loadImageDimensions(src: string): Promise<ImageDimensions | null> {
+        return await new Promise((resolve) => {
+            const image = new Image()
+            image.onload = () => {
+                resolve({
+                    width: image.naturalWidth || image.width,
+                    height: image.naturalHeight || image.height
+                })
+            }
+            image.onerror = () => resolve(null)
+            image.src = src
+        })
+    }
+
+    async function warmIconPreview(uri: string) {
+        if (!uri || iconPreviewPending.has(uri)) {
+            return
+        }
+        if (iconPreviewPathByUri.has(uri) && iconPreviewDimensionsByUri.has(uri) && iconPreviewBytesByUri.has(uri)) {
+            return
+        }
+
+        const requestGeneration = iconPreviewGeneration
+        iconPreviewPending.add(uri)
+        try {
+            const previewPath = await getFileSrc(uri)
+            if (requestGeneration !== iconPreviewGeneration) {
+                return
+            }
+            if (!previewPath) {
+                return
+            }
+            iconPreviewPathByUri.set(uri, previewPath)
+            if (!iconPreviewBytesByUri.has(uri)) {
+                let byteLength = getByteLengthFromDataUrl(previewPath)
+                if (byteLength === null) {
+                    try {
+                        const imageBytes = await readImage(uri)
+                        if (requestGeneration !== iconPreviewGeneration) {
+                            return
+                        }
+                        byteLength = imageBytes?.length ?? null
+                    } catch {
+                        byteLength = null
+                    }
+                }
+                if (typeof byteLength === 'number' && byteLength >= 0) {
+                    iconPreviewBytesByUri.set(uri, byteLength)
+                }
+            }
+            if (!iconPreviewDimensionsByUri.has(uri)) {
+                const dimensions = await loadImageDimensions(previewPath)
+                if (requestGeneration !== iconPreviewGeneration) {
+                    return
+                }
+                if (dimensions) {
+                    iconPreviewDimensionsByUri.set(uri, dimensions)
+                }
+            }
+        } finally {
+            if (requestGeneration === iconPreviewGeneration) {
+                iconPreviewPending.delete(uri)
+            }
+        }
+    }
+
+    function clearIconPreviewCache() {
+        iconPreviewGeneration += 1
+        iconPreviewPathByUri.clear()
+        iconPreviewDimensionsByUri.clear()
+        iconPreviewBytesByUri.clear()
+        iconPreviewPending.clear()
+    }
 
     function ensureEditorCharacter(): CharacterEditorState | null {
         const selected = currentCharacter
@@ -615,6 +762,46 @@
             getFileSrc(asset[1]).then((filePath) => {
                 assetFilePath[i] = filePath ?? ''
             })
+        }
+    });
+
+    $effect(() => {
+        const selected = currentCharacter
+        const nextOwnerKey = selected && selected.type === 'character'
+            ? (selected.chaId ?? `character-${$selectedCharID}`)
+            : null
+
+        if (iconPreviewOwnerKey === nextOwnerKey) {
+            return
+        }
+
+        iconPreviewOwnerKey = nextOwnerKey
+        clearIconPreviewCache()
+    });
+
+    $effect(() => {
+        const selected = currentCharacter
+        const hideAllImages = DBState.db.hideAllImages
+        if (!selected || selected.type !== 'character') {
+            return
+        }
+        if ($CharConfigSubMenu !== 1 || viewSubMenu !== 0) {
+            return
+        }
+        if (hideAllImages) {
+            clearIconPreviewCache()
+            return
+        }
+
+        if (selected.image) {
+            void warmIconPreview(selected.image)
+        }
+
+        const iconAssets = editorCharacter?.ccAssets ?? []
+        for (const asset of iconAssets) {
+            if (asset?.uri) {
+                void warmIconPreview(asset.uri)
+            }
         }
     });
 
@@ -1143,7 +1330,9 @@
         {:else}
             <div class="char-config-icon-gallery panel-shell">
                 {#if selectedCharacter.image !== '' && selectedCharacter.image}
+                    {@const currentIconStyle = getIconPreviewStyle(selectedCharacter.image, editorCharacter!.largePortrait)}
                     <button
+                        class="char-config-icon-button"
                         onclick={() => {
                         if(
                             selectedCharacter.type === 'character' &&
@@ -1158,22 +1347,30 @@
                             iconRemoveMode = false
                         }
                     }} type="button" title={iconRemoveMode ? "Remove selected icon" : "Current icon"} aria-label={iconRemoveMode ? "Remove selected icon" : "Current icon"}>
-                        {#await getCharImage(selectedCharacter.image, editorCharacter!.largePortrait ? 'lgcss' : 'css')}
-                            <div
-                                class="char-config-icon-tile char-config-icon-tile-selected"
-                                class:is-remove-mode={iconRemoveMode}
-                            ></div>
-                        {:then im}
-                            <div
-                                class="char-config-icon-tile char-config-icon-tile-selected"
-                                class:is-remove-mode={iconRemoveMode}
-                                style={im}
-                            ></div>
-                        {/await}
+                        <div
+                            class="char-config-icon-tile char-config-icon-tile-selected"
+                            class:is-remove-mode={iconRemoveMode}
+                            style={currentIconStyle}
+                        >
+                            <span class="char-config-icon-badge">Current</span>
+                            {#if getIconDimensionsLabel(selectedCharacter.image) || getIconSizeLabel(selectedCharacter.image)}
+                                <span class="char-config-icon-meta">
+                                    {#if getIconDimensionsLabel(selectedCharacter.image)}
+                                        <span class="char-config-icon-meta-line">{getIconDimensionsLabel(selectedCharacter.image)}</span>
+                                    {/if}
+                                    {#if getIconSizeLabel(selectedCharacter.image)}
+                                        <span class="char-config-icon-meta-line">{getIconSizeLabel(selectedCharacter.image)}</span>
+                                    {/if}
+                                </span>
+                            {/if}
+                        </div>
                     </button>
                 {/if}
                 {#if editorCharacter!.ccAssets}
                     {#each editorCharacter!.ccAssets as assets, i (i)}
+                        {@const iconDimensionsLabel = getIconDimensionsLabel(assets.uri)}
+                        {@const iconSizeLabel = getIconSizeLabel(assets.uri)}
+                        {@const iconStyle = getIconPreviewStyle(assets.uri, editorCharacter!.largePortrait)}
                         <button onclick={async () => {
                             if(!iconRemoveMode){
                                 changeCharImage($selectedCharID, i)
@@ -1184,23 +1381,27 @@
                                 }
                                 iconRemoveMode = false
                             }
-                        }} type="button" title={iconRemoveMode ? "Remove icon asset" : "Select icon asset"} aria-label={iconRemoveMode ? `Remove icon asset ${i + 1}` : `Select icon asset ${i + 1}`}>
-                            {#await getCharImage(assets.uri, editorCharacter!.largePortrait ? 'lgcss' : 'css')}
-                                <div
-                                    class="char-config-icon-tile char-config-icon-tile-hover"
-                                    class:is-remove-mode={iconRemoveMode}
-                                ></div>
-                            {:then im}
-                                <div
-                                    class="char-config-icon-tile char-config-icon-tile-hover"
-                                    class:is-remove-mode={iconRemoveMode}
-                                    style={im}
-                                ></div>
-                            {/await}
+                        }} class="char-config-icon-button" type="button" title={iconRemoveMode ? "Remove icon asset" : "Select icon asset"} aria-label={iconRemoveMode ? `Remove icon asset ${i + 1}` : `Select icon asset ${i + 1}`}>
+                            <div
+                                class="char-config-icon-tile char-config-icon-tile-hover"
+                                class:is-remove-mode={iconRemoveMode}
+                                style={iconStyle}
+                            >
+                                {#if iconDimensionsLabel || iconSizeLabel}
+                                    <span class="char-config-icon-meta">
+                                        {#if iconDimensionsLabel}
+                                            <span class="char-config-icon-meta-line">{iconDimensionsLabel}</span>
+                                        {/if}
+                                        {#if iconSizeLabel}
+                                            <span class="char-config-icon-meta-line">{iconSizeLabel}</span>
+                                        {/if}
+                                    </span>
+                                {/if}
+                            </div>
                         </button>
                     {/each}
                 {/if}
-                <button onclick={async () => {await selectCharImg($selectedCharID);}} type="button" title="Add icon asset" aria-label="Add icon asset">
+                <button class="char-config-icon-button" onclick={async () => {await selectCharImg($selectedCharID);}} type="button" title="Add icon asset" aria-label="Add icon asset">
                     <div
                         class="char-config-icon-add-tile"
                         class:is-large={editorCharacter!.largePortrait}
@@ -1208,6 +1409,9 @@
                         <PlusIcon />
                     </div>
                 </button>
+            </div>
+            <div class="char-config-icon-help">
+                The current icon stays in the first slot. Selecting another image swaps it here.
             </div>
             <div class="char-config-icon-remove-row">
                 <button
@@ -2518,6 +2722,12 @@
         padding: var(--ds-space-2);
     }
 
+    .char-config-icon-button {
+        border: 0;
+        padding: 0;
+        background: transparent;
+    }
+
     .char-config-icon-tile {
         width: 6rem;
         height: 6rem;
@@ -2525,6 +2735,8 @@
         background: var(--ds-text-secondary);
         cursor: pointer;
         display: block;
+        position: relative;
+        overflow: hidden;
         transition: box-shadow var(--ds-motion-fast) var(--ds-ease-standard),
             border-color var(--ds-motion-fast) var(--ds-ease-standard);
     }
@@ -2539,6 +2751,48 @@
 
     .char-config-icon-tile.is-remove-mode {
         box-shadow: 0 0 0 3px var(--ds-text-danger);
+    }
+
+    .char-config-icon-badge,
+    .char-config-icon-meta {
+        position: absolute;
+        z-index: 1;
+        display: inline-flex;
+        align-items: center;
+        border-radius: 999px;
+        color: oklch(0.98 0.01 95);
+        background: rgba(20, 20, 20, 0.78);
+        box-shadow:
+            0 0 0 1px rgba(255, 255, 255, 0.14),
+            0 8px 20px rgba(0, 0, 0, 0.28);
+        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+    }
+
+    .char-config-icon-badge {
+        top: 0.35rem;
+        left: 0.35rem;
+        padding: 0.22rem 0.56rem;
+        font-size: 0.68rem;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+    }
+
+    .char-config-icon-meta {
+        right: 0.35rem;
+        bottom: 0.35rem;
+        padding: 0.22rem 0.48rem;
+        font-size: 0.72rem;
+        font-weight: 600;
+        flex-direction: column;
+        align-items: flex-end;
+        gap: 0.02rem;
+        line-height: 1.1;
+    }
+
+    .char-config-icon-meta-line {
+        display: block;
+        white-space: nowrap;
     }
 
     .char-config-icon-add-tile {
@@ -2566,6 +2820,13 @@
         display: flex;
         align-items: flex-end;
         justify-content: flex-end;
+    }
+
+    .char-config-icon-help {
+        padding: 0 var(--ds-space-2);
+        color: var(--ds-text-secondary);
+        font-size: 0.8rem;
+        line-height: 1.4;
     }
 
     .char-config-icon-remove-button {
