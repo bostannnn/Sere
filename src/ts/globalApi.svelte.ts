@@ -87,6 +87,14 @@ function isServerStoredFilePath(path: string) {
     return path.startsWith('assets') || /^characters\/[^/]+\/images\//.test(path) || path.startsWith('characters/images')
 }
 
+export function invalidateFileCacheEntry(path: string) {
+    if (!path) {
+        return
+    }
+    fileCache.delete(path)
+    pendingFileLoads.delete(path)
+}
+
 /**
  * Gets the source URL of a file.
  * 

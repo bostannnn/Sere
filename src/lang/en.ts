@@ -1335,6 +1335,7 @@ export const languageEnglish = {
     useTokenizerCaching: "Tokenizer Caching",
     buildMemoryContextModal: "Memory Modal",
     memoryTab: "Memory",
+    imagesTab: "Images",
     promptInfoInsideChat: "Add Prompt Info to Chat",
     promptTextInfoInsideChat: "Add Prompt Text to Chat",
     promptInfoEmptyMessage: "No prompt information is available for this message.",

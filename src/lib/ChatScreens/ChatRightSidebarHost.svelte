@@ -4,9 +4,10 @@
     import CharConfig from "../SideBars/CharConfig.svelte";
     import MemoryPanel from "../Others/MemoryPanel.svelte";
     import EvolutionSettings from "../SideBars/Evolution/EvolutionSettings.svelte";
+    import CharacterImagesSidebar from "./CharacterImagesSidebar.svelte";
     import { DBState, selectedCharID } from "src/ts/stores.svelte";
 
-    type RightPanelTab = "chat" | "character" | "memory" | "evolution";
+    type RightPanelTab = "chat" | "character" | "memory" | "evolution" | "images";
 
     interface Props {
         rightSidebarTab?: RightPanelTab;
@@ -14,6 +15,7 @@
         configTabLabel?: string;
         memoryTabLabel?: string;
         evolutionTabLabel?: string;
+        imagesTabLabel?: string;
         onSelectTab?: (tab: RightPanelTab) => void;
     }
 
@@ -23,10 +25,11 @@
         configTabLabel = "Character",
         memoryTabLabel = "Memory",
         evolutionTabLabel = "Evolution",
+        imagesTabLabel = "Images",
         onSelectTab = () => {},
     }: Props = $props();
 
-    const rightPanelTabs: RightPanelTab[] = ["chat", "character", "memory", "evolution"];
+    const rightPanelTabs: RightPanelTab[] = ["chat", "character", "memory", "evolution", "images"];
     const selectedCharacter = $derived.by(() => {
         const selectedIndex = Number($selectedCharID);
         if (!Number.isInteger(selectedIndex) || selectedIndex < 0) {
@@ -39,10 +42,12 @@
     const characterPanelId = "chat-sidebar-panel-character";
     const memoryPanelId = "chat-sidebar-panel-memory";
     const evolutionPanelId = "chat-sidebar-panel-evolution";
+    const imagesPanelId = "chat-sidebar-panel-images";
     let chatTabButton: HTMLButtonElement | null = null;
     let characterTabButton: HTMLButtonElement | null = null;
     let memoryTabButton: HTMLButtonElement | null = null;
     let evolutionTabButton: HTMLButtonElement | null = null;
+    let imagesTabButton: HTMLButtonElement | null = null;
 
     const selectTab = (nextTab: RightPanelTab) => {
         onSelectTab(nextTab);
@@ -61,7 +66,11 @@
             memoryTabButton?.focus();
             return;
         }
-        evolutionTabButton?.focus();
+        if (tab === "evolution") {
+            evolutionTabButton?.focus();
+            return;
+        }
+        imagesTabButton?.focus();
     };
 
     const selectTabAndFocus = async (nextTab: RightPanelTab) => {
@@ -94,7 +103,7 @@
         }
 
         if (event.key === "End") {
-            await selectTabAndFocus("evolution");
+            await selectTabAndFocus("images");
             event.preventDefault();
             return;
         }
@@ -201,6 +210,23 @@
             onclick={() => selectTabAndFocus("evolution")}
             onkeydown={(event) => handleRightPanelTabKeydown(event, "evolution")}
         >{evolutionTabLabel}</button>
+        <button
+            type="button"
+            class="ds-chat-right-panel-tab seg-tab"
+            data-testid="chat-sidebar-tab-images"
+            data-chat-sidebar-tab="images"
+            role="tab"
+            id="chat-sidebar-tab-images"
+            bind:this={imagesTabButton}
+            aria-selected={rightSidebarTab === "images"}
+            aria-controls={imagesPanelId}
+            tabindex={rightSidebarTab === "images" ? 0 : -1}
+            class:ds-chat-right-panel-tab-active={rightSidebarTab === "images"}
+            class:active={rightSidebarTab === "images"}
+            class:is-active={rightSidebarTab === "images"}
+            onclick={() => selectTabAndFocus("images")}
+            onkeydown={(event) => handleRightPanelTabKeydown(event, "images")}
+        >{imagesTabLabel}</button>
     </div>
     <div class="ds-chat-right-panel-content">
         {#if rightSidebarTab === "chat"}
@@ -255,25 +281,42 @@
                 >
                     <MemoryPanel />
                 </div>
+            {:else if rightSidebarTab === "evolution"}
+                <div
+                    class="ds-chat-right-panel-pane ds-chat-right-panel-pane-evolution"
+                    data-testid="chat-sidebar-pane-evolution"
+                    role="tabpanel"
+                    id={evolutionPanelId}
+                    aria-labelledby="chat-sidebar-tab-evolution"
+                    tabindex={0}
+                    onkeydown={(event) => {
+                        if (event.target !== event.currentTarget) {
+                            return
+                        }
+                        handleRightPanelTabKeydown(event, "evolution")
+                    }}
+                >
+                    {#key selectedCharacter?.chaId ?? "no-character"}
+                        <EvolutionSettings />
+                    {/key}
+                </div>
             {:else}
-            <div
-                class="ds-chat-right-panel-pane ds-chat-right-panel-pane-evolution"
-                data-testid="chat-sidebar-pane-evolution"
-                role="tabpanel"
-                id={evolutionPanelId}
-                aria-labelledby="chat-sidebar-tab-evolution"
-                tabindex={0}
-                onkeydown={(event) => {
-                    if (event.target !== event.currentTarget) {
-                        return
-                    }
-                    handleRightPanelTabKeydown(event, "evolution")
-                }}
-            >
-                {#key selectedCharacter?.chaId ?? "no-character"}
-                    <EvolutionSettings />
-                {/key}
-            </div>
+                <div
+                    class="ds-chat-right-panel-pane ds-chat-right-panel-pane-images"
+                    data-testid="chat-sidebar-pane-images"
+                    role="tabpanel"
+                    id={imagesPanelId}
+                    aria-labelledby="chat-sidebar-tab-images"
+                    tabindex={0}
+                    onkeydown={(event) => {
+                        if (event.target !== event.currentTarget) {
+                            return
+                        }
+                        handleRightPanelTabKeydown(event, "images")
+                    }}
+                >
+                    <CharacterImagesSidebar character={selectedCharacter} />
+                </div>
             {/if}
         {/if}
     </div>

@@ -88,6 +88,13 @@ function registerContentRoutes(arg = {}) {
         res.sendFile(absPath);
     }));
 
+    app.delete('/data/assets/*', withAsyncRoute('DELETE /data/assets/*', async (req, res) => {
+        const relPath = req.path.replace(/^\/data\//, '');
+        const absPath = safeResolve(dataDirs.root, relPath);
+        await fs.rm(absPath, { force: true });
+        res.status(204).end();
+    }));
+
     app.get('/data/characters/images/*', withAsyncRoute('GET /data/characters/images/*', async (req, res) => {
         const relPath = req.path.replace(/^\/data\//, '');
         const absPath = safeResolve(dataDirs.root, relPath);
@@ -96,6 +103,13 @@ function registerContentRoutes(arg = {}) {
             return;
         }
         res.sendFile(absPath);
+    }));
+
+    app.delete('/data/characters/images/*', withAsyncRoute('DELETE /data/characters/images/*', async (req, res) => {
+        const relPath = req.path.replace(/^\/data\//, '');
+        const absPath = safeResolve(dataDirs.root, relPath);
+        await fs.rm(absPath, { force: true });
+        res.status(204).end();
     }));
 
     app.get('/data/characters/:charId/images/*', withAsyncRoute('GET /data/characters/:charId/images/*', async (req, res) => {
@@ -115,6 +129,22 @@ function registerContentRoutes(arg = {}) {
             return;
         }
         res.sendFile(absPath);
+    }));
+
+    app.delete('/data/characters/:charId/images/*', withAsyncRoute('DELETE /data/characters/:charId/images/*', async (req, res) => {
+        const safeCharId = requireSafeSegment(res, req.params.charId, 'character id');
+        if (!safeCharId) return;
+        const relSuffix = (req.params[0] || '').toString();
+        const safeName = relSuffix.split('/').pop() || '';
+        if (!safeName || safeName.includes('/') || safeName.includes('\\')) {
+            res.status(400).send({ error: 'INVALID_PATH' });
+            return;
+        }
+        const charDir = safeResolve(dataDirs.characters, safeCharId);
+        const imagesDir = safeResolve(charDir, 'images');
+        const absPath = safeResolve(imagesDir, safeName);
+        await fs.rm(absPath, { force: true });
+        res.status(204).end();
     }));
 
     const jsonResourceHandlers = (resourceDir) => {

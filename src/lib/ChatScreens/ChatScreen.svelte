@@ -16,7 +16,7 @@
     import { resolveChatBackgroundMode } from "../../ts/storage/database.svelte";
     interface Props {
         rightSidebarOpen?: boolean;
-        rightSidebarTab?: "chat" | "character" | "memory" | "evolution";
+        rightSidebarTab?: "chat" | "character" | "memory" | "evolution" | "images";
         rightSidebarVisible?: boolean;
     }
 
@@ -29,11 +29,13 @@
     let openChatList = $state(false)
     let openModuleList = $state(false)
     let viewportWidth = $state(typeof window !== "undefined" ? window.innerWidth : 1440)
-    type RightPanelTab = "chat" | "character" | "memory" | "evolution";
+    type RightPanelTab = "chat" | "character" | "memory" | "evolution" | "images";
     type PersistedRightPanelTab = Exclude<RightPanelTab, "memory" | "evolution">;
     const rightPanelTabKey = "risu:desktop-right-panel-tab"
     const rightSidebarPanelId = "chat-right-sidebar-drawer"
-    const isPersistedRightPanelTab = (value: string | null): value is PersistedRightPanelTab => value === "chat" || value === "character"
+    const isPersistedRightPanelTab = (value: string | null): value is PersistedRightPanelTab => {
+        return value === "chat" || value === "character" || value === "images"
+    }
 
     const currentCharacter = $derived($selectedCharID >= 0 ? DBState.db.characters[$selectedCharID] : null)
     const configTabLabel = $derived(currentCharacter?.type === "group" ? language.group : language.character)
@@ -363,6 +365,7 @@
                 configTabLabel={configTabLabel}
                 memoryTabLabel={language.memoryTab}
                 evolutionTabLabel="Evolution"
+                imagesTabLabel={language.imagesTab}
                 onSelectTab={setRightPanelTab}
             />
         </div>

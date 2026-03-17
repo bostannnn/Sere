@@ -12,7 +12,7 @@
     import { capitalize, getUserIcon, getUserName, sleep } from "src/ts/util"
     import { v4 as uuidv4, v4 } from 'uuid'
     import { language } from "../../lang"
-    import { alertClear, alertConfirm, alertInput, alertNormal, alertRequestData, alertWait } from "../../ts/alert"
+    import { alertClear, alertConfirm, alertError, alertInput, alertNormal, alertRequestData, alertWait } from "../../ts/alert"
     import { ParseMarkdown, type CbsConditions, type simpleCharacterArgument } from "../../ts/parser.svelte"
     import { onDestroy } from "svelte";
     import {
@@ -24,6 +24,7 @@
     import AutoresizeArea from "../UI/GUI/TextAreaResizable.svelte"
     import PopupButton from "../UI/PopupButton.svelte";
     import ChatBody from './ChatBody.svelte'
+    import { deleteMessagesMediaAssets, openCharacterMediaViewer } from "src/ts/chatMedia";
     const chatLog = (..._args: unknown[]) => {};
 
     let translating = $state(false)
@@ -116,8 +117,17 @@
         if (!context) {
             return
         }
+        const commitRemoval = async (nextMessages: typeof context.chat.message, removedMessages: typeof context.chat.message) => {
+            try {
+                await deleteMessagesMediaAssets(removedMessages)
+            } catch (error) {
+                alertError(`Failed to delete message media: ${error instanceof Error ? error.message : "Unknown error"}`)
+                return
+            }
+            context.chat.message = nextMessages
+        }
         if(e.shiftKey){
-            context.chat.message = context.messages.slice(0, idx)
+            await commitRemoval(context.messages.slice(0, idx), context.messages.slice(idx))
             return
         }
 
@@ -126,19 +136,38 @@
             if(DBState.db.instantRemove || rec){
                 const r = await alertConfirm(language.instantRemoveConfirm)
                 let msg = [...context.chat.message]
+                let removedMessages: typeof context.chat.message
                 if(!r){
+                    removedMessages = context.messages.slice(idx)
                     msg = msg.slice(0, idx)
                 }
                 else{
+                    removedMessages = context.messages[idx] ? [context.messages[idx]] : []
                     msg.splice(idx, 1)
                 }
-                context.chat.message = msg
+                await commitRemoval(msg, removedMessages)
             }
             else{
                 const msg = [...context.chat.message]
+                const removedMessages = context.messages[idx] ? [context.messages[idx]] : []
                 msg.splice(idx, 1)
-                context.chat.message = msg
+                await commitRemoval(msg, removedMessages)
             }
+        }
+    }
+
+    function handleMessageBodyClick(event: MouseEvent) {
+        const target = event.target as HTMLElement | null
+        const mediaTarget = target?.closest<HTMLImageElement>('img[data-risu-media-type="image"][data-risu-media-id]')
+        if (mediaTarget && currentCharacter?.type !== 'group' && currentMessage?.generationInfo?.imageGeneration) {
+            const mediaId = mediaTarget.dataset.risuMediaId
+            if (mediaId) {
+                openCharacterMediaViewer(currentCharacter.chaId, mediaId)
+                return
+            }
+        }
+        if(DBState.db.clickToEdit && idx > -1){
+            editMode = true
         }
     }
 
@@ -414,11 +443,7 @@
         <span class="ds-chat-width ds-chat-markdown ds-chat-markdown-prose ds-chat-text-body"
             class:ds-chat-markdown-prose-invert={$ColorSchemeTypeStore}
             bind:this={bodyRoot}
-            onclick={() => {
-            if(DBState.db.clickToEdit && idx > -1){
-                editMode = true
-            }
-        }}
+            onclick={handleMessageBodyClick}
             style:font-size="{0.875 * (DBState.db.zoomsize / 100)}rem"
             style:line-height="{(DBState.db.lineHeight ?? 1.25) * (DBState.db.zoomsize / 100)}rem"
         >

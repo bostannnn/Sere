@@ -101,3 +101,19 @@ export async function loadServerAsset(path: string) {
 export function getServerAssetSrc(path: string) {
     return `/data/${path}`;
 }
+
+export async function deleteServerAsset(path: string) {
+    const normalizedPath = (path || "").replace(/^\/data\//, "").replace(/^data\//, "");
+    if (!normalizedPath) {
+        return;
+    }
+    const res = await fetchWithServerAuth(`/data/${normalizedPath}`, {
+        method: "DELETE",
+    });
+    if (res.status === 404) {
+        return;
+    }
+    if (res.status < 200 || res.status >= 300) {
+        throw new Error(`deleteServerAsset failed (${res.status})`);
+    }
+}

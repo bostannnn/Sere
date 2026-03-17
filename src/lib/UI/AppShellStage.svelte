@@ -1,6 +1,7 @@
 <script lang="ts">
     import ChatScreen from "../ChatScreens/ChatScreen.svelte";
     import ChatRightSidebarHost from "../ChatScreens/ChatRightSidebarHost.svelte";
+    import CharacterMediaViewer from "../ChatScreens/CharacterMediaViewer.svelte";
     import Settings from "../Setting/Settings.svelte";
     import RulebookLibrary from "../Others/RulebookManager/RulebookLibrary.svelte";
     import HomeCharacterDirectory from "./HomeCharacterDirectory.svelte";
@@ -27,7 +28,7 @@
         shellSearchQuery?: string;
         characterDirectoryShowTrash?: boolean;
         rightSidebarOpen?: boolean;
-        rightSidebarTab?: "chat" | "character" | "memory" | "evolution";
+        rightSidebarTab?: "chat" | "character" | "memory" | "evolution" | "images";
         rightSidebarVisible?: boolean;
         librarySidebarOpen?: boolean;
         librarySidebarTab?: "library" | "settings";
@@ -99,6 +100,10 @@
                 {/key}
             {/if}
         </div>
+    {/if}
+
+    {#if workspace === "chats"}
+        <CharacterMediaViewer />
     {/if}
 
     {#if shouldRenderLibraryWorkspace}

@@ -668,6 +668,14 @@ function trimmer(str:string){
 
 const blobUrlCache = new Map<string, string>()
 
+function escapeHtmlAttribute(value: string) {
+    return value
+        .replace(/&/g, '&amp;')
+        .replace(/"/g, '&quot;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+}
+
 async function parseInlayAssets(data:string){
     const inlayMatch = data.match(/{{(inlay|inlayed|inlayeddata)::(.+?)}}/g)
     if(inlayMatch){
@@ -688,7 +696,7 @@ async function parseInlayAssets(data:string){
                     continue
                 }
                 if (/\.(png|jpe?g|gif|webp|avif)$/.test(lowerId)) {
-                    data = data.replace(inlay, `${prefix}<img src="${directSrc}"/>${postfix}`)
+                    data = data.replace(inlay, `${prefix}<img src="${directSrc}" data-risu-media-id="${escapeHtmlAttribute(id)}" data-risu-media-type="image"/>${postfix}`)
                     continue
                 }
                 if (/\.(mp4|webm|mkv)$/.test(lowerId)) {
@@ -708,7 +716,7 @@ async function parseInlayAssets(data:string){
                         data = data.replace(inlay, '')
                         break
                     }
-                    data = data.replace(inlay, `${prefix}<img src="${asset.data}"/>${postfix}`)
+                    data = data.replace(inlay, `${prefix}<img src="${asset.data}" data-risu-media-id="${escapeHtmlAttribute(id)}" data-risu-media-type="image"/>${postfix}`)
                     break
                 case 'video':
                 case 'audio': {
@@ -812,7 +820,7 @@ export async function ParseMarkdown(
 export function trimMarkdown(data:string){
     return decodeStyle(DOMPurify.sanitize(data, {
         ADD_TAGS: ["iframe", "style", "risu-style", "x-em", 'annotation', 'semantics', 'mrow', 'mi', 'mo', 'mn', 'msup', 'msub', 'mfrac', 'msqrt'],
-        ADD_ATTR: ["allow", "allowfullscreen", "frameborder", "scrolling", "risu-ctrl" ,"risu-btn", 'risu-trigger', 'risu-mark', 'risu-id', 'x-hl-lang', 'x-hl-text'],
+        ADD_ATTR: ["allow", "allowfullscreen", "frameborder", "scrolling", "risu-ctrl" ,"risu-btn", 'risu-trigger', 'risu-mark', 'risu-id', 'x-hl-lang', 'x-hl-text', 'data-risu-media-id', 'data-risu-media-type'],
     }))
 }
 

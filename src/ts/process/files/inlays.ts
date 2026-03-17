@@ -464,6 +464,13 @@ export async function getInlayMetadata<T>(path: string): Promise<T | null> {
     return await inlayMetadataStorage.getItem<T>(path)
 }
 
+export async function removeInlayMetadata(path: string) {
+    if (!path) {
+        return
+    }
+    await inlayMetadataStorage.removeItem(path)
+}
+
 export async function setInlayAsset(id: string, img: InlayAsset){
     await inlayStorage.setItem(id, img)
 }

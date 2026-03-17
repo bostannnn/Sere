@@ -36,7 +36,7 @@ export const SizeStore = writable({
 })
 
 export type AppWorkspace = "home" | "characters" | "chats" | "library" | "settings"
-export type AppInspector = "none" | "details" | "chat" | "character" | "memory" | "evolution"
+export type AppInspector = "none" | "details" | "chat" | "character" | "memory" | "evolution" | "images"
 
 export interface AppRoute {
     workspace: AppWorkspace

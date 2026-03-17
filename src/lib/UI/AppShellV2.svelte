@@ -24,7 +24,7 @@
     import AppShellTopbar from "./AppShellTopbar.svelte";
     import AppShellStage from "./AppShellStage.svelte";
 
-    type RightSidebarTab = "chat" | "character" | "memory" | "evolution";
+    type RightSidebarTab = "chat" | "character" | "memory" | "evolution" | "images";
 
     type LibraryFilterSnapshot = {
         systems: string[];
@@ -136,6 +136,8 @@
                 if (mobileChatPanelOpen) {
                     if (uiShellRightSidebarTab === "character") {
                         inspector = "character";
+                    } else if (uiShellRightSidebarTab === "images") {
+                        inspector = "images";
                     } else if (uiShellRightSidebarTab === "memory") {
                         inspector = "memory";
                     } else if (uiShellRightSidebarTab === "evolution") {
@@ -147,6 +149,8 @@
             } else if (uiShellRightSidebarOpen && uiShellRightSidebarVisible) {
                 if (uiShellRightSidebarTab === "character") {
                     inspector = "character";
+                } else if (uiShellRightSidebarTab === "images") {
+                    inspector = "images";
                 } else if (uiShellRightSidebarTab === "memory") {
                     inspector = "memory";
                 } else if (uiShellRightSidebarTab === "evolution") {
