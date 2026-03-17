@@ -93,7 +93,7 @@ describe("character evolution render", () => {
                 confidence: "confirmed",
             },
         ]
-        const { sectionConfigs, settings, characterEvolution } = createPromptBuilderArgs(state)
+        const { settings, characterEvolution } = createPromptBuilderArgs(state)
         const { buildCharacterEvolutionPromptMessages } = require("../../../server/node/llm/character_evolution/prompt_builder.cjs")
 
         const promptMessages = buildCharacterEvolutionPromptMessages({
@@ -135,7 +135,7 @@ describe("character evolution render", () => {
                 timesSeen: 3,
             },
         ]
-        const { sectionConfigs, settings, characterEvolution } = createPromptBuilderArgs(state)
+        const { settings, characterEvolution } = createPromptBuilderArgs(state)
         const { buildCharacterEvolutionPromptMessages } = require("../../../server/node/llm/character_evolution/prompt_builder.cjs")
 
         const promptMessages = buildCharacterEvolutionPromptMessages({
@@ -179,7 +179,7 @@ describe("character evolution render", () => {
             trustLevel: "very high trust with a lot of repeated explanation about how stable and carefully repaired the dynamic feels after several recent conversations",
             dynamic: "warm, teasing, and unusually open in a way that keeps restating the same emotional texture over and over to simulate a very long extractor-facing string",
         }
-        const { sectionConfigs, settings, characterEvolution } = createPromptBuilderArgs(state)
+        const { settings, characterEvolution } = createPromptBuilderArgs(state)
         const { buildCharacterEvolutionPromptMessages } = require("../../../server/node/llm/character_evolution/prompt_builder.cjs")
 
         const promptMessages = buildCharacterEvolutionPromptMessages({
@@ -214,7 +214,7 @@ describe("character evolution render", () => {
                 confidence: "confirmed",
             },
         ]
-        const { sectionConfigs, settings, characterEvolution } = createPromptBuilderArgs(state)
+        const { settings, characterEvolution } = createPromptBuilderArgs(state)
         const { buildCharacterEvolutionPromptMessages } = require("../../../server/node/llm/character_evolution/prompt_builder.cjs")
 
         const promptMessages = buildCharacterEvolutionPromptMessages({
@@ -249,7 +249,7 @@ describe("character evolution render", () => {
             { value: "fact-6", confidence: "suspected", status: "active", lastSeenAt: 5, updatedAt: 5, timesSeen: 1 },
             { value: "fact-7", confidence: "suspected", status: "active", lastSeenAt: 4, updatedAt: 4, timesSeen: 1 },
         ]
-        const { sectionConfigs, settings, characterEvolution } = createPromptBuilderArgs(state)
+        const { settings, characterEvolution } = createPromptBuilderArgs(state)
         const { buildCharacterEvolutionPromptMessages } = require("../../../server/node/llm/character_evolution/prompt_builder.cjs")
 
         const promptMessages = buildCharacterEvolutionPromptMessages({

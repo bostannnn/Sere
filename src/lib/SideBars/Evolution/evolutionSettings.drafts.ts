@@ -1,6 +1,5 @@
 import {
     createDefaultCharacterEvolutionSectionConfigs,
-    normalizeCharacterEvolutionSectionConfigs,
     normalizeCharacterEvolutionState,
 } from "src/ts/characterEvolution"
 import {

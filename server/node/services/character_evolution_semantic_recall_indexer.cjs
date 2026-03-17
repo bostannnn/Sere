@@ -386,7 +386,6 @@ function createCharacterEvolutionSemanticRecallService(arg = {}) {
         const chatId = toTrimmedString(arg.chatId);
         const defaults = normalizeCharacterEvolutionDefaults(settingsRaw.characterEvolutionDefaults);
         const semanticSettings = defaults.semanticRecall || {};
-        const enabledSections = getEnabledSectionKeys(semanticSettings);
         const evolution = historyResolver.reconcileEvolution(
             normalizeCharacterEvolutionSettings(character.characterEvolution),
             await versionStore.readVersionMetasFromDisk(characterDir, {

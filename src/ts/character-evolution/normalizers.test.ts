@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest"
 
 import {
-    createDefaultCharacterEvolutionDefaults,
     normalizeCharacterEvolutionDefaults,
     normalizeCharacterEvolutionSettings,
     normalizeCharacterEvolutionState,

@@ -16,7 +16,6 @@
     import EvolutionStatePanel from "./EvolutionStatePanel.svelte"
     import EvolutionWorkspaceTabs from "./EvolutionWorkspaceTabs.svelte"
     import {
-        EVOLUTION_HISTORY_TAB,
         EVOLUTION_REVIEW_TAB,
         EVOLUTION_SEMANTIC_RECALL_TAB,
         EVOLUTION_SECTIONS_TAB,

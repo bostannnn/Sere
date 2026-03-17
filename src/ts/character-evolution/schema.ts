@@ -7,7 +7,6 @@ import type {
 } from "../storage/database.types"
 import {
     BUILTIN_SECTION_DEFS,
-    DEFAULT_EXTRACTION_PROMPT,
     DEFAULT_PRIVACY,
 } from "./constants"
 import { createCharacterEvolutionPromptProjectionPolicy } from "./projectionPolicy"

@@ -16,6 +16,12 @@ function ensureIncludes(content, file, pattern, failures) {
   }
 }
 
+function ensureMatches(content, file, pattern, description, failures) {
+  if (!pattern.test(content)) {
+    failures.push(`[settings-shell] Missing pattern in ${file}: ${description}`);
+  }
+}
+
 function ensureExcludes(content, file, pattern, failures) {
   if (content.includes(pattern)) {
     failures.push(`[settings-shell] Forbidden pattern present in ${file}: ${pattern}`);
@@ -110,13 +116,14 @@ ensureIncludes(
 ensureIncludes(
   subTabsContent,
   settingsSubTabsFile,
-  "class=\"ds-settings-tabs seg-tabs\"",
+  "tabsRootClassName = $derived(`ds-settings-tabs seg-tabs ${tabsClassName}`.trim())",
   failures,
 );
-ensureIncludes(
+ensureMatches(
   subTabsContent,
   settingsSubTabsFile,
-  "class=\"ds-settings-tab seg-tab\"",
+  /class=\{`ds-settings-tab seg-tab \$\{tabClassName\} \$\{item\.buttonClassName \?\? ""\}`\.trim\(\)\}/,
+  "dynamic ds-settings tab class composition",
   failures,
 );
 ensureIncludes(
@@ -131,16 +138,18 @@ ensureIncludes(
   "class:active={selectedId === item.id}",
   failures,
 );
-ensureIncludes(
+ensureMatches(
   subTabsContent,
   settingsSubTabsFile,
-  "title={item.label}",
+  /title=\{item\.title \?\? item\.ariaLabel \?\? item\.label\}/,
+  "title fallback to item title, aria label, or label",
   failures,
 );
-ensureIncludes(
+ensureMatches(
   subTabsContent,
   settingsSubTabsFile,
-  "aria-label={item.label}",
+  /aria-label=\{item\.ariaLabel \?\? item\.label\}/,
+  "aria-label fallback to item aria label or label",
   failures,
 );
 ensureIncludes(

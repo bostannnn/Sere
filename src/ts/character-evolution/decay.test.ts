@@ -2,12 +2,9 @@ import { describe, expect, it } from "vitest"
 
 import {
     applyCharacterEvolutionDecay,
-    applyLastInteractionEndedOverwrite,
-    compactCharacterEvolutionCurrentState,
-    previewCharacterEvolutionRetentionDryRun,
 } from "./decay"
 import { projectCharacterEvolutionStateForPrompt } from "./projection"
-import { createDefaultCharacterEvolutionSectionConfigs, createDefaultCharacterEvolutionState } from "./schema"
+import { createDefaultCharacterEvolutionState } from "./schema"
 import { createCharacterEvolutionRetentionPolicy } from "./retentionPolicy"
 
 describe("character evolution decay", () => {
