@@ -66,6 +66,24 @@ function registerEvolutionVersionRoutes(arg = {}) {
         return normalizeCharacterEvolutionRangeRef(last?.range)?.chatId ?? null;
     }
 
+    async function loadCharacterAndSettingsWithHistory(characterId) {
+        const loaded = await loadCharacterAndSettings(characterId);
+        const normalizedEvolution = normalizeCharacterEvolutionSettings(loaded.character.characterEvolution);
+        const diskVersions = await readVersionMetasFromDisk(loaded.charDir, {
+            includeStagedThroughVersion: normalizedEvolution.currentStateVersion || 0,
+        });
+        const evolution = versionHistory.reconcileEvolution(normalizedEvolution, diskVersions);
+        return {
+            ...loaded,
+            character: {
+                ...loaded.character,
+                characterEvolution: evolution,
+            },
+            evolution,
+            diskVersions,
+        };
+    }
+
     async function readVersionPayload(characterDir, evolution, version) {
         const committedVersion = (version > 0 && version <= evolution.currentStateVersion)
             || evolution.stateVersions.some((entry) => Number(entry?.version) === Math.floor(version));
@@ -174,8 +192,7 @@ function registerEvolutionVersionRoutes(arg = {}) {
         if (!characterId || !isSafePathSegment(characterId)) {
             throw new LLMHttpError(400, 'INVALID_CHARACTER_ID', 'charId is required and must be a safe id.');
         }
-        const { settings, character } = await loadCharacterAndSettings(characterId);
-        const evolution = normalizeCharacterEvolutionSettings(character.characterEvolution);
+        const { settings, evolution } = await loadCharacterAndSettingsWithHistory(characterId);
         const defaults = settings?.characterEvolutionDefaults && typeof settings.characterEvolutionDefaults === 'object'
             ? settings.characterEvolutionDefaults
             : {};
@@ -199,14 +216,8 @@ function registerEvolutionVersionRoutes(arg = {}) {
         if (!characterId || !isSafePathSegment(characterId)) {
             throw new LLMHttpError(400, 'INVALID_CHARACTER_ID', 'charId is required and must be a safe id.');
         }
-        const { character, charDir } = await loadCharacterAndSettings(characterId);
-        const evolution = normalizeCharacterEvolutionSettings(character.characterEvolution);
-        const versions = versionHistory.listReadableVersionMetas(
-            evolution,
-            await readVersionMetasFromDisk(charDir, {
-                includeStagedThroughVersion: evolution.currentStateVersion || 0,
-            }),
-        );
+        const { evolution } = await loadCharacterAndSettingsWithHistory(characterId);
+        const versions = evolution.stateVersions;
         sendJson(res, 200, {
             ok: true,
             currentStateVersion: evolution.currentStateVersion,
@@ -226,8 +237,7 @@ function registerEvolutionVersionRoutes(arg = {}) {
         if (!Number.isFinite(version) || version < 0) {
             throw new LLMHttpError(400, 'INVALID_VERSION', 'version must be a positive number.');
         }
-        const { character } = await loadCharacterAndSettings(characterId);
-        const evolution = normalizeCharacterEvolutionSettings(character.characterEvolution);
+        const { evolution } = await loadCharacterAndSettingsWithHistory(characterId);
         const committedVersion = (version > 0 && version <= evolution.currentStateVersion)
             || evolution.stateVersions.some((entry) => Number(entry?.version) === Math.floor(version));
         const versionPath = await resolveVersionFilePath(
@@ -289,14 +299,8 @@ function registerEvolutionVersionRoutes(arg = {}) {
         if (!requestedRange) {
             throw new LLMHttpError(400, 'INVALID_RANGE', 'Provide an exact accepted range to clear.');
         }
-        const { character, charDir } = await loadCharacterAndSettings(characterId);
-        const evolution = normalizeCharacterEvolutionSettings(character.characterEvolution);
-        const recoveredVersions = versionHistory.listReadableVersionMetas(
-            evolution,
-            await readVersionMetasFromDisk(charDir, {
-                includeStagedThroughVersion: evolution.currentStateVersion || 0,
-            }),
-        );
+        const { character, charDir, evolution } = await loadCharacterAndSettingsWithHistory(characterId);
+        const recoveredVersions = evolution.stateVersions;
         const matchingRange = (Array.isArray(evolution.processedRanges) ? evolution.processedRanges : [])
             .find((entry) => rangesExactlyMatch(normalizeCharacterEvolutionRangeRef(entry?.range), requestedRange));
         if (!matchingRange) {
@@ -342,14 +346,8 @@ function registerEvolutionVersionRoutes(arg = {}) {
         if (version === null || version < 1) {
             throw new LLMHttpError(400, 'INVALID_VERSION', 'version must be a positive number.');
         }
-        const { character, charDir } = await loadCharacterAndSettings(characterId);
-        const evolution = normalizeCharacterEvolutionSettings(character.characterEvolution);
-        const recoveredVersions = versionHistory.listReadableVersionMetas(
-            evolution,
-            await readVersionMetasFromDisk(charDir, {
-                includeStagedThroughVersion: evolution.currentStateVersion || 0,
-            }),
-        );
+        const { character, charDir, evolution } = await loadCharacterAndSettingsWithHistory(characterId);
+        const recoveredVersions = evolution.stateVersions;
         const targetExists = recoveredVersions.some((entry) => entry.version === version);
         if (!targetExists) {
             throw new LLMHttpError(404, 'VERSION_NOT_FOUND', `Evolution version not found: ${version}`);
@@ -391,14 +389,8 @@ function registerEvolutionVersionRoutes(arg = {}) {
         if (version === null || version < 1) {
             throw new LLMHttpError(400, 'INVALID_VERSION', 'version must be a positive number.');
         }
-        const { character, charDir } = await loadCharacterAndSettings(characterId);
-        const evolution = normalizeCharacterEvolutionSettings(character.characterEvolution);
-        const recoveredVersions = versionHistory.listReadableVersionMetas(
-            evolution,
-            await readVersionMetasFromDisk(charDir, {
-                includeStagedThroughVersion: evolution.currentStateVersion || 0,
-            }),
-        );
+        const { character, charDir, evolution } = await loadCharacterAndSettingsWithHistory(characterId);
+        const recoveredVersions = evolution.stateVersions;
         const targetIndex = recoveredVersions.findIndex((entry) => entry.version === version);
         if (targetIndex < 0) {
             throw new LLMHttpError(404, 'VERSION_NOT_FOUND', `Evolution version not found: ${version}`);

@@ -106,6 +106,71 @@ describe("evolution routes cursor progression", () => {
     }));
   });
 
+  it("preserves explicit per-chat cursor fallback for valid no-snapshot imports", async () => {
+    const dataDirs = getDataDirs();
+    writeJson(path.join(dataDirs.characters, characterId, "character.json"), {
+      character: {
+        chaId: characterId,
+        type: "character",
+        name: "Eva",
+        desc: "desc",
+        personality: "personality",
+        characterEvolution: {
+          enabled: true,
+          currentStateVersion: 4,
+          currentState: {
+            activeThreads: [
+              {
+                value: "imported current thread",
+                status: "active",
+                confidence: "likely",
+                lastSeenVersion: 2,
+                unseenAcceptedHandoffs: 2,
+              },
+            ],
+          },
+          stateVersions: [
+            { version: 4, chatId, acceptedAt: 4000 },
+          ],
+          processedRanges: [],
+          lastProcessedChatId: chatId,
+          lastProcessedMessageIndexByChat: {
+            [chatId]: 1,
+          },
+        },
+      },
+    });
+
+    writeJson(path.join(dataDirs.characters, characterId, "chats", `${chatId}.json`), {
+      chat: {
+        id: chatId,
+        message: [
+          { role: "user", data: "first" },
+          { role: "char", data: "second" },
+          { role: "user", data: "third" },
+        ],
+      },
+    });
+
+    const { postHandlers } = buildHandlers();
+    const handoff = postHandlers.get("/data/character-evolution/handoff");
+    expect(handoff).toBeTruthy();
+
+    const res = createRes();
+    await handoff!(createReq({ characterId, chatId }), res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.payload).toEqual(expect.objectContaining({
+      proposal: expect.objectContaining({
+        sourceRange: {
+          chatId,
+          startMessageIndex: 2,
+          endMessageIndex: 2,
+        },
+      }),
+    }));
+  });
+
   it("does not advance the cursor when a proposal is rejected", async () => {
     const { postHandlers } = buildHandlers();
     const handoff = postHandlers.get("/data/character-evolution/handoff");

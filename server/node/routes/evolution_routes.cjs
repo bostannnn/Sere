@@ -15,7 +15,7 @@ function registerEvolutionRoutes(arg = {}) {
         mergeAcceptedCharacterEvolutionState = require('../llm/character_evolution/items.cjs').mergeAcceptedCharacterEvolutionState,
         pruneUnchangedCharacterEvolutionProposalState = require('../llm/character_evolution/items.cjs').pruneUnchangedCharacterEvolutionProposalState,
         resolveCharacterEvolutionStateConflicts = require('../llm/character_evolution/conflicts.cjs').resolveCharacterEvolutionStateConflicts,
-        applyCharacterEvolutionDecay = require('../llm/character_evolution/decay.cjs').applyCharacterEvolutionDecay,
+        applyCharacterEvolutionDecayWithReport = require('../llm/character_evolution/decay.cjs').applyCharacterEvolutionDecayWithReport,
         applyLastInteractionEndedOverwrite = require('../llm/character_evolution/decay.cjs').applyLastInteractionEndedOverwrite,
         createCharacterEvolutionRepository = require('../services/character_evolution_repository.cjs').createCharacterEvolutionRepository,
         createCharacterEvolutionHistoryResolver = require('../services/character_evolution_history_resolver.cjs').createCharacterEvolutionHistoryResolver,
@@ -100,6 +100,7 @@ function registerEvolutionRoutes(arg = {}) {
     } = versionStore;
     const evolutionHistory = createCharacterEvolutionHistoryResolver({
         normalizeCharacterEvolutionRangeRef,
+        normalizeCharacterEvolutionState,
     });
     const {
         assertHandoffRangeAllowed,
@@ -131,6 +132,24 @@ function registerEvolutionRoutes(arg = {}) {
         truncatePromptMessagesForAudit,
     });
 
+    async function loadCharacterAndSettingsWithHistory(characterId) {
+        const loaded = await loadCharacterAndSettings(characterId);
+        const normalizedEvolution = normalizeCharacterEvolutionSettings(loaded.character.characterEvolution);
+        const diskVersions = await readVersionMetasFromDisk(loaded.charDir, {
+            includeStagedThroughVersion: normalizedEvolution.currentStateVersion || 0,
+        });
+        const evolution = evolutionHistory.reconcileEvolution(normalizedEvolution, diskVersions);
+        return {
+            ...loaded,
+            character: {
+                ...loaded.character,
+                characterEvolution: evolution,
+            },
+            evolution,
+            diskVersions,
+        };
+    }
+
     app.post('/data/character-evolution/handoff', withAsyncRoute('character_evolution_handoff', async (req, res, reqId, startedAt) => {
         if (typeof requirePasswordAuth === 'function' && !requirePasswordAuth(req, res)) {
             return;
@@ -161,12 +180,11 @@ function registerEvolutionRoutes(arg = {}) {
             streaming: false,
         });
 
-        const { settings, character } = await loadCharacterAndSettings(characterId);
+        const { settings, character, evolution: currentEvolution } = await loadCharacterAndSettingsWithHistory(characterId);
         if (character.type === 'group') {
             throw new LLMHttpError(400, 'GROUP_CHAT_UNSUPPORTED', 'Character evolution is only supported for single-character chats.');
         }
         const evolution = resolveEffectiveEvolutionSettings(settings, character);
-        const currentEvolution = normalizeCharacterEvolutionSettings(character.characterEvolution);
         req._characterEvolutionAudit.provider = evolution.extractionProvider;
         req._characterEvolutionAudit.model = evolution.extractionModel;
         req._characterEvolutionAudit.metadata = {
@@ -236,9 +254,8 @@ function registerEvolutionRoutes(arg = {}) {
             };
             throw new LLMHttpError(502, 'EVOLUTION_PARSE_FAILED', 'Extraction model returned invalid JSON.');
         }
-        const { settings: latestSettings, character: latestCharacter } = await loadCharacterAndSettings(characterId);
+        const { settings: latestSettings, character: latestCharacter, evolution: latestEvolution } = await loadCharacterAndSettingsWithHistory(characterId);
         const latestEffectiveEvolution = resolveEffectiveEvolutionSettings(latestSettings, latestCharacter);
-        const latestEvolution = normalizeCharacterEvolutionSettings(latestCharacter.characterEvolution);
         if (latestEvolution.pendingProposal) {
             throw new LLMHttpError(409, 'PENDING_PROPOSAL_EXISTS', 'Another evolution handoff finished first. Review the current proposal before running another handoff.');
         }
@@ -338,7 +355,7 @@ function registerEvolutionRoutes(arg = {}) {
         sendJson(res, 200, payload);
     }));
 
-    app.post('/data/character-evolution/:charId/proposal/accept', withAsyncRoute('character_evolution_accept', async (req, res) => {
+    app.post('/data/character-evolution/:charId/proposal/accept', withAsyncRoute('character_evolution_accept', async (req, res, reqId, startedAt) => {
         if (typeof requirePasswordAuth === 'function' && !requirePasswordAuth(req, res)) {
             return;
         }
@@ -346,17 +363,28 @@ function registerEvolutionRoutes(arg = {}) {
         if (!characterId || !isSafePathSegment(characterId)) {
             throw new LLMHttpError(400, 'INVALID_CHARACTER_ID', 'charId is required and must be a safe id.');
         }
-        const { settings, character, charDir } = await loadCharacterAndSettings(characterId);
+        const { settings, character, charDir, evolution: storedEvolution, diskVersions } = await loadCharacterAndSettingsWithHistory(characterId);
         if (character.type === 'group') {
             throw new LLMHttpError(400, 'GROUP_CHAT_UNSUPPORTED', 'Character evolution is only supported for single-character chats.');
         }
-        const storedEvolution = normalizeCharacterEvolutionSettings(character.characterEvolution);
         const effectiveEvolution = getEffectiveCharacterEvolutionSettings(settings, character);
         const pendingProposal = storedEvolution.pendingProposal;
         if (!pendingProposal) {
             throw new LLMHttpError(404, 'PENDING_PROPOSAL_NOT_FOUND', 'No pending proposal exists for this character.');
         }
         const body = (req.body && typeof req.body === 'object') ? req.body : {};
+        req._characterEvolutionAudit = {
+            mode: 'memory',
+            provider: '',
+            characterId,
+            chatId: pendingProposal.sourceChatId || '',
+            requestBody: body,
+            promptMessages: [],
+            metadata: {
+                proposalId: pendingProposal.proposalId,
+                sourceRange: pendingProposal.sourceRange || null,
+            },
+        };
         const acceptedAt = Date.now();
         const sourceRange = normalizeCharacterEvolutionRangeRef(pendingProposal.sourceRange);
         const proposedStateRaw = Object.prototype.hasOwnProperty.call(body, 'proposedState')
@@ -385,9 +413,7 @@ function registerEvolutionRoutes(arg = {}) {
         }
         const recoveredVersions = mergeVersionMetas(
             storedEvolution.stateVersions,
-            await readVersionMetasFromDisk(charDir, {
-                includeStagedThroughVersion: storedEvolution.currentStateVersion || 0,
-            }),
+            diskVersions,
         );
         const nextVersion = Math.max(
             storedEvolution.currentStateVersion || 0,
@@ -411,12 +437,17 @@ function registerEvolutionRoutes(arg = {}) {
             currentState: storedEvolution.currentState,
             proposedState: normalizedAcceptedProposalState,
         });
-        const proposedState = (shouldPreserveDisabledSections ? sanitizeStateForEvolution : (value) => value)(applyCharacterEvolutionDecay({
+        const decayResult = applyCharacterEvolutionDecayWithReport({
             state: mergedCanonicalState,
             acceptedVersion: nextVersion,
             retentionPolicy: evolutionDefaults.retention,
             promptProjectionPolicy: evolutionDefaults.promptProjection,
-        }), effectiveEvolution, storedEvolution.currentState);
+        });
+        const proposedState = (shouldPreserveDisabledSections ? sanitizeStateForEvolution : (value) => value)(
+            decayResult.state,
+            effectiveEvolution,
+            storedEvolution.currentState
+        );
         const versionFile = await stageVersionFile(charDir, nextVersion, {
             version: nextVersion,
             chatId: pendingProposal.sourceChatId || null,
@@ -480,13 +511,46 @@ function registerEvolutionRoutes(arg = {}) {
             throw error;
         }
         await finalizeVersionFile(versionFile);
-        sendJson(res, 200, {
+        const payload = {
             ok: true,
             version: nextVersion,
             acceptedAt,
             ...(sourceRange ? { range: sourceRange } : {}),
             state: proposedState,
-        });
+        };
+        const durationMs = Date.now() - startedAt;
+        try {
+            await appendLLMAudit({
+                requestId: reqId,
+                method: req.method,
+                path: req.originalUrl,
+                endpoint: 'character_evolution_accept',
+                mode: 'memory',
+                provider: null,
+                characterId,
+                chatId: pendingProposal.sourceChatId || null,
+                streaming: false,
+                status: 200,
+                ok: true,
+                durationMs,
+                metadata: {
+                    proposalId: pendingProposal.proposalId,
+                    acceptedVersion: nextVersion,
+                    sourceRange,
+                    retentionReport: decayResult.report,
+                },
+                request: buildExecutionAuditRequest('character_evolution_accept', body),
+                response: payload,
+            });
+        } catch (auditError) {
+            console.warn('[character-evolution] Failed to append accept audit log.', {
+                requestId: reqId,
+                characterId,
+                version: nextVersion,
+                error: auditError instanceof Error ? auditError.message : String(auditError),
+            });
+        }
+        sendJson(res, 200, payload);
     }));
 
     app.post('/data/character-evolution/:charId/proposal/reject', withAsyncRoute('character_evolution_reject', async (req, res) => {
@@ -497,8 +561,7 @@ function registerEvolutionRoutes(arg = {}) {
         if (!characterId || !isSafePathSegment(characterId)) {
             throw new LLMHttpError(400, 'INVALID_CHARACTER_ID', 'charId is required and must be a safe id.');
         }
-        const { character } = await loadCharacterAndSettings(characterId);
-        const evolution = normalizeCharacterEvolutionSettings(character.characterEvolution);
+        const { character, evolution } = await loadCharacterAndSettingsWithHistory(characterId);
         if (!evolution.pendingProposal) {
             sendJson(res, 200, { ok: true, cleared: false });
             return;

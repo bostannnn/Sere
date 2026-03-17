@@ -86,6 +86,120 @@ describe("evolution routes accept and replay", () => {
     }
   });
 
+  it("audits accept-time retention decisions with per-item reasons", async () => {
+    const dataDirs = getDataDirs();
+    writeJson(path.join(dataDirs.characters, characterId, "states", "v1.json"), {
+      version: 1,
+      chatId,
+      acceptedAt: 1000,
+      state: {
+        activeThreads: [],
+      },
+    });
+    writeJson(path.join(dataDirs.characters, characterId, "character.json"), {
+      character: {
+        chaId: characterId,
+        type: "character",
+        name: "Eva",
+        desc: "desc",
+        personality: "personality",
+        characterEvolution: {
+          enabled: true,
+          currentStateVersion: 1,
+          currentState: {
+            activeThreads: [
+              {
+                value: "book the train to Kazan",
+                status: "active",
+                confidence: "likely",
+                lastSeenVersion: 1,
+                unseenAcceptedHandoffs: 0,
+              },
+              {
+                value: "follow up on the old gallery invite",
+                status: "active",
+                confidence: "likely",
+                lastSeenVersion: 1,
+                unseenAcceptedHandoffs: 1,
+              },
+            ],
+          },
+          pendingProposal: {
+            proposalId: "proposal-accept-audit",
+            sourceChatId: chatId,
+            sourceRange: {
+              chatId,
+              startMessageIndex: 0,
+              endMessageIndex: 1,
+            },
+            proposedState: {
+              activeThreads: [
+                {
+                  value: "book the train to Kazan",
+                  status: "active",
+                  confidence: "likely",
+                },
+              ],
+            },
+            changes: [
+              {
+                sectionKey: "activeThreads",
+                summary: "The train booking is still the active thread.",
+                evidence: ["They returned to the train booking directly."],
+              },
+            ],
+            createdAt: 100,
+          },
+          stateVersions: [],
+          lastProcessedChatId: null,
+        },
+      },
+    });
+
+    const appendLLMAudit = vi.fn(async () => {});
+    const { postHandlers } = buildHandlers({ appendLLMAudit });
+    const accept = postHandlers.get("/data/character-evolution/:charId/proposal/accept");
+    expect(accept).toBeTruthy();
+
+    const acceptRes = createRes();
+    await accept!(createReq({}, { charId: characterId }), acceptRes);
+
+    expect(acceptRes.statusCode).toBe(200);
+    expect(appendLLMAudit).toHaveBeenCalledWith(expect.objectContaining({
+      endpoint: "character_evolution_accept",
+      status: 200,
+      metadata: expect.objectContaining({
+        acceptedVersion: 2,
+        retentionReport: expect.objectContaining({
+          acceptedVersion: 2,
+          sections: expect.objectContaining({
+            activeThreads: expect.objectContaining({
+              bucket: "fast",
+              archiveThreshold: 2,
+              decisions: expect.arrayContaining([
+                expect.objectContaining({
+                  reason: "reinforced",
+                  valuePreview: "book the train to Kazan",
+                  fromStatus: "active",
+                  toStatus: "active",
+                }),
+                expect.objectContaining({
+                  reason: "decay_archive",
+                  valuePreview: "follow up on the old gallery invite",
+                  fromStatus: "active",
+                  toStatus: "archived",
+                }),
+              ]),
+            }),
+          }),
+        }),
+      }),
+      response: expect.objectContaining({
+        version: 2,
+      }),
+    }));
+  });
+
   it("rejects malformed partial accept payloads instead of silently sanitizing them", async () => {
     const { postHandlers } = buildHandlers();
     const handoff = postHandlers.get("/data/character-evolution/handoff");
@@ -112,6 +226,85 @@ describe("evolution routes accept and replay", () => {
       sourceChatId: chatId,
     }));
     expect(existsSync(path.join(dataDirs.characters, characterId, "states", "v1.json"))).toBe(false);
+  });
+
+  it("keeps accept successful when success-path audit logging fails", async () => {
+    const dataDirs = getDataDirs();
+    writeJson(path.join(dataDirs.characters, characterId, "character.json"), {
+      character: {
+        chaId: characterId,
+        type: "character",
+        name: "Eva",
+        desc: "desc",
+        personality: "personality",
+        characterEvolution: {
+          enabled: true,
+          currentStateVersion: 1,
+          currentState: {
+            relationship: {
+              trustLevel: "steady",
+              dynamic: "warm",
+            },
+          },
+          pendingProposal: {
+            proposalId: "proposal-audit-failure",
+            sourceChatId: chatId,
+            sourceRange: {
+              chatId,
+              startMessageIndex: 0,
+              endMessageIndex: 1,
+            },
+            proposedState: {
+              relationship: {
+                trustLevel: "high",
+                dynamic: "closer after the handoff",
+              },
+            },
+            changes: [
+              {
+                sectionKey: "relationship",
+                summary: "The relationship warmed up.",
+                evidence: ["They ended on a closer note."],
+              },
+            ],
+            createdAt: 100,
+          },
+          stateVersions: [],
+          lastProcessedChatId: null,
+        },
+      },
+    });
+
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const appendLLMAudit = vi.fn(async () => {
+      throw new Error("disk full");
+    });
+    const { postHandlers } = buildHandlers({ appendLLMAudit });
+    const accept = postHandlers.get("/data/character-evolution/:charId/proposal/accept");
+    expect(accept).toBeTruthy();
+
+    const acceptRes = createRes();
+    await accept!(createReq({}, { charId: characterId }), acceptRes);
+
+    expect(acceptRes.statusCode).toBe(200);
+    expect(acceptRes.payload).toEqual(expect.objectContaining({
+      ok: true,
+      version: 2,
+    }));
+
+    const characterFile = JSON.parse(readFileSync(path.join(dataDirs.characters, characterId, "character.json"), "utf-8"));
+    expect(characterFile.character.characterEvolution.currentStateVersion).toBe(2);
+    expect(existsSync(path.join(dataDirs.characters, characterId, "states", "v2.json"))).toBe(true);
+    expect(warnSpy).toHaveBeenCalledWith(
+      "[character-evolution] Failed to append accept audit log.",
+      expect.objectContaining({
+        characterId,
+        version: 2,
+        error: "disk full",
+      }),
+    );
+
+    warnSpy.mockRestore();
   });
 
   it("re-validates pending proposals against latest global defaults on accept", async () => {

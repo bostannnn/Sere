@@ -23,8 +23,78 @@ afterEach(() => {
 });
 
 describe("evolution routes versioning retention", () => {
+  it("rebases retention counters when snapshot files were removed but current imported state remains", async () => {
+    const dataDirs = getDataDirs();
+    writeJson(path.join(dataDirs.characters, characterId, "character.json"), {
+      character: {
+        chaId: characterId,
+        type: "character",
+        name: "Eva",
+        desc: "desc",
+        personality: "personality",
+        characterEvolution: {
+          enabled: true,
+          currentStateVersion: 4,
+          currentState: {
+            activeThreads: [
+              {
+                value: "follow up on the gallery invite",
+                status: "active",
+                confidence: "likely",
+                lastSeenVersion: 1,
+                unseenAcceptedHandoffs: 3,
+              },
+            ],
+          },
+          stateVersions: [
+            { version: 4, chatId, acceptedAt: 4000 },
+          ],
+          processedRanges: [],
+          lastProcessedChatId: chatId,
+          lastProcessedMessageIndexByChat: {},
+        },
+      },
+    });
+
+    const { postHandlers } = buildHandlers();
+    const preview = postHandlers.get("/data/character-evolution/:charId/retention/dry-run");
+    expect(preview).toBeTruthy();
+
+    const previewRes = createRes();
+    await preview!(createReq({}, { charId: characterId }), previewRes);
+
+    expect(previewRes.statusCode).toBe(200);
+    expect(previewRes.payload).toEqual(expect.objectContaining({
+      ok: true,
+      report: expect.objectContaining({
+        currentStateVersion: 4,
+        simulatedAcceptedVersion: 5,
+        sections: expect.objectContaining({
+          activeThreads: expect.objectContaining({
+            archivedByDecay: 0,
+            deletedByDecay: 0,
+            archivedByCap: 0,
+            deletedByCap: 0,
+            after: expect.objectContaining({
+              total: 1,
+              active: 1,
+            }),
+          }),
+        }),
+      }),
+    }));
+  });
+
   it("previews retention cleanup without mutating canonical state", async () => {
     const dataDirs = getDataDirs();
+    writeJson(path.join(dataDirs.characters, characterId, "states", "v4.json"), {
+      version: 4,
+      chatId,
+      acceptedAt: 4000,
+      state: {
+        activeThreads: [],
+      },
+    });
     writeJson(path.join(dataDirs.characters, characterId, "character.json"), {
       character: {
         chaId: characterId,
