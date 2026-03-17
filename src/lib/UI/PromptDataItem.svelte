@@ -398,10 +398,10 @@
             <span>{language.defaultPrompt}</span>
             <TextInput bind:value={promptItem.defaultText} />
         {/if}
-        {#if promptItem.type === 'persona' || promptItem.type === 'description' || promptItem.type === 'authornote' || promptItem.type === 'memory' || promptItem.type === 'rulebookRag' || promptItem.type === 'gameState' || promptItem.type === 'semanticRecall'}
+        {#if promptItem.type === 'persona' || promptItem.type === 'description' || promptItem.type === 'authornote' || promptItem.type === 'memory' || promptItem.type === 'rulebookRag' || promptItem.type === 'gameState'}
             {#if !promptItem.innerFormat}
                 <CheckInput name={language.customInnerFormat} check={false} className="ds-input-margin-top-sm" onChange={() => {
-                    if(promptItem.type === 'persona' || promptItem.type === 'description' || promptItem.type === 'authornote' || promptItem.type === 'memory' || promptItem.type === 'rulebookRag' || promptItem.type === 'gameState' || promptItem.type === 'semanticRecall'){
+                    if(promptItem.type === 'persona' || promptItem.type === 'description' || promptItem.type === 'authornote' || promptItem.type === 'memory' || promptItem.type === 'rulebookRag' || promptItem.type === 'gameState'){
                         promptItem.innerFormat = "{{slot}}"
                     }
                 }} />
@@ -409,7 +409,7 @@
                 <span>{language.innerFormat}</span>
                 <TextAreaInput highlight bind:value={promptItem.innerFormat}/>
                 <CheckInput name={language.customInnerFormat} check={true} className="ds-input-margin-top-sm" onChange={() => {
-                    if(promptItem.type === 'persona' || promptItem.type === 'description' || promptItem.type === 'authornote' || promptItem.type === 'memory' || promptItem.type === 'rulebookRag' || promptItem.type === 'gameState' || promptItem.type === 'semanticRecall'){
+                    if(promptItem.type === 'persona' || promptItem.type === 'description' || promptItem.type === 'authornote' || promptItem.type === 'memory' || promptItem.type === 'rulebookRag' || promptItem.type === 'gameState'){
                         promptItem.innerFormat = null
                     }
                 }} />
