@@ -9,6 +9,12 @@ vi.mock(import("src/ts/stores.svelte"), async () => {
   const ReloadGUIPointer = writable(0);
   const CharConfigSubMenu = writable(0);
   const bookmarkListOpen = writable(false);
+  const popupStore = {
+    children: null,
+    mouseX: 0,
+    mouseY: 0,
+    openId: 0,
+  };
   const selIdState = { selId: 0 };
   const DBState = {
     db: {
@@ -50,6 +56,7 @@ vi.mock(import("src/ts/stores.svelte"), async () => {
     ReloadGUIPointer,
     CharConfigSubMenu,
     bookmarkListOpen,
+    popupStore,
     selIdState,
   };
 });

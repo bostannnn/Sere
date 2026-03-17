@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { ArrowLeft, ArrowRight, BookmarkIcon, BotIcon, CopyIcon, PowerOff, GitBranch, LanguagesIcon, PencilIcon, RefreshCcwIcon, SplitIcon, TrashIcon, Volume2Icon, Scissors } from "@lucide/svelte"
+    import { ArrowLeft, ArrowRight, BookmarkIcon, BotIcon, CopyIcon, MoreHorizontalIcon, PowerOff, GitBranch, LanguagesIcon, PencilIcon, RefreshCcwIcon, SplitIcon, TrashIcon, Volume2Icon, Scissors } from "@lucide/svelte"
     import { aiLawApplies, changeChatTo, foldChatToMessage, getFileSrc, createChatCopyName } from "src/ts/globalApi.svelte"
     import { ColorSchemeTypeStore } from "src/ts/gui/colorscheme"
     import { longpress } from "src/ts/gui/longtouch"
@@ -8,12 +8,13 @@
     import { risuChatParser } from "src/ts/process/scripts"
     import { runTrigger } from 'src/ts/process/triggers'
     import { sayTTS } from "src/ts/process/tts"
-    import { DBState, ReloadChatPointer, CurrentTriggerIdStore, SizeStore } from 'src/ts/stores.svelte'
+    import { DBState, ReloadChatPointer, CurrentTriggerIdStore, SizeStore, popupStore } from 'src/ts/stores.svelte'
     import { capitalize, getUserIcon, getUserName, sleep } from "src/ts/util"
     import { v4 as uuidv4, v4 } from 'uuid'
     import { language } from "../../lang"
     import { alertClear, alertConfirm, alertInput, alertNormal, alertRequestData, alertWait } from "../../ts/alert"
     import { ParseMarkdown, type CbsConditions, type simpleCharacterArgument } from "../../ts/parser.svelte"
+    import { onDestroy } from "svelte";
     import {
         resolveSelectedChatState,
         setChatByCharacterAndChatId,
@@ -21,8 +22,8 @@
     } from "../../ts/storage/database.svelte"
     import { HideIconStore, ReloadGUIPointer, selIdState } from "../../ts/stores.svelte"
     import AutoresizeArea from "../UI/GUI/TextAreaResizable.svelte"
-    import ChatBody from './ChatBody.svelte'
     import PopupButton from "../UI/PopupButton.svelte";
+    import ChatBody from './ChatBody.svelte'
     const chatLog = (..._args: unknown[]) => {};
 
     let translating = $state(false)
@@ -75,6 +76,7 @@
         disabled = false,
     }: Props = $props();
      
+    const mobileMenuButtonId = Math.random()
 
     let msgDisplay = $state('')
     let translated = $state(false)
@@ -167,6 +169,26 @@
             statusMessage = ''
         }, timeout)
     }
+
+    function toggleMobileMessageMenu(event: MouseEvent) {
+        event.stopPropagation()
+        if (popupStore.openId === mobileMenuButtonId) {
+            popupStore.children = null
+            popupStore.openId = 0
+            return
+        }
+        popupStore.mouseX = event.clientX
+        popupStore.mouseY = event.clientY
+        popupStore.children = mobileMessageMenu
+        popupStore.openId = mobileMenuButtonId
+    }
+
+    onDestroy(() => {
+        if (popupStore.openId === mobileMenuButtonId) {
+            popupStore.children = null
+            popupStore.openId = 0
+        }
+    })
 
 
     const blankMessage = $derived((message === '{{none}}' || message === '{{blank}}' || message === '') && idx === -1 || isComment)
@@ -794,45 +816,75 @@
     {/if}
 {/snippet}
 
-{#snippet rerolls()}
+{#snippet rerolls(showNames:boolean = false)}
     {#if rerollIcon || altGreeting}
         {#if DBState.db.swipe || altGreeting}
             <button
                 type="button"
-                class="ds-chat-icon-action icon-btn icon-btn--sm"
-                class:ds-chat-icon-dynamic={rerollIcon === 'dynamic'}
-                title="Previous reroll"
-                aria-label="Previous reroll"
+                class="ds-chat-icon-action"
+                class:icon-btn={!showNames}
+                class:icon-btn--sm={!showNames}
+                class:ds-ui-menu-item={showNames}
+                class:ds-chat-icon-dynamic={!showNames && rerollIcon === 'dynamic'}
+                title={language.unreroll}
+                aria-label={language.unreroll}
                 onclick={unReroll}
             >
                 <ArrowLeft size={22}/>
+                {#if showNames}
+                    <span class="ds-chat-icon-label">{language.unreroll}</span>
+                {/if}
             </button>
             {#if firstMessage && DBState.db.swipe && DBState.db.showFirstMessagePages}
                 <span class="ds-chat-page-indicator">{currentPage}/{totalPages}</span>
             {/if}
             <button
                 type="button"
-                class="ds-chat-icon-action icon-btn icon-btn--sm"
-                class:ds-chat-icon-dynamic={rerollIcon === 'dynamic'}
-                title="Next reroll"
-                aria-label="Next reroll"
+                class="ds-chat-icon-action"
+                class:icon-btn={!showNames}
+                class:icon-btn--sm={!showNames}
+                class:ds-ui-menu-item={showNames}
+                class:ds-chat-icon-dynamic={!showNames && rerollIcon === 'dynamic'}
+                title={language.reroll}
+                aria-label={language.reroll}
                 onclick={onReroll}
             >
                 <ArrowRight size={22}/>
+                {#if showNames}
+                    <span class="ds-chat-icon-label">{language.reroll}</span>
+                {/if}
             </button>
         {:else}
             <button
                 type="button"
-                class="ds-chat-icon-action icon-btn icon-btn--sm"
-                class:ds-chat-icon-dynamic={rerollIcon === 'dynamic'}
+                class="ds-chat-icon-action"
+                class:icon-btn={!showNames}
+                class:icon-btn--sm={!showNames}
+                class:ds-ui-menu-item={showNames}
+                class:ds-chat-icon-dynamic={!showNames && rerollIcon === 'dynamic'}
                 title={language.reroll}
                 aria-label={language.reroll}
                 onclick={onReroll}
             >
                 <RefreshCcwIcon size={20}/>
+                {#if showNames}
+                    <span class="ds-chat-icon-label">{language.reroll}</span>
+                {/if}
             </button>
         {/if}
     {/if}
+{/snippet}
+
+{#snippet mobileMessageMenu()}
+    {@render genInfo()}
+    <div class="ds-chat-mobile-menu-actions action-rail ds-ui-action-rail">
+        {@render translationButton(true)}
+        {@render majorIconButtonsBody(true)}
+        {#if currentCharacter}
+            {@render minorIconButtonsBody(true)}
+        {/if}
+        {@render rerolls(true)}
+    </div>
 {/snippet}
 
 {#snippet minorIconButtonsBody(showNames:boolean)}
@@ -1143,18 +1195,31 @@
                     class:ds-chat-mobile-bubble-user={role === 'user'}
                 >
                     <p>{@render textBox()}</p>
-                    {#if currentMessageTime}
-                        <span class="ds-chat-mobile-time">
-                            {new Intl.DateTimeFormat(undefined, {
-                                hour: '2-digit',
-                                minute: '2-digit',
-                                second: '2-digit',
-                                month: '2-digit',
-                                day: '2-digit',
-                                hour12: false
-                            }).format(currentMessageTime)}
-                        </span>
-                    {/if}
+                    <div class="ds-chat-mobile-footer">
+                        {#if currentMessageTime}
+                            <span class="ds-chat-mobile-time">
+                                {new Intl.DateTimeFormat(undefined, {
+                                    hour: '2-digit',
+                                    minute: '2-digit',
+                                    second: '2-digit',
+                                    month: '2-digit',
+                                    day: '2-digit',
+                                    hour12: false
+                                }).format(currentMessageTime)}
+                            </span>
+                        {/if}
+                        <button
+                            type="button"
+                            class="ds-chat-mobile-menu-trigger icon-btn icon-btn--sm"
+                            title={language.menu}
+                            aria-label={language.menu}
+                            aria-haspopup="menu"
+                            aria-expanded={popupStore.openId === mobileMenuButtonId}
+                            onclick={toggleMobileMessageMenu}
+                        >
+                            <MoreHorizontalIcon size={16} />
+                        </button>
+                    </div>
                 </div>
                 {#if role === 'user'}
                     {@render senderIcon({rounded: true})}

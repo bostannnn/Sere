@@ -4099,6 +4099,7 @@ body {
   padding: var(--ds-space-3);
   border-radius: var(--ds-radius-md);
   color: var(--ds-text-primary);
+  position: relative;
 }
 
 .ds-chat-mobile-bubble-char {
@@ -4111,11 +4112,55 @@ body {
   border-top-right-radius: 0;
 }
 
+.ds-chat-mobile-footer {
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-end;
+  gap: var(--ds-space-2);
+  margin-top: var(--ds-space-2);
+}
+
 .ds-chat-mobile-time {
   display: block;
-  margin-top: var(--ds-space-1);
   font-size: var(--ds-font-size-xs);
   color: var(--ds-text-secondary);
+  text-align: right;
+}
+
+.ds-chat-mobile-menu-trigger.icon-btn.icon-btn--sm {
+  width: 1.75rem;
+  height: 1.75rem;
+  min-width: 1.75rem;
+  min-height: 1.75rem;
+  padding: 0;
+  color: var(--ds-text-secondary);
+  background: color-mix(in srgb, var(--risu-theme-darkbg) 18%, transparent);
+}
+
+.ds-chat-mobile-menu-trigger.icon-btn.icon-btn--sm:hover {
+  color: var(--ds-text-primary);
+  background: color-mix(in srgb, var(--risu-theme-darkbg) 42%, transparent);
+}
+
+.ds-chat-mobile-menu-actions.action-rail {
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--ds-space-1);
+}
+
+.ds-overlay-menu .ds-chat-geninfo-panel {
+  margin-top: 0;
+}
+
+.ds-overlay-menu .ds-chat-geninfo-button.icon-btn.icon-btn--sm,
+.ds-chat-mobile-menu-actions .ds-chat-icon-action.icon-btn,
+.ds-chat-mobile-menu-actions .ds-chat-icon-action.icon-btn--sm,
+.ds-chat-mobile-menu-actions .ds-chat-icon-action.ds-ui-menu-item {
+  width: 100%;
+}
+
+.ds-chat-mobile-menu-actions .ds-chat-page-indicator {
+  align-self: center;
 }
 
 .ds-chat-disabled-divider {
