@@ -10,7 +10,28 @@
     import TextInput from "src/lib/UI/GUI/TextInput.svelte";
     import TextAreaInput from "src/lib/UI/GUI/TextAreaInput.svelte";
     import Help from "src/lib/Others/Help.svelte";
-    import { type triggerEffectV2, type triggerEffect, type triggerscript, displayAllowList, requestAllowList, type triggerV2IfAdvanced } from "src/ts/process/triggers";
+    import {
+        type TriggerV2EditorFieldKind,
+        type TriggerV2EditorOption,
+        createTriggerV2Default,
+        displayAllowList,
+        getTriggerV2DescriptionKey,
+        getTriggerV2Definition,
+        getTriggerV2EditorFieldOrder,
+        getTriggerV2LabelKey,
+        isTriggerV2BlockEffectType,
+        isTriggerV2EffectType,
+        isTriggerV2LowLevelType,
+        canTriggerV2HaveElse,
+        isTriggerV2LoopBlockType,
+        isTriggerV2PrimaryBlockStartType,
+        isTriggerV2SpecialType,
+        requestAllowList,
+        type triggerEffect,
+        type triggerEffectV2,
+        triggerV2Categories,
+        type triggerscript
+    } from "src/ts/process/triggers";
     import { onMount } from "svelte";
     import DOMPurify from "dompurify";
     import { DBState } from "src/ts/stores.svelte";
@@ -21,129 +42,7 @@
         lowLevelAble?: boolean;
     }
 
-    const effectCategories = {
-        'Special': [
-            'v2GetDisplayState',
-            'v2SetDisplayState',
-            'v2GetRequestState',
-            'v2SetRequestState',
-            'v2GetRequestStateRole',
-            'v2SetRequestStateRole',
-            'v2GetRequestStateLength'
-        ],
-        'Control': [
-            'v2SetVar',
-            'v2DeclareLocalVar',
-            'v2Calculate',
-            'v2IfAdvanced',
-            'v2LoopNTimes',
-            'v2Loop',
-            'v2BreakLoop',
-            'v2Command',
-            'v2ConsoleLog',
-            'v2RunTrigger',
-            'v2StopTrigger',
-            'v2Comment'
-        ],
-        'Chat': [
-            'v2CutChat',
-            'v2ModifyChat',
-            'v2Impersonate',
-            'v2GetLastMessage',
-            'v2GetLastUserMessage',
-            'v2GetLastCharMessage',
-            'v2GetMessageAtIndex',
-            'v2GetMessageCount',
-            'v2GetFirstMessage',
-            'v2QuickSearchChat'
-        ],
-        'Low Level': [
-            'v2SendAIprompt',
-            'v2CheckSimilarity',
-            'v2RunLLM'
-        ],
-        'Alert': [
-            'v2ShowAlert',
-            'v2GetAlertInput',
-            'v2GetAlertSelect'
-        ],
-        'Lorebook V2': [
-            'v2GetAllLorebooks',
-            'v2GetLorebookByName',
-            'v2GetLorebookByIndex',
-            'v2CreateLorebook',
-            'v2ModifyLorebookByIndex',
-            'v2DeleteLorebookByIndex',
-            'v2GetLorebookCountNew',
-            'v2SetLorebookAlwaysActive'
-        ],
-        'String': [
-            'v2RegexTest',
-            'v2ExtractRegex',
-            'v2GetCharAt',
-            'v2GetCharCount',
-            'v2ToLowerCase',
-            'v2ToUpperCase',
-            'v2SetCharAt',
-            'v2SplitString',
-            'v2ConcatString',
-            'v2ReplaceString'
-        ],
-        'Data': [
-            'v2GetCharacterDesc',
-            'v2SetCharacterDesc',
-            'v2GetPersonaDesc',
-            'v2SetPersonaDesc',
-            'v2GetReplaceGlobalNote',
-            'v2SetReplaceGlobalNote',
-            'v2GetAuthorNote',
-            'v2SetAuthorNote'
-        ],
-        'Array': [
-            'v2MakeArrayVar',
-            'v2GetArrayVarLength',
-            'v2GetArrayVar',
-            'v2SetArrayVar',
-            'v2PushArrayVar',
-            'v2PopArrayVar',
-            'v2ShiftArrayVar',
-            'v2UnshiftArrayVar',
-            'v2SpliceArrayVar',
-            'v2SliceArrayVar',
-            'v2GetIndexOfValueInArrayVar',
-            'v2RemoveIndexFromArrayVar',
-            'v2JoinArrayVar'
-        ],
-        'Dictionary': [
-            'v2MakeDictVar',
-            'v2GetDictVar',
-            'v2SetDictVar',
-            'v2DeleteDictKey',
-            'v2HasDictKey',
-            'v2ClearDict',
-            'v2GetDictSize',
-            'v2GetDictKeys',
-            'v2GetDictValues'
-        ],
-        'Others': [
-            'v2Random',
-            'v2UpdateGUI',
-            'v2SystemPrompt',
-            'v2UpdateChatAt',
-            'v2Wait',
-            'v2StopPromptSending',
-            'v2Tokenize'
-        ],
-        'Deprecated': [
-            'v2If',
-            'v2ModifyLorebook',
-            'v2GetLorebook',
-            'v2GetLorebookCount',
-            'v2GetLorebookEntry',
-            'v2SetLorebookActivation',
-            'v2GetLorebookIndexViaName'
-        ]
-    }
+    const effectCategories = triggerV2Categories
 
     let lastClickTime = 0
     let { value = $bindable([]), lowLevelAble = false }: Props = $props();
@@ -176,6 +75,198 @@
 
     const setEditTriggerDraft = (effect: triggerEffectV2 | null) => {
         editTrigger = effect ? safeStructuredClone(effect) as triggerEffectV2 : null as triggerEffectV2
+    }
+
+    const resolveEditorLabel = (label: string) => {
+        return language.triggerInputLabels?.[label] || language[label] || label
+    }
+
+    const getEditTriggerDefinition = () => {
+        return editTrigger ? getTriggerV2Definition(editTrigger.type) : null
+    }
+
+    const getTriggerLabel = (type: triggerEffect['type']) => {
+        return language.triggerDesc[getTriggerV2LabelKey(type as never)] || type
+    }
+
+    const getTriggerDescriptionTemplate = (type: triggerEffect['type']) => {
+        return language.triggerDesc[getTriggerV2DescriptionKey(type as never)] || type
+    }
+
+    const getEditTriggerEditor = () => {
+        return getEditTriggerDefinition()?.editor
+    }
+
+    const getEditTriggerBaseKeys = () => {
+        if (!editTrigger) {
+            return []
+        }
+        return getTriggerV2EditorFieldOrder(editTrigger.type as never)
+    }
+
+    const isEndIndentEffect = (type: triggerEffect['type']) => type === 'v2EndIndent'
+    const isElseEffect = (type: triggerEffect['type']) => type === 'v2Else'
+    const isStructuralEffect = (type: triggerEffect['type']) => isEndIndentEffect(type) || isElseEffect(type)
+    const isPrimaryBlockStart = (type: triggerEffect['type']) => isTriggerV2PrimaryBlockStartType(type as never)
+    const isBlockEffect = (type: triggerEffect['type']) => isTriggerV2BlockEffectType(type as never)
+    const isLoopBlockEffect = (type: triggerEffect['type']) => isTriggerV2LoopBlockType(type as never)
+    const canEffectHaveElse = (type: triggerEffect['type']) => canTriggerV2HaveElse(type as never)
+
+    const findBlockEndIndentIndex = (effects: triggerEffectV2[], startIndex: number) => {
+        const startEffect = effects[startIndex]
+        if (!startEffect || !isBlockEffect(startEffect.type)) {
+            return -1
+        }
+
+        const indent = startEffect.indent
+        for (let pointer = startIndex + 1; pointer < effects.length; pointer++) {
+            const effect = effects[pointer]
+            if (isEndIndentEffect(effect.type) && effect.indent === indent + 1) {
+                return pointer
+            }
+        }
+
+        return -1
+    }
+
+    const findBlockElseIndex = (effects: triggerEffectV2[], startIndex: number) => {
+        const startEffect = effects[startIndex]
+        if (!startEffect || !canEffectHaveElse(startEffect.type)) {
+            return -1
+        }
+
+        const endIndentIndex = findBlockEndIndentIndex(effects, startIndex)
+        if (endIndentIndex === -1 || endIndentIndex + 1 >= effects.length) {
+            return -1
+        }
+
+        const nextEffect = effects[endIndentIndex + 1]
+        if (isElseEffect(nextEffect.type) && nextEffect.indent === startEffect.indent) {
+            return endIndentIndex + 1
+        }
+
+        return -1
+    }
+
+    const getEditorTypeKey = (key: string) => `${key}Type`
+
+    const hasEditorTypeKey = (key: string) => {
+        return !!editTrigger && getEditorTypeKey(key) in editTrigger
+    }
+
+    const isEditorKeyVisible = (key: string) => {
+        if (!editTrigger) {
+            return false
+        }
+        const visible = getEditTriggerEditor()?.visibility?.[key]
+        return visible ? visible(editTrigger as never) : true
+    }
+
+    const getEditorFieldKind = (key: string): TriggerV2EditorFieldKind => {
+        if (!editTrigger) {
+            return 'text'
+        }
+
+        const override = getEditTriggerEditor()?.fieldKinds?.[key]
+        if (override) {
+            return typeof override === 'function' ? override(editTrigger as never) : override
+        }
+
+        const value = (editTrigger as Record<string, unknown>)[key]
+        if (typeof value === 'boolean') {
+            return 'checkbox'
+        }
+        if (getEditTriggerEditor()?.textareaFields?.includes(key as never)) {
+            return 'textarea'
+        }
+        if (key.endsWith('Type')) {
+            return 'select'
+        }
+        if (getEditTriggerEditor()?.fieldOptions?.[key]) {
+            return 'select'
+        }
+        return 'text'
+    }
+
+    const getEditorFieldOptions = (key: string): TriggerV2EditorOption[] => {
+        if (!editTrigger) {
+            return []
+        }
+
+        const editor = getEditTriggerEditor()
+        const override = editor?.fieldOptions?.[key]
+        if (override) {
+            return [...(typeof override === 'function' ? override(editTrigger as never, { triggers: value }) : override)]
+        }
+
+        if (key.endsWith('Type')) {
+            return [
+                { value: 'value', label: 'value' },
+                { value: 'var', label: 'var' }
+            ]
+        }
+
+        return []
+    }
+
+    const getEditorFieldLabel = (key: string) => {
+        if (!editTrigger) {
+            return ''
+        }
+
+        const override = getEditTriggerEditor()?.labelOverrides?.[key]
+        const label = override ? (typeof override === 'function' ? override(editTrigger as never) : override) : key
+        return resolveEditorLabel(label)
+    }
+
+    const getEditorCheckboxLabel = (key: string) => {
+        if (!editTrigger) {
+            return ''
+        }
+
+        const override = getEditTriggerEditor()?.checkboxLabels?.[key]
+        if (override) {
+            const label = typeof override === 'function' ? override(editTrigger as never) : override
+            return resolveEditorLabel(label)
+        }
+        return getEditorFieldLabel(key)
+    }
+
+    const getEditorFieldHelpKey = (key: string) => {
+        return getEditTriggerEditor()?.helpKeys?.[key] ?? null
+    }
+
+    const isEditorFieldHighlighted = (key: string) => {
+        return !!getEditTriggerEditor()?.highlightFields?.includes(key as never)
+    }
+
+    const getEditorFieldStringValue = (key: string) => {
+        if (!editTrigger) {
+            return ''
+        }
+        const value = (editTrigger as Record<string, unknown>)[key]
+        return typeof value === 'string' || typeof value === 'number' ? String(value) : ''
+    }
+
+    const getEditorFieldBooleanValue = (key: string) => {
+        if (!editTrigger) {
+            return false
+        }
+        return Boolean((editTrigger as Record<string, unknown>)[key])
+    }
+
+    const updateEditTriggerField = (key: string, nextValue: string | boolean) => {
+        if (!editTrigger) {
+            return
+        }
+
+        const nextTrigger = safeStructuredClone(editTrigger) as Record<string, unknown>
+        nextTrigger[key] = nextValue
+        const postChange = getEditTriggerEditor()?.postChange?.[key]
+        if (postChange) {
+            postChange(nextTrigger as never, nextValue)
+        }
+        editTrigger = nextTrigger as triggerEffectV2
     }
     
     const scrollManager = $state({
@@ -571,965 +662,38 @@
         if(!value || value.length === 0 || selectedIndex < 0 || selectedIndex >= value.length || !value[selectedIndex]){
             return false
         }
+        if(!isTriggerV2EffectType(e as triggerEffect['type'])){
+            return false
+        }
         if(value[selectedIndex].type === 'display'){
             return displayAllowList.includes(e)
         }
         if(value[selectedIndex].type === 'request'){
             return requestAllowList.includes(e)
         }
-        if(effectCategories['Special'].includes(e)){
+        if(isTriggerV2SpecialType(e)){
             return false
         }
 
         if(lowLevelAble){
             return true
         }
-        return !effectCategories['Low Level'].includes(e)
+        return !isTriggerV2LowLevelType(e)
     }
     const makeDefaultEditType = (type:string) => {
-        switch(type){
-            case 'v2SetVar':
-                editTrigger = {
-                    type: 'v2SetVar',
-                    operator: '=',
-                    var: '',
-                    value: '',
-                    valueType: 'value',
-                    indent: 0
-                }
-                break;
-            case 'v2If':
-                editTrigger = {
-                    type: 'v2If',
-                    indent: 0,
-                    condition: '=',
-                    targetType: 'value',
-                    target: '',
-                    source: ''
-                }
-                break;
-            case 'v2IfAdvanced':
-                editTrigger = {
-                    type: 'v2IfAdvanced',
-                    indent: 0,
-                    condition: '=',
-                    targetType: 'value',
-                    target: '',
-                    sourceType: 'value',
-                    source: '',
-                }
-                break;
-            case 'v2Else':
-                editTrigger = {
-                    type: 'v2Else',
-                    indent: 0
-                }
-                break;
-            case 'v2Loop':
-                editTrigger = {
-                    type: 'v2Loop',
-                    indent: 0,
-                }
-                break;
-            case 'v2LoopNTimes':
-                editTrigger = {
-                    type: 'v2LoopNTimes',
-                    indent: 0,
-                    value: '',
-                    valueType: 'value'
-                }
-                break;
-            case 'v2BreakLoop':
-                editTrigger = {
-                    type: 'v2BreakLoop',
-                    indent: 0
-                }
-                break;
-            case 'v2RunTrigger':
-                editTrigger = {
-                    type: 'v2RunTrigger',
-                    indent: 0,
-                    target: ''
-                }
-                break;
-            case 'v2ConsoleLog':
-                editTrigger = {
-                    type: 'v2ConsoleLog',
-                    indent: 0,
-                    sourceType: 'value',
-                    source: ''
-                }
-                break;
-            case 'v2StopTrigger':
-                editTrigger = {
-                    type: 'v2StopTrigger',
-                    indent: 0
-                }
-                break;
-            case 'v2CutChat':
-                editTrigger = {
-                    type: 'v2CutChat',
-                    indent: 0,
-                    start: '0',
-                    end: '0',
-                    startType: 'value',
-                    endType: 'value'
-                }
-                break;
-            case 'v2ModifyChat':
-                editTrigger = {
-                    type: 'v2ModifyChat',
-                    index: '',
-                    indexType: 'value',
-                    value: '',
-                    valueType: 'value',
-                    indent: 0
-                }
-                break;
-            case 'v2SystemPrompt':
-                editTrigger = {
-                    type: 'v2SystemPrompt',
-                    location: 'start',
-                    value: '',
-                    valueType: 'value',
-                    indent: 0
-                }
-                break;
-            case 'v2Impersonate':
-                editTrigger = {
-                    type: 'v2Impersonate',
-                    role: 'user',
-                    value: '',
-                    valueType: 'value',
-                    indent: 0
-                }
-                break;
-            case 'v2Command':
-                editTrigger = {
-                    type: 'v2Command',
-                    value: '',
-                    valueType: 'value',
-                    indent: 0
-                }
-                break;
-            case 'v2SendAIprompt':
-                editTrigger = {
-                    type: 'v2SendAIprompt',
-                    indent: 0
-                }
-                break;
-            case 'v2CheckSimilarity':
-                editTrigger = {
-                    type: 'v2CheckSimilarity',
-                    source: '',
-                    sourceType: 'value',
-                    value: '',
-                    valueType: 'value',
-                    outputVar: '',
-                    indent: 0
-                }
-                break;
-            case 'v2RunLLM':
-                editTrigger = {
-                    type: 'v2RunLLM',
-                    value: '',
-                    valueType: 'value',
-                    outputVar: '',
-                    indent: 0,
-                    model: 'model'
-                }
-                break;
-            case 'v2ShowAlert':
-                editTrigger = {
-                    type: 'v2ShowAlert',
-                    value: '',
-                    valueType: 'value',
-                    indent: 0
-                }
-                break;
-            case 'v2ExtractRegex':
-                editTrigger = {
-                    type: 'v2ExtractRegex',
-                    value: '',
-                    valueType: 'value',
-                    regex: '',
-                    regexType: 'value',
-                    flags: '',
-                    flagsType: 'value',
-                    result: '',
-                    resultType: 'value',
-                    outputVar: '',
-                    indent: 0
-                }
-                break;
-            case 'v2GetLastMessage':
-                editTrigger = {
-                    type: 'v2GetLastMessage',
-                    outputVar: '',
-                    indent: 0
-                }
-                break;
-            case 'v2GetMessageAtIndex':
-                editTrigger = {
-                    type: 'v2GetMessageAtIndex',
-                    index: '',
-                    indexType: 'value',
-                    outputVar: '',
-                    indent: 0
-                }
-                break;
-            case 'v2GetMessageCount':
-                editTrigger = {
-                    type: 'v2GetMessageCount',
-                    outputVar: '',
-                    indent: 0
-                }
-                break;
-            case 'v2ModifyLorebook':
-                editTrigger = {
-                    type: 'v2ModifyLorebook',
-                    target: '',
-                    targetType: 'value',
-                    value: '',
-                    valueType: 'value',
-                    indent: 0
-                }
-                break;
-            case 'v2GetLorebook':
-                editTrigger = {
-                    type: 'v2GetLorebook',
-                    target: '',
-                    targetType: 'value',
-                    outputVar: '',
-                    indent: 0
-                }
-                break;
-            case 'v2GetLorebookCount':
-                editTrigger = {
-                    type: 'v2GetLorebookCount',
-                    outputVar: '',
-                    indent: 0
-                }
-                break;
-            case 'v2GetLorebookEntry':
-                editTrigger = {
-                    type: 'v2GetLorebookEntry',
-                    index: '',
-                    indexType: 'value',
-                    outputVar: '',
-                    indent: 0
-                }
-                break;
-            case 'v2SetLorebookActivation':
-                editTrigger = {
-                    type: 'v2SetLorebookActivation',
-                    index: '',
-                    indexType: 'value',
-                    value: true,
-                    indent: 0
-                }
-                break;
-            case 'v2GetLorebookIndexViaName':
-                editTrigger = {
-                    type: 'v2GetLorebookIndexViaName',
-                    name: '',
-                    nameType: 'value',
-                    outputVar: '',
-                    indent: 0
-                }
-                break;
-            case 'v2Random':
-                editTrigger = {
-                    type: 'v2Random',
-                    outputVar: '',
-                    min: '0',
-                    max: '100',
-                    minType: 'value',
-                    maxType: 'value',
-                    indent: 0
-                }
-                break;
-            case 'v2GetCharAt':
-                editTrigger = {
-                    type: 'v2GetCharAt',
-                    source: '',
-                    sourceType: 'value',
-                    index: '',
-                    indexType: 'value',
-                    outputVar: '',
-                    indent: 0
-                }
-                break;
-            case 'v2GetCharCount':
-                editTrigger = {
-                    type: 'v2GetCharCount',
-                    source: '',
-                    sourceType: 'value',
-                    outputVar: '',
-                    indent: 0
-                }
-                break;
-            case 'v2ToLowerCase':
-                editTrigger = {
-                    type: 'v2ToLowerCase',
-                    source: '',
-                    sourceType: 'value',
-                    outputVar: '',
-                    indent: 0
-                }
-                break;
-            case 'v2ToUpperCase':
-                editTrigger = {
-                    type: 'v2ToUpperCase',
-                    source: '',
-                    sourceType: 'value',
-                    outputVar: '',
-                    indent: 0
-                }
-                break;
-            case 'v2SetCharAt':
-                editTrigger = {
-                    type: 'v2SetCharAt',
-                    source: '',
-                    sourceType: 'value',
-                    index: '',
-                    indexType: 'value',
-                    value: '',
-                    valueType: 'value',
-                    outputVar: '',
-                    indent: 0
-                }
-                break;
-            case 'v2SplitString':
-                editTrigger = {
-                    type: 'v2SplitString',
-                    source: '',
-                    sourceType: 'value',
-                    delimiter: '',
-                    delimiterType: 'value',
-                    outputVar: '',
-                    indent: 0
-                }
-                break;
-            case 'v2JoinArrayVar':
-                editTrigger = {
-                    type: 'v2JoinArrayVar',
-                    var: '',
-                    varType: 'value',
-                    delimiter: '',
-                    delimiterType: 'value',
-                    outputVar: '',
-                    indent: 0
-                }
-                break;
-            case 'v2GetCharacterDesc':
-                editTrigger = {
-                    type: 'v2GetCharacterDesc',
-                    outputVar: '',
-                    indent: 0
-                }
-                break;
-            case 'v2SetCharacterDesc':
-                editTrigger = {
-                    type: 'v2SetCharacterDesc',
-                    value: '',
-                    valueType: 'value',
-                    indent: 0
-                }
-                break;
-            case 'v2GetPersonaDesc':
-                editTrigger = {
-                    type: 'v2GetPersonaDesc',
-                    outputVar: '',
-                    indent: 0
-                }
-                break;
-            case 'v2SetPersonaDesc':
-                editTrigger = {
-                    type: 'v2SetPersonaDesc',
-                    value: '',
-                    valueType: 'value',
-                    indent: 0
-                }
-                break;
-            case 'v2MakeArrayVar':
-                editTrigger = {
-                    type: 'v2MakeArrayVar',
-                    var: '',
-                    indent: 0
-                }
-                break;
-            case 'v2GetArrayVarLength':
-                editTrigger = {
-                    type: 'v2GetArrayVarLength',
-                    var: '',
-                    outputVar: '',
-                    indent: 0
-                }
-                break;
-            case 'v2GetArrayVar':
-                editTrigger = {
-                    type: 'v2GetArrayVar',
-                    var: '',
-                    index: '',
-                    indexType: 'value',
-                    outputVar: '',
-                    indent: 0
-                }
-                break;
-            case 'v2SetArrayVar':
-                editTrigger = {
-                    type: 'v2SetArrayVar',
-                    var: '',
-                    index: '',
-                    indexType: 'value',
-                    value: '',
-                    valueType: 'value',
-                    indent: 0
-                }
-                break;
-            case 'v2Tokenize':{
-                editTrigger = {
-                    type: 'v2Tokenize',
-                    value: '',
-                    valueType: 'value',
-                    indent: 0,
-                    outputVar: ""
-                }
-                break;
-            }
-            case 'v2PushArrayVar':
-                editTrigger = {
-                    type: 'v2PushArrayVar',
-                    var: '',
-                    value: '',
-                    valueType: 'value',
-                    indent: 0
-                }
-                break;
-            case 'v2PopArrayVar':
-                editTrigger = {
-                    type: 'v2PopArrayVar',
-                    var: '',
-                    outputVar: '',
-                    indent: 0
-                }
-                break;
-            case 'v2ShiftArrayVar':
-                editTrigger = {
-                    type: 'v2ShiftArrayVar',
-                    var: '',
-                    outputVar: '',
-                    indent: 0
-                }
-                break;
-            case 'v2UnshiftArrayVar':
-                editTrigger = {
-                    type: 'v2UnshiftArrayVar',
-                    var: '',
-                    value: '',
-                    valueType: 'value',
-                    indent: 0
-                }
-                break;
-            case 'v2SpliceArrayVar':
-                editTrigger = {
-                    type: 'v2SpliceArrayVar',
-                    var: '',
-                    start: '',
-                    startType: 'value',
-                    item: '',
-                    itemType: 'value',
-                    indent: 0
-                }
-                break;
-            case 'v2SliceArrayVar':
-                editTrigger = {
-                    type: 'v2SliceArrayVar',
-                    var: '',
-                    start: '',
-                    startType: 'value',
-                    end: '',
-                    endType: 'value',
-                    outputVar: '',
-                    indent: 0
-                }
-                break;
-            case 'v2GetIndexOfValueInArrayVar':
-                editTrigger = {
-                    type: 'v2GetIndexOfValueInArrayVar',
-                    var: '',
-                    value: '',
-                    valueType: 'value',
-                    outputVar: '',
-                    indent: 0
-                }
-                break;
-            case 'v2RemoveIndexFromArrayVar':
-                editTrigger = {
-                    type: 'v2RemoveIndexFromArrayVar',
-                    var: '',
-                    index: '',
-                    indexType: 'value',
-                    indent: 0
-                }
-                break;
-            case 'v2ConcatString':
-                editTrigger = {
-                    type: 'v2ConcatString',
-                    source1: '',
-                    source1Type: 'value',
-                    source2: '',
-                    source2Type: 'value',
-                    outputVar: '',
-                    indent: 0
-                }
-                break;
-            case 'v2GetLastUserMessage':{
-                editTrigger = {
-                    type: 'v2GetLastUserMessage',
-                    outputVar: '',
-                    indent: 0
-                }
-                break;
-            }
-            case 'v2GetLastCharMessage':{
-                editTrigger = {
-                    type: 'v2GetLastCharMessage',
-                    outputVar: '',
-                    indent: 0
-                }
-                break;
-            }
-            case 'v2GetFirstMessage':{
-                editTrigger = {
-                    type: 'v2GetFirstMessage',
-                    outputVar: '',
-                    indent: 0
-                }
-                break;
-            }
-            case 'v2GetAlertInput':{
-                editTrigger = {
-                    type: 'v2GetAlertInput',
-                    outputVar: '',
-                    indent: 0,
-                    display: '',
-                    displayType: 'value'
-                }
-                break;
-            }
-            case 'v2GetAlertSelect':{
-                editTrigger = {
-                    type: 'v2GetAlertSelect',
-                    display: '',
-                    displayType: 'value',
-                    value: '',
-                    valueType: 'value',
-                    outputVar: '',
-                    indent: 0
-                }
-                break;
-            }
-            case 'v2GetDisplayState':{
-                editTrigger = {
-                    type: 'v2GetDisplayState',
-                    outputVar: '',
-                    indent: 0
-                }
-                break;
-            }
-            case 'v2SetDisplayState':{
-                editTrigger = {
-                    type: 'v2SetDisplayState',
-                    value: '',
-                    valueType: 'value',
-                    indent: 0
-                }
-                break;
-            }
-            case 'v2UpdateGUI':{
-                editTrigger = {
-                    type: 'v2UpdateGUI',
-                    indent: 0
-                }
-                break;
-            }
-            case 'v2UpdateChatAt':{
-                editTrigger = {
-                    type: 'v2UpdateChatAt',
-                    index: '0',
-                    indent: 0
-                }
-                break;
-            }
-            case 'v2Wait':{
-                editTrigger = {
-                    type: 'v2Wait',
-                    value: '1',
-                    valueType: 'value',
-                    indent: 0
-                }
-                break;
-            }
-            case 'v2GetRequestState':{
-                editTrigger = {
-                    type: 'v2GetRequestState',
-                    outputVar: '',
-                    index: '',
-                    indexType: 'value',
-                    indent: 0
-                }
-                break;
-            }
-            case 'v2SetRequestState':{
-                editTrigger = {
-                    type: 'v2SetRequestState',
-                    value: '',
-                    valueType: 'value',
-                    index: '',
-                    indexType: 'value',
-                    indent: 0
-                }
-                break;
-            }
-            case 'v2GetRequestStateRole':{
-                editTrigger = {
-                    type: 'v2GetRequestStateRole',
-                    outputVar: '',
-                    index: '',
-                    indexType: 'value',
-                    indent: 0
-                }
-                break;
-            }
-            case 'v2SetRequestStateRole':{
-                editTrigger = {
-                    type: 'v2SetRequestStateRole',
-                    value: '',
-                    valueType: 'value',
-                    index: '',
-                    indexType: 'value',
-                    indent: 0
-                }
-                break;
-            }
-            case 'v2GetRequestStateLength':{
-                editTrigger = {
-                    type: 'v2GetRequestStateLength',
-                    outputVar: '',
-                    indent: 0
-                }
-                break;
-            }
-            case 'v2StopPromptSending':{
-                editTrigger = {
-                    type: 'v2StopPromptSending',
-                    indent: 0
-                }
-                break;
-            }
-            case 'v2QuickSearchChat':{
-                editTrigger = {
-                    type: 'v2QuickSearchChat',
-                    value: '',
-                    valueType: 'value',
-                    indent: 0,
-                    condition: 'loose',
-                    depth: '3',
-                    depthType: 'value',
-                    outputVar: ''
-                }
-                break;
-            }
-            case 'v2GetAllLorebooks':{
-                editTrigger = {
-                    type: 'v2GetAllLorebooks',
-                    outputVar: '',
-                    indent: 0
-                }
-                break;
-            }
-            case 'v2RegexTest':{
-                editTrigger = {
-                    type: 'v2RegexTest',
-                    value: '',
-                    valueType: 'value',
-                    regex: '',
-                    regexType: 'value',
-                    flags: '',
-                    flagsType: 'value',
-                    outputVar: '',
-                    indent: 0
-                }
-                break;
-            }
-            case 'v2GetLorebookByName':{
-                editTrigger = {
-                    type: 'v2GetLorebookByName',
-                    name: '',
-                    nameType: 'value',
-                    outputVar: '',
-                    indent: 0
-                }
-                break;
-            }
-            case 'v2GetLorebookByIndex':{
-                editTrigger = {
-                    type: 'v2GetLorebookByIndex',
-                    index: '',
-                    indexType: 'value',
-                    outputVar: '',
-                    indent: 0
-                }
-                break;
-            }
-            case 'v2CreateLorebook':{
-                editTrigger = {
-                    type: 'v2CreateLorebook',
-                    name: '',
-                    nameType: 'value',
-                    key: '',
-                    keyType: 'value',
-                    content: '',
-                    contentType: 'value',
-                    insertOrder: '100',
-                    insertOrderType: 'value',
-                    indent: 0
-                }
-                break;
-            }
-            case 'v2ModifyLorebookByIndex':{
-                editTrigger = {
-                    type: 'v2ModifyLorebookByIndex',
-                    index: '',
-                    indexType: 'value',
-                    name: '{{slot}}',
-                    nameType: 'value',
-                    key: '{{slot}}',
-                    keyType: 'value',
-                    content: '{{slot}}',
-                    contentType: 'value',
-                    insertOrder: '{{slot}}',
-                    insertOrderType: 'value',
-                    indent: 0
-                }
-                break;
-            }
-            case 'v2DeleteLorebookByIndex':{
-                editTrigger = {
-                    type: 'v2DeleteLorebookByIndex',
-                    index: '',
-                    indexType: 'value',
-                    indent: 0
-                }
-                break;
-            }
-            case 'v2GetLorebookCountNew':{
-                editTrigger = {
-                    type: 'v2GetLorebookCountNew',
-                    outputVar: '',
-                    indent: 0
-                }
-                break;
-            }
-            case 'v2SetLorebookAlwaysActive':{
-                editTrigger = {
-                    type: 'v2SetLorebookAlwaysActive',
-                    index: '',
-                    indexType: 'value',
-                    value: true,
-                    indent: 0
-                }
-                break;
-            }
-            case 'v2GetReplaceGlobalNote':{
-                editTrigger = {
-                    type: 'v2GetReplaceGlobalNote',
-                    outputVar: '',
-                    indent: 0
-                }
-                break;
-            }
-            case 'v2SetReplaceGlobalNote':{
-                editTrigger = {
-                    type: 'v2SetReplaceGlobalNote',
-                    value: '',
-                    valueType: 'value',
-                    indent: 0
-                }
-                break;
-            }
-            case 'v2GetAuthorNote':{
-                editTrigger = {
-                    type: 'v2GetAuthorNote',
-                    outputVar: '',
-                    indent: 0
-                }
-                break;
-            }
-            case 'v2SetAuthorNote':{
-                editTrigger = {
-                    type: 'v2SetAuthorNote',
-                    value: '',
-                    valueType: 'value',
-                    indent: 0
-                }
-                break;
-            }
-            case 'v2MakeDictVar':{
-                editTrigger = {
-                    type: 'v2MakeDictVar',
-                    var: '',
-                    indent: 0
-                }
-                break;
-            }
-            case 'v2GetDictVar':{
-                editTrigger = {
-                    type: 'v2GetDictVar',
-                    var: '',
-                    varType: 'value',
-                    key: '',
-                    keyType: 'value',
-                    outputVar: '',
-                    indent: 0
-                }
-                break;
-            }
-            case 'v2SetDictVar':{
-                editTrigger = {
-                    type: 'v2SetDictVar',
-                    var: '',
-                    varType: 'value',
-                    key: '',
-                    keyType: 'value',
-                    value: '',
-                    valueType: 'value',
-                    indent: 0
-                }
-                break;
-            }
-            case 'v2DeleteDictKey':{
-                editTrigger = {
-                    type: 'v2DeleteDictKey',
-                    var: '',
-                    varType: 'value',
-                    key: '',
-                    keyType: 'value',
-                    indent: 0
-                }
-                break;
-            }
-            case 'v2HasDictKey':{
-                editTrigger = {
-                    type: 'v2HasDictKey',
-                    var: '',
-                    varType: 'value',
-                    key: '',
-                    keyType: 'value',
-                    outputVar: '',
-                    indent: 0
-                }
-                break;
-            }
-            case 'v2ClearDict':{
-                editTrigger = {
-                    type: 'v2ClearDict',
-                    var: '',
-                    indent: 0
-                }
-                break;
-            }
-            case 'v2GetDictSize':{
-                editTrigger = {
-                    type: 'v2GetDictSize',
-                    var: '',
-                    varType: 'value',
-                    outputVar: '',
-                    indent: 0
-                }
-                break;
-            }
-            case 'v2GetDictKeys':{
-                editTrigger = {
-                    type: 'v2GetDictKeys',
-                    var: '',
-                    varType: 'value',
-                    outputVar: '',
-                    indent: 0
-                }
-                break;
-            }
-            case 'v2GetDictValues':{
-                editTrigger = {
-                    type: 'v2GetDictValues',
-                    var: '',
-                    varType: 'value',
-                    outputVar: '',
-                    indent: 0
-                }
-                break;
-            }
-            case 'v2Calculate':{
-                editTrigger = {
-                    type: 'v2Calculate',
-                    expression: '',
-                    expressionType: 'value',
-                    outputVar: '',
-                    indent: 0
-                }
-                break;
-            }
-            case 'v2ReplaceString':{
-                editTrigger = {
-                    type: 'v2ReplaceString',
-                    source: '',
-                    sourceType: 'value',
-                    regex: '',
-                    regexType: 'value',
-                    result: '',
-                    resultType: 'value',
-                    replacement: '',
-                    replacementType: 'value',
-                    flags: '',
-                    flagsType: 'value',
-                    outputVar: '',
-                    indent: 0
-                }
-                break;
-            }
-            case 'v2Comment':{
-                editTrigger = {
-                    type: 'v2Comment',
-                    value: '',
-                    indent: 0
-                }
-                break;
-            }
-            case 'v2DeclareLocalVar':{
-                editTrigger = {
-                    type: 'v2DeclareLocalVar',
-                    var: '',
-                    value: '',
-                    valueType: 'value',
-                    indent: 0
-                }
-                break;
-            }
-        }
+        editTrigger = createTriggerV2Default(type as never)
     }
 
     const deleteEffect = () => {
         const type = value[selectedIndex].effect[selectedEffectIndex]
         value[selectedIndex].effect.splice(selectedEffectIndex, 1)
-        if(type.type === 'v2If' || type.type === 'v2IfAdvanced' || type.type === 'v2Loop' || type.type === 'v2Else' || type.type === 'v2LoopNTimes'){
+        if(isBlockEffect(type.type)){
             let pointer = selectedEffectIndex
             const indent = (type as triggerEffectV2).indent
             while(pointer < value[selectedIndex].effect.length){
-                if(value[selectedIndex].effect[pointer].type === 'v2EndIndent' && (value[selectedIndex].effect[pointer] as triggerEffectV2).indent === indent + 1){
+                if(isEndIndentEffect(value[selectedIndex].effect[pointer].type) && (value[selectedIndex].effect[pointer] as triggerEffectV2).indent === indent + 1){
                     value[selectedIndex].effect.splice(pointer, 1)
-                    if(value?.[selectedIndex]?.effect?.[pointer]?.type === 'v2Else'){
+                    if(isElseEffect(value?.[selectedIndex]?.effect?.[pointer]?.type)){
                         value[selectedIndex].effect.splice(pointer, 1)
                         continue
                     }
@@ -1553,7 +717,7 @@
     const copyEffect = () => {
         const type = value[selectedIndex].effect[selectedEffectIndex]
         
-        if(type.type === 'v2If' || type.type === 'v2IfAdvanced' || type.type === 'v2Loop' || type.type === 'v2LoopNTimes'){
+        if(isPrimaryBlockStart(type.type)){
             const blockRange = getBlockRange(selectedEffectIndex)
             const blockEffects = value[selectedIndex].effect.slice(blockRange.start, blockRange.end + 1)
             clipboard = {
@@ -1563,7 +727,7 @@
             return
         }
         
-        if(type.type === 'v2Else'){
+        if(isElseEffect(type.type)){
             return
         }
         
@@ -1583,7 +747,7 @@
                 return 0
             }
             const lastEffect = value[selectedIndex].effect[value[selectedIndex].effect.length - 1] as triggerEffectV2
-            if (lastEffect.type === 'v2EndIndent') {
+            if (isEndIndentEffect(lastEffect.type)) {
                 return lastEffect.indent - 1
             }
             return lastEffect.indent
@@ -1592,24 +756,23 @@
         const targetEffect = value[selectedIndex].effect[insertIndex] as triggerEffectV2
         const prevEffect = insertIndex > 0 ? value[selectedIndex].effect[insertIndex - 1] as triggerEffectV2 : null
         
-        if (targetEffect.type === 'v2EndIndent') {
+        if (isEndIndentEffect(targetEffect.type)) {
             return targetEffect.indent
         }
         
-        if (targetEffect.type === 'v2Else') {
+        if (isElseEffect(targetEffect.type)) {
             return targetEffect.indent
         }
         
-        if (prevEffect && (prevEffect.type === 'v2If' || prevEffect.type === 'v2IfAdvanced' || 
-                          prevEffect.type === 'v2Loop' || prevEffect.type === 'v2LoopNTimes')) {
+        if (prevEffect && isPrimaryBlockStart(prevEffect.type)) {
             return prevEffect.indent + 1
         }
         
-        if (prevEffect && prevEffect.type === 'v2Else') {
+        if (prevEffect && isElseEffect(prevEffect.type)) {
             return prevEffect.indent + 1
         }
         
-        if (prevEffect && prevEffect.type === 'v2EndIndent') {
+        if (prevEffect && isEndIndentEffect(prevEffect.type)) {
             return prevEffect.indent - 1
         }
         
@@ -1629,12 +792,7 @@
         const targetIndent = getInsertIndent(insertIndex)
         
         const firstEffect = clipboard.value[0] as triggerEffectV2
-        const isBlock = firstEffect && (
-            firstEffect.type === 'v2If' || 
-            firstEffect.type === 'v2IfAdvanced' || 
-            firstEffect.type === 'v2Loop' || 
-            firstEffect.type === 'v2LoopNTimes'
-        )
+        const isBlock = firstEffect && isPrimaryBlockStart(firstEffect.type)
         
         if (isBlock) {
             const baseIndent = firstEffect.indent
@@ -1796,41 +954,25 @@
         const effects = value[selectedIndex].effect;
         const startEffect = effects[startIndex] as triggerEffectV2;
         
-        if (!startEffect || 
-            (startEffect.type !== 'v2If' && startEffect.type !== 'v2IfAdvanced' && 
-             startEffect.type !== 'v2Loop' && startEffect.type !== 'v2LoopNTimes')) {
+        if (!startEffect || !isPrimaryBlockStart(startEffect.type)) {
             return { start: startIndex, end: startIndex };
         }
         
-        let pointer = startIndex + 1;
-        const indent = startEffect.indent;
-        
-        while (pointer < effects.length) {
-            const currentEffect = effects[pointer] as triggerEffectV2;
-            if (currentEffect.type === 'v2EndIndent' && currentEffect.indent === indent + 1) {
-                let endIndex = pointer;
-                
-                if (pointer + 1 < effects.length) {
-                    const nextEffect = effects[pointer + 1] as triggerEffectV2;
-                    if (nextEffect.type === 'v2Else' && nextEffect.indent === indent) {
-                        pointer += 2;
-                        while (pointer < effects.length) {
-                            const elseEffect = effects[pointer] as triggerEffectV2;
-                            if (elseEffect.type === 'v2EndIndent' && elseEffect.indent === indent + 1) {
-                                endIndex = pointer;
-                                break;
-                            }
-                            pointer++;
-                        }
-                    }
-                }
-                
-                return { start: startIndex, end: endIndex };
-            }
-            pointer++;
+        const endIndentIndex = findBlockEndIndentIndex(effects, startIndex)
+        if (endIndentIndex === -1) {
+            return { start: startIndex, end: startIndex }
         }
-        
-        return { start: startIndex, end: startIndex };
+
+        const elseIndex = findBlockElseIndex(effects, startIndex)
+        if (elseIndex === -1) {
+            return { start: startIndex, end: endIndentIndex }
+        }
+
+        const elseEndIndex = findBlockEndIndentIndex(effects, elseIndex)
+        return {
+            start: startIndex,
+            end: elseEndIndex === -1 ? endIndentIndex : elseEndIndex
+        }
     }
 
     const canMoveEffect = (fromIndex: number, toIndex: number): boolean => {
@@ -1842,12 +984,11 @@
         const fromEffect = value[selectedIndex].effect[fromIndex] as triggerEffectV2;
         if (!fromEffect) return false;
         
-        if (fromEffect.type === 'v2EndIndent' || fromEffect.type === 'v2Else') {
+        if (isStructuralEffect(fromEffect.type)) {
             return false;
         }
         
-        if (fromEffect.type === 'v2If' || fromEffect.type === 'v2IfAdvanced' || 
-            fromEffect.type === 'v2Loop' || fromEffect.type === 'v2LoopNTimes') {
+        if (isPrimaryBlockStart(fromEffect.type)) {
             const blockRange = getBlockRange(fromIndex);
             
             if (toIndex > blockRange.start && toIndex <= blockRange.end + 1) {
@@ -1857,14 +998,14 @@
         
         if (toIndex < value[selectedIndex].effect.length) {
             const targetEffect = value[selectedIndex].effect[toIndex] as triggerEffectV2;
-            if (targetEffect && targetEffect.type === 'v2Else' && toIndex > 0) {
+            if (targetEffect && isElseEffect(targetEffect.type) && toIndex > 0) {
                 const prevEffect = value[selectedIndex].effect[toIndex - 1] as triggerEffectV2;
-                if (prevEffect && prevEffect.type === 'v2EndIndent') {
+                if (prevEffect && isEndIndentEffect(prevEffect.type)) {
                     const blockIndent = prevEffect.indent - 1;
                     for (let i = toIndex - 2; i >= 0; i--) {
                         const checkEffect = value[selectedIndex].effect[i] as triggerEffectV2;
                         if (checkEffect.indent === blockIndent) {
-                            if (checkEffect.type === 'v2If' || checkEffect.type === 'v2IfAdvanced') {
+                            if (canEffectHaveElse(checkEffect.type)) {
                                 return false;
                             }
                             break;
@@ -1878,8 +1019,8 @@
             const prevEffect = value[selectedIndex].effect[toIndex - 1] as triggerEffectV2;
             const targetEffect = value[selectedIndex].effect[toIndex] as triggerEffectV2;
             
-            if (prevEffect && prevEffect.type === 'v2EndIndent' && 
-                targetEffect && targetEffect.type === 'v2Else') {
+            if (prevEffect && isEndIndentEffect(prevEffect.type) && 
+                targetEffect && isElseEffect(targetEffect.type)) {
                 return false;
             }
         }
@@ -1902,8 +1043,7 @@
         const effects = [...value[selectedIndex].effect];
         const fromEffect = effects[fromIndex] as triggerEffectV2;
         
-        if (fromEffect.type === 'v2If' || fromEffect.type === 'v2IfAdvanced' || 
-            fromEffect.type === 'v2Loop' || fromEffect.type === 'v2LoopNTimes') {
+        if (isPrimaryBlockStart(fromEffect.type)) {
             
             const blockRange = getBlockRange(fromIndex);
             const blockSize = blockRange.end - blockRange.start + 1;
@@ -1995,11 +1135,8 @@
                         const before = value[selectedIndex].effect[selectedEffectIndex] as triggerEffectV2
                         const after = value[selectedIndex].effect[selectedEffectIndex + 1] as triggerEffectV2
                         if(
-                            before.type !== 'v2EndIndent' && after.type !== 'v2EndIndent'
-                            && before.type !== 'v2If' && after.type !== 'v2If'
-                            && before.type !== 'v2IfAdvanced' && after.type !== 'v2IfAdvanced'
-                            && before.type !== 'v2Loop' && after.type !== 'v2Loop'
-                            && before.type !== 'v2LoopNTimes' && after.type !== 'v2LoopNTimes'
+                            !isStructuralEffect(before.type) && !isStructuralEffect(after.type)
+                            && !isPrimaryBlockStart(before.type) && !isPrimaryBlockStart(after.type)
                             && before.indent === after.indent
                         ){
                             value[selectedIndex].effect[selectedEffectIndex] = after
@@ -2017,11 +1154,8 @@
                         const before = value[selectedIndex].effect[selectedEffectIndex] as triggerEffectV2
                         const after = value[selectedIndex].effect[selectedEffectIndex - 1] as triggerEffectV2
                         if(
-                            before.type !== 'v2EndIndent' && after.type !== 'v2EndIndent'
-                            && before.type !== 'v2If' && after.type !== 'v2If'
-                            && before.type !== 'v2IfAdvanced' && after.type !== 'v2IfAdvanced'
-                            && before.type !== 'v2Loop' && after.type !== 'v2Loop'
-                            && before.type !== 'v2LoopNTimes' && after.type !== 'v2LoopNTimes'
+                            !isStructuralEffect(before.type) && !isStructuralEffect(after.type)
+                            && !isPrimaryBlockStart(before.type) && !isPrimaryBlockStart(after.type)
                             && before.indent === after.indent
                         ){
                             value[selectedIndex].effect[selectedEffectIndex] = after
@@ -2135,7 +1269,7 @@
             return DOMPurify.sanitize(`<span class="text-red-500">${escapeHtml(language.triggerDesc.v2UnsupportedTriggerDesc)}</span>`)
         }
 
-        const txt = escapeHtml(language.triggerDesc[type + 'Desc'] as string || type).replace(/{{(.+?)}}/g, (_match, p1) => {
+        const txt = escapeHtml(getTriggerDescriptionTemplate(type) as string || type).replace(/{{(.+?)}}/g, (_match, p1) => {
             const d = effect[p1]
             const safeValue = escapeHtml(d || 'null')
             
@@ -2277,30 +1411,12 @@
                 {/if}
                 
                 {#if selectMode === 1}
-                    {#if selectedEffectIndex !== -1 && value[selectedIndex].effect[selectedEffectIndex].type !== 'v2EndIndent'}
+                    {#if selectedEffectIndex !== -1 && !isEndIndentEffect(value[selectedIndex].effect[selectedEffectIndex].type)}
                         <button type="button" class="trigger-v2-context-action ds-ui-menu-item" title={language.edit} aria-label={language.edit} onclick={(e) => {
                             e.stopPropagation()
                             const currentEffect = value[selectedIndex].effect[selectedEffectIndex] as triggerEffectV2
-                            if(currentEffect.type === 'v2If' || currentEffect.type === 'v2IfAdvanced'){
-                                let hasExistingElse = false
-                                let pointer = selectedEffectIndex + 1
-                                const indent = currentEffect.indent
-                                
-                                while(pointer < value[selectedIndex].effect.length){
-                                    const effect = value[selectedIndex].effect[pointer] as triggerEffectV2
-                                    if(effect.type === 'v2EndIndent' && effect.indent === indent + 1){
-                                        if(pointer + 1 < value[selectedIndex].effect.length){
-                                            const nextEffect = value[selectedIndex].effect[pointer + 1] as triggerEffectV2
-                                            if(nextEffect.type === 'v2Else' && nextEffect.indent === indent){
-                                                hasExistingElse = true
-                                            }
-                                        }
-                                        break
-                                    }
-                                    pointer++
-                                }
-                                
-                                addElse = hasExistingElse
+                            if(canEffectHaveElse(currentEffect.type)){
+                                addElse = findBlockElseIndex(value[selectedIndex].effect as triggerEffectV2[], selectedEffectIndex) !== -1
                             }
                             
                             if(selectedIndex > 0) {
@@ -2662,11 +1778,9 @@
                          }}>
                         {#key guideLineKey}
                             {#each (value && value[selectedIndex] && value[selectedIndex].effect) ? value[selectedIndex].effect : [] as effect, i (effect)}
-                                {#if effect.type === 'v2If' || effect.type === 'v2IfAdvanced' || effect.type === 'v2Loop' || effect.type === 'v2LoopNTimes' || effect.type === 'v2Else'}
+                                {#if isBlockEffect(effect.type)}
                                     {@const blockIndent = (effect as triggerEffectV2).indent}
-                                    {@const endIndex = (value && value[selectedIndex] && value[selectedIndex].effect) ? value[selectedIndex].effect.findIndex((e, idx) => 
-                                        idx > i && e.type === 'v2EndIndent' && (e as triggerEffectV2).indent === blockIndent + 1
-                                    ) : -1}
+                                    {@const endIndex = (value && value[selectedIndex] && value[selectedIndex].effect) ? findBlockEndIndentIndex(value[selectedIndex].effect as triggerEffectV2[], i) : -1}
                                     {#if endIndex !== -1 && effectElements[i] && effectElements[endIndex] && menu0Container}
                                         {@const startElement = effectElements[i]}
                                         {@const endElement = effectElements[endIndex]}
@@ -2764,7 +1878,7 @@
                                     }}
                                     oncontextmenu={(e) => handleContextMenu(e, 1, i, effect)}
                                 >
-                                    {#if effect.type === 'v2EndIndent'}
+                                    {#if isEndIndentEffect(effect.type)}
                                         <div class="text-textcolor" style:margin-left={effect.indent + 'rem'}>...</div>
                                     {:else}
                                         <!-- eslint-disable-next-line svelte/no-at-html-tags -->
@@ -2772,7 +1886,7 @@
                                     {/if}
                                 </button>
                                 
-                                {#if effect.type !== 'v2EndIndent' && effect.type !== 'v2Else'}
+                                {#if !isStructuralEffect(effect.type)}
                                     <div class="trigger-v2-effect-handle"
                                          draggable={!isMobileScreen}
                                          onclick={(e) => {
@@ -2917,8 +2031,8 @@
                                     type="button"
                                     class="trigger-v2-type-item trigger-v2-selection-hover text-textcolor2 hover:text-textcolor" 
                                     class:opacity-60={effectCategories.Deprecated.includes(type)} 
-                                    title={language.triggerDesc[type]}
-                                    aria-label={language.triggerDesc[type]}
+                                    title={getTriggerLabel(type)}
+                                    aria-label={getTriggerLabel(type)}
                                     onclick={(e) => {
                                         e.stopPropagation()
                                         makeDefaultEditType(type)
@@ -2930,7 +2044,7 @@
                                     }}
                                 >
                                     <div>
-                                        {language.triggerDesc[type]}
+                                        {getTriggerLabel(type)}
                                         {#if effectCategories.Deprecated.includes(type)}
                                             <span class="trigger-v2-deprecated-note">(Deprecated)</span>
                                         {/if}
@@ -2965,1017 +2079,65 @@
                             <ArrowLeftIcon />
                         </button>
                         <h2 class="trigger-v2-edit-title">
-                            {language.triggerDesc[editTrigger.type]}
+                            {getTriggerLabel(editTrigger.type)}
                         </h2>
                     </div>
-                    {#if editTrigger.type === 'v2SetVar'}
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.varName}</span>
-                        <TextInput bind:value={editTrigger.var} />
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.operator}</span>
-                        <SelectInput bind:value={editTrigger.operator}>
-                            <OptionInput value="=">{language.triggerInputLabels.operatorSet}</OptionInput>
-                            <OptionInput value="+=">{language.triggerInputLabels.operatorAdd}</OptionInput>
-                            <OptionInput value="-=">{language.triggerInputLabels.operatorSubtract}</OptionInput>
-                            <OptionInput value="*=">{language.triggerInputLabels.operatorMultiply}</OptionInput>
-                            <OptionInput value="/=">{language.triggerInputLabels.operatorDivide}</OptionInput>
-                            <OptionInput value="%=">{language.triggerInputLabels.operatorModulo}</OptionInput>
-                        </SelectInput>
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.value}</span>
-                        <SelectInput bind:value={editTrigger.valueType}>
-                            <OptionInput value="value">{language.triggerInputLabels.value}</OptionInput>
-                            <OptionInput value="var">{language.triggerInputLabels.var}</OptionInput>
-                        </SelectInput>
-                        <TextAreaInput highlight bind:value={editTrigger.value} />
-                    {:else if editTrigger.type === 'v2If' || editTrigger.type === 'v2IfAdvanced'}
-                        
-                        <span class="trigger-v2-field-label">{editTrigger.type === 'v2If' ? language.triggerInputLabels.varName : 'A'}</span>
-                        {#if editTrigger.type === 'v2IfAdvanced'}
-                            <SelectInput bind:value={editTrigger.sourceType}>
-                                <OptionInput value="value">{language.triggerInputLabels.value}</OptionInput>
-                                <OptionInput value="var">{language.triggerInputLabels.var}</OptionInput>
-                            </SelectInput>
-                        {/if}
-                        <TextInput bind:value={editTrigger.source} />
-
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.condition}</span>
-                        <SelectInput bind:value={editTrigger.condition} onchange={(e) => {
-                            if(e.currentTarget.value === '≡'){
-                                const trg = editTrigger as triggerV2IfAdvanced
-                                trg.condition = '≡'
-                                trg.target = 'true'
-                                trg.targetType = 'value'
-                            }
-                        }}>
-                            <OptionInput value="=">{language.triggerInputLabels.conditionEqual}</OptionInput>
-                            <OptionInput value="!=">{language.triggerInputLabels.conditionNotEqual}</OptionInput>
-                            <OptionInput value=">">{language.triggerInputLabels.conditionGreater}</OptionInput>
-                            <OptionInput value="<">{language.triggerInputLabels.conditionLess}</OptionInput>
-                            <OptionInput value=">=">{language.triggerInputLabels.conditionGreaterEqual}</OptionInput>
-                            <OptionInput value="<=">{language.triggerInputLabels.conditionLessEqual}</OptionInput>
-                            {#if editTrigger.type === 'v2IfAdvanced'}
-                                <OptionInput value="≒">{language.triggerInputLabels.conditionSimilar}</OptionInput>
-                                <OptionInput value="∋">{language.triggerInputLabels.conditionContains}</OptionInput>
-                                <OptionInput value="∈">{language.triggerInputLabels.conditionIn}</OptionInput>
-                                <OptionInput value="∌">{language.triggerInputLabels.conditionNotContains}</OptionInput>
-                                <OptionInput value="∉">{language.triggerInputLabels.conditionNotIn}</OptionInput>
-                                <OptionInput value="≡">{language.triggerInputLabels.conditionTruthy}</OptionInput>
-                            {/if}
-                        </SelectInput>
-
-                        <span class="trigger-v2-field-label">{editTrigger.type === 'v2If' ? language.triggerInputLabels.value : 'B'}</span>
-                        {#if editTrigger.condition === '≡'}
-                            <SelectInput bind:value={editTrigger.target}>
-                                <OptionInput value="true">{language.triggerInputLabels.boolTrue}</OptionInput>
-                                <OptionInput value="false">{language.triggerInputLabels.boolFalse}</OptionInput>
-                                <OptionInput value="null">{language.triggerInputLabels.boolNull}</OptionInput>
-                            </SelectInput>
-                        {:else}
-                            <SelectInput bind:value={editTrigger.targetType}>
-                                <OptionInput value="value">{language.triggerInputLabels.value}</OptionInput>
-                                <OptionInput value="var">{language.triggerInputLabels.var}</OptionInput>
-                            </SelectInput>
-                            <TextInput bind:value={editTrigger.target} />
-                        {/if}
-
-                        <CheckInput bind:check={addElse} name={language.triggerInputLabels.addElse} className="mt-4"/>
-                    {:else if editTrigger.type === 'v2RunTrigger'}
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.trigger}</span>
-                        <SelectInput bind:value={editTrigger.target}>
-                            {#each value as trigger, i (trigger)}
-                                {#if i === 0}
-                                    <!-- Header, skip the first trigger -->
-                                {:else}
-                                    <OptionInput value={trigger.comment}>{trigger.comment || 'Unnamed Trigger'}</OptionInput>
+                    {#if getEditTriggerBaseKeys().length > 0}
+                        {#each getEditTriggerBaseKeys() as key (`${editTrigger.type}-${key}`)}
+                            {#if isEditorKeyVisible(key)}
+                                {#if hasEditorTypeKey(key) && isEditorKeyVisible(getEditorTypeKey(key))}
+                                    <SelectInput
+                                        value={getEditorFieldStringValue(getEditorTypeKey(key))}
+                                        onchange={(e) => updateEditTriggerField(getEditorTypeKey(key), e.currentTarget.value)}
+                                    >
+                                        {#each getEditorFieldOptions(getEditorTypeKey(key)) as option (`${key}-${option.value}`)}
+                                            <OptionInput value={option.value}>{resolveEditorLabel(option.label)}</OptionInput>
+                                        {/each}
+                                    </SelectInput>
                                 {/if}
-                            {/each}
-                        </SelectInput>
-                    {:else if editTrigger.type === 'v2ConsoleLog'}
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.value}</span>
-                        <SelectInput bind:value={editTrigger.sourceType}>
-                            <OptionInput value="value">{language.triggerInputLabels.value}</OptionInput>
-                            <OptionInput value="var">{language.triggerInputLabels.var}</OptionInput>
-                        </SelectInput>
-                        <TextInput bind:value={editTrigger.source} />
 
-                    {:else if editTrigger.type === 'v2ShowAlert'}
-                        <span>{language.triggerInputLabels.alertContent}</span>
-                        <SelectInput bind:value={editTrigger.valueType}>
-                            <OptionInput value="value">{language.triggerInputLabels.value}</OptionInput>
-                            <OptionInput value="var">{language.triggerInputLabels.var}</OptionInput>
-                        </SelectInput>
-                        <TextInput bind:value={editTrigger.value} />
+                                {#if getEditorFieldKind(key) === 'checkbox'}
+                                    <CheckInput
+                                        check={getEditorFieldBooleanValue(key)}
+                                        onChange={(checked) => updateEditTriggerField(key, checked)}
+                                        name={getEditorCheckboxLabel(key)}
+                                        className="mt-4"
+                                    />
+                                {:else}
+                                    <span class="trigger-v2-field-label">
+                                        {getEditorFieldLabel(key)}
+                                        {#if getEditorFieldHelpKey(key)}
+                                            <Help key={getEditorFieldHelpKey(key)} />
+                                        {/if}
+                                    </span>
 
-                    {:else if editTrigger.type === 'v2RunLLM'}
-                        <span>{language.triggerInputLabels.prompt}</span>
-                        <SelectInput bind:value={editTrigger.valueType}>
-                            <OptionInput value="value">{language.triggerInputLabels.value}</OptionInput>
-                            <OptionInput value="var">{language.triggerInputLabels.var}</OptionInput>
-                        </SelectInput>
-                        <TextAreaInput highlight bind:value={editTrigger.value} />
-
-                        <span>{language.triggerInputLabels.model}</span>
-                        <SelectInput bind:value={editTrigger.model}>
-                            <OptionInput value="model">{language.triggerInputLabels.modelMain}</OptionInput>
-                            <OptionInput value="submodel">{language.triggerInputLabels.modelSub}</OptionInput>
-                        </SelectInput>
-
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.outputVar}</span>
-                        <TextInput bind:value={editTrigger.outputVar} />
-
-                    {:else if editTrigger.type === 'v2CheckSimilarity'}
-                        <span>{language.triggerInputLabels.source}</span>
-                        <SelectInput bind:value={editTrigger.sourceType}>
-                            <OptionInput value="value">{language.triggerInputLabels.value}</OptionInput>
-                            <OptionInput value="var">{language.triggerInputLabels.var}</OptionInput>
-                        </SelectInput>
-                        <TextInput bind:value={editTrigger.source} />
-                        <span>{language.triggerInputLabels.value}</span>
-                        <SelectInput bind:value={editTrigger.valueType}>
-                            <OptionInput value="value">{language.triggerInputLabels.value}</OptionInput>
-                            <OptionInput value="var">{language.triggerInputLabels.var}</OptionInput>
-                        </SelectInput>
-                        <TextInput bind:value={editTrigger.value} />
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.outputVar}</span>
-                        <TextInput bind:value={editTrigger.outputVar} />
-                    {:else if editTrigger.type === 'v2CutChat'}
-                        <span>{language.triggerInputLabels.start}</span>
-                        <SelectInput bind:value={editTrigger.startType}>
-                            <OptionInput value="value">{language.triggerInputLabels.value}</OptionInput>
-                            <OptionInput value="var">{language.triggerInputLabels.var}</OptionInput>
-                        </SelectInput>
-                        <TextInput bind:value={editTrigger.start} />
-                        <span>{language.triggerInputLabels.end}</span>
-                        <SelectInput bind:value={editTrigger.endType}>
-                            <OptionInput value="value">{language.triggerInputLabels.value}</OptionInput>
-                            <OptionInput value="var">{language.triggerInputLabels.var}</OptionInput>
-                        </SelectInput>
-                        <TextInput bind:value={editTrigger.end} />
-                        
-                    {:else if editTrigger.type === 'v2Command'}
-                        <span>{language.triggerInputLabels.cmd}</span>
-                        <SelectInput bind:value={editTrigger.valueType}>
-                            <OptionInput value="value">{language.triggerInputLabels.value}</OptionInput>
-                            <OptionInput value="var">{language.triggerInputLabels.var}</OptionInput>
-                        </SelectInput>
-                        <TextInput bind:value={editTrigger.value} />
-
-                    {:else if editTrigger.type === 'v2SystemPrompt'}
-                        <span>{language.triggerInputLabels.location}</span>
-                        <SelectInput bind:value={editTrigger.location}>
-                            <OptionInput value="start">{language.triggerInputLabels.sysStart}</OptionInput>
-                            <OptionInput value="historyend">{language.triggerInputLabels.sysHistoryEnd}</OptionInput>
-                            <OptionInput value="promptend">{language.triggerInputLabels.sysPromptEnd}</OptionInput>
-                        </SelectInput>
-                        <span>{language.triggerInputLabels.value}</span>
-                        <SelectInput bind:value={editTrigger.valueType}>
-                            <OptionInput value="value">{language.triggerInputLabels.value}</OptionInput>
-                            <OptionInput value="var">{language.triggerInputLabels.var}</OptionInput>
-                        </SelectInput>
-                        <TextAreaInput highlight bind:value={editTrigger.value} />
-
-                    {:else if editTrigger.type === 'v2Impersonate'}
-                        <span>{language.triggerInputLabels.role}</span>
-                        <SelectInput bind:value={editTrigger.role}>
-                            <OptionInput value="user">{language.triggerInputLabels.roleUser}</OptionInput>
-                            <OptionInput value="char">{language.triggerInputLabels.roleChar}</OptionInput>
-                        </SelectInput>
-                        <span>{language.triggerInputLabels.value}</span>
-                        <SelectInput bind:value={editTrigger.valueType}>
-                            <OptionInput value="value">{language.triggerInputLabels.value}</OptionInput>
-                            <OptionInput value="var">{language.triggerInputLabels.var}</OptionInput>
-                        </SelectInput>
-                        <TextAreaInput highlight bind:value={editTrigger.value} />
-
-                    {:else if editTrigger.type === 'v2ModifyChat'}
-                        <span>{language.triggerInputLabels.index}</span>
-                        <SelectInput bind:value={editTrigger.indexType}>
-                            <OptionInput value="value">{language.triggerInputLabels.value}</OptionInput>
-                            <OptionInput value="var">{language.triggerInputLabels.var}</OptionInput>
-                        </SelectInput>
-                        <TextInput bind:value={editTrigger.index} />
-                        <span>{language.triggerInputLabels.value}</span>
-                        <SelectInput bind:value={editTrigger.valueType}>
-                            <OptionInput value="value">{language.triggerInputLabels.value}</OptionInput>
-                            <OptionInput value="var">{language.triggerInputLabels.var}</OptionInput>
-                        </SelectInput>
-                        <TextAreaInput highlight bind:value={editTrigger.value} />
-                    {:else if editTrigger.type === 'v2LoopNTimes'}
-                        <span>{language.triggerInputLabels.value}</span>
-                        <SelectInput bind:value={editTrigger.valueType}>
-                            <OptionInput value="value">{language.triggerInputLabels.value}</OptionInput>
-                            <OptionInput value="var">{language.triggerInputLabels.var}</OptionInput>
-                        </SelectInput>
-                        <TextInput bind:value={editTrigger.value} />
-                    {:else if editTrigger.type === 'v2GetLastMessage'}
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.outputVar}</span>
-                        <TextInput bind:value={editTrigger.outputVar} />
-
-                    {:else if editTrigger.type === 'v2GetMessageAtIndex'}
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.index}</span>
-                        <SelectInput bind:value={editTrigger.indexType}>
-                            <OptionInput value="value">{language.triggerInputLabels.value}</OptionInput>
-                            <OptionInput value="var">{language.triggerInputLabels.var}</OptionInput>
-                        </SelectInput>
-                        <TextInput bind:value={editTrigger.index} />
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.outputVar}</span>
-                        <TextInput bind:value={editTrigger.outputVar} />
-
-                    {:else if editTrigger.type === 'v2GetMessageCount'}
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.outputVar}</span>
-                        <TextInput bind:value={editTrigger.outputVar} />
-
-                    {:else if editTrigger.type === 'v2ModifyLorebook'}
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.target}</span>
-                        <SelectInput bind:value={editTrigger.targetType}>
-                            <OptionInput value="value">{language.triggerInputLabels.value}</OptionInput>
-                            <OptionInput value="var">{language.triggerInputLabels.var}</OptionInput>
-                        </SelectInput>
-                        <TextInput bind:value={editTrigger.target} />
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.value}</span>
-                        <SelectInput bind:value={editTrigger.valueType}>
-                            <OptionInput value="value">{language.triggerInputLabels.value}</OptionInput>
-                            <OptionInput value="var">{language.triggerInputLabels.var}</OptionInput>
-                        </SelectInput>
-                        <TextInput bind:value={editTrigger.value} />
-
-                    {:else if editTrigger.type === 'v2GetLorebook'}
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.target}</span>
-                        <SelectInput bind:value={editTrigger.targetType}>
-                            <OptionInput value="value">{language.triggerInputLabels.value}</OptionInput>
-                            <OptionInput value="var">{language.triggerInputLabels.var}</OptionInput>
-                        </SelectInput>
-                        <TextInput bind:value={editTrigger.target} />
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.outputVar}</span>
-                        <TextInput bind:value={editTrigger.outputVar} />
-
-                    {:else if editTrigger.type === 'v2GetLorebookCountNew'}
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.outputVar}</span>
-                        <TextInput bind:value={editTrigger.outputVar} />
-
-                    {:else if editTrigger.type === 'v2GetLorebookEntry'}
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.index}</span>
-                        <SelectInput bind:value={editTrigger.indexType}>
-                            <OptionInput value="value">{language.triggerInputLabels.value}</OptionInput>
-                            <OptionInput value="var">{language.triggerInputLabels.var}</OptionInput>
-                        </SelectInput>
-                        <TextInput bind:value={editTrigger.index} />
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.outputVar}</span>
-                        <TextInput bind:value={editTrigger.outputVar} />
-
-                    {:else if editTrigger.type === 'v2SetLorebookActivation'}
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.index}</span>
-                        <SelectInput bind:value={editTrigger.indexType}>
-                            <OptionInput value="value">{language.triggerInputLabels.value}</OptionInput>
-                            <OptionInput value="var">{language.triggerInputLabels.var}</OptionInput>
-                        </SelectInput>
-                        <TextInput bind:value={editTrigger.index} />
-                        <CheckInput bind:check={editTrigger.value} name={language.triggerInputLabels.alwaysActive} className="mt-4" />
-                    {:else if editTrigger.type === 'v2GetLorebookIndexViaName'}
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.name}</span>
-                        <SelectInput bind:value={editTrigger.nameType}>
-                            <OptionInput value="value">{language.triggerInputLabels.value}</OptionInput>
-                            <OptionInput value="var">{language.triggerInputLabels.var}</OptionInput>
-                        </SelectInput>
-                        <TextInput bind:value={editTrigger.name} />
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.outputVar}</span>
-                        <TextInput bind:value={editTrigger.outputVar} />
-                    {:else if editTrigger.type === 'v2Random'}
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.min}</span>
-                        <SelectInput bind:value={editTrigger.minType}>
-                            <OptionInput value="value">{language.triggerInputLabels.value}</OptionInput>
-                            <OptionInput value="var">{language.triggerInputLabels.var}</OptionInput>
-                        </SelectInput>
-                        <TextInput bind:value={editTrigger.min} />
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.max}</span>
-                        <SelectInput bind:value={editTrigger.maxType}>
-                            <OptionInput value="value">{language.triggerInputLabels.value}</OptionInput>
-                            <OptionInput value="var">{language.triggerInputLabels.var}</OptionInput>
-                        </SelectInput>
-                        <TextInput bind:value={editTrigger.max} />
-
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.outputVar}</span>
-                        <TextInput bind:value={editTrigger.outputVar} />
-                    {:else if editTrigger.type === 'v2GetCharAt'}
-                        <span>{language.triggerInputLabels.source}</span>
-                        <SelectInput bind:value={editTrigger.sourceType}>
-                            <OptionInput value="value">{language.triggerInputLabels.value}</OptionInput>
-                            <OptionInput value="var">{language.triggerInputLabels.var}</OptionInput>
-                        </SelectInput>
-                        <TextInput bind:value={editTrigger.source} />
-                        <span>{language.triggerInputLabels.index}</span>
-                        <SelectInput bind:value={editTrigger.indexType}>
-                            <OptionInput value="value">{language.triggerInputLabels.value}</OptionInput>
-                            <OptionInput value="var">{language.triggerInputLabels.var}</OptionInput>
-                        </SelectInput>
-                        <TextInput bind:value={editTrigger.index} />
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.outputVar}</span>
-                        <TextInput bind:value={editTrigger.outputVar} />
-                    
-
-                    {:else if editTrigger.type === 'v2GetCharCount'}
-                        <span>{language.triggerInputLabels.source}</span>
-                        <SelectInput bind:value={editTrigger.sourceType}>
-                            <OptionInput value="value">{language.triggerInputLabels.value}</OptionInput>
-                            <OptionInput value="var">{language.triggerInputLabels.var}</OptionInput>
-                        </SelectInput>
-                        <TextInput bind:value={editTrigger.source} />
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.outputVar}</span>
-                        <TextInput bind:value={editTrigger.outputVar} />
-                    
-                    {:else if editTrigger.type === 'v2ToLowerCase'}
-                        <span>{language.triggerInputLabels.source}</span>
-                        <SelectInput bind:value={editTrigger.sourceType}>
-                            <OptionInput value="value">{language.triggerInputLabels.value}</OptionInput>
-                            <OptionInput value="var">{language.triggerInputLabels.var}</OptionInput>
-                        </SelectInput>
-                        <TextInput bind:value={editTrigger.source} />
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.outputVar}</span>
-                        <TextInput bind:value={editTrigger.outputVar} />
-
-                    {:else if editTrigger.type === 'v2ToUpperCase'}
-                        <span>{language.triggerInputLabels.source}</span>
-                        <SelectInput bind:value={editTrigger.sourceType}>
-                            <OptionInput value="value">{language.triggerInputLabels.value}</OptionInput>
-                            <OptionInput value="var">{language.triggerInputLabels.var}</OptionInput>
-                        </SelectInput>
-                        <TextInput bind:value={editTrigger.source} />
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.outputVar}</span>
-                        <TextInput bind:value={editTrigger.outputVar} />
-
-                    {:else if editTrigger.type === 'v2SetCharAt'}
-                        <span>{language.triggerInputLabels.source}</span>
-                        <SelectInput bind:value={editTrigger.sourceType}>
-                            <OptionInput value="value">{language.triggerInputLabels.value}</OptionInput>
-                            <OptionInput value="var">{language.triggerInputLabels.var}</OptionInput>
-                        </SelectInput>
-                        <TextInput bind:value={editTrigger.source} />
-                        <span>{language.triggerInputLabels.index}</span>
-                        <SelectInput bind:value={editTrigger.indexType}>
-                            <OptionInput value="value">{language.triggerInputLabels.value}</OptionInput>
-                            <OptionInput value="var">{language.triggerInputLabels.var}</OptionInput>
-                        </SelectInput>
-                        <TextInput bind:value={editTrigger.index} />
-                        <span>{language.triggerInputLabels.value}</span>
-                        <SelectInput bind:value={editTrigger.valueType}>
-                            <OptionInput value="value">{language.triggerInputLabels.value}</OptionInput>
-                            <OptionInput value="var">{language.triggerInputLabels.var}</OptionInput>
-                        </SelectInput>
-                        <TextInput bind:value={editTrigger.value} />
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.outputVar}</span>
-                        <TextInput bind:value={editTrigger.outputVar} />
-
-                    {:else if editTrigger.type === 'v2SplitString'}
-                        <span>{language.triggerInputLabels.source}</span>
-                        <SelectInput bind:value={editTrigger.sourceType}>
-                            <OptionInput value="value">{language.triggerInputLabels.value}</OptionInput>
-                            <OptionInput value="var">{language.triggerInputLabels.var}</OptionInput>
-                        </SelectInput>
-                        <TextInput bind:value={editTrigger.source} />
-                        <span>{language.triggerInputLabels.delimiter}</span>
-                        <SelectInput bind:value={editTrigger.delimiterType}>
-                            <OptionInput value="value">{language.triggerInputLabels.value}</OptionInput>
-                            <OptionInput value="var">{language.triggerInputLabels.var}</OptionInput>
-                            <OptionInput value="regex">{language.triggerInputLabels.regex}</OptionInput>
-                        </SelectInput>
-                        <TextInput bind:value={editTrigger.delimiter} />
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.outputVar}</span>
-                        <TextInput bind:value={editTrigger.outputVar} />
-
-                    {:else if editTrigger.type === 'v2JoinArrayVar'}
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.var}</span>
-                        <SelectInput bind:value={editTrigger.varType}>
-                            <OptionInput value="value">{language.triggerInputLabels.value}</OptionInput>
-                            <OptionInput value="var">{language.triggerInputLabels.var}</OptionInput>
-                        </SelectInput>
-                        <TextInput bind:value={editTrigger.var} />
-                        <span>{language.triggerInputLabels.delimiter}</span>
-                        <SelectInput bind:value={editTrigger.delimiterType}>
-                            <OptionInput value="value">{language.triggerInputLabels.value}</OptionInput>
-                            <OptionInput value="var">{language.triggerInputLabels.var}</OptionInput>
-                        </SelectInput>
-                        <TextInput bind:value={editTrigger.delimiter} />
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.outputVar}</span>
-                        <TextInput bind:value={editTrigger.outputVar} />
-
-                    {:else if editTrigger.type === 'v2GetCharacterDesc'}
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.outputVar}</span>
-                        <TextInput bind:value={editTrigger.outputVar} />
-
-                    {:else if editTrigger.type === 'v2SetCharacterDesc'}
-                        <span>{language.triggerInputLabels.value}</span>
-                        <SelectInput bind:value={editTrigger.valueType}>
-                            <OptionInput value="value">{language.triggerInputLabels.value}</OptionInput>
-                            <OptionInput value="var">{language.triggerInputLabels.var}</OptionInput>
-                        </SelectInput>
-                        <TextAreaInput highlight  bind:value={editTrigger.value} />
-                    {:else if editTrigger.type === 'v2GetPersonaDesc'}
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.outputVar}</span>
-                        <TextInput bind:value={editTrigger.outputVar} />
-                    {:else if editTrigger.type === 'v2SetPersonaDesc'}
-                        <span>{language.triggerInputLabels.value}</span>
-                        <SelectInput bind:value={editTrigger.valueType}>
-                            <OptionInput value="value">{language.triggerInputLabels.value}</OptionInput>
-                            <OptionInput value="var">{language.triggerInputLabels.var}</OptionInput>
-                        </SelectInput>
-                        <TextAreaInput highlight  bind:value={editTrigger.value} />
-                    {:else if editTrigger.type === 'v2ExtractRegex'}
-                        <span>{language.triggerInputLabels.source}</span>
-                        <SelectInput bind:value={editTrigger.valueType}>
-                            <OptionInput value="value">{language.triggerInputLabels.value}</OptionInput>
-                            <OptionInput value="var">{language.triggerInputLabels.var}</OptionInput>
-                        </SelectInput>
-                        <TextInput bind:value={editTrigger.value} />
-                        <span>{language.triggerInputLabels.regex}</span>
-                        <SelectInput bind:value={editTrigger.regexType}>
-                            <OptionInput value="value">{language.triggerInputLabels.value}</OptionInput>
-                            <OptionInput value="var">{language.triggerInputLabels.var}</OptionInput>
-                        </SelectInput>
-                        <TextInput bind:value={editTrigger.regex} />
-
-                        <span>{language.triggerInputLabels.resultFormat}</span>
-                        <SelectInput bind:value={editTrigger.resultType}>
-                            <OptionInput value="value">{language.triggerInputLabels.value}</OptionInput>
-                            <OptionInput value="var">{language.triggerInputLabels.var}</OptionInput>
-                        </SelectInput>
-                        <TextInput bind:value={editTrigger.result} />
-
-                        <span>{language.triggerInputLabels.flags}</span>
-                        <SelectInput bind:value={editTrigger.flagsType}>
-                            <OptionInput value="value">{language.triggerInputLabels.value}</OptionInput>
-                            <OptionInput value="var">{language.triggerInputLabels.var}</OptionInput>
-                        </SelectInput>
-                        <TextInput bind:value={editTrigger.flags} />
-
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.outputVar}</span>
-                        <TextInput bind:value={editTrigger.outputVar} />
-                    {:else if editTrigger.type === 'v2MakeArrayVar'}
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.var}</span>
-                        <TextInput bind:value={editTrigger.var} />
-
-                    {:else if editTrigger.type === 'v2GetArrayVarLength'}
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.var}</span>
-                        <TextInput bind:value={editTrigger.var} />
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.outputVar}</span>
-                        <TextInput bind:value={editTrigger.outputVar} />
-
-                    {:else if editTrigger.type === 'v2GetArrayVar'}
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.var}</span>
-                        <TextInput bind:value={editTrigger.var} />
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.index}</span>
-                        <SelectInput bind:value={editTrigger.indexType}>
-                            <OptionInput value="value">{language.triggerInputLabels.value}</OptionInput>
-                            <OptionInput value="var">{language.triggerInputLabels.var}</OptionInput>
-                        </SelectInput>
-                        <TextInput bind:value={editTrigger.index} />
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.outputVar}</span>
-                        <TextInput bind:value={editTrigger.outputVar} />
-
-                    {:else if editTrigger.type === 'v2SetArrayVar'}
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.var}</span>
-                        <TextInput bind:value={editTrigger.var} />
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.index}</span>
-                        <SelectInput bind:value={editTrigger.indexType}>
-                            <OptionInput value="value">{language.triggerInputLabels.value}</OptionInput>
-                            <OptionInput value="var">{language.triggerInputLabels.var}</OptionInput>
-                        </SelectInput>
-                        <TextInput bind:value={editTrigger.index} />
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.value}</span>
-                        <SelectInput bind:value={editTrigger.valueType}>
-                            <OptionInput value="value">{language.triggerInputLabels.value}</OptionInput>
-                            <OptionInput value="var">{language.triggerInputLabels.var}</OptionInput>
-                        </SelectInput>
-                        <TextInput bind:value={editTrigger.value} />
-
-                    {:else if editTrigger.type === 'v2PushArrayVar'}
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.var}</span>
-                        <TextInput bind:value={editTrigger.var} />
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.value}</span>
-                        <SelectInput bind:value={editTrigger.valueType}>
-                            <OptionInput value="value">{language.triggerInputLabels.value}</OptionInput>
-                            <OptionInput value="var">{language.triggerInputLabels.var}</OptionInput>
-                        </SelectInput>
-                        <TextInput bind:value={editTrigger.value} />
-
-                    {:else if editTrigger.type === 'v2PopArrayVar'}
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.var}</span>
-                        <TextInput bind:value={editTrigger.var} />
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.outputVar}</span>
-                        <TextInput bind:value={editTrigger.outputVar} />
-
-                    {:else if editTrigger.type === 'v2ShiftArrayVar'}
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.var}</span>
-                        <TextInput bind:value={editTrigger.var} />
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.outputVar}</span>
-                        <TextInput bind:value={editTrigger.outputVar} />
-
-                    {:else if editTrigger.type === 'v2UnshiftArrayVar'}
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.var}</span>
-                        <TextInput bind:value={editTrigger.var} />
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.value}</span>
-                        <SelectInput bind:value={editTrigger.valueType}>
-                            <OptionInput value="value">{language.triggerInputLabels.value}</OptionInput>
-                            <OptionInput value="var">{language.triggerInputLabels.var}</OptionInput>
-                        </SelectInput>
-                        <TextInput bind:value={editTrigger.value} />
-
-                    {:else if editTrigger.type === 'v2SpliceArrayVar'}
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.var}</span>
-                        <TextInput bind:value={editTrigger.var} />
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.start}</span>
-                        <SelectInput bind:value={editTrigger.startType}>
-                            <OptionInput value="value">{language.triggerInputLabels.value}</OptionInput>
-                            <OptionInput value="var">{language.triggerInputLabels.var}</OptionInput>
-                        </SelectInput>
-                        <TextInput bind:value={editTrigger.start} />
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.value}</span>
-                        <SelectInput bind:value={editTrigger.itemType}>
-                            <OptionInput value="value">{language.triggerInputLabels.value}</OptionInput>
-                            <OptionInput value="var">{language.triggerInputLabels.var}</OptionInput>
-                        </SelectInput>
-                        <TextInput bind:value={editTrigger.item} />
-                    {:else if editTrigger.type === 'v2SliceArrayVar'}
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.var}</span>
-                        <TextInput bind:value={editTrigger.var} />
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.start}</span>
-                        <SelectInput bind:value={editTrigger.startType}>
-                            <OptionInput value="value">{language.triggerInputLabels.value}</OptionInput>
-                            <OptionInput value="var">{language.triggerInputLabels.var}</OptionInput>
-                        </SelectInput>
-                        <TextInput bind:value={editTrigger.start} />
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.end}</span>
-                        <SelectInput bind:value={editTrigger.endType}>
-                            <OptionInput value="value">{language.triggerInputLabels.value}</OptionInput>
-                            <OptionInput value="var">{language.triggerInputLabels.var}</OptionInput>
-                        </SelectInput>
-                        <TextInput bind:value={editTrigger.end} />
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.outputVar}</span>
-                        <TextInput bind:value={editTrigger.outputVar} />
-                    {:else if editTrigger.type === 'v2GetIndexOfValueInArrayVar'}
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.var}</span>
-                        <TextInput bind:value={editTrigger.var} />
-
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.value}</span>
-                        <SelectInput bind:value={editTrigger.valueType}>
-                            <OptionInput value="value">{language.triggerInputLabels.value}</OptionInput>
-                            <OptionInput value="var">{language.triggerInputLabels.var}</OptionInput>
-                        </SelectInput>
-
-                        <TextInput bind:value={editTrigger.value} />
-
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.outputVar}</span>
-                        <TextInput bind:value={editTrigger.outputVar} />
-                    {:else if editTrigger.type === 'v2RemoveIndexFromArrayVar'}
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.var}</span>
-                        <TextInput bind:value={editTrigger.var} />
-
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.index}</span>
-                        <SelectInput bind:value={editTrigger.indexType}>
-                            <OptionInput value="value">{language.triggerInputLabels.value}</OptionInput>
-                            <OptionInput value="var">{language.triggerInputLabels.var}</OptionInput>
-                        </SelectInput>
-                        <TextInput bind:value={editTrigger.index} />
-                    {:else if editTrigger.type === 'v2ConcatString'}
-                        <span class="trigger-v2-field-label">A</span>
-                        <SelectInput bind:value={editTrigger.source1Type}>
-                            <OptionInput value="value">{language.triggerInputLabels.value}</OptionInput>
-                            <OptionInput value="var">{language.triggerInputLabels.var}</OptionInput>
-                        </SelectInput>
-                        <TextInput bind:value={editTrigger.source1} />
-
-                        <span class="trigger-v2-field-label">B</span>
-                        <SelectInput bind:value={editTrigger.source2Type}>
-                            <OptionInput value="value">{language.triggerInputLabels.value}</OptionInput>
-                            <OptionInput value="var">{language.triggerInputLabels.var}</OptionInput>
-                        </SelectInput>
-                        <TextInput bind:value={editTrigger.source2} />
-
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.outputVar}</span>
-                        <TextInput bind:value={editTrigger.outputVar} />
-                    {:else if editTrigger.type === 'v2GetLastUserMessage'}
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.outputVar}</span>
-                        <TextInput bind:value={editTrigger.outputVar} />
-                    {:else if editTrigger.type === 'v2GetLastCharMessage'}
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.outputVar}</span>
-                        <TextInput bind:value={editTrigger.outputVar} />
-                    {:else if editTrigger.type === 'v2GetFirstMessage'}
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.outputVar}</span>
-                        <TextInput bind:value={editTrigger.outputVar} />
-                    {:else if editTrigger.type === 'v2GetAlertInput'}
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.alertContent}</span>
-                        <SelectInput bind:value={editTrigger.displayType}>
-                            <OptionInput value="value">{language.triggerInputLabels.value}</OptionInput>
-                            <OptionInput value="var">{language.triggerInputLabels.var}</OptionInput>
-                        </SelectInput>
-                        <TextInput bind:value={editTrigger.display} />
-
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.outputVar}</span>
-                        <TextInput bind:value={editTrigger.outputVar} />
-                    {:else if editTrigger.type === 'v2GetAlertSelect'}
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.alertContent}</span>
-                        <SelectInput bind:value={editTrigger.displayType}>
-                            <OptionInput value="value">{language.triggerInputLabels.value}</OptionInput>
-                            <OptionInput value="var">{language.triggerInputLabels.var}</OptionInput>
-                        </SelectInput>
-                        <TextInput bind:value={editTrigger.display} />
-
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.options} <Help key="v2GetAlertSelect" /></span>
-                        <SelectInput bind:value={editTrigger.valueType}>
-                            <OptionInput value="value">{language.triggerInputLabels.value}</OptionInput>
-                            <OptionInput value="var">{language.triggerInputLabels.var}</OptionInput>
-                        </SelectInput>
-                        <TextInput bind:value={editTrigger.value} />
-
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.outputVar}</span>
-                        <TextInput bind:value={editTrigger.outputVar} />
-                    {:else if editTrigger.type === 'v2GetDisplayState'}
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.outputVar}</span>
-                        <TextInput bind:value={editTrigger.outputVar} />
-                    {:else if editTrigger.type === 'v2SetDisplayState'}
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.value}</span>
-                        <SelectInput bind:value={editTrigger.valueType}>
-                            <OptionInput value="value">{language.triggerInputLabels.value}</OptionInput>
-                            <OptionInput value="var">{language.triggerInputLabels.var}</OptionInput>
-                        </SelectInput>
-                        <TextInput bind:value={editTrigger.value} />
-                    {:else if editTrigger.type === 'v2Wait'}
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.value}</span>
-                        <SelectInput bind:value={editTrigger.valueType}>
-                            <OptionInput value="value">{language.triggerInputLabels.value}</OptionInput>
-                            <OptionInput value="var">{language.triggerInputLabels.var}</OptionInput>
-                        </SelectInput>
-                        <TextInput bind:value={editTrigger.value} />
-                    {:else if editTrigger.type === 'v2GetRequestState'}
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.index}</span>
-                        <SelectInput bind:value={editTrigger.indexType}>
-                            <OptionInput value="value">{language.triggerInputLabels.value}</OptionInput>
-                            <OptionInput value="var">{language.triggerInputLabels.var}</OptionInput>
-                        </SelectInput>
-                        <TextInput bind:value={editTrigger.index} />
-
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.outputVar}</span>
-                        <TextInput bind:value={editTrigger.outputVar} />
-                    {:else if editTrigger.type === 'v2GetRequestStateRole'}
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.index}</span>
-                        <SelectInput bind:value={editTrigger.indexType}>
-                            <OptionInput value="value">{language.triggerInputLabels.value}</OptionInput>
-                            <OptionInput value="var">{language.triggerInputLabels.var}</OptionInput>
-                        </SelectInput>
-                        <TextInput bind:value={editTrigger.index} />
-
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.outputVar}</span>
-                        <TextInput bind:value={editTrigger.outputVar} />
-                    {:else if editTrigger.type === 'v2SetRequestState'}
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.index}</span>
-                        <SelectInput bind:value={editTrigger.indexType}>
-                            <OptionInput value="value">{language.triggerInputLabels.value}</OptionInput>
-                            <OptionInput value="var">{language.triggerInputLabels.var}</OptionInput>
-                        </SelectInput>
-                        <TextInput bind:value={editTrigger.index} />
-
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.value}</span>
-                        <SelectInput bind:value={editTrigger.valueType}>
-                            <OptionInput value="value">{language.triggerInputLabels.value}</OptionInput>
-                            <OptionInput value="var">{language.triggerInputLabels.var}</OptionInput>
-                        </SelectInput>
-                        <TextInput bind:value={editTrigger.value} />
-                    {:else if editTrigger.type === 'v2SetRequestStateRole'}
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.index}</span>
-                        <SelectInput bind:value={editTrigger.indexType}>
-                            <OptionInput value="value">{language.triggerInputLabels.value}</OptionInput>
-                            <OptionInput value="var">{language.triggerInputLabels.var}</OptionInput>
-                        </SelectInput>
-                        <TextInput bind:value={editTrigger.index} />
-
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.value}</span>
-                        <SelectInput bind:value={editTrigger.valueType}>
-                            <OptionInput value="value">{language.triggerInputLabels.value}</OptionInput>
-                            <OptionInput value="var">{language.triggerInputLabels.var}</OptionInput>
-                        </SelectInput>
-                        <TextInput bind:value={editTrigger.value} />
-                    {:else if editTrigger.type === 'v2GetRequestStateLength'}
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.outputVar}</span>
-                        <TextInput bind:value={editTrigger.outputVar} />
-                    {:else if editTrigger.type === 'v2QuickSearchChat'}
-                        <span class="trigger-v2-field-label">{language.value}</span>
-                        <SelectInput bind:value={editTrigger.valueType}>
-                            <OptionInput value="value">{language.value}</OptionInput>
-                            <OptionInput value="var">{language.var}</OptionInput>
-                        </SelectInput>
-                        <TextInput bind:value={editTrigger.value} />
-
-                        <span class="trigger-v2-field-label">{language.condition}</span>
-                        <SelectInput bind:value={editTrigger.condition}>
-                            <OptionInput value="loose">loose</OptionInput>
-                            <OptionInput value="strict">strict</OptionInput>
-                            <OptionInput value="regex">regex</OptionInput>
-                        </SelectInput>
-
-                        <span class="trigger-v2-field-label">{language.depth}</span>
-                        <SelectInput bind:value={editTrigger.depthType}>
-                            <OptionInput value="value">{language.triggerInputLabels.value}</OptionInput>
-                            <OptionInput value="var">{language.triggerInputLabels.var}</OptionInput>
-                        </SelectInput>
-                        <TextInput bind:value={editTrigger.depth} />
-
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.outputVar}</span>
-                        <TextInput bind:value={editTrigger.outputVar} />
-                    {:else if editTrigger.type === 'v2Tokenize'}
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.value}</span>
-                        <SelectInput bind:value={editTrigger.valueType}>
-                            <OptionInput value="value">{language.triggerInputLabels.value}</OptionInput>
-                            <OptionInput value="var">{language.triggerInputLabels.var}</OptionInput>
-                        </SelectInput>
-                        <TextInput bind:value={editTrigger.value} />
-
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.outputVar}</span>
-                        <TextInput bind:value={editTrigger.outputVar} />
-                    {:else if editTrigger.type === 'v2GetAllLorebooks'}
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.outputVar}</span>
-                        <TextInput bind:value={editTrigger.outputVar} />
-                    {:else if editTrigger.type === 'v2GetLorebookByName'}
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.name}</span>
-                        <SelectInput bind:value={editTrigger.nameType}>
-                            <OptionInput value="value">{language.triggerInputLabels.value}</OptionInput>
-                            <OptionInput value="var">{language.triggerInputLabels.var}</OptionInput>
-                        </SelectInput>
-                        <TextInput bind:value={editTrigger.name} />
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.outputVar}</span>
-                        <TextInput bind:value={editTrigger.outputVar} />
-                    {:else if editTrigger.type === 'v2GetLorebookByIndex'}
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.index}</span>
-                        <SelectInput bind:value={editTrigger.indexType}>
-                            <OptionInput value="value">{language.triggerInputLabels.value}</OptionInput>
-                            <OptionInput value="var">{language.triggerInputLabels.var}</OptionInput>
-                        </SelectInput>
-                        <TextInput bind:value={editTrigger.index} />
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.outputVar}</span>
-                        <TextInput bind:value={editTrigger.outputVar} />
-                    {:else if editTrigger.type === 'v2CreateLorebook'}
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.name}</span>
-                        <SelectInput bind:value={editTrigger.nameType}>
-                            <OptionInput value="value">{language.triggerInputLabels.value}</OptionInput>
-                            <OptionInput value="var">{language.triggerInputLabels.var}</OptionInput>
-                        </SelectInput>
-                        <TextInput bind:value={editTrigger.name} />
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.activationKeys}</span>
-                        <SelectInput bind:value={editTrigger.keyType}>
-                            <OptionInput value="value">{language.triggerInputLabels.value}</OptionInput>
-                            <OptionInput value="var">{language.triggerInputLabels.var}</OptionInput>
-                        </SelectInput>
-                        <TextInput bind:value={editTrigger.key} />
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.prompt}</span>
-                        <SelectInput bind:value={editTrigger.contentType}>
-                            <OptionInput value="value">{language.triggerInputLabels.value}</OptionInput>
-                            <OptionInput value="var">{language.triggerInputLabels.var}</OptionInput>
-                        </SelectInput>
-                        <TextAreaInput bind:value={editTrigger.content} />
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.insertOrder}</span>
-                        <SelectInput bind:value={editTrigger.insertOrderType}>
-                            <OptionInput value="value">{language.triggerInputLabels.value}</OptionInput>
-                            <OptionInput value="var">{language.triggerInputLabels.var}</OptionInput>
-                        </SelectInput>
-                        <TextInput bind:value={editTrigger.insertOrder} />
-                    {:else if editTrigger.type === 'v2ModifyLorebookByIndex'}
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.index}</span>
-                        <SelectInput bind:value={editTrigger.indexType}>
-                            <OptionInput value="value">{language.triggerInputLabels.value}</OptionInput>
-                            <OptionInput value="var">{language.triggerInputLabels.var}</OptionInput>
-                        </SelectInput>
-                        <TextInput bind:value={editTrigger.index} />
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.name}</span>
-                        <SelectInput bind:value={editTrigger.nameType}>
-                            <OptionInput value="value">{language.triggerInputLabels.value}</OptionInput>
-                            <OptionInput value="var">{language.triggerInputLabels.var}</OptionInput>
-                        </SelectInput>
-                        <TextInput bind:value={editTrigger.name} />
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.activationKeys}</span>
-                        <SelectInput bind:value={editTrigger.keyType}>
-                            <OptionInput value="value">{language.triggerInputLabels.value}</OptionInput>
-                            <OptionInput value="var">{language.triggerInputLabels.var}</OptionInput>
-                        </SelectInput>
-                        <TextInput bind:value={editTrigger.key} />
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.prompt}</span>
-                        <SelectInput bind:value={editTrigger.contentType}>
-                            <OptionInput value="value">{language.triggerInputLabels.value}</OptionInput>
-                            <OptionInput value="var">{language.triggerInputLabels.var}</OptionInput>
-                        </SelectInput>
-                        <TextAreaInput bind:value={editTrigger.content} />
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.insertOrder}</span>
-                        <SelectInput bind:value={editTrigger.insertOrderType}>
-                            <OptionInput value="value">{language.triggerInputLabels.value}</OptionInput>
-                            <OptionInput value="var">{language.triggerInputLabels.var}</OptionInput>
-                        </SelectInput>
-                        <TextInput bind:value={editTrigger.insertOrder} />
-                    {:else if editTrigger.type === 'v2DeleteLorebookByIndex'}
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.index}</span>
-                        <SelectInput bind:value={editTrigger.indexType}>
-                            <OptionInput value="value">{language.triggerInputLabels.value}</OptionInput>
-                            <OptionInput value="var">{language.triggerInputLabels.var}</OptionInput>
-                        </SelectInput>
-                        <TextInput bind:value={editTrigger.index} />
-                    {:else if editTrigger.type === 'v2SetLorebookAlwaysActive'}
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.index}</span>
-                        <SelectInput bind:value={editTrigger.indexType}>
-                            <OptionInput value="value">{language.triggerInputLabels.value}</OptionInput>
-                            <OptionInput value="var">{language.triggerInputLabels.var}</OptionInput>
-                        </SelectInput>
-                        <TextInput bind:value={editTrigger.index} />
-                        <CheckInput bind:check={editTrigger.value} name={language.triggerInputLabels.alwaysActive} className="mt-4" />
-                    {:else if editTrigger.type === 'v2UpdateChatAt'}
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.index}</span>
-                        <TextInput bind:value={editTrigger.index} />
-                    {:else if editTrigger.type === 'v2RegexTest'}
-                        <span>{language.triggerInputLabels.source}</span>
-                        <SelectInput bind:value={editTrigger.valueType}>
-                            <OptionInput value="value">{language.triggerInputLabels.value}</OptionInput>
-                            <OptionInput value="var">{language.triggerInputLabels.var}</OptionInput>
-                        </SelectInput>
-                        <TextInput bind:value={editTrigger.value} />
-                        <span>{language.triggerInputLabels.regex}</span>
-                        <SelectInput bind:value={editTrigger.regexType}>
-                            <OptionInput value="value">{language.triggerInputLabels.value}</OptionInput>
-                            <OptionInput value="var">{language.triggerInputLabels.var}</OptionInput>
-                        </SelectInput>
-                        <TextInput bind:value={editTrigger.regex} />
-
-                        <span>{language.triggerInputLabels.flags}</span>
-                        <SelectInput bind:value={editTrigger.flagsType}>
-                            <OptionInput value="value">{language.triggerInputLabels.value}</OptionInput>
-                            <OptionInput value="var">{language.triggerInputLabels.var}</OptionInput>
-                        </SelectInput>
-                        <TextInput bind:value={editTrigger.flags} />
-
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.outputVar} <Help key="v2RegexTest" /></span>
-                        <TextInput bind:value={editTrigger.outputVar} />
-                    {:else if editTrigger.type === 'v2GetReplaceGlobalNote'}
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.outputVar}</span>
-                        <TextInput bind:value={editTrigger.outputVar} />
-                    {:else if editTrigger.type === 'v2SetReplaceGlobalNote'}
-                        <span>{language.triggerInputLabels.value}</span>
-                        <SelectInput bind:value={editTrigger.valueType}>
-                            <OptionInput value="value">{language.triggerInputLabels.value}</OptionInput>
-                            <OptionInput value="var">{language.triggerInputLabels.var}</OptionInput>
-                        </SelectInput>
-                        <TextAreaInput highlight bind:value={editTrigger.value} />
-                    {:else if editTrigger.type === 'v2GetAuthorNote'}
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.outputVar}</span>
-                        <TextInput bind:value={editTrigger.outputVar} />
-                    {:else if editTrigger.type === 'v2SetAuthorNote'}
-                        <span>{language.triggerInputLabels.value}</span>
-                        <SelectInput bind:value={editTrigger.valueType}>
-                            <OptionInput value="value">{language.triggerInputLabels.value}</OptionInput>
-                            <OptionInput value="var">{language.triggerInputLabels.var}</OptionInput>
-                        </SelectInput>
-                        <TextAreaInput highlight bind:value={editTrigger.value} />
-                    {:else if editTrigger.type === 'v2MakeDictVar'}
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.var}</span>
-                        <TextInput bind:value={editTrigger.var} />
-                    {:else if editTrigger.type === 'v2GetDictVar'}
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.var}</span>
-                        <SelectInput bind:value={editTrigger.varType}>
-                            <OptionInput value="value">{language.triggerInputLabels.value}</OptionInput>
-                            <OptionInput value="var">{language.triggerInputLabels.var}</OptionInput>
-                        </SelectInput>
-                        <TextInput bind:value={editTrigger.var} />
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.key}</span>
-                        <SelectInput bind:value={editTrigger.keyType}>
-                            <OptionInput value="value">{language.triggerInputLabels.value}</OptionInput>
-                            <OptionInput value="var">{language.triggerInputLabels.var}</OptionInput>
-                        </SelectInput>
-                        <TextInput bind:value={editTrigger.key} />
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.outputVar}</span>
-                        <TextInput bind:value={editTrigger.outputVar} />
-                    {:else if editTrigger.type === 'v2SetDictVar'}
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.var}</span>
-                        <SelectInput bind:value={editTrigger.varType}>
-                            <OptionInput value="value">{language.triggerInputLabels.value}</OptionInput>
-                            <OptionInput value="var">{language.triggerInputLabels.var}</OptionInput>
-                        </SelectInput>
-                        <TextInput bind:value={editTrigger.var} />
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.key}</span>
-                        <SelectInput bind:value={editTrigger.keyType}>
-                            <OptionInput value="value">{language.triggerInputLabels.value}</OptionInput>
-                            <OptionInput value="var">{language.triggerInputLabels.var}</OptionInput>
-                        </SelectInput>
-                        <TextInput bind:value={editTrigger.key} />
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.value}</span>
-                        <SelectInput bind:value={editTrigger.valueType}>
-                            <OptionInput value="value">{language.triggerInputLabels.value}</OptionInput>
-                            <OptionInput value="var">{language.triggerInputLabels.var}</OptionInput>
-                        </SelectInput>
-                        <TextInput bind:value={editTrigger.value} />
-                    {:else if editTrigger.type === 'v2DeleteDictKey'}
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.var}</span>
-                        <SelectInput bind:value={editTrigger.varType}>
-                            <OptionInput value="value">{language.triggerInputLabels.value}</OptionInput>
-                            <OptionInput value="var">{language.triggerInputLabels.var}</OptionInput>
-                        </SelectInput>
-                        <TextInput bind:value={editTrigger.var} />
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.key}</span>
-                        <SelectInput bind:value={editTrigger.keyType}>
-                            <OptionInput value="value">{language.triggerInputLabels.value}</OptionInput>
-                            <OptionInput value="var">{language.triggerInputLabels.var}</OptionInput>
-                        </SelectInput>
-                        <TextInput bind:value={editTrigger.key} />
-                    {:else if editTrigger.type === 'v2HasDictKey'}
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.var}</span>
-                        <SelectInput bind:value={editTrigger.varType}>
-                            <OptionInput value="value">{language.triggerInputLabels.value}</OptionInput>
-                            <OptionInput value="var">{language.triggerInputLabels.var}</OptionInput>
-                        </SelectInput>
-                        <TextInput bind:value={editTrigger.var} />
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.key}</span>
-                        <SelectInput bind:value={editTrigger.keyType}>
-                            <OptionInput value="value">{language.triggerInputLabels.value}</OptionInput>
-                            <OptionInput value="var">{language.triggerInputLabels.var}</OptionInput>
-                        </SelectInput>
-                        <TextInput bind:value={editTrigger.key} />
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.outputVar}</span>
-                        <TextInput bind:value={editTrigger.outputVar} />
-                    {:else if editTrigger.type === 'v2ClearDict'}
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.var}</span>
-                        <TextInput bind:value={editTrigger.var} />
-                    {:else if editTrigger.type === 'v2GetDictSize'}
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.var}</span>
-                        <SelectInput bind:value={editTrigger.varType}>
-                            <OptionInput value="value">{language.triggerInputLabels.value}</OptionInput>
-                            <OptionInput value="var">{language.triggerInputLabels.var}</OptionInput>
-                        </SelectInput>
-                        <TextInput bind:value={editTrigger.var} />
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.outputVar}</span>
-                        <TextInput bind:value={editTrigger.outputVar} />
-                    {:else if editTrigger.type === 'v2GetDictKeys'}
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.var}</span>
-                        <SelectInput bind:value={editTrigger.varType}>
-                            <OptionInput value="value">{language.triggerInputLabels.value}</OptionInput>
-                            <OptionInput value="var">{language.triggerInputLabels.var}</OptionInput>
-                        </SelectInput>
-                        <TextInput bind:value={editTrigger.var} />
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.outputVar}</span>
-                        <TextInput bind:value={editTrigger.outputVar} />
-                    {:else if editTrigger.type === 'v2GetDictValues'}
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.var}</span>
-                        <SelectInput bind:value={editTrigger.varType}>
-                            <OptionInput value="value">{language.triggerInputLabels.value}</OptionInput>
-                            <OptionInput value="var">{language.triggerInputLabels.var}</OptionInput>
-                        </SelectInput>
-                        <TextInput bind:value={editTrigger.var} />
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.outputVar}</span>
-                        <TextInput bind:value={editTrigger.outputVar} />
-                    {:else if editTrigger.type === 'v2Calculate'}
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.expression} <Help key="v2Calculate" /></span>
-                        <SelectInput bind:value={editTrigger.expressionType}>
-                            <OptionInput value="value">{language.triggerInputLabels.value}</OptionInput>
-                            <OptionInput value="var">{language.triggerInputLabels.var}</OptionInput>
-                        </SelectInput>
-                        <TextAreaInput highlight bind:value={editTrigger.expression} />
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.outputVar}</span>
-                        <TextInput bind:value={editTrigger.outputVar} />
-                    {:else if editTrigger.type === 'v2ReplaceString'}
-                        <span>{language.triggerInputLabels.source}</span>
-                        <SelectInput bind:value={editTrigger.sourceType}>
-                            <OptionInput value="value">{language.triggerInputLabels.value}</OptionInput>
-                            <OptionInput value="var">{language.triggerInputLabels.var}</OptionInput>
-                        </SelectInput>
-                        <TextInput bind:value={editTrigger.source} />
-                        <span>{language.triggerInputLabels.regex}</span>
-                        <SelectInput bind:value={editTrigger.regexType}>
-                            <OptionInput value="value">{language.triggerInputLabels.value}</OptionInput>
-                            <OptionInput value="var">{language.triggerInputLabels.var}</OptionInput>
-                        </SelectInput>
-                        <TextInput bind:value={editTrigger.regex} />
-                        <span>{language.triggerInputLabels.resultFormat}</span>
-                        <SelectInput bind:value={editTrigger.resultType}>
-                            <OptionInput value="value">{language.triggerInputLabels.value}</OptionInput>
-                            <OptionInput value="var">{language.triggerInputLabels.var}</OptionInput>
-                        </SelectInput>
-                        <TextInput bind:value={editTrigger.result} />
-                        <span>{language.triggerInputLabels.replacement}</span>
-                        <SelectInput bind:value={editTrigger.replacementType}>
-                            <OptionInput value="value">{language.triggerInputLabels.value}</OptionInput>
-                            <OptionInput value="var">{language.triggerInputLabels.var}</OptionInput>
-                        </SelectInput>
-                        <TextInput bind:value={editTrigger.replacement} />
-                        <span>{language.triggerInputLabels.flags}</span>
-                        <SelectInput bind:value={editTrigger.flagsType}>
-                            <OptionInput value="value">{language.triggerInputLabels.value}</OptionInput>
-                            <OptionInput value="var">{language.triggerInputLabels.var}</OptionInput>
-                        </SelectInput>
-                        <TextInput bind:value={editTrigger.flags} />
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.outputVar}</span>
-                        <TextInput bind:value={editTrigger.outputVar} />
-                    {:else if editTrigger.type === 'v2Comment'}
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.value}</span>
-                        <TextInput bind:value={editTrigger.value} />
-                    {:else if editTrigger.type === 'v2DeclareLocalVar'}
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.varName}</span>
-                        <TextInput bind:value={editTrigger.var} />
-                        <span class="trigger-v2-field-label">{language.triggerInputLabels.value}</span>
-                        <SelectInput bind:value={editTrigger.valueType}>
-                            <OptionInput value="value">{language.triggerInputLabels.value}</OptionInput>
-                            <OptionInput value="var">{language.triggerInputLabels.var}</OptionInput>
-                        </SelectInput>
-                        <TextInput bind:value={editTrigger.value} />
+                                    {#if getEditorFieldKind(key) === 'select'}
+                                        <SelectInput
+                                            value={getEditorFieldStringValue(key)}
+                                            onchange={(e) => updateEditTriggerField(key, e.currentTarget.value)}
+                                        >
+                                            {#each getEditorFieldOptions(key) as option (`${key}-${option.value}`)}
+                                                <OptionInput value={option.value}>{resolveEditorLabel(option.label)}</OptionInput>
+                                            {/each}
+                                        </SelectInput>
+                                    {:else if getEditorFieldKind(key) === 'textarea'}
+                                        <TextAreaInput
+                                            value={getEditorFieldStringValue(key)}
+                                            highlight={isEditorFieldHighlighted(key)}
+                                            onValueChange={(nextValue) => updateEditTriggerField(key, nextValue)}
+                                        />
+                                    {:else}
+                                        <TextInput
+                                            value={getEditorFieldStringValue(key)}
+                                            oninput={(e) => updateEditTriggerField(key, e.currentTarget.value)}
+                                        />
+                                    {/if}
+                                {/if}
+                            {/if}
+                        {/each}
+                        {#if getEditTriggerEditor()?.showAddElse}
+                            <CheckInput bind:check={addElse} name={language.triggerInputLabels.addElse} className="mt-4"/>
+                        {/if}
                     {:else}
                         <span>{language.noConfig}</span>
                     {/if}
@@ -3986,14 +2148,14 @@
                         if(selectedEffectIndex === -1){
                             value[selectedIndex].effect.push(nextEditTrigger)
 
-                            if(nextEditTrigger.type === 'v2If'  || nextEditTrigger.type === 'v2IfAdvanced' || nextEditTrigger.type === 'v2Loop' || nextEditTrigger.type === 'v2Else' || nextEditTrigger.type === 'v2LoopNTimes'){
+                            if(isBlockEffect(nextEditTrigger.type)){
                                 value[selectedIndex].effect.push({
                                     type: 'v2EndIndent',
                                     indent: nextEditTrigger.indent + 1,
-                                    endOfLoop: nextEditTrigger.type === 'v2Loop' || nextEditTrigger.type === 'v2LoopNTimes'
+                                    endOfLoop: isLoopBlockEffect(nextEditTrigger.type)
                                 })
 
-                                if(addElse){
+                                if(addElse && canEffectHaveElse(nextEditTrigger.type)){
                                     value[selectedIndex].effect.push({
                                         type: 'v2Else',
                                         indent: nextEditTrigger.indent
@@ -4007,14 +2169,14 @@
                         }
                         else if(menuMode === 2){
                             nextEditTrigger.indent = (value[selectedIndex].effect[selectedEffectIndex] as triggerEffectV2).indent
-                            if(nextEditTrigger.type === 'v2If' || nextEditTrigger.type === 'v2IfAdvanced' || nextEditTrigger.type === 'v2Loop' || nextEditTrigger.type === 'v2LoopNTimes' || nextEditTrigger.type === 'v2Else'){
+                            if(isBlockEffect(nextEditTrigger.type)){
                                 value[selectedIndex].effect.splice(selectedEffectIndex, 0, {
                                     type: 'v2EndIndent',
                                     indent: nextEditTrigger.indent + 1,
-                                    endOfLoop: nextEditTrigger.type === 'v2Loop' || nextEditTrigger.type === 'v2LoopNTimes'
+                                    endOfLoop: isLoopBlockEffect(nextEditTrigger.type)
                                 })
                                 
-                                if(addElse){
+                                if(addElse && canEffectHaveElse(nextEditTrigger.type)){
                                     value[selectedIndex].effect.splice(selectedEffectIndex, 0, {
                                         type: 'v2Else',
                                         indent: nextEditTrigger.indent
@@ -4029,33 +2191,16 @@
                         }
                         else if(menuMode === 3){
                             const originalEffect = value[selectedIndex].effect[selectedEffectIndex] as triggerEffectV2
-                            const isIfType = nextEditTrigger.type === 'v2If' || nextEditTrigger.type === 'v2IfAdvanced'
+                            const canHaveElse = canEffectHaveElse(nextEditTrigger.type)
                             
-                            if(isIfType){
-                                let hasExistingElse = false
-                                let elseIndex = -1
-                                let endIndentIndex = -1
-                                
-                                let pointer = selectedEffectIndex + 1
+                            if(canHaveElse){
+                                const effects = value[selectedIndex].effect as triggerEffectV2[]
                                 const indent = originalEffect.indent
-                                while(pointer < value[selectedIndex].effect.length){
-                                    const effect = value[selectedIndex].effect[pointer] as triggerEffectV2
-                                    if(effect.type === 'v2EndIndent' && effect.indent === indent + 1){
-                                        endIndentIndex = pointer
-                                        break
-                                    }
-                                    pointer++
-                                }
+                                const endIndentIndex = findBlockEndIndentIndex(effects, selectedEffectIndex)
+                                const elseIndex = findBlockElseIndex(effects, selectedEffectIndex)
+                                const hasExistingElse = elseIndex !== -1
                                 
-                                if(endIndentIndex !== -1 && endIndentIndex + 1 < value[selectedIndex].effect.length){
-                                    const nextEffect = value[selectedIndex].effect[endIndentIndex + 1] as triggerEffectV2
-                                    if(nextEffect.type === 'v2Else' && nextEffect.indent === indent){
-                                        hasExistingElse = true
-                                        elseIndex = endIndentIndex + 1
-                                    }
-                                }
-                                
-                                if(addElse && !hasExistingElse){
+                                if(addElse && !hasExistingElse && endIndentIndex !== -1){
                                     value[selectedIndex].effect.splice(endIndentIndex + 1, 0, {
                                         type: 'v2Else',
                                         indent: indent
@@ -4067,10 +2212,10 @@
                                 }
                                 else if(!addElse && hasExistingElse){
                                     let elseEndIndex = -1
-                                    pointer = elseIndex + 1
+                                    let pointer = elseIndex + 1
                                     while(pointer < value[selectedIndex].effect.length){
                                         const effect = value[selectedIndex].effect[pointer] as triggerEffectV2
-                                        if(effect.type === 'v2EndIndent' && effect.indent === indent + 1){
+                                        if(isEndIndentEffect(effect.type) && effect.indent === indent + 1){
                                             elseEndIndex = pointer
                                             break
                                         }

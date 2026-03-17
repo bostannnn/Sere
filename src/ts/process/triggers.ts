@@ -969,60 +969,7 @@ export type triggerV2DeclareLocalVar = {
     indent: number
 }
 
-const safeSubset = [
-    'v2SetVar',
-    'v2If',
-    'v2IfAdvanced',
-    'v2Else',
-    'v2EndIndent',
-    'v2LoopNTimes',
-    'v2BreakLoop',
-    'v2ConsoleLog',
-    'v2StopTrigger',
-    'v2Random',
-    'v2ExtractRegex',
-    'v2RegexTest',
-    'v2GetCharAt',
-    'v2GetCharCount',
-    'v2ToLowerCase',
-    'v2ToUpperCase',
-    'v2SetCharAt',
-    'v2SplitString',
-    'v2JoinArrayVar',
-    'v2ConcatString',
-    'v2MakeArrayVar',
-    'v2GetArrayVarLength',
-    'v2GetArrayVar',
-    'v2SetArrayVar',
-    'v2PushArrayVar',
-    'v2PopArrayVar',
-    'v2ShiftArrayVar',
-    'v2UnshiftArrayVar',
-    'v2SpliceArrayVar',
-    'v2SliceArrayVar',
-    'v2GetIndexOfValueInArrayVar',
-    'v2RemoveIndexFromArrayVar',
-    'v2Calculate',
-    'v2Comment',
-    'v2DeclareLocalVar'
-]
-
-export const displayAllowList = [
-    'v2GetDisplayState',
-    'v2SetDisplayState',
-    ...safeSubset
-]
-
-export const requestAllowList = [
-    'v2GetRequestState',
-    'v2SetRequestState',
-    'v2GetRequestStateRole',
-    'v2SetRequestStateRole',
-    'v2GetRequestStateLength',
-    ...safeSubset
-]
-
-export async function runTrigger(char:character,mode:triggerMode, arg:{
+export type RunTriggerArg = {
     chat: Chat,
     recursiveCount?: number
     additonalSysPrompt?: additonalSysPrompt
@@ -1031,8 +978,2781 @@ export async function runTrigger(char:character,mode:triggerMode, arg:{
     triggerId?: string
     displayMode?: boolean
     displayData?: string
-    tempVars?: Record<string, string>
-}){
+    tempVars?: Record<string, string | number>
+}
+
+export type TriggerV2EffectType = triggerEffectV2['type']
+export type TriggerV2SelectableType = Exclude<TriggerV2EffectType, 'v2Header' | 'v2Else' | 'v2EndIndent'>
+export type TriggerV2EffectByType<T extends TriggerV2EffectType> = Extract<triggerEffectV2, { type: T }>
+
+const triggerV2CategoryOrder = [
+    'Special',
+    'Control',
+    'Chat',
+    'Low Level',
+    'Alert',
+    'Lorebook V2',
+    'String',
+    'Data',
+    'Array',
+    'Dictionary',
+    'Others',
+    'Deprecated'
+] as const
+
+export type TriggerV2Category = typeof triggerV2CategoryOrder[number]
+export type TriggerV2EditorFieldKind = 'text' | 'textarea' | 'select' | 'checkbox'
+export type TriggerV2EditorOption = {
+    value: string | number
+    label: string
+}
+
+export type TriggerV2EditorContext = {
+    triggers: triggerscript[]
+}
+
+type TriggerV2EditorLabel<T extends TriggerV2EffectType> = string | ((effect: TriggerV2EffectByType<T>) => string)
+type TriggerV2EditorOptions<T extends TriggerV2EffectType> =
+    readonly TriggerV2EditorOption[]
+    | ((effect: TriggerV2EffectByType<T>, context: TriggerV2EditorContext) => readonly TriggerV2EditorOption[])
+type TriggerV2EditorKey<T extends TriggerV2EffectType> = keyof TriggerV2EffectByType<T> & string
+
+export type TriggerV2EditorConfig<T extends TriggerV2EffectType> = {
+    fieldOrder?: readonly TriggerV2EditorKey<T>[]
+    textareaFields?: readonly TriggerV2EditorKey<T>[]
+    highlightFields?: readonly TriggerV2EditorKey<T>[]
+    labelOverrides?: Partial<Record<TriggerV2EditorKey<T>, TriggerV2EditorLabel<T>>>
+    checkboxLabels?: Partial<Record<TriggerV2EditorKey<T>, TriggerV2EditorLabel<T>>>
+    helpKeys?: Partial<Record<TriggerV2EditorKey<T>, string>>
+    fieldKinds?: Partial<Record<TriggerV2EditorKey<T>, TriggerV2EditorFieldKind | ((effect: TriggerV2EffectByType<T>) => TriggerV2EditorFieldKind)>>
+    fieldOptions?: Partial<Record<TriggerV2EditorKey<T>, TriggerV2EditorOptions<T>>>
+    visibility?: Partial<Record<TriggerV2EditorKey<T>, (effect: TriggerV2EffectByType<T>) => boolean>>
+    postChange?: Partial<Record<TriggerV2EditorKey<T>, (effect: TriggerV2EffectByType<T>, value: string | boolean) => void>>
+    showAddElse?: boolean
+}
+
+type TriggerV2RuntimeState = {
+    chat: Chat
+    additonalSysPrompt: additonalSysPrompt
+    stopSending: boolean
+    sendAIprompt: boolean
+    currentIndent: number
+    index: number
+    displayData?: string
+    tempVars: Record<string, string | number>
+}
+
+type TriggerV2RuntimeControl = void | { abortRun: true }
+
+type TriggerV2RuntimeContext = {
+    char: character
+    mode: triggerMode
+    trigger: triggerscript
+    arg: RunTriggerArg
+    state: TriggerV2RuntimeState
+    getVar: (key: string) => string
+    setVar: (key: string, value: string) => void
+    declareLocalVar: (key: string, value: string, indent: number) => void
+    clearLocalVarsAtIndent: (indent: number) => void
+    resolveTargetCharacter: () => ReturnType<typeof resolveCharacterEntryById> | null
+    resolveTargetChat: () => Chat | null
+}
+
+type TriggerV2RuntimeHandler<T extends TriggerV2EffectType> = (
+    effect: TriggerV2EffectByType<T>,
+    context: TriggerV2RuntimeContext
+) => Promise<TriggerV2RuntimeControl> | TriggerV2RuntimeControl
+
+export type TriggerV2Definition<T extends TriggerV2EffectType> = {
+    type: T
+    category?: TriggerV2Category
+    labelKey?: string
+    descriptionKey?: string
+    deprecated?: boolean
+    special?: boolean
+    lowLevel?: boolean
+    displayAllowed?: boolean
+    requestAllowed?: boolean
+    selectable?: boolean
+    opensBlock?: boolean
+    loopBlock?: boolean
+    allowElse?: boolean
+    createDefault?: () => TriggerV2EffectByType<T>
+    editor?: TriggerV2EditorConfig<T>
+    run?: TriggerV2RuntimeHandler<T>
+}
+
+type TriggerV2Registry = {
+    [K in TriggerV2EffectType]: TriggerV2Definition<K>
+}
+
+const defineTriggerV2 = <T extends TriggerV2EffectType>(
+    type: T,
+    definition: Omit<TriggerV2Definition<T>, 'type'>
+): TriggerV2Definition<T> => ({
+    type,
+    labelKey: type,
+    descriptionKey: `${type}Desc`,
+    ...definition
+})
+
+const option = (value: string | number, label: string): TriggerV2EditorOption => ({ value, label })
+
+const valueVarOptions = [
+    option('value', 'value'),
+    option('var', 'var')
+] as const
+
+const valueVarRegexOptions = [
+    ...valueVarOptions,
+    option('regex', 'regex')
+] as const
+
+const operatorOptions = [
+    option('=', 'operatorSet'),
+    option('+=', 'operatorAdd'),
+    option('-=', 'operatorSubtract'),
+    option('*=', 'operatorMultiply'),
+    option('/=', 'operatorDivide'),
+    option('%=', 'operatorModulo')
+] as const
+
+const ifConditionOptions = [
+    option('=', 'conditionEqual'),
+    option('!=', 'conditionNotEqual'),
+    option('>', 'conditionGreater'),
+    option('<', 'conditionLess'),
+    option('>=', 'conditionGreaterEqual'),
+    option('<=', 'conditionLessEqual')
+] as const
+
+const advancedIfConditionOptions = [
+    ...ifConditionOptions,
+    option('≒', 'conditionSimilar'),
+    option('∋', 'conditionContains'),
+    option('∈', 'conditionIn'),
+    option('∌', 'conditionNotContains'),
+    option('∉', 'conditionNotIn'),
+    option('≡', 'conditionTruthy')
+] as const
+
+const truthyTargetOptions = [
+    option('true', 'boolTrue'),
+    option('false', 'boolFalse'),
+    option('null', 'boolNull')
+] as const
+
+const systemPromptLocationOptions = [
+    option('start', 'sysStart'),
+    option('historyend', 'sysHistoryEnd'),
+    option('promptend', 'sysPromptEnd')
+] as const
+
+const impersonateRoleOptions = [
+    option('user', 'roleUser'),
+    option('char', 'roleChar')
+] as const
+
+const modelOptions = [
+    option('model', 'modelMain'),
+    option('submodel', 'modelSub')
+] as const
+
+const quickSearchConditionOptions = [
+    option('loose', 'searchLoose'),
+    option('strict', 'searchStrict'),
+    option('regex', 'searchRegex')
+] as const
+
+const safeInDisplayAndRequest = {
+    displayAllowed: true,
+    requestAllowed: true
+} as const
+
+const displayOnly = {
+    displayAllowed: true
+} as const
+
+const requestOnly = {
+    requestAllowed: true
+} as const
+
+const isTriggerV2TruthyCondition = (effect: triggerV2IfAdvanced) => effect.condition === '≡'
+
+const triggerV2Registry: TriggerV2Registry = {
+    v2Header: defineTriggerV2('v2Header', {
+        selectable: false
+    }),
+    v2If: defineTriggerV2('v2If', {
+        ...safeInDisplayAndRequest,
+        category: 'Deprecated',
+        deprecated: true,
+        opensBlock: true,
+        allowElse: true,
+        createDefault: () => ({
+            type: 'v2If',
+            source: '',
+            condition: '=',
+            targetType: 'value',
+            target: '',
+            indent: 0
+        }),
+        editor: {
+            labelOverrides: {
+                source: 'varName',
+                target: 'value'
+            },
+            fieldKinds: {
+                condition: 'select'
+            },
+            fieldOptions: {
+                condition: ifConditionOptions
+            },
+            showAddElse: true
+        }
+    }),
+    v2Else: defineTriggerV2('v2Else', {
+        ...safeInDisplayAndRequest,
+        selectable: false,
+        opensBlock: true
+    }),
+    v2EndIndent: defineTriggerV2('v2EndIndent', {
+        ...safeInDisplayAndRequest,
+        selectable: false
+    }),
+    v2SetVar: defineTriggerV2('v2SetVar', {
+        ...safeInDisplayAndRequest,
+        category: 'Control',
+        createDefault: () => ({
+            type: 'v2SetVar',
+            var: '',
+            operator: '=',
+            valueType: 'value',
+            value: '',
+            indent: 0
+        }),
+        editor: {
+            textareaFields: ['value'],
+            highlightFields: ['value'],
+            labelOverrides: {
+                var: 'varName'
+            },
+            fieldKinds: {
+                operator: 'select'
+            },
+            fieldOptions: {
+                operator: operatorOptions
+            }
+        }
+    }),
+    v2Loop: defineTriggerV2('v2Loop', {
+        category: 'Control',
+        opensBlock: true,
+        loopBlock: true,
+        createDefault: () => ({
+            type: 'v2Loop',
+            indent: 0
+        })
+    }),
+    v2BreakLoop: defineTriggerV2('v2BreakLoop', {
+        ...safeInDisplayAndRequest,
+        category: 'Control',
+        createDefault: () => ({
+            type: 'v2BreakLoop',
+            indent: 0
+        })
+    }),
+    v2RunTrigger: defineTriggerV2('v2RunTrigger', {
+        category: 'Control',
+        createDefault: () => ({
+            type: 'v2RunTrigger',
+            target: '',
+            indent: 0
+        }),
+        editor: {
+            labelOverrides: {
+                target: 'trigger'
+            },
+            fieldKinds: {
+                target: 'select'
+            },
+            fieldOptions: {
+                target: (_effect, context) =>
+                    context.triggers
+                        .slice(1)
+                        .map((trigger) => option(trigger.comment, trigger.comment || 'Unnamed Trigger'))
+            }
+        }
+    }),
+    v2ConsoleLog: defineTriggerV2('v2ConsoleLog', {
+        ...safeInDisplayAndRequest,
+        category: 'Control',
+        createDefault: () => ({
+            type: 'v2ConsoleLog',
+            sourceType: 'value',
+            source: '',
+            indent: 0
+        }),
+        editor: {
+            labelOverrides: {
+                source: 'value'
+            }
+        }
+    }),
+    v2StopTrigger: defineTriggerV2('v2StopTrigger', {
+        ...safeInDisplayAndRequest,
+        category: 'Control',
+        createDefault: () => ({
+            type: 'v2StopTrigger',
+            indent: 0
+        })
+    }),
+    v2CutChat: defineTriggerV2('v2CutChat', {
+        category: 'Chat',
+        createDefault: () => ({
+            type: 'v2CutChat',
+            startType: 'value',
+            start: '0',
+            endType: 'value',
+            end: '0',
+            indent: 0
+        })
+    }),
+    v2ModifyChat: defineTriggerV2('v2ModifyChat', {
+        category: 'Chat',
+        createDefault: () => ({
+            type: 'v2ModifyChat',
+            indexType: 'value',
+            index: '',
+            valueType: 'value',
+            value: '',
+            indent: 0
+        }),
+        editor: {
+            textareaFields: ['value'],
+            highlightFields: ['value']
+        }
+    }),
+    v2SystemPrompt: defineTriggerV2('v2SystemPrompt', {
+        category: 'Others',
+        createDefault: () => ({
+            type: 'v2SystemPrompt',
+            location: 'start',
+            valueType: 'value',
+            value: '',
+            indent: 0
+        }),
+        editor: {
+            textareaFields: ['value'],
+            highlightFields: ['value'],
+            fieldKinds: {
+                location: 'select'
+            },
+            fieldOptions: {
+                location: systemPromptLocationOptions
+            }
+        }
+    }),
+    v2Impersonate: defineTriggerV2('v2Impersonate', {
+        category: 'Chat',
+        createDefault: () => ({
+            type: 'v2Impersonate',
+            role: 'user',
+            valueType: 'value',
+            value: '',
+            indent: 0
+        }),
+        editor: {
+            textareaFields: ['value'],
+            highlightFields: ['value'],
+            fieldKinds: {
+                role: 'select'
+            },
+            fieldOptions: {
+                role: impersonateRoleOptions
+            }
+        }
+    }),
+    v2Command: defineTriggerV2('v2Command', {
+        category: 'Control',
+        createDefault: () => ({
+            type: 'v2Command',
+            valueType: 'value',
+            value: '',
+            indent: 0
+        }),
+        editor: {
+            labelOverrides: {
+                value: 'cmd'
+            }
+        }
+    }),
+    v2SendAIprompt: defineTriggerV2('v2SendAIprompt', {
+        category: 'Low Level',
+        lowLevel: true,
+        createDefault: () => ({
+            type: 'v2SendAIprompt',
+            indent: 0
+        })
+    }),
+    v2CheckSimilarity: defineTriggerV2('v2CheckSimilarity', {
+        category: 'Low Level',
+        lowLevel: true,
+        createDefault: () => ({
+            type: 'v2CheckSimilarity',
+            sourceType: 'value',
+            source: '',
+            valueType: 'value',
+            value: '',
+            outputVar: '',
+            indent: 0
+        })
+    }),
+    v2RunLLM: defineTriggerV2('v2RunLLM', {
+        category: 'Low Level',
+        lowLevel: true,
+        createDefault: () => ({
+            type: 'v2RunLLM',
+            valueType: 'value',
+            value: '',
+            model: 'model',
+            outputVar: '',
+            indent: 0
+        }),
+        editor: {
+            textareaFields: ['value'],
+            highlightFields: ['value'],
+            labelOverrides: {
+                value: 'prompt'
+            },
+            fieldKinds: {
+                model: 'select'
+            },
+            fieldOptions: {
+                model: modelOptions
+            }
+        }
+    }),
+    v2ShowAlert: defineTriggerV2('v2ShowAlert', {
+        category: 'Alert',
+        createDefault: () => ({
+            type: 'v2ShowAlert',
+            valueType: 'value',
+            value: '',
+            indent: 0
+        }),
+        editor: {
+            labelOverrides: {
+                value: 'alertContent'
+            }
+        }
+    }),
+    v2ExtractRegex: defineTriggerV2('v2ExtractRegex', {
+        ...safeInDisplayAndRequest,
+        category: 'String',
+        createDefault: () => ({
+            type: 'v2ExtractRegex',
+            valueType: 'value',
+            value: '',
+            regexType: 'value',
+            regex: '',
+            resultType: 'value',
+            result: '',
+            flagsType: 'value',
+            flags: '',
+            outputVar: '',
+            indent: 0
+        }),
+        editor: {
+            labelOverrides: {
+                value: 'source',
+                result: 'resultFormat'
+            }
+        }
+    }),
+    v2GetLastMessage: defineTriggerV2('v2GetLastMessage', {
+        category: 'Chat',
+        createDefault: () => ({
+            type: 'v2GetLastMessage',
+            outputVar: '',
+            indent: 0
+        })
+    }),
+    v2GetMessageAtIndex: defineTriggerV2('v2GetMessageAtIndex', {
+        category: 'Chat',
+        createDefault: () => ({
+            type: 'v2GetMessageAtIndex',
+            indexType: 'value',
+            index: '',
+            outputVar: '',
+            indent: 0
+        })
+    }),
+    v2GetMessageCount: defineTriggerV2('v2GetMessageCount', {
+        category: 'Chat',
+        createDefault: () => ({
+            type: 'v2GetMessageCount',
+            outputVar: '',
+            indent: 0
+        })
+    }),
+    v2ModifyLorebook: defineTriggerV2('v2ModifyLorebook', {
+        category: 'Deprecated',
+        deprecated: true,
+        createDefault: () => ({
+            type: 'v2ModifyLorebook',
+            targetType: 'value',
+            target: '',
+            valueType: 'value',
+            value: '',
+            indent: 0
+        })
+    }),
+    v2GetLorebook: defineTriggerV2('v2GetLorebook', {
+        category: 'Deprecated',
+        deprecated: true,
+        createDefault: () => ({
+            type: 'v2GetLorebook',
+            targetType: 'value',
+            target: '',
+            outputVar: '',
+            indent: 0
+        })
+    }),
+    v2GetLorebookCount: defineTriggerV2('v2GetLorebookCount', {
+        category: 'Deprecated',
+        deprecated: true,
+        createDefault: () => ({
+            type: 'v2GetLorebookCount',
+            outputVar: '',
+            indent: 0
+        })
+    }),
+    v2GetLorebookEntry: defineTriggerV2('v2GetLorebookEntry', {
+        category: 'Deprecated',
+        deprecated: true,
+        createDefault: () => ({
+            type: 'v2GetLorebookEntry',
+            indexType: 'value',
+            index: '',
+            outputVar: '',
+            indent: 0
+        })
+    }),
+    v2SetLorebookActivation: defineTriggerV2('v2SetLorebookActivation', {
+        category: 'Deprecated',
+        deprecated: true,
+        createDefault: () => ({
+            type: 'v2SetLorebookActivation',
+            indexType: 'value',
+            index: '',
+            value: true,
+            indent: 0
+        }),
+        editor: {
+            checkboxLabels: {
+                value: 'alwaysActive'
+            }
+        }
+    }),
+    v2GetLorebookIndexViaName: defineTriggerV2('v2GetLorebookIndexViaName', {
+        category: 'Deprecated',
+        deprecated: true,
+        createDefault: () => ({
+            type: 'v2GetLorebookIndexViaName',
+            nameType: 'value',
+            name: '',
+            outputVar: '',
+            indent: 0
+        })
+    }),
+    v2LoopNTimes: defineTriggerV2('v2LoopNTimes', {
+        ...safeInDisplayAndRequest,
+        category: 'Control',
+        opensBlock: true,
+        loopBlock: true,
+        createDefault: () => ({
+            type: 'v2LoopNTimes',
+            valueType: 'value',
+            value: '',
+            indent: 0
+        })
+    }),
+    v2Random: defineTriggerV2('v2Random', {
+        ...safeInDisplayAndRequest,
+        category: 'Others',
+        createDefault: () => ({
+            type: 'v2Random',
+            minType: 'value',
+            min: '0',
+            maxType: 'value',
+            max: '100',
+            outputVar: '',
+            indent: 0
+        })
+    }),
+    v2GetCharAt: defineTriggerV2('v2GetCharAt', {
+        ...safeInDisplayAndRequest,
+        category: 'String',
+        createDefault: () => ({
+            type: 'v2GetCharAt',
+            sourceType: 'value',
+            source: '',
+            indexType: 'value',
+            index: '',
+            outputVar: '',
+            indent: 0
+        })
+    }),
+    v2GetCharCount: defineTriggerV2('v2GetCharCount', {
+        ...safeInDisplayAndRequest,
+        category: 'String',
+        createDefault: () => ({
+            type: 'v2GetCharCount',
+            sourceType: 'value',
+            source: '',
+            outputVar: '',
+            indent: 0
+        })
+    }),
+    v2ToLowerCase: defineTriggerV2('v2ToLowerCase', {
+        ...safeInDisplayAndRequest,
+        category: 'String',
+        createDefault: () => ({
+            type: 'v2ToLowerCase',
+            sourceType: 'value',
+            source: '',
+            outputVar: '',
+            indent: 0
+        })
+    }),
+    v2ToUpperCase: defineTriggerV2('v2ToUpperCase', {
+        ...safeInDisplayAndRequest,
+        category: 'String',
+        createDefault: () => ({
+            type: 'v2ToUpperCase',
+            sourceType: 'value',
+            source: '',
+            outputVar: '',
+            indent: 0
+        })
+    }),
+    v2SetCharAt: defineTriggerV2('v2SetCharAt', {
+        ...safeInDisplayAndRequest,
+        category: 'String',
+        createDefault: () => ({
+            type: 'v2SetCharAt',
+            sourceType: 'value',
+            source: '',
+            indexType: 'value',
+            index: '',
+            valueType: 'value',
+            value: '',
+            outputVar: '',
+            indent: 0
+        })
+    }),
+    v2SplitString: defineTriggerV2('v2SplitString', {
+        ...safeInDisplayAndRequest,
+        category: 'String',
+        createDefault: () => ({
+            type: 'v2SplitString',
+            sourceType: 'value',
+            source: '',
+            delimiterType: 'value',
+            delimiter: '',
+            outputVar: '',
+            indent: 0
+        }),
+        editor: {
+            fieldOptions: {
+                delimiterType: valueVarRegexOptions
+            }
+        }
+    }),
+    v2JoinArrayVar: defineTriggerV2('v2JoinArrayVar', {
+        ...safeInDisplayAndRequest,
+        category: 'Array',
+        createDefault: () => ({
+            type: 'v2JoinArrayVar',
+            varType: 'value',
+            var: '',
+            delimiterType: 'value',
+            delimiter: '',
+            outputVar: '',
+            indent: 0
+        })
+    }),
+    v2GetCharacterDesc: defineTriggerV2('v2GetCharacterDesc', {
+        category: 'Data',
+        createDefault: () => ({
+            type: 'v2GetCharacterDesc',
+            outputVar: '',
+            indent: 0
+        })
+    }),
+    v2SetCharacterDesc: defineTriggerV2('v2SetCharacterDesc', {
+        category: 'Data',
+        createDefault: () => ({
+            type: 'v2SetCharacterDesc',
+            valueType: 'value',
+            value: '',
+            indent: 0
+        }),
+        editor: {
+            textareaFields: ['value'],
+            highlightFields: ['value']
+        }
+    }),
+    v2GetPersonaDesc: defineTriggerV2('v2GetPersonaDesc', {
+        category: 'Data',
+        createDefault: () => ({
+            type: 'v2GetPersonaDesc',
+            outputVar: '',
+            indent: 0
+        })
+    }),
+    v2SetPersonaDesc: defineTriggerV2('v2SetPersonaDesc', {
+        category: 'Data',
+        createDefault: () => ({
+            type: 'v2SetPersonaDesc',
+            valueType: 'value',
+            value: '',
+            indent: 0
+        }),
+        editor: {
+            textareaFields: ['value'],
+            highlightFields: ['value']
+        }
+    }),
+    v2MakeArrayVar: defineTriggerV2('v2MakeArrayVar', {
+        ...safeInDisplayAndRequest,
+        category: 'Array',
+        createDefault: () => ({
+            type: 'v2MakeArrayVar',
+            var: '',
+            indent: 0
+        })
+    }),
+    v2GetArrayVarLength: defineTriggerV2('v2GetArrayVarLength', {
+        ...safeInDisplayAndRequest,
+        category: 'Array',
+        createDefault: () => ({
+            type: 'v2GetArrayVarLength',
+            var: '',
+            outputVar: '',
+            indent: 0
+        })
+    }),
+    v2GetArrayVar: defineTriggerV2('v2GetArrayVar', {
+        ...safeInDisplayAndRequest,
+        category: 'Array',
+        createDefault: () => ({
+            type: 'v2GetArrayVar',
+            var: '',
+            indexType: 'value',
+            index: '',
+            outputVar: '',
+            indent: 0
+        })
+    }),
+    v2SetArrayVar: defineTriggerV2('v2SetArrayVar', {
+        ...safeInDisplayAndRequest,
+        category: 'Array',
+        createDefault: () => ({
+            type: 'v2SetArrayVar',
+            var: '',
+            indexType: 'value',
+            index: '',
+            valueType: 'value',
+            value: '',
+            indent: 0
+        })
+    }),
+    v2PushArrayVar: defineTriggerV2('v2PushArrayVar', {
+        ...safeInDisplayAndRequest,
+        category: 'Array',
+        createDefault: () => ({
+            type: 'v2PushArrayVar',
+            var: '',
+            valueType: 'value',
+            value: '',
+            indent: 0
+        })
+    }),
+    v2PopArrayVar: defineTriggerV2('v2PopArrayVar', {
+        ...safeInDisplayAndRequest,
+        category: 'Array',
+        createDefault: () => ({
+            type: 'v2PopArrayVar',
+            var: '',
+            outputVar: '',
+            indent: 0
+        })
+    }),
+    v2ShiftArrayVar: defineTriggerV2('v2ShiftArrayVar', {
+        ...safeInDisplayAndRequest,
+        category: 'Array',
+        createDefault: () => ({
+            type: 'v2ShiftArrayVar',
+            var: '',
+            outputVar: '',
+            indent: 0
+        })
+    }),
+    v2UnshiftArrayVar: defineTriggerV2('v2UnshiftArrayVar', {
+        ...safeInDisplayAndRequest,
+        category: 'Array',
+        createDefault: () => ({
+            type: 'v2UnshiftArrayVar',
+            var: '',
+            valueType: 'value',
+            value: '',
+            indent: 0
+        })
+    }),
+    v2SpliceArrayVar: defineTriggerV2('v2SpliceArrayVar', {
+        ...safeInDisplayAndRequest,
+        category: 'Array',
+        createDefault: () => ({
+            type: 'v2SpliceArrayVar',
+            var: '',
+            startType: 'value',
+            start: '',
+            itemType: 'value',
+            item: '',
+            indent: 0
+        }),
+        editor: {
+            labelOverrides: {
+                item: 'value'
+            }
+        }
+    }),
+    v2GetFirstMessage: defineTriggerV2('v2GetFirstMessage', {
+        category: 'Chat',
+        createDefault: () => ({
+            type: 'v2GetFirstMessage',
+            outputVar: '',
+            indent: 0
+        })
+    }),
+    v2SliceArrayVar: defineTriggerV2('v2SliceArrayVar', {
+        ...safeInDisplayAndRequest,
+        category: 'Array',
+        createDefault: () => ({
+            type: 'v2SliceArrayVar',
+            var: '',
+            startType: 'value',
+            start: '',
+            endType: 'value',
+            end: '',
+            outputVar: '',
+            indent: 0
+        })
+    }),
+    v2GetIndexOfValueInArrayVar: defineTriggerV2('v2GetIndexOfValueInArrayVar', {
+        ...safeInDisplayAndRequest,
+        category: 'Array',
+        createDefault: () => ({
+            type: 'v2GetIndexOfValueInArrayVar',
+            var: '',
+            valueType: 'value',
+            value: '',
+            outputVar: '',
+            indent: 0
+        })
+    }),
+    v2RemoveIndexFromArrayVar: defineTriggerV2('v2RemoveIndexFromArrayVar', {
+        ...safeInDisplayAndRequest,
+        category: 'Array',
+        createDefault: () => ({
+            type: 'v2RemoveIndexFromArrayVar',
+            var: '',
+            indexType: 'value',
+            index: '',
+            indent: 0
+        })
+    }),
+    v2ConcatString: defineTriggerV2('v2ConcatString', {
+        ...safeInDisplayAndRequest,
+        category: 'String',
+        createDefault: () => ({
+            type: 'v2ConcatString',
+            source1Type: 'value',
+            source1: '',
+            source2Type: 'value',
+            source2: '',
+            outputVar: '',
+            indent: 0
+        }),
+        editor: {
+            labelOverrides: {
+                source1: 'A',
+                source2: 'B'
+            }
+        }
+    }),
+    v2GetLastUserMessage: defineTriggerV2('v2GetLastUserMessage', {
+        category: 'Chat',
+        createDefault: () => ({
+            type: 'v2GetLastUserMessage',
+            outputVar: '',
+            indent: 0
+        })
+    }),
+    v2GetLastCharMessage: defineTriggerV2('v2GetLastCharMessage', {
+        category: 'Chat',
+        createDefault: () => ({
+            type: 'v2GetLastCharMessage',
+            outputVar: '',
+            indent: 0
+        })
+    }),
+    v2GetAlertInput: defineTriggerV2('v2GetAlertInput', {
+        category: 'Alert',
+        createDefault: () => ({
+            type: 'v2GetAlertInput',
+            displayType: 'value',
+            display: '',
+            outputVar: '',
+            indent: 0
+        }),
+        editor: {
+            labelOverrides: {
+                display: 'alertContent'
+            }
+        }
+    }),
+    v2GetAlertSelect: defineTriggerV2('v2GetAlertSelect', {
+        category: 'Alert',
+        createDefault: () => ({
+            type: 'v2GetAlertSelect',
+            displayType: 'value',
+            display: '',
+            valueType: 'value',
+            value: '',
+            outputVar: '',
+            indent: 0
+        }),
+        editor: {
+            labelOverrides: {
+                display: 'alertContent',
+                value: 'options'
+            },
+            helpKeys: {
+                value: 'v2GetAlertSelect'
+            }
+        }
+    }),
+    v2GetDisplayState: defineTriggerV2('v2GetDisplayState', {
+        ...displayOnly,
+        category: 'Special',
+        special: true,
+        createDefault: () => ({
+            type: 'v2GetDisplayState',
+            outputVar: '',
+            indent: 0
+        })
+    }),
+    v2SetDisplayState: defineTriggerV2('v2SetDisplayState', {
+        ...displayOnly,
+        category: 'Special',
+        special: true,
+        createDefault: () => ({
+            type: 'v2SetDisplayState',
+            valueType: 'value',
+            value: '',
+            indent: 0
+        })
+    }),
+    v2UpdateGUI: defineTriggerV2('v2UpdateGUI', {
+        category: 'Others',
+        createDefault: () => ({
+            type: 'v2UpdateGUI',
+            indent: 0
+        })
+    }),
+    v2UpdateChatAt: defineTriggerV2('v2UpdateChatAt', {
+        category: 'Others',
+        createDefault: () => ({
+            type: 'v2UpdateChatAt',
+            index: '0',
+            indent: 0
+        })
+    }),
+    v2Wait: defineTriggerV2('v2Wait', {
+        category: 'Others',
+        createDefault: () => ({
+            type: 'v2Wait',
+            valueType: 'value',
+            value: '1',
+            indent: 0
+        })
+    }),
+    v2GetRequestState: defineTriggerV2('v2GetRequestState', {
+        ...requestOnly,
+        category: 'Special',
+        special: true,
+        createDefault: () => ({
+            type: 'v2GetRequestState',
+            indexType: 'value',
+            index: '',
+            outputVar: '',
+            indent: 0
+        })
+    }),
+    v2SetRequestState: defineTriggerV2('v2SetRequestState', {
+        ...requestOnly,
+        category: 'Special',
+        special: true,
+        createDefault: () => ({
+            type: 'v2SetRequestState',
+            indexType: 'value',
+            index: '',
+            valueType: 'value',
+            value: '',
+            indent: 0
+        })
+    }),
+    v2GetRequestStateRole: defineTriggerV2('v2GetRequestStateRole', {
+        ...requestOnly,
+        category: 'Special',
+        special: true,
+        createDefault: () => ({
+            type: 'v2GetRequestStateRole',
+            indexType: 'value',
+            index: '',
+            outputVar: '',
+            indent: 0
+        })
+    }),
+    v2SetRequestStateRole: defineTriggerV2('v2SetRequestStateRole', {
+        ...requestOnly,
+        category: 'Special',
+        special: true,
+        createDefault: () => ({
+            type: 'v2SetRequestStateRole',
+            indexType: 'value',
+            index: '',
+            valueType: 'value',
+            value: '',
+            indent: 0
+        })
+    }),
+    v2GetRequestStateLength: defineTriggerV2('v2GetRequestStateLength', {
+        ...requestOnly,
+        category: 'Special',
+        special: true,
+        createDefault: () => ({
+            type: 'v2GetRequestStateLength',
+            outputVar: '',
+            indent: 0
+        })
+    }),
+    v2IfAdvanced: defineTriggerV2('v2IfAdvanced', {
+        ...safeInDisplayAndRequest,
+        category: 'Control',
+        opensBlock: true,
+        allowElse: true,
+        createDefault: () => ({
+            type: 'v2IfAdvanced',
+            sourceType: 'value',
+            source: '',
+            condition: '=',
+            targetType: 'value',
+            target: '',
+            indent: 0
+        }),
+        editor: {
+            labelOverrides: {
+                source: 'A',
+                target: 'B'
+            },
+            fieldKinds: {
+                condition: 'select',
+                target: (effect) => isTriggerV2TruthyCondition(effect) ? 'select' : 'text'
+            },
+            fieldOptions: {
+                condition: advancedIfConditionOptions,
+                target: truthyTargetOptions
+            },
+            visibility: {
+                targetType: (effect) => !isTriggerV2TruthyCondition(effect)
+            },
+            postChange: {
+                condition: (effect, value) => {
+                    if (value === '≡') {
+                        effect.target = 'true'
+                        effect.targetType = 'value'
+                    }
+                }
+            },
+            showAddElse: true
+        }
+    }),
+    v2QuickSearchChat: defineTriggerV2('v2QuickSearchChat', {
+        category: 'Chat',
+        createDefault: () => ({
+            type: 'v2QuickSearchChat',
+            valueType: 'value',
+            value: '',
+            condition: 'loose',
+            depthType: 'value',
+            depth: '3',
+            outputVar: '',
+            indent: 0
+        }),
+        editor: {
+            fieldKinds: {
+                condition: 'select'
+            },
+            fieldOptions: {
+                condition: quickSearchConditionOptions
+            }
+        }
+    }),
+    v2StopPromptSending: defineTriggerV2('v2StopPromptSending', {
+        category: 'Others',
+        createDefault: () => ({
+            type: 'v2StopPromptSending',
+            indent: 0
+        })
+    }),
+    v2Tokenize: defineTriggerV2('v2Tokenize', {
+        category: 'Others',
+        createDefault: () => ({
+            type: 'v2Tokenize',
+            valueType: 'value',
+            value: '',
+            outputVar: '',
+            indent: 0
+        })
+    }),
+    v2GetAllLorebooks: defineTriggerV2('v2GetAllLorebooks', {
+        category: 'Lorebook V2',
+        createDefault: () => ({
+            type: 'v2GetAllLorebooks',
+            outputVar: '',
+            indent: 0
+        })
+    }),
+    v2GetLorebookByName: defineTriggerV2('v2GetLorebookByName', {
+        category: 'Lorebook V2',
+        createDefault: () => ({
+            type: 'v2GetLorebookByName',
+            nameType: 'value',
+            name: '',
+            outputVar: '',
+            indent: 0
+        })
+    }),
+    v2GetLorebookByIndex: defineTriggerV2('v2GetLorebookByIndex', {
+        category: 'Lorebook V2',
+        createDefault: () => ({
+            type: 'v2GetLorebookByIndex',
+            indexType: 'value',
+            index: '',
+            outputVar: '',
+            indent: 0
+        })
+    }),
+    v2CreateLorebook: defineTriggerV2('v2CreateLorebook', {
+        category: 'Lorebook V2',
+        createDefault: () => ({
+            type: 'v2CreateLorebook',
+            nameType: 'value',
+            name: '',
+            keyType: 'value',
+            key: '',
+            contentType: 'value',
+            content: '',
+            insertOrderType: 'value',
+            insertOrder: '100',
+            indent: 0
+        }),
+        editor: {
+            textareaFields: ['content'],
+            labelOverrides: {
+                key: 'activationKeys',
+                content: 'prompt'
+            }
+        }
+    }),
+    v2ModifyLorebookByIndex: defineTriggerV2('v2ModifyLorebookByIndex', {
+        category: 'Lorebook V2',
+        createDefault: () => ({
+            type: 'v2ModifyLorebookByIndex',
+            indexType: 'value',
+            index: '',
+            nameType: 'value',
+            name: '{{slot}}',
+            keyType: 'value',
+            key: '{{slot}}',
+            contentType: 'value',
+            content: '{{slot}}',
+            insertOrderType: 'value',
+            insertOrder: '{{slot}}',
+            indent: 0
+        }),
+        editor: {
+            textareaFields: ['content'],
+            labelOverrides: {
+                key: 'activationKeys',
+                content: 'prompt'
+            }
+        }
+    }),
+    v2DeleteLorebookByIndex: defineTriggerV2('v2DeleteLorebookByIndex', {
+        category: 'Lorebook V2',
+        createDefault: () => ({
+            type: 'v2DeleteLorebookByIndex',
+            indexType: 'value',
+            index: '',
+            indent: 0
+        })
+    }),
+    v2GetLorebookCountNew: defineTriggerV2('v2GetLorebookCountNew', {
+        category: 'Lorebook V2',
+        createDefault: () => ({
+            type: 'v2GetLorebookCountNew',
+            outputVar: '',
+            indent: 0
+        })
+    }),
+    v2SetLorebookAlwaysActive: defineTriggerV2('v2SetLorebookAlwaysActive', {
+        category: 'Lorebook V2',
+        createDefault: () => ({
+            type: 'v2SetLorebookAlwaysActive',
+            indexType: 'value',
+            index: '',
+            value: true,
+            indent: 0
+        }),
+        editor: {
+            checkboxLabels: {
+                value: 'alwaysActive'
+            }
+        }
+    }),
+    v2RegexTest: defineTriggerV2('v2RegexTest', {
+        ...safeInDisplayAndRequest,
+        category: 'String',
+        createDefault: () => ({
+            type: 'v2RegexTest',
+            valueType: 'value',
+            value: '',
+            regexType: 'value',
+            regex: '',
+            flagsType: 'value',
+            flags: '',
+            outputVar: '',
+            indent: 0
+        }),
+        editor: {
+            labelOverrides: {
+                value: 'source'
+            },
+            helpKeys: {
+                outputVar: 'v2RegexTest'
+            }
+        }
+    }),
+    v2GetReplaceGlobalNote: defineTriggerV2('v2GetReplaceGlobalNote', {
+        category: 'Data',
+        createDefault: () => ({
+            type: 'v2GetReplaceGlobalNote',
+            outputVar: '',
+            indent: 0
+        })
+    }),
+    v2SetReplaceGlobalNote: defineTriggerV2('v2SetReplaceGlobalNote', {
+        category: 'Data',
+        createDefault: () => ({
+            type: 'v2SetReplaceGlobalNote',
+            valueType: 'value',
+            value: '',
+            indent: 0
+        }),
+        editor: {
+            textareaFields: ['value'],
+            highlightFields: ['value']
+        }
+    }),
+    v2GetAuthorNote: defineTriggerV2('v2GetAuthorNote', {
+        category: 'Data',
+        createDefault: () => ({
+            type: 'v2GetAuthorNote',
+            outputVar: '',
+            indent: 0
+        })
+    }),
+    v2SetAuthorNote: defineTriggerV2('v2SetAuthorNote', {
+        category: 'Data',
+        createDefault: () => ({
+            type: 'v2SetAuthorNote',
+            valueType: 'value',
+            value: '',
+            indent: 0
+        }),
+        editor: {
+            textareaFields: ['value'],
+            highlightFields: ['value']
+        }
+    }),
+    v2MakeDictVar: defineTriggerV2('v2MakeDictVar', {
+        category: 'Dictionary',
+        createDefault: () => ({
+            type: 'v2MakeDictVar',
+            var: '',
+            indent: 0
+        })
+    }),
+    v2GetDictVar: defineTriggerV2('v2GetDictVar', {
+        category: 'Dictionary',
+        createDefault: () => ({
+            type: 'v2GetDictVar',
+            varType: 'value',
+            var: '',
+            keyType: 'value',
+            key: '',
+            outputVar: '',
+            indent: 0
+        })
+    }),
+    v2SetDictVar: defineTriggerV2('v2SetDictVar', {
+        category: 'Dictionary',
+        createDefault: () => ({
+            type: 'v2SetDictVar',
+            varType: 'value',
+            var: '',
+            keyType: 'value',
+            key: '',
+            valueType: 'value',
+            value: '',
+            indent: 0
+        })
+    }),
+    v2DeleteDictKey: defineTriggerV2('v2DeleteDictKey', {
+        category: 'Dictionary',
+        createDefault: () => ({
+            type: 'v2DeleteDictKey',
+            varType: 'value',
+            var: '',
+            keyType: 'value',
+            key: '',
+            indent: 0
+        })
+    }),
+    v2HasDictKey: defineTriggerV2('v2HasDictKey', {
+        category: 'Dictionary',
+        createDefault: () => ({
+            type: 'v2HasDictKey',
+            varType: 'value',
+            var: '',
+            keyType: 'value',
+            key: '',
+            outputVar: '',
+            indent: 0
+        })
+    }),
+    v2ClearDict: defineTriggerV2('v2ClearDict', {
+        category: 'Dictionary',
+        createDefault: () => ({
+            type: 'v2ClearDict',
+            var: '',
+            indent: 0
+        })
+    }),
+    v2GetDictSize: defineTriggerV2('v2GetDictSize', {
+        category: 'Dictionary',
+        createDefault: () => ({
+            type: 'v2GetDictSize',
+            varType: 'value',
+            var: '',
+            outputVar: '',
+            indent: 0
+        })
+    }),
+    v2GetDictKeys: defineTriggerV2('v2GetDictKeys', {
+        category: 'Dictionary',
+        createDefault: () => ({
+            type: 'v2GetDictKeys',
+            varType: 'value',
+            var: '',
+            outputVar: '',
+            indent: 0
+        })
+    }),
+    v2GetDictValues: defineTriggerV2('v2GetDictValues', {
+        category: 'Dictionary',
+        createDefault: () => ({
+            type: 'v2GetDictValues',
+            varType: 'value',
+            var: '',
+            outputVar: '',
+            indent: 0
+        })
+    }),
+    v2Calculate: defineTriggerV2('v2Calculate', {
+        ...safeInDisplayAndRequest,
+        category: 'Control',
+        createDefault: () => ({
+            type: 'v2Calculate',
+            expressionType: 'value',
+            expression: '',
+            outputVar: '',
+            indent: 0
+        }),
+        editor: {
+            textareaFields: ['expression'],
+            highlightFields: ['expression'],
+            helpKeys: {
+                expression: 'v2Calculate'
+            }
+        }
+    }),
+    v2ReplaceString: defineTriggerV2('v2ReplaceString', {
+        category: 'String',
+        createDefault: () => ({
+            type: 'v2ReplaceString',
+            sourceType: 'value',
+            source: '',
+            regexType: 'value',
+            regex: '',
+            resultType: 'value',
+            result: '',
+            replacementType: 'value',
+            replacement: '',
+            flagsType: 'value',
+            flags: '',
+            outputVar: '',
+            indent: 0
+        }),
+        editor: {
+            labelOverrides: {
+                result: 'resultFormat'
+            }
+        }
+    }),
+    v2Comment: defineTriggerV2('v2Comment', {
+        ...safeInDisplayAndRequest,
+        category: 'Control',
+        createDefault: () => ({
+            type: 'v2Comment',
+            value: '',
+            indent: 0
+        })
+    }),
+    v2DeclareLocalVar: defineTriggerV2('v2DeclareLocalVar', {
+        ...safeInDisplayAndRequest,
+        category: 'Control',
+        createDefault: () => ({
+            type: 'v2DeclareLocalVar',
+            var: '',
+            valueType: 'value',
+            value: '',
+            indent: 0
+        }),
+        editor: {
+            labelOverrides: {
+                var: 'varName'
+            }
+        }
+    })
+}
+
+const triggerV2EditorFieldOrderMap = {
+    v2If: ['source', 'condition', 'target'],
+    v2SetVar: ['var', 'operator', 'value'],
+    v2Loop: [],
+    v2BreakLoop: [],
+    v2RunTrigger: ['target'],
+    v2ConsoleLog: ['source'],
+    v2StopTrigger: [],
+    v2CutChat: ['start', 'end'],
+    v2ModifyChat: ['index', 'value'],
+    v2SystemPrompt: ['location', 'value'],
+    v2Impersonate: ['role', 'value'],
+    v2Command: ['value'],
+    v2SendAIprompt: [],
+    v2CheckSimilarity: ['source', 'value', 'outputVar'],
+    v2RunLLM: ['value', 'model', 'outputVar'],
+    v2ShowAlert: ['value'],
+    v2ExtractRegex: ['value', 'regex', 'result', 'flags', 'outputVar'],
+    v2GetLastMessage: ['outputVar'],
+    v2GetMessageAtIndex: ['index', 'outputVar'],
+    v2GetMessageCount: ['outputVar'],
+    v2ModifyLorebook: ['target', 'value'],
+    v2GetLorebook: ['target', 'outputVar'],
+    v2GetLorebookCount: ['outputVar'],
+    v2GetLorebookEntry: ['index', 'outputVar'],
+    v2SetLorebookActivation: ['index', 'value'],
+    v2GetLorebookIndexViaName: ['name', 'outputVar'],
+    v2LoopNTimes: ['value'],
+    v2Random: ['min', 'max', 'outputVar'],
+    v2GetCharAt: ['source', 'index', 'outputVar'],
+    v2GetCharCount: ['source', 'outputVar'],
+    v2ToLowerCase: ['source', 'outputVar'],
+    v2ToUpperCase: ['source', 'outputVar'],
+    v2SetCharAt: ['source', 'index', 'value', 'outputVar'],
+    v2SplitString: ['source', 'delimiter', 'outputVar'],
+    v2JoinArrayVar: ['var', 'delimiter', 'outputVar'],
+    v2GetCharacterDesc: ['outputVar'],
+    v2SetCharacterDesc: ['value'],
+    v2GetPersonaDesc: ['outputVar'],
+    v2SetPersonaDesc: ['value'],
+    v2MakeArrayVar: ['var'],
+    v2GetArrayVarLength: ['var', 'outputVar'],
+    v2GetArrayVar: ['var', 'index', 'outputVar'],
+    v2SetArrayVar: ['var', 'index', 'value'],
+    v2PushArrayVar: ['var', 'value'],
+    v2PopArrayVar: ['var', 'outputVar'],
+    v2ShiftArrayVar: ['var', 'outputVar'],
+    v2UnshiftArrayVar: ['var', 'value'],
+    v2SpliceArrayVar: ['var', 'start', 'item'],
+    v2GetFirstMessage: ['outputVar'],
+    v2SliceArrayVar: ['var', 'start', 'end', 'outputVar'],
+    v2GetIndexOfValueInArrayVar: ['var', 'value', 'outputVar'],
+    v2RemoveIndexFromArrayVar: ['var', 'index'],
+    v2ConcatString: ['source1', 'source2', 'outputVar'],
+    v2GetLastUserMessage: ['outputVar'],
+    v2GetLastCharMessage: ['outputVar'],
+    v2GetAlertInput: ['display', 'outputVar'],
+    v2GetAlertSelect: ['display', 'value', 'outputVar'],
+    v2GetDisplayState: ['outputVar'],
+    v2SetDisplayState: ['value'],
+    v2UpdateGUI: [],
+    v2UpdateChatAt: ['index'],
+    v2Wait: ['value'],
+    v2GetRequestState: ['index', 'outputVar'],
+    v2SetRequestState: ['index', 'value'],
+    v2GetRequestStateRole: ['index', 'outputVar'],
+    v2SetRequestStateRole: ['index', 'value'],
+    v2GetRequestStateLength: ['outputVar'],
+    v2IfAdvanced: ['source', 'condition', 'target'],
+    v2QuickSearchChat: ['value', 'condition', 'depth', 'outputVar'],
+    v2StopPromptSending: [],
+    v2Tokenize: ['value', 'outputVar'],
+    v2GetAllLorebooks: ['outputVar'],
+    v2GetLorebookByName: ['name', 'outputVar'],
+    v2GetLorebookByIndex: ['index', 'outputVar'],
+    v2CreateLorebook: ['name', 'key', 'content', 'insertOrder'],
+    v2ModifyLorebookByIndex: ['index', 'name', 'key', 'content', 'insertOrder'],
+    v2DeleteLorebookByIndex: ['index'],
+    v2GetLorebookCountNew: ['outputVar'],
+    v2SetLorebookAlwaysActive: ['index', 'value'],
+    v2RegexTest: ['value', 'regex', 'flags', 'outputVar'],
+    v2GetReplaceGlobalNote: ['outputVar'],
+    v2SetReplaceGlobalNote: ['value'],
+    v2GetAuthorNote: ['outputVar'],
+    v2SetAuthorNote: ['value'],
+    v2MakeDictVar: ['var'],
+    v2GetDictVar: ['var', 'key', 'outputVar'],
+    v2SetDictVar: ['var', 'key', 'value'],
+    v2DeleteDictKey: ['var', 'key'],
+    v2HasDictKey: ['var', 'key', 'outputVar'],
+    v2ClearDict: ['var'],
+    v2GetDictSize: ['var', 'outputVar'],
+    v2GetDictKeys: ['var', 'outputVar'],
+    v2GetDictValues: ['var', 'outputVar'],
+    v2Calculate: ['expression', 'outputVar'],
+    v2ReplaceString: ['source', 'regex', 'result', 'replacement', 'flags', 'outputVar'],
+    v2Comment: ['value'],
+    v2DeclareLocalVar: ['var', 'value']
+} as const satisfies Record<TriggerV2SelectableType, readonly string[]>
+
+for (const [type, fieldOrder] of Object.entries(triggerV2EditorFieldOrderMap) as [TriggerV2SelectableType, readonly string[]][]) {
+    const definition = triggerV2Registry[type]
+    definition.editor = {
+        ...(definition.editor ?? {}),
+        fieldOrder
+    } as never
+}
+
+export const triggerV2Categories = triggerV2CategoryOrder.reduce((acc, category) => {
+    acc[category] = (Object.values(triggerV2Registry) as TriggerV2Definition<TriggerV2EffectType>[])
+        .filter((definition) => definition.category === category && definition.selectable !== false)
+        .map((definition) => definition.type as TriggerV2SelectableType)
+    return acc
+}, {} as Record<TriggerV2Category, TriggerV2SelectableType[]>)
+
+export const getTriggerV2Definition = <T extends TriggerV2EffectType>(type: T): TriggerV2Definition<T> => {
+    return triggerV2Registry[type] as TriggerV2Definition<T>
+}
+
+export const isTriggerV2EffectType = (type: triggerEffect['type']): type is TriggerV2EffectType => {
+    return Object.hasOwn(triggerV2Registry, type)
+}
+
+export const getTriggerV2LabelKey = <T extends TriggerV2EffectType>(type: T) => {
+    return getTriggerV2Definition(type).labelKey ?? type
+}
+
+export const getTriggerV2DescriptionKey = <T extends TriggerV2EffectType>(type: T) => {
+    return getTriggerV2Definition(type).descriptionKey ?? `${type}Desc`
+}
+
+export const getTriggerV2EditorFieldOrder = <T extends TriggerV2SelectableType>(type: T) => {
+    return [...getTriggerV2Definition(type).editor?.fieldOrder ?? []] as string[]
+}
+
+export const isTriggerV2BlockEffectType = (type: TriggerV2EffectType) => {
+    return getTriggerV2Definition(type).opensBlock === true
+}
+
+export const isTriggerV2PrimaryBlockStartType = (type: TriggerV2EffectType) => {
+    return type !== 'v2Else' && isTriggerV2BlockEffectType(type)
+}
+
+export const isTriggerV2LoopBlockType = (type: TriggerV2EffectType) => {
+    return getTriggerV2Definition(type).loopBlock === true
+}
+
+export const canTriggerV2HaveElse = (type: TriggerV2EffectType) => {
+    return getTriggerV2Definition(type).allowElse === true
+}
+
+export const isTriggerV2SpecialType = (type: TriggerV2EffectType) => {
+    return getTriggerV2Definition(type).special === true
+}
+
+export const isTriggerV2LowLevelType = (type: TriggerV2EffectType) => {
+    return getTriggerV2Definition(type).lowLevel === true
+}
+
+export const isTriggerV2DisplayAllowed = (type: TriggerV2EffectType) => {
+    return getTriggerV2Definition(type).displayAllowed === true
+}
+
+export const isTriggerV2RequestAllowed = (type: TriggerV2EffectType) => {
+    return getTriggerV2Definition(type).requestAllowed === true
+}
+
+export const displayAllowList = (Object.values(triggerV2Registry) as TriggerV2Definition<TriggerV2EffectType>[])
+    .filter((definition) => definition.displayAllowed)
+    .map((definition) => definition.type)
+
+export const requestAllowList = (Object.values(triggerV2Registry) as TriggerV2Definition<TriggerV2EffectType>[])
+    .filter((definition) => definition.requestAllowed)
+    .map((definition) => definition.type)
+
+export const createTriggerV2Default = <T extends TriggerV2SelectableType>(type: T): TriggerV2EffectByType<T> => {
+    const definition = getTriggerV2Definition(type)
+    if (!definition.createDefault) {
+        throw new Error(`Trigger definition for ${type} does not expose a default editor state.`)
+    }
+    return definition.createDefault()
+}
+
+const parseTriggerValue = (context: TriggerV2RuntimeContext, value: string) => {
+    return risuChatParser(value, { chara: context.char })
+}
+
+const resolveTriggerInput = (
+    context: TriggerV2RuntimeContext,
+    value: string,
+    valueType: 'value' | 'var'
+) => {
+    const parsedValue = parseTriggerValue(context, value)
+    return valueType === 'value' ? parsedValue : context.getVar(parsedValue)
+}
+
+const resolveTriggerNumber = (
+    context: TriggerV2RuntimeContext,
+    value: string,
+    valueType: 'value' | 'var',
+    fallback = 0
+) => {
+    const parsed = Number(resolveTriggerInput(context, value, valueType))
+    return Number.isNaN(parsed) ? fallback : parsed
+}
+
+const resolveTriggerOutputKey = (context: TriggerV2RuntimeContext, outputVar: string) => {
+    return parseTriggerValue(context, outputVar)
+}
+
+const triggerV2RuntimeHandlers: {
+    [K in TriggerV2EffectType]?: TriggerV2RuntimeHandler<K>
+} = {
+    v2Header: () => {},
+    v2If: (effect, context) => {
+        const sourceValue = context.getVar(parseTriggerValue(context, effect.source))
+        const targetValue = resolveTriggerInput(context, effect.target, effect.targetType)
+        let pass = false
+        switch (effect.condition) {
+            case '=':
+                pass = !isNaN(Number(sourceValue)) && !isNaN(Number(targetValue))
+                    ? Number(sourceValue) === Number(targetValue)
+                    : sourceValue === targetValue
+                break
+            case '!=':
+                pass = !isNaN(Number(sourceValue)) && !isNaN(Number(targetValue))
+                    ? Number(sourceValue) !== Number(targetValue)
+                    : sourceValue !== targetValue
+                break
+            case '>':
+                pass = Number(sourceValue) > Number(targetValue)
+                break
+            case '<':
+                pass = Number(sourceValue) < Number(targetValue)
+                break
+            case '>=':
+                pass = Number(sourceValue) >= Number(targetValue)
+                break
+            case '<=':
+                pass = Number(sourceValue) <= Number(targetValue)
+                break
+        }
+
+        if (!pass) {
+            let indent = effect.indent + 1
+            for (; context.state.index < context.trigger.effect.length; context.state.index++) {
+                const nextEffect = context.trigger.effect[context.state.index] as triggerEffectV2
+                if (nextEffect.type === 'v2EndIndent' && indent === nextEffect.indent) {
+                    indent--
+                    const elseEffect = context.trigger.effect[context.state.index + 1] as triggerEffectV2
+                    if (elseEffect?.type === 'v2Else' && elseEffect?.indent === indent) {
+                        context.state.index++
+                    }
+                    break
+                }
+            }
+        }
+    },
+    v2Else: (effect, context) => {
+        const indent = effect.indent + 1
+        for (; context.state.index < context.trigger.effect.length; context.state.index++) {
+            const nextEffect = context.trigger.effect[context.state.index] as triggerEffectV2
+            if (nextEffect.type === 'v2EndIndent' && indent === nextEffect.indent) {
+                break
+            }
+        }
+    },
+    v2EndIndent: async (effect, context) => {
+        if (effect.endOfLoop) {
+            const indent = effect.indent - 1
+            const originalIndex = context.state.index
+            for (; context.state.index >= 0; context.state.index--) {
+                const nextEffect = context.trigger.effect[context.state.index] as triggerEffectV2
+                if ((nextEffect.type === 'v2Loop' || nextEffect.type === 'v2LoopNTimes') && indent === nextEffect.indent) {
+                    if (nextEffect.type === 'v2LoopNTimes') {
+                        const loopLimit = resolveTriggerNumber(context, nextEffect.value, nextEffect.valueType)
+                        const loopCountKey = `${context.state.index}LoopNTimes`
+                        const loopCount = Number(context.state.tempVars[loopCountKey] ?? 0) + 1
+                        context.state.tempVars[loopCountKey] = loopCount
+
+                        if (loopCount >= loopLimit) {
+                            context.state.index = originalIndex
+                        }
+                        else {
+                            break
+                        }
+                    }
+                    break
+                }
+            }
+
+            const loopTimes = Number(context.state.tempVars.loopTimes ?? 0) + 1
+            context.state.tempVars.loopTimes = loopTimes
+            if (loopTimes > 100) {
+                await sleep(1)
+                context.state.tempVars.loopTimes = 0
+            }
+        }
+
+        context.clearLocalVarsAtIndent(effect.indent)
+    },
+    v2SetVar: (effect, context) => {
+        const effectValue = resolveTriggerInput(context, effect.value, effect.valueType)
+        const varKey = parseTriggerValue(context, effect.var)
+        let originalVar = Number(context.getVar(varKey))
+        if (Number.isNaN(originalVar)) {
+            originalVar = 0
+        }
+
+        let resultValue = ''
+        switch (effect.operator) {
+            case '=':
+                resultValue = effectValue
+                break
+            case '+=':
+                resultValue = (originalVar + Number(effectValue)).toString()
+                break
+            case '-=':
+                resultValue = (originalVar - Number(effectValue)).toString()
+                break
+            case '*=':
+                resultValue = (originalVar * Number(effectValue)).toString()
+                break
+            case '/=':
+                resultValue = (originalVar / Number(effectValue)).toString()
+                break
+            case '%=':
+                resultValue = (originalVar % Number(effectValue)).toString()
+                break
+        }
+
+        context.setVar(varKey, resultValue)
+    },
+    v2Loop: () => {},
+    v2BreakLoop: (_effect, context) => {
+        for (; context.state.index < context.trigger.effect.length; context.state.index++) {
+            const nextEffect = context.trigger.effect[context.state.index] as triggerEffectV2
+            if (nextEffect.type === 'v2EndIndent' && nextEffect.endOfLoop) {
+                break
+            }
+        }
+    },
+    v2RunTrigger: async (effect, context) => {
+        if (context.arg.recursiveCount !== undefined && context.arg.recursiveCount >= 10 && !context.trigger.lowLevelAccess) {
+            return
+        }
+
+        context.arg.recursiveCount = (context.arg.recursiveCount ?? 0) + 1
+        const result = await runTrigger(context.char, 'manual', {
+            chat: context.state.chat,
+            recursiveCount: context.arg.recursiveCount,
+            additonalSysPrompt: context.state.additonalSysPrompt,
+            stopSending: context.state.stopSending,
+            manualName: effect.target
+        })
+
+        if (result) {
+            context.state.additonalSysPrompt = result.additonalSysPrompt
+            context.state.chat = result.chat
+            context.state.stopSending = result.stopSending
+        }
+    },
+    v2ConsoleLog: (effect, context) => {
+        const sourceValue = resolveTriggerInput(context, effect.source, effect.sourceType)
+        triggerLog(sourceValue)
+    },
+    v2StopTrigger: (_effect, context) => {
+        context.state.index = context.trigger.effect.length
+    },
+    v2CutChat: (effect, context) => {
+        const start = resolveTriggerNumber(context, effect.start, effect.startType, 0)
+        const end = resolveTriggerNumber(context, effect.end, effect.endType, context.state.chat.message.length)
+        context.state.chat.message = context.state.chat.message.slice(start, end)
+    },
+    v2ModifyChat: (effect, context) => {
+        const index = resolveTriggerNumber(context, effect.index, effect.indexType)
+        const value = resolveTriggerInput(context, effect.value, effect.valueType)
+        if (context.state.chat.message[index]) {
+            context.state.chat.message[index].data = value
+        }
+    },
+    v2SystemPrompt: (effect, context) => {
+        const value = resolveTriggerInput(context, effect.value, effect.valueType)
+        context.state.additonalSysPrompt[effect.location] += `${value}\n\n`
+    },
+    v2Impersonate: (effect, context) => {
+        const value = resolveTriggerInput(context, effect.value, effect.valueType)
+        if (effect.role === 'user') {
+            context.state.chat.message.push({ role: 'user', data: value })
+        }
+        else if (effect.role === 'char') {
+            context.state.chat.message.push({ role: 'char', data: value })
+        }
+    },
+    v2Command: async (effect, context) => {
+        await processMultiCommand(resolveTriggerInput(context, effect.value, effect.valueType))
+    },
+    v2SendAIprompt: (_effect, context) => {
+        if (!context.trigger.lowLevelAccess) {
+            return
+        }
+        context.state.sendAIprompt = true
+    },
+    v2CheckSimilarity: async (effect, context) => {
+        if (!context.trigger.lowLevelAccess) {
+            return
+        }
+        const source = resolveTriggerInput(context, effect.source, effect.sourceType)
+        const value = resolveTriggerInput(context, effect.value, effect.valueType)
+        const processor = new EmbeddingProcessor()
+        await processor.addText(value.split('§'))
+        const result = await processor.similaritySearch(source)
+        context.setVar(resolveTriggerOutputKey(context, effect.outputVar), result.join('§'))
+    },
+    v2RunLLM: async (effect, context) => {
+        if (!context.trigger.lowLevelAccess) {
+            return
+        }
+
+        const value = resolveTriggerInput(context, effect.value, effect.valueType)
+        let promptBody = parseChatML(value)
+        if (!promptBody) {
+            promptBody = [{ role: 'user', content: value }]
+        }
+
+        const result = await requestChatData({
+            formated: promptBody,
+            bias: {},
+            useStreaming: false,
+            noMultiGen: true
+        }, effect.model)
+
+        if (result.type === 'fail' || result.type === 'streaming' || result.type === 'multiline') {
+            context.setVar(resolveTriggerOutputKey(context, effect.outputVar), 'null')
+            return
+        }
+        context.setVar(resolveTriggerOutputKey(context, effect.outputVar), result.result)
+    },
+    v2ShowAlert: (effect, context) => {
+        if (context.arg.displayMode) {
+            return { abortRun: true }
+        }
+        alertNormal(resolveTriggerInput(context, effect.value, effect.valueType))
+    },
+    v2ExtractRegex: (effect, context) => {
+        const value = resolveTriggerInput(context, effect.value, effect.valueType)
+        const regexValue = resolveTriggerInput(context, effect.regex, effect.regexType)
+        const flagsValue = resolveTriggerInput(context, effect.flags, effect.flagsType)
+        const resultValue = resolveTriggerInput(context, effect.result, effect.resultType)
+        const regex = new RegExp(regexValue, flagsValue)
+        const regexResult = regex.exec(value)
+
+        const result = regexResult !== null
+            ? resultValue
+                .replace(/\$[0-9]+/g, (match) => regexResult[Number(match.slice(1))] || '')
+                .replace(/\$&/g, regexResult[0] || '')
+                .replace(/\$\$/g, '$')
+            : resultValue
+                .replace(/\$[0-9]+/g, '')
+                .replace(/\$&/g, '')
+                .replace(/\$\$/g, '$')
+
+        context.setVar(resolveTriggerOutputKey(context, effect.outputVar), result)
+    },
+    v2GetLastMessage: (effect, context) => {
+        context.setVar(resolveTriggerOutputKey(context, effect.outputVar), context.state.chat.message[context.state.chat.message.length - 1]?.data ?? 'null')
+    },
+    v2GetMessageAtIndex: (effect, context) => {
+        const index = resolveTriggerNumber(context, effect.index, effect.indexType)
+        context.setVar(resolveTriggerOutputKey(context, effect.outputVar), context.state.chat.message[index]?.data ?? 'null')
+    },
+    v2GetMessageCount: (effect, context) => {
+        context.setVar(resolveTriggerOutputKey(context, effect.outputVar), context.state.chat.message.length.toString())
+    },
+    v2ModifyLorebook: (effect, context) => {
+        context.char.globalLore = context.char.globalLore ?? []
+        const target = resolveTriggerInput(context, effect.target, effect.targetType)
+        const value = resolveTriggerInput(context, effect.value, effect.valueType)
+        const index = context.char.globalLore.findIndex((entry) => entry[0] === target)
+
+        if (index !== -1) {
+            context.char.globalLore[index][1] = value
+        }
+
+        const targetCharacter = context.resolveTargetCharacter()
+        if (targetCharacter && targetCharacter.type !== 'group') {
+            targetCharacter.globalLore = context.char.globalLore
+        }
+    },
+    v2GetLorebook: (effect, context) => {
+        context.char.globalLore = context.char.globalLore ?? []
+        const target = resolveTriggerInput(context, effect.target, effect.targetType)
+        const index = context.char.globalLore.findIndex((entry) => entry[0] === target)
+        context.setVar(resolveTriggerOutputKey(context, effect.outputVar), index === -1 ? 'null' : context.char.globalLore[index][1])
+    },
+    v2GetLorebookCount: (effect, context) => {
+        context.char.globalLore = context.char.globalLore ?? []
+        context.setVar(resolveTriggerOutputKey(context, effect.outputVar), context.char.globalLore.length.toString())
+    },
+    v2GetLorebookEntry: (effect, context) => {
+        context.char.globalLore = context.char.globalLore ?? []
+        const index = resolveTriggerNumber(context, effect.index, effect.indexType, 0)
+        context.setVar(resolveTriggerOutputKey(context, effect.outputVar), context.char.globalLore[index]?.[1] ?? 'null')
+    },
+    v2SetLorebookActivation: (effect, context) => {
+        context.char.globalLore = context.char.globalLore ?? []
+        const index = resolveTriggerNumber(context, effect.index, effect.indexType)
+        context.char.globalLore[index][2] = effect.value
+
+        const targetCharacter = context.resolveTargetCharacter()
+        if (targetCharacter && targetCharacter.type !== 'group') {
+            targetCharacter.globalLore = context.char.globalLore
+        }
+    },
+    v2GetLorebookIndexViaName: (effect, context) => {
+        context.char.globalLore = context.char.globalLore ?? []
+        const name = resolveTriggerInput(context, effect.name, effect.nameType)
+        const index = context.char.globalLore.findIndex((entry) => entry[0] === name)
+        context.setVar(resolveTriggerOutputKey(context, effect.outputVar), index.toString())
+    },
+    v2LoopNTimes: () => {},
+    v2Random: (effect, context) => {
+        const min = resolveTriggerNumber(context, effect.min, effect.minType)
+        const max = resolveTriggerNumber(context, effect.max, effect.maxType)
+        const output = Math.floor(Math.random() * (max - min + 1) + min)
+        context.setVar(resolveTriggerOutputKey(context, effect.outputVar), output.toString())
+    },
+    v2GetCharAt: (effect, context) => {
+        const source = resolveTriggerInput(context, effect.source, effect.sourceType)
+        const index = resolveTriggerNumber(context, effect.index, effect.indexType)
+        context.setVar(resolveTriggerOutputKey(context, effect.outputVar), source[index] ?? 'null')
+    },
+    v2GetCharCount: (effect, context) => {
+        const source = resolveTriggerInput(context, effect.source, effect.sourceType)
+        context.setVar(resolveTriggerOutputKey(context, effect.outputVar), source.length.toString())
+    },
+    v2ToLowerCase: (effect, context) => {
+        context.setVar(resolveTriggerOutputKey(context, effect.outputVar), resolveTriggerInput(context, effect.source, effect.sourceType).toLowerCase())
+    },
+    v2ToUpperCase: (effect, context) => {
+        context.setVar(resolveTriggerOutputKey(context, effect.outputVar), resolveTriggerInput(context, effect.source, effect.sourceType).toUpperCase())
+    },
+    v2SetCharAt: (effect, context) => {
+        const source = resolveTriggerInput(context, effect.source, effect.sourceType)
+        const index = resolveTriggerNumber(context, effect.index, effect.indexType)
+        const value = resolveTriggerInput(context, effect.value, effect.valueType)
+        const chars = [...source]
+        chars[index] = value
+        context.setVar(resolveTriggerOutputKey(context, effect.outputVar), chars.join(''))
+    },
+    v2SplitString: (effect, context) => {
+        const source = resolveTriggerInput(context, effect.source, effect.sourceType)
+        let delimiter = effect.delimiterType === 'regex'
+            ? parseTriggerValue(context, effect.delimiter)
+            : resolveTriggerInput(context, effect.delimiter, effect.delimiterType)
+
+        let result: string[]
+        if (effect.delimiterType === 'regex') {
+            try {
+                const regexMatch = delimiter.match(/^\/(.+)\/([gimuy]*)$/)
+                if (regexMatch) {
+                    const [, pattern, flags] = regexMatch
+                    result = source.split(new RegExp(pattern, flags))
+                }
+                else {
+                    result = source.split(new RegExp(delimiter))
+                }
+            }
+            catch {
+                result = [source]
+            }
+        }
+        else {
+            result = source.split(delimiter)
+        }
+
+        context.setVar(resolveTriggerOutputKey(context, effect.outputVar), JSON.stringify(result))
+    },
+    v2JoinArrayVar: (effect, context) => {
+        try {
+            const varValue = resolveTriggerInput(context, effect.var, effect.varType)
+            const delimiter = resolveTriggerInput(context, effect.delimiter, effect.delimiterType)
+            const arrayValue = JSON.parse(varValue)
+            context.setVar(resolveTriggerOutputKey(context, effect.outputVar), arrayValue.join(delimiter))
+        }
+        catch {
+            context.setVar(resolveTriggerOutputKey(context, effect.outputVar), '')
+        }
+    },
+    v2GetCharacterDesc: (effect, context) => {
+        context.setVar(resolveTriggerOutputKey(context, effect.outputVar), context.char.desc)
+    },
+    v2SetCharacterDesc: (effect, context) => {
+        const value = resolveTriggerInput(context, effect.value, effect.valueType)
+        context.char.desc = value
+        const targetCharacter = context.resolveTargetCharacter()
+        if (targetCharacter && targetCharacter.type !== 'group') {
+            targetCharacter.desc = value
+        }
+    },
+    v2GetPersonaDesc: (effect, context) => {
+        const db = getDatabase()
+        const currentPersonaPrompt = db.personaPrompt ?? ''
+        const savedPersonaPrompt = db.personas[db.selectedPersona]?.personaPrompt ?? ''
+        context.setVar(resolveTriggerOutputKey(context, effect.outputVar), currentPersonaPrompt || savedPersonaPrompt)
+    },
+    v2SetPersonaDesc: (effect, context) => {
+        const value = resolveTriggerInput(context, effect.value, effect.valueType)
+        const db = getDatabase()
+        if (db.personas[db.selectedPersona]) {
+            db.personas[db.selectedPersona].personaPrompt = value
+            db.personaPrompt = value
+            setDatabase(db)
+        }
+    },
+    v2MakeArrayVar: (effect, context) => {
+        const varName = parseTriggerValue(context, effect.var)
+        if (varName.startsWith('[') && varName.endsWith(']')) {
+            return { abortRun: true }
+        }
+        context.setVar(varName, '[]')
+    },
+    v2GetArrayVarLength: (effect, context) => {
+        try {
+            const varValue = context.getVar(parseTriggerValue(context, effect.var))
+            const arrayValue = JSON.parse(varValue)
+            context.setVar(resolveTriggerOutputKey(context, effect.outputVar), arrayValue.length.toString())
+        }
+        catch {
+            context.setVar(resolveTriggerOutputKey(context, effect.outputVar), '0')
+        }
+    },
+    v2GetArrayVar: (effect, context) => {
+        try {
+            const varValue = context.getVar(parseTriggerValue(context, effect.var))
+            const arrayValue = JSON.parse(varValue)
+            const index = resolveTriggerNumber(context, effect.index, effect.indexType)
+            context.setVar(resolveTriggerOutputKey(context, effect.outputVar), arrayValue[index] ?? 'null')
+        }
+        catch {
+            context.setVar(resolveTriggerOutputKey(context, effect.outputVar), 'null')
+        }
+    },
+    v2SetArrayVar: (effect, context) => {
+        const index = resolveTriggerNumber(context, effect.index, effect.indexType, Number.NaN)
+        if (Number.isNaN(index)) {
+            return
+        }
+        try {
+            const varName = parseTriggerValue(context, effect.var)
+            const arrayValue = JSON.parse(context.getVar(varName))
+            arrayValue[index] = resolveTriggerInput(context, effect.value, effect.valueType)
+            context.setVar(varName, JSON.stringify(arrayValue))
+        }
+        catch {
+            // keep legacy silent failure behavior
+        }
+    },
+    v2PushArrayVar: (effect, context) => {
+        try {
+            const varName = parseTriggerValue(context, effect.var)
+            const arrayValue = JSON.parse(context.getVar(varName))
+            arrayValue.push(resolveTriggerInput(context, effect.value, effect.valueType))
+            context.setVar(varName, JSON.stringify(arrayValue))
+        }
+        catch {
+            context.setVar(parseTriggerValue(context, effect.var), '[]')
+        }
+    },
+    v2PopArrayVar: (effect, context) => {
+        try {
+            const varName = parseTriggerValue(context, effect.var)
+            const arrayValue = JSON.parse(context.getVar(varName))
+            context.setVar(resolveTriggerOutputKey(context, effect.outputVar), arrayValue.pop() ?? 'null')
+            context.setVar(varName, JSON.stringify(arrayValue))
+        }
+        catch {
+            const varName = parseTriggerValue(context, effect.var)
+            context.setVar(varName, '[]')
+            context.setVar(resolveTriggerOutputKey(context, effect.outputVar), 'null')
+        }
+    },
+    v2ShiftArrayVar: (effect, context) => {
+        try {
+            const varName = parseTriggerValue(context, effect.var)
+            const arrayValue = JSON.parse(context.getVar(varName))
+            context.setVar(resolveTriggerOutputKey(context, effect.outputVar), arrayValue.shift() ?? 'null')
+            context.setVar(varName, JSON.stringify(arrayValue))
+        }
+        catch {
+            const varName = parseTriggerValue(context, effect.var)
+            context.setVar(varName, '[]')
+            context.setVar(resolveTriggerOutputKey(context, effect.outputVar), 'null')
+        }
+    },
+    v2UnshiftArrayVar: (effect, context) => {
+        try {
+            const varName = parseTriggerValue(context, effect.var)
+            const arrayValue = JSON.parse(context.getVar(varName))
+            arrayValue.unshift(resolveTriggerInput(context, effect.value, effect.valueType))
+            context.setVar(varName, JSON.stringify(arrayValue))
+        }
+        catch {
+            context.setVar(parseTriggerValue(context, effect.var), '[]')
+        }
+    },
+    v2SpliceArrayVar: (effect, context) => {
+        try {
+            const varName = parseTriggerValue(context, effect.var)
+            const arrayValue = JSON.parse(context.getVar(varName))
+            const start = resolveTriggerNumber(context, effect.start, effect.startType)
+            const value = resolveTriggerInput(context, effect.item, effect.itemType)
+            arrayValue.splice(start, 0, value)
+            context.setVar(varName, JSON.stringify(arrayValue))
+        }
+        catch {
+            context.setVar(parseTriggerValue(context, effect.var), '[]')
+        }
+    },
+    v2GetFirstMessage: (effect, context) => {
+        context.setVar(
+            resolveTriggerOutputKey(context, effect.outputVar),
+            context.state.chat.fmIndex === -1 ? context.char.firstMessage : context.char.alternateGreetings[context.state.chat.fmIndex]
+        )
+    },
+    v2SliceArrayVar: (effect, context) => {
+        try {
+            const varName = parseTriggerValue(context, effect.var)
+            const arrayValue = JSON.parse(context.getVar(varName))
+            const start = resolveTriggerNumber(context, effect.start, effect.startType)
+            const end = resolveTriggerNumber(context, effect.end, effect.endType)
+            context.setVar(resolveTriggerOutputKey(context, effect.outputVar), JSON.stringify(arrayValue.slice(start, end)))
+        }
+        catch {
+            context.setVar(resolveTriggerOutputKey(context, effect.outputVar), '[]')
+        }
+    },
+    v2GetIndexOfValueInArrayVar: (effect, context) => {
+        try {
+            const arrayValue = JSON.parse(context.getVar(parseTriggerValue(context, effect.var)))
+            const value = resolveTriggerInput(context, effect.value, effect.valueType)
+            context.setVar(resolveTriggerOutputKey(context, effect.outputVar), arrayValue.indexOf(value).toString())
+        }
+        catch {
+            context.setVar(resolveTriggerOutputKey(context, effect.outputVar), '-1')
+        }
+    },
+    v2RemoveIndexFromArrayVar: (effect, context) => {
+        try {
+            const varName = parseTriggerValue(context, effect.var)
+            const arrayValue = JSON.parse(context.getVar(varName))
+            const index = resolveTriggerNumber(context, effect.index, effect.indexType)
+            arrayValue.splice(index, 1)
+            context.setVar(varName, JSON.stringify(arrayValue))
+        }
+        catch {
+            context.setVar(parseTriggerValue(context, effect.var), '[]')
+        }
+    },
+    v2ConcatString: (effect, context) => {
+        const source1 = resolveTriggerInput(context, effect.source1, effect.source1Type)
+        const source2 = resolveTriggerInput(context, effect.source2, effect.source2Type)
+        context.setVar(resolveTriggerOutputKey(context, effect.outputVar), source1 + source2)
+    },
+    v2GetLastUserMessage: (effect, context) => {
+        const lastUserMessage = context.state.chat.message.slice().reverse().find((message) => message.role === 'user')
+        context.setVar(resolveTriggerOutputKey(context, effect.outputVar), lastUserMessage?.data ?? 'null')
+    },
+    v2GetLastCharMessage: (effect, context) => {
+        const lastCharMessage = context.state.chat.message.slice().reverse().find((message) => message.role === 'char')
+        context.setVar(resolveTriggerOutputKey(context, effect.outputVar), lastCharMessage?.data ?? 'null')
+    },
+    v2GetAlertInput: async (effect, context) => {
+        if (context.arg.displayMode) {
+            return { abortRun: true }
+        }
+        const value = await alertInput(resolveTriggerInput(context, effect.display, effect.displayType))
+        context.setVar(resolveTriggerOutputKey(context, effect.outputVar), value)
+    },
+    v2GetAlertSelect: async (effect, context) => {
+        if (context.arg.displayMode) {
+            return { abortRun: true }
+        }
+        const display = resolveTriggerInput(context, effect.display, effect.displayType)
+        const value = resolveTriggerInput(context, effect.value, effect.valueType)
+        const result = await alertSelect(value.split('|'), display)
+        context.setVar(resolveTriggerOutputKey(context, effect.outputVar), result)
+    },
+    v2GetDisplayState: (effect, context) => {
+        if (!context.arg.displayMode) {
+            return { abortRun: true }
+        }
+        context.setVar(resolveTriggerOutputKey(context, effect.outputVar), context.state.displayData ?? 'null')
+    },
+    v2SetDisplayState: (effect, context) => {
+        if (!context.arg.displayMode) {
+            return { abortRun: true }
+        }
+        context.state.displayData = resolveTriggerInput(context, effect.value, effect.valueType)
+    },
+    v2UpdateGUI: () => {
+        ReloadGUIPointer.set(get(ReloadGUIPointer) + 1)
+    },
+    v2UpdateChatAt: (effect) => {
+        ReloadChatPointer.update((value) => {
+            value[effect.index] = (value[effect.index] ?? 0) + 1
+            return value
+        })
+    },
+    v2Wait: async (effect, context) => {
+        await sleep(resolveTriggerNumber(context, effect.value, effect.valueType) * 1000)
+    },
+    v2GetRequestState: (effect, context) => {
+        if (!context.arg.displayMode) {
+            return { abortRun: true }
+        }
+        const requestState = JSON.parse(context.state.displayData) as OpenAIChat[]
+        const index = resolveTriggerNumber(context, effect.index, effect.indexType)
+        context.setVar(resolveTriggerOutputKey(context, effect.outputVar), requestState?.[index]?.content ?? 'null')
+    },
+    v2SetRequestState: (effect, context) => {
+        if (!context.arg.displayMode) {
+            return { abortRun: true }
+        }
+        const requestState = JSON.parse(context.state.displayData) as OpenAIChat[]
+        const index = resolveTriggerNumber(context, effect.index, effect.indexType)
+        requestState[index].content = resolveTriggerInput(context, effect.value, effect.valueType)
+        context.state.displayData = JSON.stringify(requestState)
+    },
+    v2GetRequestStateRole: (effect, context) => {
+        if (!context.arg.displayMode) {
+            return { abortRun: true }
+        }
+        const requestState = JSON.parse(context.state.displayData) as OpenAIChat[]
+        const index = resolveTriggerNumber(context, effect.index, effect.indexType)
+        context.setVar(resolveTriggerOutputKey(context, effect.outputVar), requestState?.[index]?.role ?? 'null')
+    },
+    v2SetRequestStateRole: (effect, context) => {
+        if (!context.arg.displayMode) {
+            return { abortRun: true }
+        }
+        const requestState = JSON.parse(context.state.displayData) as OpenAIChat[]
+        const index = resolveTriggerNumber(context, effect.index, effect.indexType)
+        const value = resolveTriggerInput(context, effect.value, effect.valueType)
+        if (value === 'user' || value === 'assistant' || value === 'system') {
+            requestState[index].role = value
+        }
+        context.state.displayData = JSON.stringify(requestState)
+    },
+    v2GetRequestStateLength: (effect, context) => {
+        if (!context.arg.displayMode) {
+            return { abortRun: true }
+        }
+        const requestState = JSON.parse(context.state.displayData) as OpenAIChat[]
+        context.setVar(resolveTriggerOutputKey(context, effect.outputVar), requestState.length.toString())
+    },
+    v2IfAdvanced: (effect, context) => {
+        const sourceValue = effect.sourceType === 'var'
+            ? context.getVar(parseTriggerValue(context, effect.source))
+            : parseTriggerValue(context, effect.source)
+        const targetValue = resolveTriggerInput(context, effect.target, effect.targetType)
+        let pass = false
+
+        switch (effect.condition) {
+            case '=':
+                pass = !isNaN(Number(sourceValue)) && !isNaN(Number(targetValue))
+                    ? Number(sourceValue) === Number(targetValue)
+                    : sourceValue === targetValue
+                break
+            case '!=':
+                pass = !isNaN(Number(sourceValue)) && !isNaN(Number(targetValue))
+                    ? Number(sourceValue) !== Number(targetValue)
+                    : sourceValue !== targetValue
+                break
+            case '>':
+                pass = Number(sourceValue) > Number(targetValue)
+                break
+            case '<':
+                pass = Number(sourceValue) < Number(targetValue)
+                break
+            case '>=':
+                pass = Number(sourceValue) >= Number(targetValue)
+                break
+            case '<=':
+                pass = Number(sourceValue) <= Number(targetValue)
+                break
+            case '∈':
+                try {
+                    pass = JSON.parse(targetValue).includes(sourceValue)
+                }
+                catch {
+                    pass = false
+                }
+                break
+            case '∋':
+                try {
+                    pass = JSON.parse(sourceValue).includes(targetValue)
+                }
+                catch {
+                    pass = false
+                }
+                break
+            case '∉':
+                try {
+                    pass = !JSON.parse(targetValue).includes(sourceValue)
+                }
+                catch {
+                    pass = true
+                }
+                break
+            case '∌':
+                try {
+                    pass = !JSON.parse(sourceValue).includes(targetValue)
+                }
+                catch {
+                    pass = true
+                }
+                break
+            case '≒': {
+                const sourceNumber = Number(sourceValue)
+                const targetNumber = Number(targetValue)
+                pass = Number.isNaN(sourceNumber) || Number.isNaN(targetNumber)
+                    ? sourceValue.toLocaleLowerCase().replace(/ /g, '') === targetValue.toLocaleLowerCase().replace(/ /g, '')
+                    : Math.abs(sourceNumber - targetNumber) < 0.0001
+                break
+            }
+            case '≡':
+                if (targetValue === 'true') {
+                    pass = sourceValue === 'true' || sourceValue === '1'
+                }
+                else if (targetValue === 'false') {
+                    pass = !(sourceValue === 'true' || sourceValue === '1')
+                }
+                else {
+                    pass = sourceValue === targetValue
+                }
+                break
+        }
+
+        if (!pass) {
+            let indent = effect.indent + 1
+            for (; context.state.index < context.trigger.effect.length; context.state.index++) {
+                const nextEffect = context.trigger.effect[context.state.index] as triggerEffectV2
+                if (nextEffect.type === 'v2EndIndent' && indent === nextEffect.indent) {
+                    indent--
+                    const elseEffect = context.trigger.effect[context.state.index + 1] as triggerEffectV2
+                    if (elseEffect?.type === 'v2Else' && elseEffect?.indent === indent) {
+                        context.state.index++
+                    }
+                    break
+                }
+            }
+        }
+    },
+    v2QuickSearchChat: (effect, context) => {
+        const value = resolveTriggerInput(context, effect.value, effect.valueType)
+        const depth = resolveTriggerNumber(context, effect.depth, effect.depthType, Number.NaN)
+        if (Number.isNaN(depth)) {
+            context.setVar(resolveTriggerOutputKey(context, effect.outputVar), '0')
+            return
+        }
+        const searchText = context.state.chat.message.slice(0 - depth).map((message) => message.data).join(' ')
+        let pass = false
+        if (effect.condition === 'strict') {
+            pass = searchText.split(' ').includes(value)
+        }
+        else if (effect.condition === 'loose') {
+            pass = searchText.toLowerCase().includes(value.toLowerCase())
+        }
+        else if (effect.condition === 'regex') {
+            pass = new RegExp(value).test(searchText)
+        }
+        context.setVar(resolveTriggerOutputKey(context, effect.outputVar), pass ? '1' : '0')
+    },
+    v2StopPromptSending: (_effect, context) => {
+        context.state.stopSending = true
+    },
+    v2Tokenize: async (effect, context) => {
+        const value = resolveTriggerInput(context, effect.value, effect.valueType)
+        context.setVar(resolveTriggerOutputKey(context, effect.outputVar), (await tokenize(value)).toString())
+    },
+    v2GetAllLorebooks: (effect, context) => {
+        context.char.globalLore = context.char.globalLore ?? []
+        const allPrompts = context.char.globalLore
+            .filter((lore) => lore && lore.content !== undefined)
+            .map((lore) => lore.content)
+        context.setVar(resolveTriggerOutputKey(context, effect.outputVar), JSON.stringify(allPrompts))
+    },
+    v2GetLorebookByName: (effect, context) => {
+        context.char.globalLore = context.char.globalLore ?? []
+        const name = resolveTriggerInput(context, effect.name, effect.nameType)
+        const regex = new RegExp(name, 'i')
+        const matchingIndices = context.char.globalLore
+            .map((lore, index) => {
+                if (lore && lore.comment !== undefined && regex.test(lore.comment)) {
+                    return index
+                }
+                return -1
+            })
+            .filter((index) => index !== -1)
+        context.setVar(resolveTriggerOutputKey(context, effect.outputVar), JSON.stringify(matchingIndices))
+    },
+    v2GetLorebookByIndex: (effect, context) => {
+        context.char.globalLore = context.char.globalLore ?? []
+        const index = resolveTriggerNumber(context, effect.index, effect.indexType, Number.NaN)
+        if (Number.isNaN(index) || index < 0 || index >= context.char.globalLore.length) {
+            context.setVar(resolveTriggerOutputKey(context, effect.outputVar), 'null')
+            return
+        }
+        const loreEntry = context.char.globalLore[index]
+        context.setVar(resolveTriggerOutputKey(context, effect.outputVar), loreEntry?.content ?? 'null')
+    },
+    v2CreateLorebook: (effect, context) => {
+        context.char.globalLore = context.char.globalLore ?? []
+        const name = resolveTriggerInput(context, effect.name, effect.nameType)
+        const key = resolveTriggerInput(context, effect.key, effect.keyType)
+        const content = resolveTriggerInput(context, effect.content, effect.contentType)
+        const insertOrder = resolveTriggerNumber(context, effect.insertOrder, effect.insertOrderType, 100)
+        context.char.globalLore.push({
+            key,
+            comment: name,
+            content,
+            mode: 'normal',
+            insertorder: insertOrder,
+            alwaysActive: false,
+            secondkey: '',
+            selective: false
+        })
+
+        const targetCharacter = context.resolveTargetCharacter()
+        if (targetCharacter && targetCharacter.type !== 'group') {
+            targetCharacter.globalLore = context.char.globalLore
+        }
+    },
+    v2ModifyLorebookByIndex: (effect, context) => {
+        context.char.globalLore = context.char.globalLore ?? []
+        const index = resolveTriggerNumber(context, effect.index, effect.indexType, Number.NaN)
+        if (Number.isNaN(index) || index < 0 || index >= context.char.globalLore.length || !context.char.globalLore[index]) {
+            return
+        }
+
+        const currentLore = context.char.globalLore[index]
+        let name = resolveTriggerInput(context, effect.name, effect.nameType).replace(/{{slot}}/g, currentLore.comment || '')
+        let key = resolveTriggerInput(context, effect.key, effect.keyType).replace(/{{slot}}/g, currentLore.key || '')
+        let content = resolveTriggerInput(context, effect.content, effect.contentType).replace(/{{slot}}/g, currentLore.content || '')
+        let insertOrder = resolveTriggerInput(context, effect.insertOrder, effect.insertOrderType)
+            .replace(/{{slot}}/g, (currentLore.insertorder || 100).toString())
+
+        context.char.globalLore[index].comment = name
+        context.char.globalLore[index].key = key
+        context.char.globalLore[index].content = content
+        const insertOrderNumber = Number(insertOrder)
+        if (!Number.isNaN(insertOrderNumber)) {
+            context.char.globalLore[index].insertorder = insertOrderNumber
+        }
+
+        const targetCharacter = context.resolveTargetCharacter()
+        if (targetCharacter && targetCharacter.type !== 'group') {
+            targetCharacter.globalLore = context.char.globalLore
+        }
+    },
+    v2DeleteLorebookByIndex: (effect, context) => {
+        context.char.globalLore = context.char.globalLore ?? []
+        const index = resolveTriggerNumber(context, effect.index, effect.indexType, Number.NaN)
+        if (Number.isNaN(index) || index < 0 || index >= context.char.globalLore.length || !context.char.globalLore[index]) {
+            return
+        }
+        context.char.globalLore.splice(index, 1)
+
+        const targetCharacter = context.resolveTargetCharacter()
+        if (targetCharacter && targetCharacter.type !== 'group') {
+            targetCharacter.globalLore = context.char.globalLore
+        }
+    },
+    v2GetLorebookCountNew: (effect, context) => {
+        context.char.globalLore = context.char.globalLore ?? []
+        context.setVar(resolveTriggerOutputKey(context, effect.outputVar), context.char.globalLore.length.toString())
+    },
+    v2SetLorebookAlwaysActive: (effect, context) => {
+        context.char.globalLore = context.char.globalLore ?? []
+        const index = resolveTriggerNumber(context, effect.index, effect.indexType, Number.NaN)
+        if (Number.isNaN(index) || index < 0 || index >= context.char.globalLore.length || !context.char.globalLore[index]) {
+            return
+        }
+        context.char.globalLore[index].alwaysActive = effect.value
+
+        const targetCharacter = context.resolveTargetCharacter()
+        if (targetCharacter && targetCharacter.type !== 'group') {
+            targetCharacter.globalLore = context.char.globalLore
+        }
+    },
+    v2RegexTest: (effect, context) => {
+        try {
+            const value = resolveTriggerInput(context, effect.value, effect.valueType)
+            const regexPattern = resolveTriggerInput(context, effect.regex, effect.regexType)
+            const flags = resolveTriggerInput(context, effect.flags, effect.flagsType)
+            const result = new RegExp(regexPattern, flags).test(value)
+            context.setVar(resolveTriggerOutputKey(context, effect.outputVar), result ? '1' : '0')
+        }
+        catch {
+            context.setVar(resolveTriggerOutputKey(context, effect.outputVar), '0')
+        }
+    },
+    v2GetReplaceGlobalNote: (effect, context) => {
+        context.setVar(resolveTriggerOutputKey(context, effect.outputVar), context.char.replaceGlobalNote ?? '')
+    },
+    v2SetReplaceGlobalNote: (effect, context) => {
+        const value = resolveTriggerInput(context, effect.value, effect.valueType)
+        context.char.replaceGlobalNote = value
+        const targetCharacter = context.resolveTargetCharacter()
+        if (targetCharacter && targetCharacter.type !== 'group') {
+            targetCharacter.replaceGlobalNote = value
+        }
+    },
+    v2GetAuthorNote: (effect, context) => {
+        context.setVar(resolveTriggerOutputKey(context, effect.outputVar), context.state.chat.note ?? '')
+    },
+    v2SetAuthorNote: (effect, context) => {
+        const value = resolveTriggerInput(context, effect.value, effect.valueType)
+        context.state.chat.note = value
+        if (!context.arg.displayMode) {
+            const targetChat = context.resolveTargetChat()
+            if (targetChat) {
+                targetChat.note = value
+            }
+        }
+    },
+    v2MakeDictVar: (effect, context) => {
+        if (effect.var.startsWith('{') && effect.var.endsWith('}')) {
+            return { abortRun: true }
+        }
+        context.setVar(parseTriggerValue(context, effect.var), '{}')
+    },
+    v2GetDictVar: (effect, context) => {
+        try {
+            const dict = JSON.parse(resolveTriggerInput(context, effect.var, effect.varType))
+            const key = resolveTriggerInput(context, effect.key, effect.keyType)
+            context.setVar(resolveTriggerOutputKey(context, effect.outputVar), dict[key] ?? 'null')
+        }
+        catch {
+            context.setVar(resolveTriggerOutputKey(context, effect.outputVar), 'null')
+        }
+    },
+    v2SetDictVar: (effect, context) => {
+        try {
+            if (effect.varType === 'value') {
+                return
+            }
+            const varName = parseTriggerValue(context, effect.var)
+            const dict = JSON.parse(context.getVar(varName))
+            const key = resolveTriggerInput(context, effect.key, effect.keyType)
+            const value = resolveTriggerInput(context, effect.value, effect.valueType)
+            dict[key] = value
+            context.setVar(varName, JSON.stringify(dict))
+        }
+        catch {
+            if (effect.varType === 'var') {
+                const dict = {}
+                dict[resolveTriggerInput(context, effect.key, effect.keyType)] = resolveTriggerInput(context, effect.value, effect.valueType)
+                context.setVar(parseTriggerValue(context, effect.var), JSON.stringify(dict))
+            }
+        }
+    },
+    v2DeleteDictKey: (effect, context) => {
+        try {
+            if (effect.varType === 'value') {
+                return
+            }
+            const varName = parseTriggerValue(context, effect.var)
+            const dict = JSON.parse(context.getVar(varName))
+            delete dict[resolveTriggerInput(context, effect.key, effect.keyType)]
+            context.setVar(varName, JSON.stringify(dict))
+        }
+        catch {
+            if (effect.varType === 'var') {
+                context.setVar(parseTriggerValue(context, effect.var), '{}')
+            }
+        }
+    },
+    v2HasDictKey: (effect, context) => {
+        try {
+            const dict = JSON.parse(resolveTriggerInput(context, effect.var, effect.varType))
+            const key = resolveTriggerInput(context, effect.key, effect.keyType)
+            context.setVar(resolveTriggerOutputKey(context, effect.outputVar), Object.hasOwn(dict, key) ? '1' : '0')
+        }
+        catch {
+            context.setVar(resolveTriggerOutputKey(context, effect.outputVar), '0')
+        }
+    },
+    v2ClearDict: (effect, context) => {
+        if (effect.var.startsWith('{') && effect.var.endsWith('}')) {
+            return { abortRun: true }
+        }
+        context.setVar(parseTriggerValue(context, effect.var), '{}')
+    },
+    v2GetDictSize: (effect, context) => {
+        try {
+            const dict = JSON.parse(resolveTriggerInput(context, effect.var, effect.varType))
+            context.setVar(resolveTriggerOutputKey(context, effect.outputVar), Object.keys(dict).length.toString())
+        }
+        catch {
+            context.setVar(resolveTriggerOutputKey(context, effect.outputVar), '0')
+        }
+    },
+    v2GetDictKeys: (effect, context) => {
+        try {
+            const dict = JSON.parse(resolveTriggerInput(context, effect.var, effect.varType))
+            context.setVar(resolveTriggerOutputKey(context, effect.outputVar), JSON.stringify(Object.keys(dict)))
+        }
+        catch {
+            context.setVar(resolveTriggerOutputKey(context, effect.outputVar), '[]')
+        }
+    },
+    v2GetDictValues: (effect, context) => {
+        try {
+            const dict = JSON.parse(resolveTriggerInput(context, effect.var, effect.varType))
+            context.setVar(resolveTriggerOutputKey(context, effect.outputVar), JSON.stringify(Object.values(dict)))
+        }
+        catch {
+            context.setVar(resolveTriggerOutputKey(context, effect.outputVar), '[]')
+        }
+    },
+    v2Calculate: (effect, context) => {
+        try {
+            let expression = resolveTriggerInput(context, effect.expression, effect.expressionType)
+            expression = expression.replace(/\$([a-zA-Z0-9_]+)/g, (_match, varName) => {
+                const parsed = parseFloat(context.getVar(varName))
+                return Number.isNaN(parsed) ? '0' : parsed.toString()
+            })
+            context.setVar(resolveTriggerOutputKey(context, effect.outputVar), calcString(expression).toString())
+        }
+        catch {
+            context.setVar(resolveTriggerOutputKey(context, effect.outputVar), '0')
+        }
+    },
+    v2ReplaceString: (effect, context) => {
+        try {
+            const source = resolveTriggerInput(context, effect.source, effect.sourceType)
+            const regexPattern = resolveTriggerInput(context, effect.regex, effect.regexType)
+            const resultFormat = resolveTriggerInput(context, effect.result, effect.resultType)
+            const replacement = resolveTriggerInput(context, effect.replacement, effect.replacementType)
+            const flags = resolveTriggerInput(context, effect.flags, effect.flagsType)
+
+            const regex = new RegExp(regexPattern, flags)
+            const result = source.replace(regex, (...args) => {
+                const match = args[0]
+                const groups = args.slice(1, -2)
+                const targetGroupMatch = resultFormat.match(/^\$(\d+)$/)
+
+                if (targetGroupMatch) {
+                    const targetIndex = Number(targetGroupMatch[1])
+                    if (targetIndex === 0) {
+                        return replacement
+                    }
+                    const targetGroup = groups[targetIndex - 1]
+                    if (targetGroup) {
+                        return match.replace(targetGroup, replacement)
+                    }
+                }
+
+                return resultFormat
+                    .replace(/\$[0-9]+/g, (placeholder) => {
+                        const index = Number(placeholder.slice(1))
+                        return index === 0 ? match : (groups[index - 1] || '')
+                    })
+                    .replace(/\$&/g, match)
+                    .replace(/\$\$/g, '$')
+            })
+
+            context.setVar(resolveTriggerOutputKey(context, effect.outputVar), result)
+        }
+        catch {
+            context.setVar(resolveTriggerOutputKey(context, effect.outputVar), resolveTriggerInput(context, effect.source, effect.sourceType))
+        }
+    },
+    v2Comment: () => {},
+    v2DeclareLocalVar: (effect, context) => {
+        const effectValue = resolveTriggerInput(context, effect.value, effect.valueType)
+        const varKey = parseTriggerValue(context, effect.var)
+        const finalValue = effectValue === null || effectValue === undefined ? 'null' : effectValue
+        context.declareLocalVar(varKey, finalValue, effect.indent)
+    }
+}
+
+for (const [type, handler] of Object.entries(triggerV2RuntimeHandlers) as [TriggerV2EffectType, TriggerV2RuntimeHandler<TriggerV2EffectType>][]) {
+    if (handler) {
+        triggerV2Registry[type].run = handler as never
+    }
+}
+
+export async function runTrigger(char:character,mode:triggerMode, arg:RunTriggerArg){
     arg.recursiveCount ??= 0
     char = arg.displayMode ? char : safeStructuredClone(char)
     let varChanged = false
@@ -1110,7 +3830,7 @@ export async function runTrigger(char:character,mode:triggerMode, arg:{
         return null
     }
 
-    const tempVars:Record<string, string> = arg.tempVars ?? {}
+    const tempVars:Record<string, string | number> = arg.tempVars ?? {}
     
     let localVarScopes: Record<number, Record<string, string>>[] = [{}]
     let currentIndent = 0
@@ -1199,7 +3919,7 @@ export async function runTrigger(char:character,mode:triggerMode, arg:{
                 return findResult[1]
             }
             if(arg.displayMode){
-                return tempVars[key] ?? 'null'
+                return String(tempVars[key] ?? 'null')
             }
             return 'null'
         }
@@ -1326,10 +4046,10 @@ export async function runTrigger(char:character,mode:triggerMode, arg:{
 
         for(let index = 0; index < trigger.effect.length; index++){
             const effect = trigger.effect[index]
-            if(mode === 'display' && !displayAllowList.includes(effect.type)){
+            if(mode === 'display' && (!isTriggerV2EffectType(effect.type) || !isTriggerV2DisplayAllowed(effect.type))){
                 continue
             }
-            if(mode === 'request' && !requestAllowList.includes(effect.type)){
+            if(mode === 'request' && (!isTriggerV2EffectType(effect.type) || !isTriggerV2RequestAllowed(effect.type))){
                 continue
             }
             
@@ -1393,8 +4113,7 @@ export async function runTrigger(char:character,mode:triggerMode, arg:{
                     await processMultiCommand(effectValue)
                     break
                 }
-                case 'stop':
-                case 'v2StopPromptSending':{
+                case 'stop':{
                     stopSending = true
                     break
                 }
@@ -1548,1212 +4267,52 @@ export async function runTrigger(char:character,mode:triggerMode, arg:{
                     chat = triggerCodeResult.chat
                     break
                 }
-
-                //V2 triggers
-                case 'v2Header':{
-                    //Header for V2 triggers to identify the start of a new trigger
-                    break
-                }
-                case 'v2SetVar':{
-                    const effectValue = effect.valueType === 'value' ? risuChatParser(effect.value,{chara:char}) : getVar(risuChatParser(effect.value,{chara:char}))
-                    const varKey  = risuChatParser(effect.var,{chara:char})
-                    let originalVar = Number(getVar(varKey))
-                    if(Number.isNaN(originalVar)){
-                        originalVar = 0
-                    }
-                    let resultValue = ''
-                    switch(effect.operator){
-                        case '=':{
-                            resultValue = effectValue
-                            break
-                        }
-                        case '+=':{
-                            resultValue = (originalVar + Number(effectValue)).toString()
-                            break
-                        }
-                        case '-=':{
-                            resultValue = (originalVar - Number(effectValue)).toString()
-                            break
-                        }
-                        case '*=':{
-                            resultValue = (originalVar * Number(effectValue)).toString()
-                            break
-                        }
-                        case '/=':{
-                            resultValue = (originalVar / Number(effectValue)).toString()
-                            break
-                        }
-                        case '%=':{
-                            resultValue = (originalVar % Number(effectValue)).toString()
-                            break
-                        }
-                    }
-                    setVar(varKey, resultValue)
-                    break
-                }
-                case 'v2DeclareLocalVar':{
-                    const effectValue = effect.valueType === 'value' ? risuChatParser(effect.value,{chara:char}) : getVar(risuChatParser(effect.value,{chara:char}))
-                    const varKey = risuChatParser(effect.var,{chara:char})
-                    const finalValue = (effectValue === null || effectValue === undefined) ? 'null' : effectValue
-                    declareLocalVar(varKey, finalValue, effect.indent)
-                    break
-                }
-                case 'v2If':
-                case 'v2IfAdvanced':{
-                    const sourceValue = (effect.type === 'v2If' || effect.sourceType === 'var') ? getVar(risuChatParser(effect.source,{chara:char})) : risuChatParser(effect.source,{chara:char})
-                    const targetValue = effect.targetType === 'value' ? risuChatParser(effect.target,{chara:char}) : getVar(risuChatParser(effect.target,{chara:char}))
-                    let pass = false
-                    switch(effect.condition){
-                        case '=':{                            
-                            if(!isNaN(Number(sourceValue)) && !isNaN(Number(targetValue))){ //to check like 1.0 = 1
-                                pass = Number(sourceValue) === Number(targetValue)
-                            }
-                            else{
-                                pass = sourceValue === targetValue
-                            }
-                            break
-                        }
-                        case '!=':{
-                            if(!isNaN(Number(sourceValue)) && !isNaN(Number(targetValue))){ //to check like 1.0 = 1
-                                pass = Number(sourceValue) !== Number(targetValue)
-                            }
-                            else{
-                                pass = sourceValue !== targetValue
-                            }
-                            break
-                        }
-                        case '>':{
-                            pass = Number(sourceValue) > Number(targetValue)
-                            break
-                        }
-                        case '<':{
-                            pass = Number(sourceValue) < Number(targetValue)
-                            break
-                        }
-                        case '>=':{
-                            pass = Number(sourceValue) >= Number(targetValue)
-                            break
-                        }
-                        case '<=':{
-                            pass = Number(sourceValue) <= Number(targetValue)
-                            break
-                        }
-                        case '∈':{
-                            try {
-                                pass = JSON.parse(targetValue).includes(sourceValue)
-                            } catch {
-                                pass = false
-                            }
-                            break
-                        }
-                        case '∋':{
-                            try {
-                                pass = JSON.parse(sourceValue).includes(targetValue)
-                            } catch {
-                                pass = false
-                            }
-                            break
-                        }
-                        case '∉':{
-                            try {
-                                pass = !JSON.parse(targetValue).includes(sourceValue)
-                            } catch {
-                                pass = true
-                            }
-                            break
-                        }
-                        case '∌':{
-                            try {
-                                pass = !JSON.parse(sourceValue).includes(targetValue)
-                            } catch {
-                                pass = true
-                            }
-                            break
-                        }
-                        case '≒':{
-                            const num1 = Number(sourceValue)
-                            const num2 = Number(targetValue)
-                            if(Number.isNaN(num1) || Number.isNaN(num2)){
-                                pass = sourceValue.toLocaleLowerCase().replace(/ /g,'') === targetValue.toLocaleLowerCase().replace(/ /g,'')
-                            }
-                            else{
-                                pass = Math.abs(num1 - num2) < 0.0001
-                            }
-                            break
-                        }
-                        case '≡':{
-                            if(targetValue === 'true'){
-                                pass = sourceValue === 'true' || sourceValue === '1'
-                            }
-                            else if(targetValue === 'false'){
-                                pass = !(sourceValue === 'true' || sourceValue === '1')
-                            }
-                            else{
-                                pass = sourceValue === targetValue
-                            }
-                        }
+                default: {
+                    if (!effect.type.startsWith('v2')) {
+                        break
                     }
 
+                    const definition = getTriggerV2Definition(effect.type as TriggerV2EffectType)
+                    if (!definition.run) {
+                        break
+                    }
 
-                    if(!pass){
-                        let indent = effect.indent + 1
-                        for(; index < trigger.effect.length; index++){
-                            const ef = trigger.effect[index] as triggerEffectV2
-                            if(ef.type === 'v2EndIndent' && indent === ef.indent){
-                                const nextEf = trigger.effect[index + 1] as triggerEffectV2
-                                indent--
-                                if(nextEf?.type === 'v2Else' && nextEf?.indent === indent){
-                                    index++
-                                }
-
-                                break
-                            }
-                        }
-                    }
-                    break
-                }
-                case 'v2Else':{
-                    //since if handles the else if the if is false, we can skip the else
-                    const indent = effect.indent + 1
-                    for(; index < trigger.effect.length; index++){
-                        const ef = trigger.effect[index] as triggerEffectV2
-                        if(ef.type === 'v2EndIndent' && indent === ef.indent){
-                            break
-                        }
-                    }
-                    break
-                }
-                case 'v2EndIndent':{
-                    if(effect.endOfLoop){
-                        const indent = effect.indent - 1
-                        const originalIndex = index
-                        for(; index >= 0; index--){
-                            const ef = trigger.effect[index] as triggerEffectV2
-                            if((ef.type === 'v2Loop' || ef.type === 'v2LoopNTimes') && indent === ef.indent){
-                                
-                                if(ef.type === 'v2LoopNTimes'){
-                                    const value = ef.valueType === 'value' ? risuChatParser(ef.value,{chara:char}) : getVar(risuChatParser(ef.value,{chara:char}))
-                                    let valueNum = Number(value)
-                                    if(Number.isNaN(valueNum)){
-                                        valueNum = 0
-                                    }
-                                    tempVars[index + 'LoopNTimes'] = (tempVars[index + 'LoopNTimes'] ?? 0) + 1
-                                    if(tempVars[index + 'LoopNTimes'] >= valueNum){
-                                        index = originalIndex
-                                    }
-                                    else{
-                                        break
-                                    }
-                                }
-
-                                break
-                            }
-                        }
-                        
-                        //this is for preventing lagging
-                        tempVars['loopTimes'] = (tempVars['loopTimes'] ?? 0) + 1
-                        if(tempVars['loopTimes'] > 100){
-                            await sleep(1)
-                            tempVars['loopTimes'] = 0
-                        }
-                    }
-                    
-                    clearLocalVarsAtIndent(effect.indent)
-                    
-                    break
-                }
-                case 'v2Loop':
-                case 'v2LoopNTimes':{
-                    //Looping is handled by the v2EndIndent
-                    break
-                }
-                case 'v2BreakLoop':{
-                    for(; index < trigger.effect.length; index++){
-                        const ef = trigger.effect[index] as triggerEffectV2
-                        if(ef.type === 'v2EndIndent' && ef.endOfLoop){
-                            break
-                        }
-                    }
-                    break
-                }
-                case 'v2RunTrigger':{
-                    if(arg.recursiveCount < 10 || trigger.lowLevelAccess){
-                        arg.recursiveCount++
-                        const r = await runTrigger(char,'manual',{
+                    const runtimeContext: TriggerV2RuntimeContext = {
+                        char,
+                        mode,
+                        trigger,
+                        arg,
+                        state: {
                             chat,
-                            recursiveCount: arg.recursiveCount,
                             additonalSysPrompt,
                             stopSending,
-                            manualName: effect.target
-                        })
-                        if(r){
-                            additonalSysPrompt = r.additonalSysPrompt
-                            chat = r.chat
-                            stopSending = r.stopSending
-                        }
+                            sendAIprompt,
+                            currentIndent,
+                            index,
+                            displayData: arg.displayData,
+                            tempVars
+                        },
+                        getVar,
+                        setVar,
+                        declareLocalVar,
+                        clearLocalVarsAtIndent,
+                        resolveTargetCharacter,
+                        resolveTargetChat
                     }
-                    break
-                }
-                case 'v2ConsoleLog':{
-                    const sourceValue = effect.sourceType === 'value' ? risuChatParser(effect.source,{chara:char}) : getVar(risuChatParser(effect.source,{chara:char}))
-                    triggerLog(sourceValue)
-                    break
-                }
-                case 'v2StopTrigger':{
-                    index = trigger.effect.length
-                    break
-                }
-                case 'v2CutChat':{
-                    let start = effect.startType === 'value' ? Number(risuChatParser(effect.start,{chara:char})) : Number(getVar(risuChatParser(effect.start,{chara:char})))
-                    let end = effect.endType === 'value' ? Number(risuChatParser(effect.end,{chara:char})) : Number(getVar(risuChatParser(effect.end,{chara:char})))
-                    if(isNaN(start)){
-                        start = 0
-                    }
-                    if(isNaN(end)){
-                        end = chat.message.length
-                    }
-                    
-                    chat.message = chat.message.slice(start,end)
-                    break
-                }
-                case 'v2ModifyChat':{
-                    const index = effect.indexType === 'value' ? Number(risuChatParser(effect.index,{chara:char})) : Number(getVar(risuChatParser(effect.index,{chara:char})))
-                    const value = effect.valueType === 'value' ? risuChatParser(effect.value,{chara:char}) : getVar(risuChatParser(effect.value,{chara:char}))
-                    if(chat.message[index]){
-                        chat.message[index].data = value
-                    }
-                    break
-                }
-                case 'v2SystemPrompt':{
-                    const value = effect.valueType === 'value' ? risuChatParser(effect.value,{chara:char}) : getVar(risuChatParser(effect.value,{chara:char}))
-                    additonalSysPrompt[effect.location] += value + "\n\n"
-                    break
-                }
-                case 'v2Impersonate':{
-                    const value = effect.valueType === 'value' ? risuChatParser(effect.value,{chara:char}) : getVar(risuChatParser(effect.value,{chara:char}))
-                    if(effect.role === 'user'){
-                        chat.message.push({role: 'user', data: value})
-                    }
-                    else if(effect.role === 'char'){
-                        chat.message.push({role: 'char', data: value})
-                    }
-                    break
-                }
-                case 'v2Command':{
-                    const value = effect.valueType === 'value' ? risuChatParser(effect.value,{chara:char}) : getVar(risuChatParser(effect.value,{chara:char}))
-                    await processMultiCommand(value)
-                    break
-                }
-                case 'v2SendAIprompt':{
-                    if(!trigger.lowLevelAccess){
-                        break
-                    }
-                    sendAIprompt = true
-                    break
-                }
-                case 'v2CheckSimilarity':{
-                    if(!trigger.lowLevelAccess){
-                        break
-                    }
-                    const source = effect.sourceType === 'value' ? risuChatParser(effect.source,{chara:char}) : getVar(risuChatParser(effect.source,{chara:char}))
-                    const value = effect.valueType === 'value' ? risuChatParser(effect.value,{chara:char}) : getVar(risuChatParser(effect.value,{chara:char}))
-                    const processer = new EmbeddingProcessor()
-                    await processer.addText(value.split('§'))
-                    const val = await processer.similaritySearch(source)
-                    setVar(risuChatParser(effect.outputVar, {chara:char}), val.join('§'))
-                    break
-                }
-                case 'v2RunLLM':{
-                    if(!trigger.lowLevelAccess){
-                        break
-                    }
-                    const value = effect.valueType === 'value' ? risuChatParser(effect.value,{chara:char}) : getVar(risuChatParser(effect.value,{chara:char}))
-                    let promptbody = parseChatML(value)
-                    if(!promptbody){
-                        promptbody = [{role:'user', content:value}]
-                    }
-                    const result = await requestChatData({
-                        formated: promptbody,
-                        bias: {},
-                        useStreaming: false,
-                        noMultiGen: true,
-                    }, effect.model)
 
-                    if(result.type === 'fail' || result.type === 'streaming' || result.type === 'multiline'){
-                        setVar(risuChatParser(effect.outputVar, {chara:char}), 'null')
-                    }
-                    else{
-                        setVar(risuChatParser(effect.outputVar, {chara:char}), result.result)
-                    }
-                    break
-                }
-                case 'v2ShowAlert':{
-                    if(arg.displayMode){
+                    const control = await definition.run(effect as never, runtimeContext)
+
+                    chat = runtimeContext.state.chat
+                    additonalSysPrompt = runtimeContext.state.additonalSysPrompt
+                    stopSending = runtimeContext.state.stopSending
+                    sendAIprompt = runtimeContext.state.sendAIprompt
+                    currentIndent = runtimeContext.state.currentIndent
+                    index = runtimeContext.state.index
+                    arg.displayData = runtimeContext.state.displayData
+
+                    if (control && control.abortRun) {
                         return
                     }
-                    const value = effect.valueType === 'value' ? risuChatParser(effect.value,{chara:char}) : getVar(risuChatParser(effect.value,{chara:char}))
-                    alertNormal(value)
-                    break
-                }
-                case 'v2ExtractRegex':{
-                    const value = effect.valueType === 'value' ? risuChatParser(effect.value,{chara:char}) : getVar(risuChatParser(effect.value,{chara:char}))
-                    const regexValue = effect.regexType === 'value' ? risuChatParser(effect.regex,{chara:char}) : getVar(risuChatParser(effect.regex,{chara:char}))
-                    const flagsValue = effect.flagsType === 'value' ? risuChatParser(effect.flags,{chara:char}) : getVar(risuChatParser(effect.flags,{chara:char}))
-                    const regex = new RegExp(regexValue, flagsValue)
-                    const regexResult = regex.exec(value)
-                    const resultValue = effect.resultType === 'value' ? risuChatParser(effect.result,{chara:char}) : getVar(risuChatParser(effect.result,{chara:char}))
-                    
-                    let result = ''
-                    if (regexResult !== null) {
-                        result = resultValue.replace(/\$[0-9]+/g, (match) => {
-                            const index = Number(match.slice(1))
-                            return regexResult[index] || ''
-                        }).replace(/\$&/g, regexResult[0] || '').replace(/\$\$/g, '$')
-                    } else {
-                        result = resultValue.replace(/\$[0-9]+/g, '').replace(/\$&/g, '').replace(/\$\$/g, '$')
-                    }
-
-                    setVar(risuChatParser(effect.outputVar, {chara:char}), result)
-                    break
-                }
-                case 'v2GetLastMessage':{
-                    setVar(risuChatParser(effect.outputVar, {chara:char}), chat.message[chat.message.length - 1]?.data ?? 'null')
-                    break
-                }
-                case 'v2GetMessageAtIndex':{
-                    const index = effect.indexType === 'value' ? Number(risuChatParser(effect.index,{chara:char})) : Number(getVar(risuChatParser(effect.index,{chara:char})))
-                    setVar(risuChatParser(effect.outputVar, {chara:char}), chat.message[index]?.data ?? 'null')
-                    break
-                }
-                case 'v2GetMessageCount':{
-                    setVar(risuChatParser(effect.outputVar, {chara:char}), chat.message.length.toString())
-                    break
-                }
-                case 'v2ModifyLorebook':{
-                    char.globalLore = char.globalLore ?? []
-                    const target = effect.targetType === 'value' ? risuChatParser(effect.target,{chara:char}) : getVar(risuChatParser(effect.target,{chara:char}))
-                    const value = effect.valueType === 'value' ? risuChatParser(effect.value,{chara:char}) : getVar(risuChatParser(effect.value,{chara:char}))
-
-                    const index = char.globalLore.findIndex((v) => v[0] === target)
-                    if(index !== -1){
-                        char.globalLore[index][1] = value
-                    }
-
-                    const targetCharacter = resolveTargetCharacter()
-                    if (targetCharacter && targetCharacter.type !== 'group') {
-                        targetCharacter.globalLore = char.globalLore
-                    }
-                    break
-                }
-                case 'v2GetLorebook':{
-                    char.globalLore = char.globalLore ?? []
-                    const target = effect.targetType === 'value' ? risuChatParser(effect.target,{chara:char}) : getVar(risuChatParser(effect.target,{chara:char}))
-                    const index = char.globalLore.findIndex((v) => v[0] === target)
-                    setVar(risuChatParser(effect.outputVar, {chara:char}), index === -1 ? 'null' : char.globalLore[index][1])
-                    break
-                }
-                case 'v2GetLorebookCount':{
-                    char.globalLore = char.globalLore ?? []
-                    setVar(risuChatParser(effect.outputVar, {chara:char}), char.globalLore.length.toString())
-                    break
-                }
-                case 'v2GetLorebookEntry':{
-                    char.globalLore = char.globalLore ?? []
-                    let index = effect.indexType === 'value' ? Number(risuChatParser(effect.index,{chara:char})) : Number(getVar(risuChatParser(effect.index,{chara:char})))
-                    if(Number.isNaN(index)){
-                        index = 0
-                    }
-                    setVar(risuChatParser(effect.outputVar, {chara:char}), char.globalLore[index]?.[1] ?? 'null')
-                    break
-                }
-                case 'v2SetLorebookActivation':{
-                    char.globalLore = char.globalLore ?? []
-                    const index = effect.indexType === 'value' ? Number(risuChatParser(effect.index,{chara:char})) : Number(getVar(risuChatParser(effect.index,{chara:char})))
-                    const value = effect.value
-                    char.globalLore[index][2] = value
-
-                    const targetCharacter = resolveTargetCharacter()
-                    if (targetCharacter && targetCharacter.type !== 'group') {
-                        targetCharacter.globalLore = char.globalLore
-                    }
-
-                    break
-                }
-                case 'v2GetLorebookIndexViaName':{
-                    char.globalLore = char.globalLore ?? []
-                    const name = effect.nameType === 'value' ? risuChatParser(effect.name,{chara:char}) : getVar(risuChatParser(effect.name,{chara:char}))
-                    const index = char.globalLore.findIndex((v) => v[0] === name)
-                    setVar(risuChatParser(effect.outputVar, {chara:char}), index.toString())
-                    break
-                }
-                case 'v2Random':{
-                    const min = effect.minType === 'value' ? Number(risuChatParser(effect.min,{chara:char})) : Number(getVar(risuChatParser(effect.min,{chara:char})))
-                    const max = effect.maxType === 'value' ? Number(risuChatParser(effect.max,{chara:char})) : Number(getVar(risuChatParser(effect.max,{chara:char})))
-
-                    const output = Math.floor(Math.random() * (max - min + 1) + min)
-                    setVar(risuChatParser(effect.outputVar, {chara:char}), output.toString())
-                    break
-                }
-                case 'v2GetCharAt':{
-                    const source = effect.sourceType === 'value' ? risuChatParser(effect.source,{chara:char}) : getVar(risuChatParser(effect.source,{chara:char}))
-                    const index = effect.indexType === 'value' ? Number(risuChatParser(effect.index,{chara:char})) : Number(getVar(risuChatParser(effect.index,{chara:char})))
-                    setVar(risuChatParser(effect.outputVar, {chara:char}), source[index] ?? 'null')
-                    break
-                }
-                case 'v2GetCharCount':{
-                    const source = effect.sourceType === 'value' ? risuChatParser(effect.source,{chara:char}) : getVar(risuChatParser(effect.source,{chara:char}))
-                    setVar(risuChatParser(effect.outputVar, {chara:char}), source.length.toString())
-                    break
-                }
-                case 'v2ToLowerCase':{
-                    const source = effect.sourceType === 'value' ? risuChatParser(effect.source,{chara:char}) : getVar(risuChatParser(effect.source,{chara:char}))
-                    setVar(risuChatParser(effect.outputVar, {chara:char}), source.toLowerCase())
-                    break
-                }
-                case 'v2ToUpperCase':{
-                    const source = effect.sourceType === 'value' ? risuChatParser(effect.source,{chara:char}) : getVar(risuChatParser(effect.source,{chara:char}))
-                    setVar(risuChatParser(effect.outputVar, {chara:char}), source.toUpperCase())
-                    break
-                }
-                case 'v2SetCharAt':{
-                    const source = effect.sourceType === 'value' ? risuChatParser(effect.source,{chara:char}) : getVar(risuChatParser(effect.source,{chara:char}))
-                    const index = effect.indexType === 'value' ? Number(risuChatParser(effect.index,{chara:char})) : Number(getVar(risuChatParser(effect.index,{chara:char})))
-                    const value = effect.valueType === 'value' ? risuChatParser(effect.value,{chara:char}) : getVar(risuChatParser(effect.value,{chara:char}))
-                    const source2 = [...source]
-                    source2[index] = value
-                    setVar(risuChatParser(effect.outputVar, {chara:char}), source2.join(''))
-                    break
-                }
-                case 'v2SplitString':{
-                    const source = effect.sourceType === 'value' ? risuChatParser(effect.source,{chara:char}) : getVar(risuChatParser(effect.source,{chara:char}))
-                    let delimiter: string
-                    
-                    if (effect.delimiterType === 'value') {
-                        delimiter = risuChatParser(effect.delimiter,{chara:char})
-                    } else if (effect.delimiterType === 'var') {
-                        delimiter = getVar(risuChatParser(effect.delimiter,{chara:char}))
-                    } else {
-                        delimiter = risuChatParser(effect.delimiter,{chara:char})
-                    }
-                    
-                    let result: string[]
-                    if (effect.delimiterType === 'regex') {
-                        try {
-                            const regexMatch = delimiter.match(/^\/(.+)\/([gimuy]*)$/)
-                            if (regexMatch) {
-                                const [, pattern, flags] = regexMatch
-                                const regex = new RegExp(pattern, flags)
-                                result = source.split(regex)
-                            } else {
-                                const regex = new RegExp(delimiter)
-                                result = source.split(regex)
-                            }
-                        } catch {
-                            result = [source]
-                        }
-                    } else {
-                        result = source.split(delimiter)
-                    }
-                    
-                    setVar(risuChatParser(effect.outputVar, {chara:char}), JSON.stringify(result))
-                    break
-                }
-                case 'v2JoinArrayVar':{
-                    try {
-                        const varValue = effect.varType === 'value' ? risuChatParser(effect.var,{chara:char}) : getVar(risuChatParser(effect.var,{chara:char}))
-                        const arr = JSON.parse(varValue)
-                        const delimiter = effect.delimiterType === 'value' ? risuChatParser(effect.delimiter,{chara:char}) : getVar(risuChatParser(effect.delimiter,{chara:char}))
-                        setVar(risuChatParser(effect.outputVar, {chara:char}), arr.join(delimiter))
-                    } catch {
-                        setVar(risuChatParser(effect.outputVar, {chara:char}), '')
-                    }
-                    break
-                }
-                case 'v2GetCharacterDesc':{
-                    setVar(risuChatParser(effect.outputVar, {chara:char}), char.desc)
-                    break
-                }
-                case 'v2SetCharacterDesc':{
-                    const value = effect.valueType === 'value' ? risuChatParser(effect.value,{chara:char}) : getVar(risuChatParser(effect.value,{chara:char}))
-                    char.desc = value
-                    const targetCharacter = resolveTargetCharacter()
-                    if (targetCharacter && targetCharacter.type !== 'group') {
-                        targetCharacter.desc = value
-                    }
-                    break
-                }
-                case 'v2GetPersonaDesc':{
-                    const db = getDatabase()
-                    const currentPersonaPrompt = db.personaPrompt ?? ''
-                    const savedPersonaPrompt = db.personas[db.selectedPersona]?.personaPrompt ?? ''
-                    setVar(risuChatParser(effect.outputVar, {chara:char}), currentPersonaPrompt || savedPersonaPrompt)
-                    break
-                }
-                case 'v2SetPersonaDesc':{
-                    const value = effect.valueType === 'value' ? risuChatParser(effect.value,{chara:char}) : getVar(risuChatParser(effect.value,{chara:char}))
-                    const db = getDatabase()
-                    if(db.personas[db.selectedPersona]){
-                        db.personas[db.selectedPersona].personaPrompt = value
-                        db.personaPrompt = value
-                        setDatabase(db)
-                    }
-                    break
-                }
-                case 'v2GetReplaceGlobalNote':{
-                    setVar(risuChatParser(effect.outputVar, {chara:char}), char.replaceGlobalNote ?? '')
-                    break
-                }
-                case 'v2SetReplaceGlobalNote':{
-                    const value = effect.valueType === 'value' ? risuChatParser(effect.value,{chara:char}) : getVar(risuChatParser(effect.value,{chara:char}))
-                    char.replaceGlobalNote = value
-                    const targetCharacter = resolveTargetCharacter()
-                    if (targetCharacter && targetCharacter.type !== 'group') {
-                        targetCharacter.replaceGlobalNote = value
-                    }
-                    break
-                }
-                case 'v2MakeArrayVar':{
-                    const varName = risuChatParser(effect.var, {chara:char})
-                    if(varName.startsWith('[') && varName.endsWith(']')){
-                        return
-                    }
-
-                    setVar(varName, '[]')
-                    break
-                }
-                case 'v2GetArrayVarLength':{
-                    try {
-                        const varName = risuChatParser(effect.var, {chara:char})
-                        const varValue = getVar(varName)
-                        const arr = JSON.parse(varValue)
-                        setVar(risuChatParser(effect.outputVar, {chara:char}), arr.length.toString())
-                    } catch {
-                        setVar(risuChatParser(effect.outputVar, {chara:char}), '0')
-                    }
-                    break
-                }
-                case 'v2GetArrayVar':{
-                    try {
-                        const varName = risuChatParser(effect.var, {chara:char})
-                        const varValue = getVar(varName)
-                        const arr = JSON.parse(varValue)
-                        const index = effect.indexType === 'value' ? Number(risuChatParser(effect.index,{chara:char})) : Number(getVar(risuChatParser(effect.index,{chara:char})))
-                        setVar(risuChatParser(effect.outputVar, {chara:char}), arr[index] ?? 'null')
-                    } catch {
-                        setVar(risuChatParser(effect.outputVar, {chara:char}), 'null')
-                    }
-                    break
-                }
-                case 'v2PushArrayVar':{
-                    try {
-                        const varName = risuChatParser(effect.var, {chara:char})
-                        const varValue = getVar(varName)
-                        const arr = JSON.parse(varValue)
-                        const value = effect.valueType === 'value' ? risuChatParser(effect.value,{chara:char}) : getVar(risuChatParser(effect.value,{chara:char}))
-                        arr.push(value)
-                        setVar(varName, JSON.stringify(arr))
-                    } catch {
-                        const varName = risuChatParser(effect.var, {chara:char})
-                        setVar(varName, '[]')
-                    }
-                    break
-                }
-                case 'v2PopArrayVar':{
-                    try {
-                        const varName = risuChatParser(effect.var, {chara:char})
-                        const varValue = getVar(varName)
-                        const arr = JSON.parse(varValue)
-                        setVar(risuChatParser(effect.outputVar, {chara:char}), arr.pop() ?? 'null')
-                        setVar(varName, JSON.stringify(arr))
-                    } catch {
-                        const varName = risuChatParser(effect.var, {chara:char})
-                        setVar(varName, '[]')
-                        setVar(risuChatParser(effect.outputVar, {chara:char}), 'null')
-                    }
-                    break
-                }
-                case 'v2ShiftArrayVar':{
-                    try {
-                        const varName = risuChatParser(effect.var, {chara:char})
-                        const varValue = getVar(varName)
-                        const arr = JSON.parse(varValue)
-                        setVar(risuChatParser(effect.outputVar, {chara:char}), arr.shift() ?? 'null')
-                        setVar(varName, JSON.stringify(arr))
-                    } catch {
-                        const varName = risuChatParser(effect.var, {chara:char})
-                        setVar(varName, '[]')
-                        setVar(risuChatParser(effect.outputVar, {chara:char}), 'null')
-                    }
-                    break
-                }
-                case 'v2UnshiftArrayVar':{
-                    try {
-                        const varName = risuChatParser(effect.var, {chara:char})
-                        const varValue = getVar(varName)
-                        const arr = JSON.parse(varValue)
-                        const value = effect.valueType === 'value' ? risuChatParser(effect.value,{chara:char}) : getVar(risuChatParser(effect.value,{chara:char}))
-                        arr.unshift(value)
-                        setVar(varName, JSON.stringify(arr))
-                    } catch {
-                        const varName = risuChatParser(effect.var, {chara:char})
-                        setVar(varName, '[]')
-                    }
-                    break
-                }
-                case 'v2SpliceArrayVar':{
-                    try {
-                        const varName = risuChatParser(effect.var, {chara:char})
-                        const varValue = getVar(varName)
-                        const arr = JSON.parse(varValue)
-                        const start = effect.startType === 'value' ? Number(risuChatParser(effect.start,{chara:char})) : Number(getVar(risuChatParser(effect.start,{chara:char})))
-                        const value = effect.itemType === 'value' ? risuChatParser(effect.item,{chara:char}) : getVar(risuChatParser(effect.item,{chara:char}))
-                        arr.splice(start, 0, value)
-                        setVar(varName, JSON.stringify(arr))
-                    } catch {
-                        const varName = risuChatParser(effect.var, {chara:char})
-                        setVar(varName, '[]')
-                    }
-                    break
-                }
-                case 'v2SliceArrayVar':{
-                    try {
-                        const varName = risuChatParser(effect.var, {chara:char})
-                        const varValue = getVar(varName)
-                        const arr = JSON.parse(varValue)
-                        const start = effect.startType === 'value' ? Number(risuChatParser(effect.start,{chara:char})) : Number(getVar(risuChatParser(effect.start,{chara:char})))
-                        const end = effect.endType === 'value' ? Number(risuChatParser(effect.end,{chara:char})) : Number(getVar(risuChatParser(effect.end,{chara:char})))
-                        
-                        setVar(risuChatParser(effect.outputVar, {chara:char}), JSON.stringify(arr.slice(start,end)))
-                    } catch {
-                        setVar(risuChatParser(effect.outputVar, {chara:char}), '[]')
-                    }
-                    break
-                }
-                case 'v2GetIndexOfValueInArrayVar':{
-                    try {
-                        const varName = risuChatParser(effect.var, {chara:char})
-                        const varValue = getVar(varName)
-                        const arr = JSON.parse(varValue)
-                        const value = effect.valueType === 'value' ? risuChatParser(effect.value,{chara:char}) : getVar(risuChatParser(effect.value,{chara:char}))
-                        setVar(risuChatParser(effect.outputVar, {chara:char}), arr.indexOf(value).toString())
-                    } catch {
-                        setVar(risuChatParser(effect.outputVar, {chara:char}), '-1')
-                    }
-                    break
-                }
-                case 'v2RemoveIndexFromArrayVar':{
-                    try {
-                        const varName = risuChatParser(effect.var, {chara:char})
-                        const varValue = getVar(varName)
-                        const arr = JSON.parse(varValue)
-                        const index = effect.indexType === 'value' ? Number(risuChatParser(effect.index,{chara:char})) : Number(getVar(risuChatParser(effect.index,{chara:char})))
-                        arr.splice(index, 1)
-                        setVar(varName, JSON.stringify(arr))
-                    } catch {
-                        const varName = risuChatParser(effect.var, {chara:char})
-                        setVar(varName, '[]')
-                    }
-                    break
-                }
-                case 'v2ConcatString':{
-                    const source1 = effect.source1Type === 'value' ? risuChatParser(effect.source1,{chara:char}) : getVar(risuChatParser(effect.source1,{chara:char}))
-                    const source2 = effect.source2Type === 'value' ? risuChatParser(effect.source2,{chara:char}) : getVar(risuChatParser(effect.source2,{chara:char}))
-                    setVar(risuChatParser(effect.outputVar, {chara:char}), source1 + source2)
-                    break
-                }
-                case 'v2GetLastUserMessage':{
-                    const lastUserMessage = chat.message.slice().reverse().find((v) => v.role === 'user')
-                    setVar(risuChatParser(effect.outputVar, {chara:char}), lastUserMessage?.data ?? 'null')
-                    break
-                }
-                case 'v2GetLastCharMessage':{
-                    const lastCharMessage = chat.message.slice().reverse().find((v) => v.role === 'char')
-                    setVar(risuChatParser(effect.outputVar, {chara:char}), lastCharMessage?.data ?? 'null')
-                    break
-                }
-                case 'v2GetFirstMessage':{
-                    setVar(risuChatParser(effect.outputVar, {chara:char}), chat.fmIndex === -1 ? char.firstMessage : char.alternateGreetings[chat.fmIndex])
-                    break
-                }
-                case 'v2GetAlertInput':{
-                    if(arg.displayMode){
-                        return
-                    }
-                    const value = await alertInput(
-                        effect.displayType === 'value' ? risuChatParser(effect.display,{chara:char}) : getVar(risuChatParser(effect.display,{chara:char}))
-                    )
-                    setVar(risuChatParser(effect.outputVar, {chara:char}), value)
-                    break
-                }
-                case 'v2GetAlertSelect':{
-                    if(arg.displayMode){
-                        return
-                    }
-                    const display = effect.displayType === 'value' ? risuChatParser(effect.display,{chara:char}) : getVar(risuChatParser(effect.display,{chara:char}))
-                    const value = effect.valueType === 'value' ? risuChatParser(effect.value,{chara:char}) : getVar(risuChatParser(effect.value,{chara:char}))
-                    const options = value.split('|')
-                    const result = await alertSelect(options, display)
-                    setVar(risuChatParser(effect.outputVar, {chara:char}), result)
-                    break
-                }
-                case 'v2SetArrayVar':{
-                    const value = effect.valueType === 'value' ? risuChatParser(effect.value,{chara:char}) : getVar(risuChatParser(effect.value,{chara:char}))
-                    const index = effect.indexType === 'value' ? Number(risuChatParser(effect.index,{chara:char})) : Number(getVar(risuChatParser(effect.index,{chara:char})))
-                    if(Number.isNaN(index)){
-                        break
-                    }
-                    try {
-                        const varName = risuChatParser(effect.var, {chara:char})
-                        const varValue = getVar(varName)
-                        const arr = JSON.parse(varValue)
-                        arr[index] = value
-                        setVar(varName, JSON.stringify(arr))
-                    } catch {
-                        
-                    }
-                    break
-                }
-                case 'v2GetDisplayState':{
-                    if(!arg.displayMode){
-                        return
-                    }
-                    
-                    setVar(risuChatParser(effect.outputVar, {chara:char}), arg.displayData ?? 'null')
-                    break
-                }
-                case 'v2SetDisplayState':{
-                    if(!arg.displayMode){
-                        return
-                    }
-                    arg.displayData = effect.valueType === 'value' ? risuChatParser(effect.value,{chara:char}) : getVar(risuChatParser(effect.value,{chara:char}))
-                    break
-                }
-                case 'v2UpdateGUI':{
-                    ReloadGUIPointer.set(get(ReloadGUIPointer) + 1)
-                    break
-                }
-                case 'v2UpdateChatAt':{
-                    ReloadChatPointer.update((v) => {
-                        v[effect.index] = (v[effect.index] ?? 0) + 1
-                        return v
-                    })
-                    break
-                }
-                case 'v2Wait':{
-                    const value = effect.valueType === 'value' ? Number(risuChatParser(effect.value,{chara:char})) : Number(getVar(risuChatParser(effect.value,{chara:char})))
-                    await sleep(value * 1000)
-                    break
-                }
-                case 'v2GetRequestState':{
-                    if(!arg.displayMode){
-                        return
-                    }
-                    const json = JSON.parse(arg.displayData) as OpenAIChat[]
-                    const index = effect.indexType === 'value' ? Number(risuChatParser(effect.index,{chara:char})) : Number(getVar(risuChatParser(effect.index,{chara:char})))
-                    const content = json?.[index]?.content ?? 'null'
-                    setVar(risuChatParser(effect.outputVar, {chara:char}), content)
-                    break
-                }
-                case 'v2SetRequestState':{
-                    if(!arg.displayMode){
-                        return
-                    }
-                    const json = JSON.parse(arg.displayData) as OpenAIChat[]
-                    const index = effect.indexType === 'value' ? Number(risuChatParser(effect.index,{chara:char})) : Number(getVar(risuChatParser(effect.index,{chara:char})))
-                    const value = effect.valueType === 'value' ? risuChatParser(effect.value,{chara:char}) : getVar(risuChatParser(effect.value,{chara:char}))
-                    json[index].content = value
-                    arg.displayData = JSON.stringify(json)
-                    break
-                }
-                case 'v2GetRequestStateRole':{
-                    if(!arg.displayMode){
-                        return
-                    }
-                    const json = JSON.parse(arg.displayData) as OpenAIChat[]
-                    const index = effect.indexType === 'value' ? Number(risuChatParser(effect.index,{chara:char})) : Number(getVar(risuChatParser(effect.index,{chara:char})))
-                    const content = json?.[index]?.role ?? 'null'
-                    setVar(risuChatParser(effect.outputVar, {chara:char}), content)
-                    break
-                }
-                case 'v2SetRequestStateRole':{
-                    if(!arg.displayMode){
-                        return
-                    }
-                    const json = JSON.parse(arg.displayData) as OpenAIChat[]
-                    const index = effect.indexType === 'value' ? Number(risuChatParser(effect.index,{chara:char})) : Number(getVar(risuChatParser(effect.index,{chara:char})))
-                    const value = effect.valueType === 'value' ? risuChatParser(effect.value,{chara:char}) : getVar(risuChatParser(effect.value,{chara:char}))
-                    if(value === 'user' || value === 'assistant' || value === 'system'){
-                        json[index].role = value
-                    }
-                    arg.displayData = JSON.stringify(json)
-                    break
-                }
-
-                case 'v2GetRequestStateLength':{
-                    if(!arg.displayMode){
-                        return
-                    }
-                    const json = JSON.parse(arg.displayData) as OpenAIChat[]
-                    setVar(risuChatParser(effect.outputVar, {chara:char}), json.length.toString())
-                    break
-                }
-                case 'v2QuickSearchChat':{
-                    const value = effect.valueType === 'value' ? risuChatParser(effect.value,{chara:char}) : getVar(risuChatParser(effect.value,{chara:char}))
-                    const depth = effect.depthType === 'value' ? Number(risuChatParser(effect.depth,{chara:char})) : Number(getVar(risuChatParser(effect.depth,{chara:char})))
-                    const condition = effect.condition
-
-                    if(isNaN(depth)){
-                        setVar(risuChatParser(effect.outputVar, {chara:char}), '0')
-                        break
-                    }
-                    let pass = false
-                    const da =  chat.message.slice(0-depth).map((v)=>v.data).join(' ')
-                    if(condition === 'strict'){
-                        pass = da.split(' ').includes(value)
-                    }
-                    else if(condition === 'loose'){
-                        pass = da.toLowerCase().includes(value.toLowerCase())
-                    }
-                    else if(condition === 'regex'){
-                        pass = new RegExp(value).test(da)
-                    }
-                    setVar(risuChatParser(effect.outputVar, {chara:char}), pass ? '1' : '0')
-                    break
-                }
-                case 'v2Tokenize':{
-                    const value = effect.valueType === 'value' ? risuChatParser(effect.value,{chara:char}) : getVar(risuChatParser(effect.value,{chara:char}))
-                    setVar(risuChatParser(effect.outputVar, {chara:char}), (await tokenize(value)).toString())
-                    break
-                }
-                case 'v2GetAllLorebooks':{
-                    char.globalLore = char.globalLore ?? []
-                    const allPrompts = char.globalLore
-                        .filter(lore => lore && lore.content !== undefined)
-                        .map(lore => lore.content)
-                    setVar(risuChatParser(effect.outputVar, {chara:char}), JSON.stringify(allPrompts))
-                    break
-                }
-                case 'v2GetLorebookByName':{
-                    char.globalLore = char.globalLore ?? []
-                    const name = effect.nameType === 'value' ? risuChatParser(effect.name,{chara:char}) : getVar(risuChatParser(effect.name,{chara:char}))
-                    const regex = new RegExp(name, 'i')
-                    const matchingIndices = char.globalLore
-                        .map((lore, index) => {
-                            if(lore && lore.comment !== undefined && regex.test(lore.comment)){
-                                return index
-                            }
-                            return -1
-                        })
-                        .filter(index => index !== -1)
-                    setVar(risuChatParser(effect.outputVar, {chara:char}), JSON.stringify(matchingIndices))
-                    break
-                }
-                case 'v2GetLorebookByIndex':{
-                    char.globalLore = char.globalLore ?? []
-                    const index = effect.indexType === 'value' ? Number(risuChatParser(effect.index,{chara:char})) : Number(getVar(risuChatParser(effect.index,{chara:char})))
-                    if(Number.isNaN(index) || index < 0 || index >= char.globalLore.length){
-                        setVar(risuChatParser(effect.outputVar, {chara:char}), 'null')
-                    } else {
-                        const loreEntry = char.globalLore[index]
-                        if(loreEntry && loreEntry.content !== undefined){
-                            setVar(risuChatParser(effect.outputVar, {chara:char}), loreEntry.content)
-                        } else {
-                            setVar(risuChatParser(effect.outputVar, {chara:char}), 'null')
-                        }
-                    }
-                    break
-                }
-                case 'v2CreateLorebook':{
-                    char.globalLore = char.globalLore ?? []
-                    const name = effect.nameType === 'value' ? risuChatParser(effect.name,{chara:char}) : getVar(risuChatParser(effect.name,{chara:char}))
-                    const key = effect.keyType === 'value' ? risuChatParser(effect.key,{chara:char}) : getVar(risuChatParser(effect.key,{chara:char}))
-                    const content = effect.contentType === 'value' ? risuChatParser(effect.content,{chara:char}) : getVar(risuChatParser(effect.content,{chara:char}))
-                    const insertOrder = effect.insertOrderType === 'value' ? Number(risuChatParser(effect.insertOrder,{chara:char})) : Number(getVar(risuChatParser(effect.insertOrder,{chara:char})))
-                    
-                    char.globalLore.push({
-                        key: key,
-                        comment: name,
-                        content: content,
-                        mode: 'normal',
-                        insertorder: Number.isNaN(insertOrder) ? 100 : insertOrder,
-                        alwaysActive: false,
-                        secondkey: "",
-                        selective: false
-                    })
-
-                    const targetCharacter = resolveTargetCharacter()
-                    if (targetCharacter && targetCharacter.type !== 'group') {
-                        targetCharacter.globalLore = char.globalLore
-                    }
-                    break
-                }
-                case 'v2ModifyLorebookByIndex':{
-                    char.globalLore = char.globalLore ?? []
-                    const index = effect.indexType === 'value' ? Number(risuChatParser(effect.index,{chara:char})) : Number(getVar(risuChatParser(effect.index,{chara:char})))
-                    
-                    if(Number.isNaN(index) || index < 0 || index >= char.globalLore.length || !char.globalLore[index]){
-                        break
-                    }
-
-                    const currentLore = char.globalLore[index]
-                    
-                    let name = effect.nameType === 'value' ? risuChatParser(effect.name,{chara:char}) : getVar(risuChatParser(effect.name,{chara:char}))
-                    name = name.replace(/{{slot}}/g, currentLore.comment || '')
-                    char.globalLore[index].comment = name
-                    
-                    let key = effect.keyType === 'value' ? risuChatParser(effect.key,{chara:char}) : getVar(risuChatParser(effect.key,{chara:char}))
-                    key = key.replace(/{{slot}}/g, currentLore.key || '')
-                    char.globalLore[index].key = key
-                    
-                    let content = effect.contentType === 'value' ? risuChatParser(effect.content,{chara:char}) : getVar(risuChatParser(effect.content,{chara:char}))
-                    content = content.replace(/{{slot}}/g, currentLore.content || '')
-                    char.globalLore[index].content = content
-                    
-                    let insertOrder = effect.insertOrderType === 'value' ? risuChatParser(effect.insertOrder,{chara:char}) : getVar(risuChatParser(effect.insertOrder,{chara:char}))
-                    insertOrder = insertOrder.replace(/{{slot}}/g, (currentLore.insertorder || 100).toString())
-                    const insertOrderNum = Number(insertOrder)
-                    if(!Number.isNaN(insertOrderNum)){
-                        char.globalLore[index].insertorder = insertOrderNum
-                    }
-
-                    const targetCharacter = resolveTargetCharacter()
-                    if (targetCharacter && targetCharacter.type !== 'group') {
-                        targetCharacter.globalLore = char.globalLore
-                    }
-                    break
-                }
-                case 'v2DeleteLorebookByIndex':{
-                    char.globalLore = char.globalLore ?? []
-                    const index = effect.indexType === 'value' ? Number(risuChatParser(effect.index,{chara:char})) : Number(getVar(risuChatParser(effect.index,{chara:char})))
-                    
-                    if(Number.isNaN(index) || index < 0 || index >= char.globalLore.length || !char.globalLore[index]){
-                        break
-                    }
-
-                    char.globalLore.splice(index, 1)
-
-                    const targetCharacter = resolveTargetCharacter()
-                    if (targetCharacter && targetCharacter.type !== 'group') {
-                        targetCharacter.globalLore = char.globalLore
-                    }
-                    break
-                }
-                case 'v2GetLorebookCountNew':{
-                    char.globalLore = char.globalLore ?? []
-                    setVar(risuChatParser(effect.outputVar, {chara:char}), char.globalLore.length.toString())
-                    break
-                }
-                case 'v2SetLorebookAlwaysActive':{
-                    char.globalLore = char.globalLore ?? []
-                    const index = effect.indexType === 'value' ? Number(risuChatParser(effect.index,{chara:char})) : Number(getVar(risuChatParser(effect.index,{chara:char})))
-                    
-                    if(Number.isNaN(index) || index < 0 || index >= char.globalLore.length || !char.globalLore[index]){
-                        break
-                    }
-
-                    char.globalLore[index].alwaysActive = effect.value
-
-                    const targetCharacter = resolveTargetCharacter()
-                    if (targetCharacter && targetCharacter.type !== 'group') {
-                        targetCharacter.globalLore = char.globalLore
-                    }
-                    break
-                }
-                case 'v2RegexTest':{
-                    try {
-                        const value = effect.valueType === 'value' ? risuChatParser(effect.value,{chara:char}) : getVar(risuChatParser(effect.value,{chara:char}))
-                        const regexPattern = effect.regexType === 'value' ? risuChatParser(effect.regex,{chara:char}) : getVar(risuChatParser(effect.regex,{chara:char}))
-                        const flags = effect.flagsType === 'value' ? risuChatParser(effect.flags,{chara:char}) : getVar(risuChatParser(effect.flags,{chara:char}))
-                        const regex = new RegExp(regexPattern, flags)
-                        const result = regex.test(value)
-                        setVar(risuChatParser(effect.outputVar, {chara:char}), result ? '1' : '0')
-                    } catch {
-                        setVar(risuChatParser(effect.outputVar, {chara:char}), '0')
-                    }
-                    break
-                }
-                case 'v2GetAuthorNote':{
-                    setVar(risuChatParser(effect.outputVar, {chara:char}), chat.note ?? '')
-                    break
-                }
-                case 'v2SetAuthorNote':{
-                    const value = effect.valueType === 'value' ? risuChatParser(effect.value,{chara:char}) : getVar(risuChatParser(effect.value,{chara:char}))
-                    chat.note = value
-                    
-                    if(!arg.displayMode){
-                        const targetChat = resolveTargetChat()
-                        if (targetChat) {
-                            targetChat.note = value
-                        }
-                    }
-                    break
-                }
-                case 'v2MakeDictVar':{
-                    if(effect.var.startsWith('{') && effect.var.endsWith('}')){
-                        return
-                    }
-
-                    setVar(risuChatParser(effect.var, {chara:char}), '{}')
-                    break
-                }
-                case 'v2GetDictVar':{
-                    try {
-                        const varValue = effect.varType === 'value' ? risuChatParser(effect.var,{chara:char}) : getVar(risuChatParser(effect.var,{chara:char}))
-                        const dict = JSON.parse(varValue)
-                        const key = effect.keyType === 'value' ? risuChatParser(effect.key,{chara:char}) : getVar(risuChatParser(effect.key,{chara:char}))
-                        setVar(risuChatParser(effect.outputVar, {chara:char}), dict[key] ?? 'null')
-                    } catch {
-                        setVar(risuChatParser(effect.outputVar, {chara:char}), 'null')
-                    }
-                    break
-                }
-                case 'v2SetDictVar':{
-                    try {
-                        const value = effect.valueType === 'value' ? risuChatParser(effect.value,{chara:char}) : getVar(risuChatParser(effect.value,{chara:char}))
-                        const key = effect.keyType === 'value' ? risuChatParser(effect.key,{chara:char}) : getVar(risuChatParser(effect.key,{chara:char}))
-                        
-                        if(effect.varType === 'value') {
-                            break
-                        }
-                        
-                        const varValue = getVar(risuChatParser(effect.var,{chara:char}))
-                        const dict = JSON.parse(varValue)
-                        dict[key] = value
-                        setVar(risuChatParser(effect.var, {chara:char}), JSON.stringify(dict))
-                    } catch {
-                        if(effect.varType === 'var') {
-                            const value = effect.valueType === 'value' ? risuChatParser(effect.value,{chara:char}) : getVar(risuChatParser(effect.value,{chara:char}))
-                            const key = effect.keyType === 'value' ? risuChatParser(effect.key,{chara:char}) : getVar(risuChatParser(effect.key,{chara:char}))
-                            const dict = {}
-                            dict[key] = value
-                            setVar(risuChatParser(effect.var, {chara:char}), JSON.stringify(dict))
-                        }
-                    }
-                    break
-                }
-                case 'v2DeleteDictKey':{
-                    try {
-                        if(effect.varType === 'value') {
-                            break
-                        }
-                        
-                        const varValue = getVar(risuChatParser(effect.var,{chara:char}))
-                        const dict = JSON.parse(varValue)
-                        const key = effect.keyType === 'value' ? risuChatParser(effect.key,{chara:char}) : getVar(risuChatParser(effect.key,{chara:char}))
-                        delete dict[key]
-                        setVar(risuChatParser(effect.var, {chara:char}), JSON.stringify(dict))
-                    } catch {
-                        if(effect.varType === 'var') {
-                            setVar(risuChatParser(effect.var, {chara:char}), '{}')
-                        }
-                    }
-                    break
-                }
-                case 'v2HasDictKey':{
-                    try {
-                        const varValue = effect.varType === 'value' ? risuChatParser(effect.var,{chara:char}) : getVar(risuChatParser(effect.var,{chara:char}))
-                        const dict = JSON.parse(varValue)
-                        const key = effect.keyType === 'value' ? risuChatParser(effect.key,{chara:char}) : getVar(risuChatParser(effect.key,{chara:char}))
-                        setVar(risuChatParser(effect.outputVar, {chara:char}), Object.hasOwn(dict, key) ? '1' : '0')
-                    } catch {
-                        setVar(risuChatParser(effect.outputVar, {chara:char}), '0')
-                    }
-                    break
-                }
-                case 'v2ClearDict':{
-                    if(effect.var.startsWith('{') && effect.var.endsWith('}')){
-                        return
-                    }
-                    setVar(risuChatParser(effect.var, {chara:char}), '{}')
-                    break
-                }
-                case 'v2GetDictSize':{
-                    try {
-                        const varValue = effect.varType === 'value' ? risuChatParser(effect.var,{chara:char}) : getVar(risuChatParser(effect.var,{chara:char}))
-                        const dict = JSON.parse(varValue)
-                        setVar(risuChatParser(effect.outputVar, {chara:char}), Object.keys(dict).length.toString())
-                    } catch {
-                        setVar(risuChatParser(effect.outputVar, {chara:char}), '0')
-                    }
-                    break
-                }
-                case 'v2GetDictKeys':{
-                    try {
-                        const varValue = effect.varType === 'value' ? risuChatParser(effect.var,{chara:char}) : getVar(risuChatParser(effect.var,{chara:char}))
-                        const dict = JSON.parse(varValue)
-                        const keys = Object.keys(dict)
-                        setVar(risuChatParser(effect.outputVar, {chara:char}), JSON.stringify(keys))
-                    } catch {
-                        setVar(risuChatParser(effect.outputVar, {chara:char}), '[]')
-                    }
-                    break
-                }
-                case 'v2GetDictValues':{
-                    try {
-                        const varValue = effect.varType === 'value' ? risuChatParser(effect.var,{chara:char}) : getVar(risuChatParser(effect.var,{chara:char}))
-                        const dict = JSON.parse(varValue)
-                        const values = Object.values(dict)
-                        setVar(risuChatParser(effect.outputVar, {chara:char}), JSON.stringify(values))
-                    } catch {
-                        setVar(risuChatParser(effect.outputVar, {chara:char}), '[]')
-                    }
-                    break
-                }
-                case 'v2Calculate':{
-                    try {
-                        let expression = effect.expressionType === 'value' ? risuChatParser(effect.expression,{chara:char}) : getVar(risuChatParser(effect.expression,{chara:char}))
-                        expression = expression.replace(/\$([a-zA-Z0-9_]+)/g, (_, varName) => {
-                            const varValue = getVar(varName)
-                            const parsed = parseFloat(varValue)
-                            return isNaN(parsed) ? '0' : parsed.toString()
-                        })
-                        
-                        const result = calcString(expression)
-                        setVar(risuChatParser(effect.outputVar, {chara:char}), result.toString())
-                    } catch {
-                        setVar(risuChatParser(effect.outputVar, {chara:char}), '0')
-                    }
-                    break
-                }
-                case 'v2ReplaceString':{
-                    try {
-                        const source = effect.sourceType === 'value' ? risuChatParser(effect.source,{chara:char}) : getVar(risuChatParser(effect.source,{chara:char}))
-                        const regexPattern = effect.regexType === 'value' ? risuChatParser(effect.regex,{chara:char}) : getVar(risuChatParser(effect.regex,{chara:char}))
-                        const resultFormat = effect.resultType === 'value' ? risuChatParser(effect.result,{chara:char}) : getVar(risuChatParser(effect.result,{chara:char}))
-                        const replacement = effect.replacementType === 'value' ? risuChatParser(effect.replacement,{chara:char}) : getVar(risuChatParser(effect.replacement,{chara:char}))
-                        const flags = effect.flagsType === 'value' ? risuChatParser(effect.flags,{chara:char}) : getVar(risuChatParser(effect.flags,{chara:char}))
-                        
-                        const regex = new RegExp(regexPattern, flags)
-                        const result = source.replace(regex, (...args) => {
-                            const match = args[0]
-                            const groups = args.slice(1, -2)
-                            
-                            const targetGroupMatch = resultFormat.match(/^\$(\d+)$/)
-                            if (targetGroupMatch) {
-                                const targetIndex = Number(targetGroupMatch[1])
-                                if (targetIndex === 0) {
-                                    return replacement
-                                } else {
-                                    const targetGroup = groups[targetIndex - 1]
-                                    if (targetGroup) {
-                                        return match.replace(targetGroup, replacement)
-                                    }
-                                }
-                            }
-                            
-                            return resultFormat.replace(/\$[0-9]+/g, (placeholder) => {
-                                const index = Number(placeholder.slice(1))
-                                return index === 0 ? match : (groups[index - 1] || '')
-                            }).replace(/\$&/g, match).replace(/\$\$/g, '$')
-                        })
-                        setVar(risuChatParser(effect.outputVar, {chara:char}), result)
-                    } catch {
-                        const source = effect.sourceType === 'value' ? risuChatParser(effect.source,{chara:char}) : getVar(risuChatParser(effect.source,{chara:char}))
-                        setVar(risuChatParser(effect.outputVar, {chara:char}), source)
-                    }
-                    break
-                }
-                case 'v2Comment':{
                     break
                 }
             }
