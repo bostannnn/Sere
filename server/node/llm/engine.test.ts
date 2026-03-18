@@ -212,4 +212,43 @@ describe("server llm rag assembly helpers", () => {
     });
     expect(promptBlocks.some((block: Record<string, unknown>) => block.mergedInto === "first-system")).toBe(false);
   });
+
+  it("uses only innermost-or-outermost messages for assembly, ignoring intermediate wrappers", async () => {
+    const { __test } = await import("./engine.cjs");
+
+    const requestContainer = {
+      messages: [{ role: "user", content: "outer" }],
+      request: {
+        messages: [{ role: "user", content: "intermediate" }],
+        request: {
+          requestBody: {
+            messages: [{ role: "user", content: "inner" }],
+          },
+        },
+      },
+    };
+
+    expect(__test.readAssemblyMessages(requestContainer, requestContainer.request.request)).toEqual([
+      { role: "user", content: "inner" },
+    ]);
+    expect(
+      __test.readAssemblyMessages(
+        requestContainer,
+        {
+          requestBody: {},
+        },
+      ),
+    ).toEqual([{ role: "user", content: "outer" }]);
+    expect(
+      __test.readAssemblyMessages(
+        {
+          messages: [{ role: "user", content: "outer" }],
+          request: {
+            messages: [{ role: "user", content: "intermediate" }],
+          },
+        },
+        {},
+      ),
+    ).toEqual([{ role: "user", content: "outer" }]);
+  });
 });

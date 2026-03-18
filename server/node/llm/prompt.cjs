@@ -21,6 +21,11 @@ const {
     resolvePromptTemplateBlockTitle,
     resolveMemoryTemplateMessages,
 } = require('../../../src/ts/process/promptTemplateShared.cjs');
+const {
+    readExecutionMessages,
+    readExecutionPromptBlocks,
+    readExecutionRequestBody,
+} = require('./execution_request_accessors.cjs');
 
 const TRACE_AUDIT_MAX_MESSAGE_COUNT = 64;
 const TRACE_AUDIT_MAX_CONTENT_CHARS = 32000;
@@ -38,14 +43,15 @@ function extractLatestUserMessage(rawBody) {
     if (explicitUserMessage) return explicitUserMessage;
 
     const candidates = [];
-    if (Array.isArray(rawBody?.request?.requestBody?.messages)) {
-        candidates.push(rawBody.request.requestBody.messages);
+    const requestBody = readExecutionRequestBody(rawBody?.request, { includeNestedRequests: false });
+    if (Array.isArray(requestBody?.messages)) {
+        candidates.push(requestBody.messages);
     }
     if (Array.isArray(rawBody?.request?.messages)) {
         candidates.push(rawBody.request.messages);
     }
-    if (Array.isArray(rawBody?.request?.requestBody?.contents)) {
-        candidates.push(rawBody.request.requestBody.contents);
+    if (Array.isArray(requestBody?.contents)) {
+        candidates.push(requestBody.contents);
     }
 
     for (const list of candidates) {
@@ -702,45 +708,12 @@ function buildGenerateProviderRequest(provider, model, messages, maxTokens, stre
     };
 }
 
-function getNestedRequestCandidates(source) {
-    const candidates = [];
-    let current = source;
-    let depth = 0;
-    while (current && typeof current === 'object' && !Array.isArray(current) && depth < 4) {
-        candidates.push(current);
-        if (!current.request || typeof current.request !== 'object' || Array.isArray(current.request)) {
-            break;
-        }
-        current = current.request;
-        depth += 1;
-    }
-    return candidates;
-}
-
 function getPayloadMessagesForTrace(payload) {
-    const requestCandidates = getNestedRequestCandidates(payload?.request);
-    for (const request of requestCandidates) {
-        if (Array.isArray(request?.requestBody?.messages)) {
-            return request.requestBody.messages;
-        }
-        if (Array.isArray(request?.messages)) {
-            return request.messages;
-        }
-    }
-    return [];
+    return readExecutionMessages(payload?.request, { maxNestedRequests: 4 });
 }
 
 function getPayloadPromptBlocksForTrace(payload) {
-    if (Array.isArray(payload?.promptBlocks)) {
-        return payload.promptBlocks;
-    }
-    const requestCandidates = getNestedRequestCandidates(payload?.request);
-    for (const request of requestCandidates) {
-        if (Array.isArray(request?.promptBlocks)) {
-            return request.promptBlocks;
-        }
-    }
-    return [];
+    return readExecutionPromptBlocks(payload, { maxNestedRequests: 4 });
 }
 
 function buildPromptTrace(payload) {

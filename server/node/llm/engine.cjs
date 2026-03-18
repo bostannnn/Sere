@@ -10,6 +10,11 @@ const { previewKoboldExecution, executeKobold } = require('./kobold.cjs');
 const { previewNovelAIExecution, executeNovelAI } = require('./novelai.cjs');
 const { searchRulebooks } = require('../rag/engine.cjs');
 const { estimateTextTokens, extractTextFromMessageContent } = require('./tokenizer.cjs');
+const {
+    readExecutionMessagesAtLevel,
+    readExecutionModel,
+    readExecutionRequest,
+} = require('./execution_request_accessors.cjs');
 const path = require('path');
 const { existsSync } = require('fs');
 const fs = require('fs/promises');
@@ -287,20 +292,13 @@ function injectServerContexts(messagesArray, promptBlocks, rulesContext, gameSta
     prependInjectedContext(messagesArray, promptBlocks, remainingRulesContext, remainingGameStateContext);
 }
 
-function getExecutionRequestPayload(input) {
-    let current = input && typeof input === 'object' && !Array.isArray(input) ? input : null;
-    let depth = 0;
-    while (
-        current &&
-        typeof current.request === 'object' &&
-        current.request &&
-        !Array.isArray(current.request) &&
-        depth < 4
-    ) {
-        current = current.request;
-        depth += 1;
+function readAssemblyMessages(requestContainer, requestPayload) {
+    const innermostMessages = readExecutionMessagesAtLevel(requestPayload);
+    if (Array.isArray(innermostMessages)) {
+        return innermostMessages;
     }
-    return current && typeof current === 'object' && !Array.isArray(current) ? current : {};
+    const outerMessages = readExecutionMessagesAtLevel(requestContainer);
+    return Array.isArray(outerMessages) ? outerMessages : [];
 }
 
 function parseExecutionInput(body, arg = {}) {
@@ -319,9 +317,7 @@ function parseExecutionInput(body, arg = {}) {
         });
     }
 
-    const nestedRequestModel =
-        (typeof body?.request?.model === 'string' ? body.request.model : '') ||
-        (typeof body?.request?.requestBody?.model === 'string' ? body.request.requestBody.model : '');
+    const nestedRequestModel = readExecutionModel(body?.request, { maxNestedRequests: 0 });
     const provider = normalizeProvider(body.provider, body.model || nestedRequestModel);
     const characterId = typeof body.characterId === 'string' ? body.characterId.trim() : '';
     const chatId = typeof body.chatId === 'string' ? body.chatId.trim() : '';
@@ -376,7 +372,7 @@ async function assembleServerPrompt(input, ctx) {
     const requestContainer = (input?.request && typeof input.request === 'object' && !Array.isArray(input.request))
         ? input.request
         : {};
-    const requestPayload = getExecutionRequestPayload(requestContainer);
+    const requestPayload = readExecutionRequest(requestContainer);
     const preloadedContext = (
         (requestContainer && typeof requestContainer.__serverContext === 'object' && requestContainer.__serverContext)
         || (requestPayload && typeof requestPayload.__serverContext === 'object' && requestPayload.__serverContext)
@@ -428,12 +424,7 @@ async function assembleServerPrompt(input, ctx) {
 
     if (ragEnabled && enabledRulebooks.length > 0) {
         // Find messages in either path
-        const messages =
-            requestPayload.requestBody?.messages
-            || requestPayload.messages
-            || requestContainer.requestBody?.messages
-            || requestContainer.messages
-            || [];
+        const messages = readAssemblyMessages(requestContainer, requestPayload);
 
         const ragQuery = buildUserOnlyRagQuery(messages);
 
@@ -506,11 +497,7 @@ async function assembleServerPrompt(input, ctx) {
     if (rulesContext || gameStateContext) {
         // Find the messages array — client nests it as payload.request.requestBody.messages
         // After parseExecutionInput, input.request = payload, so messages are at input.request.request.requestBody.messages
-        const messagesArray = requestPayload.requestBody?.messages
-            || requestPayload.messages
-            || requestContainer.requestBody?.messages
-            || requestContainer.messages
-            || null;
+        const messagesArray = readAssemblyMessages(requestContainer, requestPayload);
         const promptBlocks = ensurePromptBlocks();
 
         if (messagesArray && Array.isArray(messagesArray) && messagesArray.length > 0) {
@@ -616,5 +603,6 @@ module.exports = {
         resolveEffectiveRagSettings,
         injectContextAtTemplateSlot,
         injectServerContexts,
+        readAssemblyMessages,
     },
 };

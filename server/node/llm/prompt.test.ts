@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { buildGeneratePromptMessages, buildMessagesFromPromptTemplate, buildPromptTrace } from "./prompt.cjs";
+import {
+  buildGeneratePromptMessages,
+  buildMessagesFromPromptTemplate,
+  buildPromptTrace,
+  extractLatestUserMessage,
+} from "./prompt.cjs";
 
 function createMemoryBuilder(summaryItems: string[], content?: string) {
   const renderedContent = content ?? `<Past Events Summary>\n${summaryItems.join("\n\n")}\n</Past Events Summary>`;
@@ -15,6 +20,42 @@ function createMemoryBuilder(summaryItems: string[], content?: string) {
 }
 
 describe("server prompt template slots", () => {
+  it("falls back from requestBody.messages to request.messages when the former has no usable user text", () => {
+    const latest = extractLatestUserMessage({
+      request: {
+        requestBody: {
+          messages: [{ role: "assistant", content: "No user text here." }],
+        },
+        messages: [{ role: "user", content: "Use this fallback user message." }],
+      },
+    });
+
+    expect(latest).toBe("Use this fallback user message.");
+  });
+
+  it("keeps prompt trace access to the fourth nested request layer", () => {
+    const traced = buildPromptTrace({
+      request: {
+        request: {
+          request: {
+            request: {
+              messages: [{ role: "user", content: "deep trace message" }],
+              promptBlocks: [{ index: 0, role: "user", title: "Deep Chat", source: "chat" }],
+            },
+          },
+        },
+      },
+    });
+
+    expect(traced).toEqual([
+      expect.objectContaining({
+        role: "user",
+        title: "Deep Chat",
+        content: "deep trace message",
+      }),
+    ]);
+  });
+
   it("emits rulebook and game state slot markers without inserting placeholder messages", async () => {
     const assembled = await buildMessagesFromPromptTemplate(
       {
