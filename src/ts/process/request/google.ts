@@ -1,10 +1,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { LLMFormat } from "src/ts/model/modellist"
-import { getDatabase } from "src/ts/storage/database.svelte"
 import { type RequestDataArgumentExtended, type requestDataResponse } from "./request"
 import { isNodeServer } from "src/ts/platform"
-import { buildCharacterRagPayload, buildGlobalRagPayload } from "./ragPayload"
 import {
     getServerStringSuccessResult,
     normalizeServerEnvelope,
@@ -15,18 +13,15 @@ import {
     buildGoogleBaseRequestPayload,
     finalizeGoogleRequestPayload,
 } from "./providers/google.payload"
+import { buildServerExecutionPayloadPlan } from "./providers/serverExecutionPayload"
 import {
     requestGoogle as requestGoogleImpl,
 } from "./providers/google.response"
 import {
-    cloneServerRequestBody,
     createAccumulatingServerResponseStream,
-    getLatestUserMessage,
-    hasMultimodalMessages,
     requestServerJson,
     requestServerPreview,
     requestServerStream,
-    resolveServerExecutionEndpoint,
     readFailedServerStream,
 } from "./request.transport"
 const googleRequestLog = (..._args: unknown[]) => {};
@@ -82,58 +77,26 @@ type GoogleServerExecutionResponse = {
 }
 
 async function requestGoogleServerExecution(arg: RequestDataArgumentExtended, body: Record<string, any>): Promise<requestDataResponse> {
-    const serverExecEndpoint = resolveServerExecutionEndpoint(arg, true);
-
-    const charRagSettings = arg.currentChar?.ragSettings
-    const globalRagSettings = getDatabase().globalRagSettings
-    const requestBodyForServer = cloneServerRequestBody(body);
-    const latestUserMessage = getLatestUserMessage(arg.formated);
-    const hasMultimodal = hasMultimodalMessages(arg.formated);
-    const canUseRawGeneratePayload =
-        !arg.previewBody
-        && !!(arg.currentChar?.chaId)
-        && !!arg.chatId
-        && !!latestUserMessage
-        && !hasMultimodal;
-
-    const payload = canUseRawGeneratePayload
-        ? {
-            mode: arg.mode ?? 'model',
-            provider: 'google',
-            characterId: arg.currentChar?.chaId ?? '',
-            chatId: arg.chatId ?? '',
-            continue: !!arg.continue,
-            streaming: !!arg.useStreaming,
-            userMessage: latestUserMessage,
-            model: typeof arg.modelInfo?.internalID === 'string' ? arg.modelInfo.internalID : undefined,
-            maxTokens: Number.isFinite(Number(requestBodyForServer?.generation_config?.maxOutputTokens))
+    const { payload, serverExecEndpoint } = buildServerExecutionPayloadPlan({
+        arg,
+        body,
+        provider: 'google',
+        getModel: ({ arg: currentArg }) =>
+            typeof currentArg.modelInfo?.internalID === 'string' ? currentArg.modelInfo.internalID : undefined,
+        getMaxTokens: ({ requestBodyForServer }) =>
+            Number.isFinite(Number(requestBodyForServer?.generation_config?.maxOutputTokens))
                 ? Number(requestBodyForServer.generation_config.maxOutputTokens)
                 : undefined,
-            ragSettings: buildCharacterRagPayload(charRagSettings),
-            globalRagSettings: buildGlobalRagPayload(globalRagSettings),
-        }
-        : {
-            mode: arg.mode ?? 'model',
-            provider: 'google',
-            characterId: arg.currentChar?.chaId ?? '',
-            chatId: arg.chatId ?? '',
-            continue: !!arg.continue,
-            streaming: !!arg.useStreaming,
-            useClientAssembledRequest: serverExecEndpoint === '/data/llm/generate',
-            ragSettings: buildCharacterRagPayload(charRagSettings),
-            globalRagSettings: buildGlobalRagPayload(globalRagSettings),
-            request: {
-                requestBody: requestBodyForServer,
-                messages: Array.isArray(requestBodyForServer.contents) ? requestBodyForServer.contents : undefined,
-                model: typeof arg.modelInfo?.internalID === 'string' ? arg.modelInfo.internalID : undefined,
-                maxTokens: Number.isFinite(Number(requestBodyForServer?.generation_config?.maxOutputTokens))
-                    ? Number(requestBodyForServer.generation_config.maxOutputTokens)
-                    : undefined,
-                tools: Array.isArray(requestBodyForServer?.tools?.functionDeclarations)
-                    ? requestBodyForServer.tools.functionDeclarations
-                    : undefined,
-            },
-        };
+        getRequestMessages: ({ requestBodyForServer }) =>
+            Array.isArray(requestBodyForServer.contents) ? requestBodyForServer.contents : undefined,
+        getRequestTools: ({ requestBodyForServer }) =>
+            Array.isArray(requestBodyForServer?.tools?.functionDeclarations)
+                ? requestBodyForServer.tools.functionDeclarations
+                : undefined,
+        getFallbackPayloadFields: ({ serverExecEndpoint: endpoint }) => ({
+            useClientAssembledRequest: endpoint === '/data/llm/generate',
+        }),
+    })
 
     if (arg.previewBody) {
         const previewRes = await requestServerPreview(payload, arg);

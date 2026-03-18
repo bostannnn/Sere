@@ -1,8 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { language } from "src/lang"
-import { getDatabase } from "src/ts/storage/database.svelte"
-import { buildCharacterRagPayload, buildGlobalRagPayload } from "../ragPayload";
 import {
     getServerFailureMessage,
     getServerStringSuccessResult,
@@ -11,18 +9,25 @@ import {
     stringifyUnknownResponse,
 } from "../request.responses";
 import {
-    cloneServerRequestBody,
-    getLatestUserMessage,
-    hasMultimodalMessages,
     requestServerJson,
     requestServerPreview,
     requestServerStream,
-    resolveServerExecutionEndpoint,
     readFailedServerStream,
 } from "../request.transport";
 import { getTranStream, wrapToolStream } from "./openai.stream";
+import { buildServerExecutionPayloadPlan } from "./serverExecutionPayload";
 import type { RequestDataArgumentExtended, requestDataResponse } from "../request";
 import type { OpenAIHttpResponse } from "../openAI";
+
+function buildCompactGenerateRequestBody(body: Record<string, any>) {
+    const compact = (typeof structuredClone === 'function')
+        ? structuredClone(body)
+        : JSON.parse(JSON.stringify(body))
+    delete compact.messages
+    delete compact.prompt
+    delete compact.stream
+    return compact
+}
 
 async function requestServerExecution(
     arg: RequestDataArgumentExtended,
@@ -33,100 +38,57 @@ async function requestServerExecution(
         keyMissingCode: string
     }
 ): Promise<requestDataResponse> {
-    const generateProviders = new Set(['openrouter', 'openai', 'deepseek']);
-    const rawGenerateProviders = new Set(['openrouter', 'openai', 'deepseek']);
     const requestMode = String(arg.mode ?? 'model');
-    const canUseGenerateEndpoint = requestMode === 'model';
-    const serverExecEndpoint = resolveServerExecutionEndpoint(
+    const {
+        payload,
+        serverExecEndpoint,
+    } = buildServerExecutionPayloadPlan({
         arg,
-        canUseGenerateEndpoint && generateProviders.has(opts.provider)
-    );
+        body,
+        provider: opts.provider,
+        requestBodyCloneOptions: {
+            stream: !!arg.useStreaming,
+        },
+        canUseGenerateEndpoint: (currentArg) => String(currentArg.mode ?? 'model') === 'model',
+        isRawGenerateEligible: ({ requestBodyForServer }) => {
+            const hasNonStringMessage = Array.isArray(requestBodyForServer.messages)
+                && requestBodyForServer.messages.some((m: any) => typeof m?.content !== 'string')
+            const hasPromptOnly = typeof requestBodyForServer.prompt === 'string'
+                && (!Array.isArray(requestBodyForServer.messages) || requestBodyForServer.messages.length === 0)
 
-    const db = getDatabase();
-    const charRagSettings = arg.currentChar?.ragSettings;
-    const globalRagSettings = db.globalRagSettings;
-    const requestBodyForServer = cloneServerRequestBody(body, {
-        stream: !!arg.useStreaming,
-    });
-    const latestUserMessage = getLatestUserMessage(arg.formated);
-    const hasMultimodal = hasMultimodalMessages(arg.formated);
-    const hasNonStringMessage = Array.isArray(requestBodyForServer.messages)
-        && requestBodyForServer.messages.some((m: any) => typeof m?.content !== 'string');
-    const hasPromptOnly = typeof requestBodyForServer.prompt === 'string'
-        && (!Array.isArray(requestBodyForServer.messages) || requestBodyForServer.messages.length === 0);
-    const compactRequestBodyForGenerate = (() => {
-        const compact = (typeof structuredClone === 'function')
-            ? structuredClone(requestBodyForServer)
-            : JSON.parse(JSON.stringify(requestBodyForServer));
-        delete compact.messages;
-        delete compact.prompt;
-        delete compact.stream;
-        return compact;
-    })();
-    const canUseRawGeneratePayload =
-        serverExecEndpoint === '/data/llm/generate'
-        && rawGenerateProviders.has(opts.provider)
-        && !arg.previewBody
-        && !!(arg.currentChar?.chaId)
-        && !!arg.chatId
-        && !!latestUserMessage
-        && !hasMultimodal
-        && !hasNonStringMessage
-        && !hasPromptOnly;
-    const requestModelId = typeof requestBodyForServer.model === 'string'
-        ? requestBodyForServer.model.trim().toLowerCase()
-        : '';
-    const allowReasoningOnlyForDeepSeekV32Speciale =
-        opts.provider === 'openrouter'
-        && requestModelId === 'deepseek/deepseek-v3.2-speciale'
-        && db.openrouterAllowReasoningOnlyForDeepSeekV32Speciale === true;
-
-    const payload = canUseRawGeneratePayload
-        ? {
-            mode: arg.mode ?? 'model',
-            provider: opts.provider,
-            characterId: arg.currentChar?.chaId ?? '',
-            chatId: arg.chatId ?? '',
-            continue: !!arg.continue,
-            streaming: !!arg.useStreaming,
-            allowReasoningOnlyForDeepSeekV32Speciale,
-            userMessage: latestUserMessage,
-            model: typeof requestBodyForServer.model === 'string' ? requestBodyForServer.model : undefined,
-            maxTokens: Number.isFinite(Number(requestBodyForServer.max_tokens ?? requestBodyForServer.max_completion_tokens))
+            return !hasNonStringMessage && !hasPromptOnly
+        },
+        getModel: ({ requestBodyForServer }) =>
+            typeof requestBodyForServer.model === 'string' ? requestBodyForServer.model : undefined,
+        getMaxTokens: ({ requestBodyForServer }) =>
+            Number.isFinite(Number(requestBodyForServer.max_tokens ?? requestBodyForServer.max_completion_tokens))
                 ? Number(requestBodyForServer.max_tokens ?? requestBodyForServer.max_completion_tokens)
                 : undefined,
-            request: {
-                requestBody: compactRequestBodyForGenerate,
-                model: typeof requestBodyForServer.model === 'string' ? requestBodyForServer.model : undefined,
-                maxTokens: Number.isFinite(Number(requestBodyForServer.max_tokens ?? requestBodyForServer.max_completion_tokens))
-                    ? Number(requestBodyForServer.max_tokens ?? requestBodyForServer.max_completion_tokens)
-                    : undefined,
-                tools: Array.isArray(requestBodyForServer.tools) ? requestBodyForServer.tools : undefined,
-            },
-            ragSettings: buildCharacterRagPayload(charRagSettings),
-            globalRagSettings: buildGlobalRagPayload(globalRagSettings),
-        }
-        : {
-            mode: arg.mode ?? 'model',
-            provider: opts.provider,
-            characterId: arg.currentChar?.chaId ?? '',
-            chatId: arg.chatId ?? '',
-            continue: !!arg.continue,
-            streaming: !!arg.useStreaming,
-            allowReasoningOnlyForDeepSeekV32Speciale,
-            ragSettings: buildCharacterRagPayload(charRagSettings),
-            globalRagSettings: buildGlobalRagPayload(globalRagSettings),
-            request: {
-                requestBody: requestBodyForServer,
-                messages: Array.isArray(requestBodyForServer.messages) ? requestBodyForServer.messages : undefined,
-                prompt: typeof requestBodyForServer.prompt === 'string' ? requestBodyForServer.prompt : undefined,
-                model: typeof requestBodyForServer.model === 'string' ? requestBodyForServer.model : undefined,
-                maxTokens: Number.isFinite(Number(requestBodyForServer.max_tokens ?? requestBodyForServer.max_completion_tokens))
-                    ? Number(requestBodyForServer.max_tokens ?? requestBodyForServer.max_completion_tokens)
-                    : undefined,
-                tools: Array.isArray(requestBodyForServer.tools) ? requestBodyForServer.tools : undefined,
-            },
-        };
+        getRequestMessages: ({ requestBodyForServer }) =>
+            Array.isArray(requestBodyForServer.messages) ? requestBodyForServer.messages : undefined,
+        getRequestPrompt: ({ requestBodyForServer }) =>
+            typeof requestBodyForServer.prompt === 'string' ? requestBodyForServer.prompt : undefined,
+        getRequestTools: ({ requestBodyForServer }) =>
+            Array.isArray(requestBodyForServer.tools) ? requestBodyForServer.tools : undefined,
+        getSharedPayloadFields: ({ database, requestBodyForServer }) => {
+            const requestModelId = typeof requestBodyForServer.model === 'string'
+                ? requestBodyForServer.model.trim().toLowerCase()
+                : ''
+
+            return {
+                allowReasoningOnlyForDeepSeekV32Speciale:
+                    opts.provider === 'openrouter'
+                    && requestModelId === 'deepseek/deepseek-v3.2-speciale'
+                    && database.openrouterAllowReasoningOnlyForDeepSeekV32Speciale === true,
+            }
+        },
+        buildRawRequestWrapper: ({ requestBodyForServer, model, maxTokens }) => ({
+            requestBody: buildCompactGenerateRequestBody(requestBodyForServer),
+            model,
+            maxTokens,
+            tools: Array.isArray(requestBodyForServer.tools) ? requestBodyForServer.tools : undefined,
+        }),
+    })
 
     const requestModel = typeof body?.model === 'string' && body.model.trim().length > 0 ? body.model.trim() : '(unset)';
     const requestContext = `mode=${requestMode}, model=${requestModel}`;
