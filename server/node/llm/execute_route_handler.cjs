@@ -102,12 +102,12 @@ function createExecuteRouteHandler(arg = {}) {
         if (typeof existing !== 'string' || !existing) {
             return incoming;
         }
-        if (existing.endsWith(incoming)) {
-            return '';
-        }
         const maxOverlap = Math.min(existing.length, incoming.length);
         for (let overlap = maxOverlap; overlap > 0; overlap -= 1) {
             if (existing.slice(-overlap) === incoming.slice(0, overlap)) {
+                if (overlap >= incoming.length) {
+                    return '';
+                }
                 return incoming.slice(overlap);
             }
         }
@@ -408,6 +408,7 @@ function createExecuteRouteHandler(arg = {}) {
                 let fullText = '';
                 let anthropicThinkingOpen = false;
                 let openrouterReasoningOpen = false;
+                let openrouterReasoningText = '';
                 let sseBuffer = '';
                 let sawExplicitStreamCompletion = false;
                 let clientDisconnected = false;
@@ -598,10 +599,25 @@ function createExecuteRouteHandler(arg = {}) {
                     }
                     const text = extractTextFromEvent(data);
                     if (!text) return;
-                    const emittedText = treatOpenRouterReasoningAsContent
-                        ? dedupeChunkByExistingSuffix(fullText, text)
+                    const choice = data?.choices?.[0];
+                    const delta = (choice && typeof choice.delta === 'object') ? choice.delta : {};
+                    const openRouterReasoning = normalized.provider === 'openrouter'
+                        ? extractOpenRouterReasoningDelta(delta)
+                        : '';
+                    const openRouterContent = normalized.provider === 'openrouter' && typeof delta.content === 'string'
+                        ? delta.content
+                        : '';
+                    const shouldDedupeOpenRouterChunk = normalized.provider === 'openrouter'
+                        && (treatOpenRouterReasoningAsContent || (!!openRouterReasoning && !openRouterContent));
+                    const emittedText = shouldDedupeOpenRouterChunk
+                        ? dedupeChunkByExistingSuffix(openrouterReasoningText, text)
                         : text;
                     if (!emittedText) return;
+                    if (shouldDedupeOpenRouterChunk) {
+                        openrouterReasoningText += emittedText;
+                    } else if (normalized.provider === 'openrouter' && openRouterContent) {
+                        openrouterReasoningText = '';
+                    }
                     fullText += emittedText;
                     await writeSSEEvent({ type: 'chunk', text: emittedText });
                 };

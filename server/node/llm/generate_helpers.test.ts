@@ -334,6 +334,122 @@ describe("generate_helpers", () => {
     expect(chat.memoryData.summaries).toHaveLength(1);
   });
 
+  it("preserves structured upstream details when periodic summary execution fails", async () => {
+    const { dataRoot, characterId, chatId } = await createDataRoot();
+    cleanup.push(dataRoot);
+
+    const helpers = createHelpersHarness({
+      dataRoot,
+      parseLLMExecutionInput: (payload) => payload,
+      executeLLM: vi.fn(async () => {
+        throw new Error("should not be called");
+      }),
+      planPeriodicMemorySummarization: () => ({
+        shouldRun: true,
+        reason: "ready",
+        selectedModel: "subModel",
+        promptMessages: [{ role: "user", content: "summarize this" }],
+      }),
+      applyPeriodicMemorySummary: () => ({ updated: false, reason: "not_applied" }),
+    });
+
+    const upstreamError = new (class extends Error {
+      status = 403;
+      code = "UPSTREAM_OPENROUTER_ERROR";
+      details = {
+        status: 403,
+        statusText: "Forbidden",
+        body: {
+          error: {
+            message: "Provider returned error",
+            metadata: {
+              raw: "This service is not available in your region.",
+            },
+          },
+        },
+      };
+
+      constructor() {
+        super("OpenRouter request failed.");
+      }
+    })();
+
+    const failingHelpers = createHelpersHarness({
+      dataRoot,
+      parseLLMExecutionInput: (payload) => payload,
+      executeLLM: vi.fn(async () => {
+        throw upstreamError;
+      }),
+      planPeriodicMemorySummarization: () => ({
+        shouldRun: true,
+        reason: "ready",
+        selectedModel: "subModel",
+        promptMessages: [{ role: "user", content: "summarize this" }],
+      }),
+      applyPeriodicMemorySummary: () => ({ updated: false, reason: "not_applied" }),
+    });
+
+    const result = await failingHelpers.maybeRunServerPeriodicMemorySummarization({
+      character: {
+        chaId: characterId,
+        name: "Character A",
+        memoryEnabled: true,
+      },
+      chat: {
+        id: chatId,
+        name: "Chat A",
+        message: [{ role: "user", data: "hello" }],
+        memoryData: {
+          summaries: [],
+          metrics: {},
+          lastSummarizedMessageIndex: 0,
+        },
+      },
+      settings: {
+        memoryEnabled: true,
+        maxResponse: 300,
+        memoryPresetId: 0,
+        memoryPresets: [
+          {
+            name: "Default",
+            settings: {
+              summarizationPrompt: "",
+              doNotSummarizeUserMessage: false,
+              periodicSummarizationInterval: 1,
+              maxChatsPerSummary: 1,
+              maxSelectedSummaries: 4,
+            },
+          },
+        ],
+      },
+      characterId,
+      chatId,
+    });
+
+    expect(result.updated).toBe(false);
+    expect(result.reason).toBe("periodic_summary_execution_failed");
+    expect(result.trace).toMatchObject({
+      endpoint: "memory_periodic_summarize",
+      provider: "openrouter",
+      model: "openrouter/auto",
+      status: 500,
+      ok: false,
+      error: {
+        error: "UPSTREAM_OPENROUTER_ERROR",
+        message: "OpenRouter request failed.",
+        details: {
+          status: 403,
+          statusText: "Forbidden",
+          body: {
+            error: {
+              message: "Provider returned error",
+            },
+          },
+        },
+      },
+    });
+  });
+
   it("retries memory persistence once on STALE_BASE_EVENT and merges latest chat snapshot", async () => {
     const { dataRoot, characterId, chatId } = await createDataRoot();
     cleanup.push(dataRoot);

@@ -360,8 +360,9 @@
 
     @media (max-width: 720px) {
         .ds-chat-side-menu-composer {
-            width: 100%;
-            min-width: 0;
+            width: min(20rem, calc(100vw - (var(--ds-space-4) * 2)));
+            min-width: min(20rem, calc(100vw - (var(--ds-space-4) * 2)));
+            max-width: calc(100vw - (var(--ds-space-4) * 2));
         }
     }
 </style>

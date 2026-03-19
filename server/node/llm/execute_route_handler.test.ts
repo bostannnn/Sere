@@ -779,4 +779,270 @@ describe("execute_route_handler visible output guard", () => {
         const lastAudit = harness.appendLLMAudit.mock.calls.at(-1)?.[0];
         expect(lastAudit?.ok).toBe(true);
     });
+
+    it("dedupes overlapping OpenRouter streaming chunks for regular models", async () => {
+        const encoder = new TextEncoder();
+        const req = new MockReq();
+        const res = new MockRes();
+        let readCalls = 0;
+        const { stream } = createStreamFromRead(async () => {
+            readCalls += 1;
+            if (readCalls === 1) {
+                return {
+                    done: false,
+                    value: encoder.encode('data: {"choices":[{"delta":{"reasoning":"The user has"}}]}\n\n'),
+                };
+            }
+            if (readCalls === 2) {
+                return {
+                    done: false,
+                    value: encoder.encode('data: {"choices":[{"delta":{"reasoning":"The user has responded"}}]}\n\n'),
+                };
+            }
+            if (readCalls === 3) {
+                return {
+                    done: false,
+                    value: encoder.encode('data: {"choices":[{"delta":{"content":"Hello."}}]}\n\n'),
+                };
+            }
+            if (readCalls === 4) {
+                return {
+                    done: false,
+                    value: encoder.encode('data: [DONE]\n\n'),
+                };
+            }
+            return { done: true };
+        });
+        const harness = createHarness({
+            normalized: {
+                endpoint: "execute",
+                mode: "model",
+                provider: "openrouter",
+                model: "deepseek/deepseek-v3.2",
+                characterId: "",
+                chatId: "",
+                requestedStreaming: true,
+                streaming: true,
+                request: {
+                    allowReasoningOnlyForDeepSeekV32Speciale: false,
+                },
+            },
+            executeLLM: async () => stream,
+        });
+
+        await harness.handleLLMExecutePost(req, res, {}, "execute");
+
+        const frames = toSSEDataFrames(res.text())
+            .map((frame) => {
+                try {
+                    return JSON.parse(frame);
+                } catch {
+                    return null;
+                }
+            })
+            .filter(Boolean);
+        const chunkTexts = frames
+            .filter((frame: Record<string, unknown>) => frame.type === "chunk")
+            .map((frame: Record<string, unknown>) => String(frame.text || ""))
+            .join("");
+
+        expect(chunkTexts).toBe("<Thoughts>\nThe user has responded</Thoughts>\n\nHello.");
+        expect(chunkTexts).not.toContain("The user hasThe user has");
+        expect(frames.find((frame: Record<string, unknown>) => frame.type === "done")).toBeTruthy();
+    });
+
+    it("drops exact duplicate cumulative OpenRouter reasoning chunks", async () => {
+        const encoder = new TextEncoder();
+        const req = new MockReq();
+        const res = new MockRes();
+        let readCalls = 0;
+        const { stream } = createStreamFromRead(async () => {
+            readCalls += 1;
+            if (readCalls === 1) {
+                return {
+                    done: false,
+                    value: encoder.encode('data: {"choices":[{"delta":{"reasoning":"The user has responded"}}]}\n\n'),
+                };
+            }
+            if (readCalls === 2) {
+                return {
+                    done: false,
+                    value: encoder.encode('data: {"choices":[{"delta":{"reasoning":"The user has responded"}}]}\n\n'),
+                };
+            }
+            if (readCalls === 3) {
+                return {
+                    done: false,
+                    value: encoder.encode('data: {"choices":[{"delta":{"content":"Hello."}}]}\n\n'),
+                };
+            }
+            if (readCalls === 4) {
+                return {
+                    done: false,
+                    value: encoder.encode('data: [DONE]\n\n'),
+                };
+            }
+            return { done: true };
+        });
+        const harness = createHarness({
+            normalized: {
+                endpoint: "execute",
+                mode: "model",
+                provider: "openrouter",
+                model: "deepseek/deepseek-v3.2",
+                characterId: "",
+                chatId: "",
+                requestedStreaming: true,
+                streaming: true,
+                request: {
+                    allowReasoningOnlyForDeepSeekV32Speciale: false,
+                },
+            },
+            executeLLM: async () => stream,
+        });
+
+        await harness.handleLLMExecutePost(req, res, {}, "execute");
+
+        const frames = toSSEDataFrames(res.text())
+            .map((frame) => {
+                try {
+                    return JSON.parse(frame);
+                } catch {
+                    return null;
+                }
+            })
+            .filter(Boolean);
+        const chunkTexts = frames
+            .filter((frame: Record<string, unknown>) => frame.type === "chunk")
+            .map((frame: Record<string, unknown>) => String(frame.text || ""))
+            .join("");
+
+        expect(chunkTexts).toBe("<Thoughts>\nThe user has responded</Thoughts>\n\nHello.");
+        expect(chunkTexts).not.toContain("The user has respondedThe user has responded");
+        expect(frames.find((frame: Record<string, unknown>) => frame.type === "done")).toBeTruthy();
+    });
+
+    it("preserves exact repeated OpenRouter chunks when the model intentionally repeats text", async () => {
+        const encoder = new TextEncoder();
+        const req = new MockReq();
+        const res = new MockRes();
+        let readCalls = 0;
+        const { stream } = createStreamFromRead(async () => {
+            readCalls += 1;
+            if (readCalls === 1) {
+                return {
+                    done: false,
+                    value: encoder.encode('data: {"choices":[{"delta":{"content":"ha"}}]}\n\n'),
+                };
+            }
+            if (readCalls === 2) {
+                return {
+                    done: false,
+                    value: encoder.encode('data: {"choices":[{"delta":{"content":"ha"}}]}\n\n'),
+                };
+            }
+            if (readCalls === 3) {
+                return {
+                    done: false,
+                    value: encoder.encode('data: [DONE]\n\n'),
+                };
+            }
+            return { done: true };
+        });
+        const harness = createHarness({
+            normalized: {
+                endpoint: "execute",
+                mode: "model",
+                provider: "openrouter",
+                model: "openrouter/hunter-alpha",
+                characterId: "",
+                chatId: "",
+                requestedStreaming: true,
+                streaming: true,
+                request: {},
+            },
+            executeLLM: async () => stream,
+        });
+
+        await harness.handleLLMExecutePost(req, res, {}, "execute");
+
+        const frames = toSSEDataFrames(res.text())
+            .map((frame) => {
+                try {
+                    return JSON.parse(frame);
+                } catch {
+                    return null;
+                }
+            })
+            .filter(Boolean);
+        const chunkTexts = frames
+            .filter((frame: Record<string, unknown>) => frame.type === "chunk")
+            .map((frame: Record<string, unknown>) => String(frame.text || ""))
+            .join("");
+
+        expect(chunkTexts).toBe("haha");
+        expect(frames.find((frame: Record<string, unknown>) => frame.type === "done")).toBeTruthy();
+    });
+
+    it("does not dedupe overlapping regular OpenRouter content chunks", async () => {
+        const encoder = new TextEncoder();
+        const req = new MockReq();
+        const res = new MockRes();
+        let readCalls = 0;
+        const { stream } = createStreamFromRead(async () => {
+            readCalls += 1;
+            if (readCalls === 1) {
+                return {
+                    done: false,
+                    value: encoder.encode('data: {"choices":[{"delta":{"content":"abc"}}]}\n\n'),
+                };
+            }
+            if (readCalls === 2) {
+                return {
+                    done: false,
+                    value: encoder.encode('data: {"choices":[{"delta":{"content":"cde"}}]}\n\n'),
+                };
+            }
+            if (readCalls === 3) {
+                return {
+                    done: false,
+                    value: encoder.encode('data: [DONE]\n\n'),
+                };
+            }
+            return { done: true };
+        });
+        const harness = createHarness({
+            normalized: {
+                endpoint: "execute",
+                mode: "model",
+                provider: "openrouter",
+                model: "openrouter/hunter-alpha",
+                characterId: "",
+                chatId: "",
+                requestedStreaming: true,
+                streaming: true,
+                request: {},
+            },
+            executeLLM: async () => stream,
+        });
+
+        await harness.handleLLMExecutePost(req, res, {}, "execute");
+
+        const frames = toSSEDataFrames(res.text())
+            .map((frame) => {
+                try {
+                    return JSON.parse(frame);
+                } catch {
+                    return null;
+                }
+            })
+            .filter(Boolean);
+        const chunkTexts = frames
+            .filter((frame: Record<string, unknown>) => frame.type === "chunk")
+            .map((frame: Record<string, unknown>) => String(frame.text || ""))
+            .join("");
+
+        expect(chunkTexts).toBe("abccde");
+        expect(frames.find((frame: Record<string, unknown>) => frame.type === "done")).toBeTruthy();
+    });
 });

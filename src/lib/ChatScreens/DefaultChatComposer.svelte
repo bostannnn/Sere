@@ -41,7 +41,9 @@
         currentCharacter: character | groupChat;
         currentEvolutionSettings?: EvolutionSettings;
         evolutionBusy?: boolean;
+        showEvolutionBusyStatus?: boolean;
         evolutionBusyLabel?: string;
+        evolutionBackgroundNotice?: string;
         evolutionAction?: string | null;
         evolutionHandoffBlockedForCurrentChat?: boolean;
         messageInput?: string;
@@ -72,7 +74,9 @@
         currentCharacter,
         currentEvolutionSettings = null,
         evolutionBusy = false,
+        showEvolutionBusyStatus = false,
         evolutionBusyLabel = "",
+        evolutionBackgroundNotice = "",
         evolutionAction = null,
         evolutionHandoffBlockedForCurrentChat = false,
         messageInput = $bindable(""),
@@ -236,7 +240,14 @@
         </button>
     {/if}
 
-    {#if evolutionBusy}
+    {#if evolutionBackgroundNotice}
+        <div class="ds-chat-evolution-background-note" role="status" aria-live="polite">
+            <span class="ds-settings-label-muted-sm">Automatic handoff paused</span>
+            <span>{evolutionBackgroundNotice}</span>
+        </div>
+    {/if}
+
+    {#if showEvolutionBusyStatus}
         <div class="ds-chat-evolution-status-inline" role="status" aria-live="polite">
             <div class="ds-chat-inline-status">
                 <div class="ds-chat-spinner ds-chat-spinner-aux"></div>
@@ -461,8 +472,21 @@
         background: var(--ds-surface-2);
     }
 
+    .ds-chat-evolution-background-note {
+        width: 100%;
+        display: flex;
+        flex-direction: column;
+        gap: var(--ds-space-1);
+        padding: var(--ds-space-2) var(--ds-space-3);
+        border: 1px solid color-mix(in srgb, var(--ds-danger) 35%, var(--ds-border-subtle));
+        border-radius: var(--ds-radius-md);
+        background: color-mix(in srgb, var(--ds-danger) 8%, var(--ds-surface-2));
+        color: inherit;
+    }
+
     @media (max-width: 720px) {
         .ds-chat-composer-stack,
+        .ds-chat-evolution-background-note,
         .ds-chat-evolution-status-inline,
         .ds-chat-evolution-review-prompt {
             width: 100%;

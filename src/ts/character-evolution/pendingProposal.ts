@@ -16,6 +16,54 @@ export function getPendingProposalSourceRange(
     return proposal?.sourceRange ?? null
 }
 
+export function rebasePendingProposalAfterMessageDeletion(
+    proposal: CharacterEvolutionPendingProposal | null | undefined,
+    chatId: string | null | undefined,
+    startMessageIndex: number,
+    endMessageIndex: number,
+): CharacterEvolutionPendingProposal | null {
+    if (!proposal) {
+        return null
+    }
+
+    const normalizedChatId = typeof chatId === "string" ? chatId.trim() : ""
+    if (
+        !normalizedChatId
+        || !Number.isInteger(startMessageIndex)
+        || !Number.isInteger(endMessageIndex)
+        || startMessageIndex < 0
+        || endMessageIndex < startMessageIndex
+    ) {
+        return proposal
+    }
+
+    if (!proposal.sourceRange) {
+        return proposal.sourceChatId === normalizedChatId ? null : proposal
+    }
+
+    if (proposal.sourceRange.chatId !== normalizedChatId) {
+        return proposal
+    }
+
+    if (endMessageIndex < proposal.sourceRange.startMessageIndex) {
+        const removedCount = endMessageIndex - startMessageIndex + 1
+        return {
+            ...proposal,
+            sourceRange: {
+                ...proposal.sourceRange,
+                startMessageIndex: proposal.sourceRange.startMessageIndex - removedCount,
+                endMessageIndex: proposal.sourceRange.endMessageIndex - removedCount,
+            },
+        }
+    }
+
+    if (startMessageIndex > proposal.sourceRange.endMessageIndex) {
+        return proposal
+    }
+
+    return null
+}
+
 export function mergeProposalStateWithCurrentState(
     proposedState: CharacterEvolutionProposalState | null | undefined,
     currentState: CharacterEvolutionState,

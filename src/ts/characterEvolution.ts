@@ -33,6 +33,7 @@ export {
     getNextUnprocessedMessageIndexForChat,
     hasAcceptedEvolutionForChat,
     normalizeCharacterEvolutionRangeRef,
+    rebaseEvolutionCoverageAfterMessageDeletion,
 } from "./character-evolution/ranges"
 
 export {

@@ -99,8 +99,11 @@
     let evolutionBusy = $state(false)
     let evolutionAction: EvolutionBusyAction = $state(null)
     let evolutionAutoHandoffInProgress = $state(false)
+    let evolutionAutoHandoffPausedTargetKey = $state<string | null>(null)
+    let evolutionAutoHandoffNotice = $state('')
     let evolutionProposalDraft = $state(null)
     let evolutionProposalDraftKey = $state<string | null>(null)
+    let lastEvolutionNoticeTargetKey = $state<string | null>(null)
     let {
         onOpenModuleList = () => {},
         onOpenChatList = () => {},
@@ -268,6 +271,8 @@
             return
         }
         const characterId = currentCharacter.chaId
+        evolutionAutoHandoffPausedTargetKey = null
+        evolutionAutoHandoffNotice = ''
         evolutionBusy = true
         evolutionAction = 'handoff'
         openMenu = false
@@ -306,6 +311,8 @@
             return
         }
         const characterId = currentCharacter.chaId
+        evolutionAutoHandoffPausedTargetKey = null
+        evolutionAutoHandoffNotice = ''
         evolutionBusy = true
         evolutionAction = 'reject'
         try {
@@ -331,6 +338,8 @@
         }
         const characterId = currentCharacter.chaId
         const proposedState = JSON.parse(JSON.stringify(evolutionProposalDraft))
+        evolutionAutoHandoffPausedTargetKey = null
+        evolutionAutoHandoffNotice = ''
         evolutionBusy = true
         evolutionAction = 'accept'
         try {
@@ -396,6 +405,21 @@
     })
 
     $effect(() => {
+        const targetKey = currentCharacter?.chaId && currentChatEntry?.id
+            ? `${currentCharacter.chaId}:${currentChatEntry.id}`
+            : null
+        if (targetKey === lastEvolutionNoticeTargetKey) {
+            return
+        }
+        lastEvolutionNoticeTargetKey = targetKey
+        if (targetKey && targetKey === evolutionAutoHandoffPausedTargetKey) {
+            return
+        }
+        evolutionAutoHandoffPausedTargetKey = null
+        evolutionAutoHandoffNotice = ''
+    })
+
+    $effect(() => {
         const requestedCharacterId = $evolutionReviewOpenRequest
         if (!requestedCharacterId || requestedCharacterId !== currentCharacter?.chaId) {
             return
@@ -422,6 +446,7 @@
     const evolutionBusyLabel = $derived.by(() => {
         return getEvolutionBusyLabel(evolutionAction)
     })
+    const showEvolutionBusyStatus = $derived(evolutionBusy && !evolutionAutoHandoffInProgress)
 
     async function sendMain(continueResponse:boolean) {
         const stableTarget = resolveStableTargetFromSelection({ ensureChatId: true })
@@ -683,12 +708,14 @@
     }
 
     async function checkAndRunAutoHandoff(target: { characterId: string; chatId: string }) {
+        const targetKey = getStableChatTargetKey(target)
         const character = findCharacterById(target.characterId)
         if (!character) return
 
         const evoSettings = getEffectiveCharacterEvolutionSettings(DBState.db, character)
         if (!evoSettings?.enabled || !evoSettings.autoHandoffEnabled) return
         if (evolutionBusy) return
+        if (targetKey && evolutionAutoHandoffPausedTargetKey === targetKey) return
         if (character.characterEvolution.pendingProposal) return
 
         const batchSize = evoSettings.autoHandoffBatchSize ?? 10
@@ -717,6 +744,7 @@
         evolutionBusy = true
         evolutionAction = 'handoff'
         evolutionAutoHandoffInProgress = true
+        evolutionAutoHandoffNotice = ''
         try {
             const freshCharacter = findCharacterById(target.characterId)
             if (!freshCharacter) return
@@ -738,7 +766,6 @@
                     evolutionProposalDraftKey = result.proposalDraftKey
                     showEvolutionProposal = true
                 }
-                alertNormal('Evolution proposal is ready for review.')
                 return
             }
 
@@ -751,9 +778,11 @@
                 resolveCharacterById: findCharacterById,
             })
             commitCharacter(target.characterId, nextCharacter)
-            alertNormal(`Evolution auto-accepted (messages ${nextUnprocessedIndex + 1}–${batchEndIndex + 1}).`)
+            evolutionAutoHandoffNotice = ''
         } catch (error) {
-            alertError(getCharacterEvolutionErrorMessage(error))
+            defaultChatScreenLog("background auto handoff failed", error)
+            evolutionAutoHandoffPausedTargetKey = targetKey
+            evolutionAutoHandoffNotice = getCharacterEvolutionErrorMessage(error)
         } finally {
             evolutionAutoHandoffInProgress = false
             evolutionBusy = false
@@ -1088,7 +1117,9 @@
                 {currentCharacter}
                 {currentEvolutionSettings}
                 {evolutionBusy}
+                {showEvolutionBusyStatus}
                 {evolutionBusyLabel}
+                evolutionBackgroundNotice={evolutionAutoHandoffNotice}
                 {evolutionAction}
                 {evolutionHandoffBlockedForCurrentChat}
                 bind:messageInput

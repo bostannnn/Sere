@@ -5,6 +5,7 @@ import {
     getLastProcessedMessageIndexForChat,
     getNextUnprocessedMessageIndexForChat,
     hasAcceptedEvolutionForChat,
+    rebaseEvolutionCoverageAfterMessageDeletion,
 } from "./ranges"
 
 describe("character evolution ranges", () => {
@@ -120,5 +121,151 @@ describe("character evolution ranges", () => {
 
         expect(getNextUnprocessedMessageIndexForChat(settings, "chat-1")).toBe(5)
         expect(getNextUnprocessedMessageIndexForChat(settings, "chat-1")).toBe(getNextUnprocessedMessageIndexForChatCjs(settings, "chat-1"))
+    })
+
+    it("rebases accepted coverage after deleting a processed message from the same chat", () => {
+        const nextSettings = rebaseEvolutionCoverageAfterMessageDeletion({
+            lastProcessedChatId: "chat-1",
+            lastProcessedMessageIndexByChat: {
+                "chat-1": 3,
+            },
+            processedRanges: [
+                {
+                    version: 1,
+                    acceptedAt: 10,
+                    range: {
+                        chatId: "chat-1",
+                        startMessageIndex: 0,
+                        endMessageIndex: 3,
+                    },
+                },
+            ],
+            stateVersions: [
+                {
+                    version: 1,
+                    chatId: "chat-1",
+                    acceptedAt: 10,
+                    range: {
+                        chatId: "chat-1",
+                        startMessageIndex: 0,
+                        endMessageIndex: 3,
+                    },
+                },
+            ],
+        }, "chat-1", 1, 1)
+
+        expect(nextSettings.processedRanges).toEqual([
+            {
+                version: 1,
+                acceptedAt: 10,
+                range: {
+                    chatId: "chat-1",
+                    startMessageIndex: 0,
+                    endMessageIndex: 2,
+                },
+            },
+        ])
+        expect(nextSettings.stateVersions[0]).toEqual({
+            version: 1,
+            chatId: "chat-1",
+            acceptedAt: 10,
+            range: {
+                chatId: "chat-1",
+                startMessageIndex: 0,
+                endMessageIndex: 2,
+            },
+        })
+        expect(nextSettings.lastProcessedMessageIndexByChat).toEqual({
+            "chat-1": 2,
+        })
+        expect(getNextUnprocessedMessageIndexForChat(nextSettings, "chat-1")).toBe(3)
+    })
+
+    it("drops fully deleted coverage and shifts later ranges left", () => {
+        const nextSettings = rebaseEvolutionCoverageAfterMessageDeletion({
+            lastProcessedChatId: "chat-1",
+            lastProcessedMessageIndexByChat: {
+                "chat-1": 7,
+            },
+            processedRanges: [
+                {
+                    version: 1,
+                    acceptedAt: 10,
+                    range: {
+                        chatId: "chat-1",
+                        startMessageIndex: 0,
+                        endMessageIndex: 1,
+                    },
+                },
+                {
+                    version: 2,
+                    acceptedAt: 20,
+                    range: {
+                        chatId: "chat-1",
+                        startMessageIndex: 4,
+                        endMessageIndex: 7,
+                    },
+                },
+            ],
+            stateVersions: [],
+        }, "chat-1", 1, 4)
+
+        expect(nextSettings.processedRanges).toEqual([
+            {
+                version: 1,
+                acceptedAt: 10,
+                range: {
+                    chatId: "chat-1",
+                    startMessageIndex: 0,
+                    endMessageIndex: 0,
+                },
+            },
+            {
+                version: 2,
+                acceptedAt: 20,
+                range: {
+                    chatId: "chat-1",
+                    startMessageIndex: 1,
+                    endMessageIndex: 3,
+                },
+            },
+        ])
+        expect(nextSettings.lastProcessedMessageIndexByChat).toEqual({
+            "chat-1": 3,
+        })
+    })
+
+    it("preserves unrelated cursor-only chats while rebasing the deleted chat cursor", () => {
+        const nextSettings = rebaseEvolutionCoverageAfterMessageDeletion({
+            lastProcessedChatId: "chat-legacy",
+            lastProcessedMessageIndexByChat: {
+                "chat-legacy": 5,
+                "chat-1": 7,
+            },
+            processedRanges: [],
+            stateVersions: [],
+        }, "chat-1", 1, 4)
+
+        expect(nextSettings.lastProcessedChatId).toBe("chat-legacy")
+        expect(nextSettings.lastProcessedMessageIndexByChat).toEqual({
+            "chat-legacy": 5,
+            "chat-1": 3,
+        })
+    })
+
+    it("clears lastProcessedChatId when rebasing removes the only processed cursor for that chat", () => {
+        const nextSettings = rebaseEvolutionCoverageAfterMessageDeletion({
+            lastProcessedChatId: "chat-1",
+            lastProcessedMessageIndexByChat: {
+                "chat-1": 0,
+            },
+            processedRanges: [],
+            stateVersions: [],
+        }, "chat-1", 0, 0)
+
+        expect(nextSettings.lastProcessedChatId).toBeNull()
+        expect(nextSettings.lastProcessedMessageIndexByChat).toEqual({
+            "chat-1": -1,
+        })
     })
 })

@@ -21,9 +21,24 @@ async function parseJsonSafe(response: Response) {
     }
 }
 
+function normalizeYandexErrorMessage(message: string) {
+    const trimmed = message.trim();
+    if (!trimmed) {
+        return "";
+    }
+
+    if (trimmed === "Ресурс заблокирован. Возможно, над ним выполняется другая операция.") {
+        return "Yandex Disk resource is locked. Another operation is likely still in progress. Retry in a moment."
+    }
+
+    return trimmed;
+}
+
 async function parseYandexError(response: Response) {
     const parsed = await parseJsonSafe(response);
-    const message = typeof parsed?.message === "string" ? parsed.message.trim() : "";
+    const message = typeof parsed?.message === "string"
+        ? normalizeYandexErrorMessage(parsed.message)
+        : "";
     if (message) {
         return message;
     }

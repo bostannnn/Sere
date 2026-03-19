@@ -121,6 +121,12 @@ vi.mock(import("src/lib/UI/PopupButton.svelte"), async () => ({
 
 vi.mock(import("src/ts/stores.svelte"), async () => {
   const { writable } = await import("svelte/store");
+  const popupStore = {
+    children: null,
+    mouseX: 0,
+    mouseY: 0,
+    openId: 0,
+  };
   return {
     DBState: {
       db: {
@@ -145,6 +151,31 @@ vi.mock(import("src/ts/stores.svelte"), async () => {
             image: "",
             ttsMode: "none",
             chatPage: 0,
+            characterEvolution: {
+              enabled: true,
+              currentStateVersion: 0,
+              currentState: {
+                relationship: { trustLevel: "", dynamic: "" },
+                activeThreads: [],
+                runningJokes: [],
+                characterLikes: [],
+                characterDislikes: [],
+                characterHabits: [],
+                userFacts: [],
+                userRead: [],
+                userLikes: [],
+                userDislikes: [],
+                lastInteractionEnded: { state: "", residue: "" },
+                keyMoments: [],
+                characterIntimatePreferences: [],
+                userIntimatePreferences: [],
+              },
+              pendingProposal: null,
+              lastProcessedChatId: null,
+              lastProcessedMessageIndexByChat: {},
+              processedRanges: [],
+              stateVersions: [],
+            },
             chatFolders: [],
             chats: [
               {
@@ -173,6 +204,7 @@ vi.mock(import("src/ts/stores.svelte"), async () => {
     ReloadGUIPointer: writable(0),
     ReloadChatPointer: writable({}),
     CurrentTriggerIdStore: writable(null),
+    popupStore,
     selIdState: { selId: 0 },
   };
 });
@@ -192,6 +224,22 @@ describe("chat message actions runtime smoke", () => {
   beforeEach(() => {
     document.body.innerHTML = "";
     DBState.db.theme = "standard";
+    DBState.db.characters[0].chats[0].message = [
+      {
+        role: "char",
+        data: "hello world",
+        chatId: "msg-1",
+        disabled: false,
+      },
+    ];
+    DBState.db.characters[0].characterEvolution = {
+      ...DBState.db.characters[0].characterEvolution,
+      lastProcessedChatId: null,
+      lastProcessedMessageIndexByChat: {},
+      processedRanges: [],
+      stateVersions: [],
+      pendingProposal: null,
+    };
     mocks.getModelInfo.mockReset();
     mocks.getModelInfo.mockReturnValue({
       shortName: "stub-model",
@@ -344,5 +392,166 @@ describe("chat message actions runtime smoke", () => {
     expect(cardboardActions).not.toBeNull();
     const iconRail = cardboardActions?.querySelector(".ds-ui-grow.action-rail.ds-ui-action-rail") as HTMLElement | null;
     expect(iconRail).not.toBeNull();
+  });
+
+  it("rebases evolution coverage when deleting a covered message", async () => {
+    DBState.db.characters[0].chats[0].message = [
+      {
+        role: "user",
+        data: "m0",
+        chatId: "msg-0",
+        disabled: false,
+      },
+      {
+        role: "char",
+        data: "m1",
+        chatId: "msg-1",
+        disabled: false,
+      },
+      {
+        role: "user",
+        data: "m2",
+        chatId: "msg-2",
+        disabled: false,
+      },
+      {
+        role: "char",
+        data: "m3",
+        chatId: "msg-3",
+        disabled: false,
+      },
+      {
+        role: "user",
+        data: "m4",
+        chatId: "msg-4",
+        disabled: false,
+      },
+    ];
+    DBState.db.characters[0].characterEvolution = {
+      ...DBState.db.characters[0].characterEvolution,
+      lastProcessedChatId: "chat-1",
+      lastProcessedMessageIndexByChat: {
+        "chat-1": 3,
+      },
+      processedRanges: [
+        {
+          version: 1,
+          acceptedAt: 10,
+          range: {
+            chatId: "chat-1",
+            startMessageIndex: 0,
+            endMessageIndex: 3,
+          },
+        },
+      ],
+      stateVersions: [
+        {
+          version: 1,
+          chatId: "chat-1",
+          acceptedAt: 10,
+          range: {
+            chatId: "chat-1",
+            startMessageIndex: 0,
+            endMessageIndex: 3,
+          },
+        },
+      ],
+    };
+
+    const target = document.createElement("div");
+    document.body.appendChild(target);
+    app = mount(Chat, {
+      target,
+      props: {
+        message: "m1",
+        name: "Assistant",
+        isLastMemory: false,
+        idx: 1,
+      },
+    });
+    await flushUi();
+
+    const removeButtons = Array.from(
+      document.querySelectorAll('button[aria-label="Remove"]'),
+    ) as HTMLButtonElement[];
+    expect(removeButtons.length).toBeGreaterThan(0);
+    removeButtons[0]?.click();
+    await flushUi();
+
+    expect(DBState.db.characters[0].chats[0].message).toHaveLength(4);
+    expect(DBState.db.characters[0].characterEvolution.processedRanges).toEqual([
+      {
+        version: 1,
+        acceptedAt: 10,
+        range: {
+          chatId: "chat-1",
+          startMessageIndex: 0,
+          endMessageIndex: 2,
+        },
+      },
+    ]);
+    expect(DBState.db.characters[0].characterEvolution.lastProcessedMessageIndexByChat).toEqual({
+      "chat-1": 2,
+    });
+  });
+
+  it("drops a pending proposal when deleting a covered source message", async () => {
+    DBState.db.characters[0].chats[0].message = [
+      {
+        role: "user",
+        data: "m0",
+        chatId: "msg-0",
+        disabled: false,
+      },
+      {
+        role: "char",
+        data: "m1",
+        chatId: "msg-1",
+        disabled: false,
+      },
+      {
+        role: "user",
+        data: "m2",
+        chatId: "msg-2",
+        disabled: false,
+      },
+    ];
+    DBState.db.characters[0].characterEvolution = {
+      ...DBState.db.characters[0].characterEvolution,
+      pendingProposal: {
+        proposalId: "proposal-1",
+        sourceChatId: "chat-1",
+        sourceRange: {
+          chatId: "chat-1",
+          startMessageIndex: 1,
+          endMessageIndex: 2,
+        },
+        proposedState: {} as never,
+        changes: [],
+        createdAt: 10,
+      },
+    };
+
+    const target = document.createElement("div");
+    document.body.appendChild(target);
+    app = mount(Chat, {
+      target,
+      props: {
+        message: "m1",
+        name: "Assistant",
+        isLastMemory: false,
+        idx: 1,
+      },
+    });
+    await flushUi();
+
+    const removeButtons = Array.from(
+      document.querySelectorAll('button[aria-label="Remove"]'),
+    ) as HTMLButtonElement[];
+    expect(removeButtons.length).toBeGreaterThan(0);
+    removeButtons[0]?.click();
+    await flushUi();
+
+    expect(DBState.db.characters[0].characterEvolution.pendingProposal).toBeNull();
   });
 });

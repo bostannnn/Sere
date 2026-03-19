@@ -241,7 +241,7 @@
                     {/if}
                 </div>
                 <span class="ds-settings-label-muted-sm">
-                    Runs handoffs from next unprocessed message and auto-accepts each batch.
+                    Runs handoffs from the next unprocessed message and auto-accepts each batch. Batch size counts raw chat messages, not user/character pairs.
                 </span>
                 <div class="evolution-auto-process-row">
                     {#if autoProcessing}
@@ -271,6 +271,9 @@
                 <div class="evolution-manual-range-header">
                     <span class="ds-settings-label">Auto Handoff Every X Messages</span>
                 </div>
+                <span class="ds-settings-label-muted-sm">
+                    Counts raw chat messages from the next unprocessed point.
+                </span>
                 <CheckInput
                     bare={true}
                     className="evolution-toggle-row"

@@ -15,6 +15,11 @@ export interface CharacterGeneratedImageItem {
     promptModel?: string
 }
 
+export interface MessageMediaDeletionPlan {
+    assetPaths: string[]
+    metadataPaths: string[]
+}
+
 const inlayPattern = /\{\{(?:inlay|inlayed|inlayeddata)::(.+?)\}\}/g
 
 function normalizeMediaPath(path: string | undefined | null) {
@@ -57,6 +62,69 @@ export function collectMessageMediaPaths(message: Message) {
     }
 }
 
+function addReferencedMediaPaths(target: MessageMediaDeletionPlan, message: Message) {
+    const { assetPaths, metadataPaths } = collectMessageMediaPaths(message)
+    for (const path of assetPaths) {
+        target.assetPaths.push(path)
+    }
+    for (const path of metadataPaths) {
+        target.metadataPaths.push(path)
+    }
+}
+
+function toUniqueMediaDeletionPlan(plan: MessageMediaDeletionPlan): MessageMediaDeletionPlan {
+    return {
+        assetPaths: [...new Set(plan.assetPaths)],
+        metadataPaths: [...new Set(plan.metadataPaths)],
+    }
+}
+
+export function buildMessageMediaDeletionPlan(arg: {
+    characters: Array<character | groupChat>
+    selectedCharacterIndex: number
+    chatIndex: number
+    nextMessages: Message[]
+    removedMessages: Message[]
+}): MessageMediaDeletionPlan {
+    const stillReferenced: MessageMediaDeletionPlan = {
+        assetPaths: [],
+        metadataPaths: [],
+    }
+    const removed: MessageMediaDeletionPlan = {
+        assetPaths: [],
+        metadataPaths: [],
+    }
+
+    for (let characterIndex = 0; characterIndex < arg.characters.length; characterIndex += 1) {
+        const selectedCharacter = arg.characters[characterIndex]
+        for (let currentChatIndex = 0; currentChatIndex < (selectedCharacter?.chats?.length ?? 0); currentChatIndex += 1) {
+            const chat = selectedCharacter?.chats?.[currentChatIndex]
+            const messages = (
+                characterIndex === arg.selectedCharacterIndex && currentChatIndex === arg.chatIndex
+            )
+                ? arg.nextMessages
+                : (chat?.message ?? [])
+            for (const message of messages) {
+                addReferencedMediaPaths(stillReferenced, message)
+            }
+        }
+    }
+
+    for (const message of arg.removedMessages) {
+        addReferencedMediaPaths(removed, message)
+    }
+
+    const uniqueStillReferenced = toUniqueMediaDeletionPlan(stillReferenced)
+    const uniqueRemoved = toUniqueMediaDeletionPlan(removed)
+    const referencedAssetPaths = new Set(uniqueStillReferenced.assetPaths)
+    const referencedMetadataPaths = new Set(uniqueStillReferenced.metadataPaths)
+
+    return {
+        assetPaths: uniqueRemoved.assetPaths.filter((path) => !referencedAssetPaths.has(path)),
+        metadataPaths: uniqueRemoved.metadataPaths.filter((path) => !referencedMetadataPaths.has(path)),
+    }
+}
+
 async function deletePersistedMediaPath(path: string, kind: "asset" | "metadata") {
     const normalizedPath = normalizeMediaPath(path)
     if (!normalizedPath) {
@@ -80,14 +148,19 @@ async function deletePersistedMediaPath(path: string, kind: "asset" | "metadata"
 
 export async function deleteMessageMediaAssets(message: Message) {
     const { assetPaths, metadataPaths } = collectMessageMediaPaths(message)
-    await Promise.all([
-        ...assetPaths.map((path) => deletePersistedMediaPath(path, "asset")),
-        ...metadataPaths.map((path) => deletePersistedMediaPath(path, "metadata")),
-    ])
+    await deleteMessageMediaPaths({ assetPaths, metadataPaths })
 }
 
 export async function deleteMessagesMediaAssets(messages: Message[]) {
     await Promise.all(messages.map(deleteMessageMediaAssets))
+}
+
+export async function deleteMessageMediaPaths(plan: MessageMediaDeletionPlan) {
+    const uniquePlan = toUniqueMediaDeletionPlan(plan)
+    await Promise.all([
+        ...uniquePlan.assetPaths.map((path) => deletePersistedMediaPath(path, "asset")),
+        ...uniquePlan.metadataPaths.map((path) => deletePersistedMediaPath(path, "metadata")),
+    ])
 }
 
 export function getCharacterGeneratedImageItems(selectedCharacter: character | groupChat | null | undefined) {

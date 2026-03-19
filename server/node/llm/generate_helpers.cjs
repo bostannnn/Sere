@@ -100,6 +100,28 @@ function createGenerateHelpers(arg = {}) {
         return '';
     }
 
+    function buildStructuredExecutionError(error, fallbackCode, fallbackMessage) {
+        if (error && typeof error === 'object') {
+            const code = toStringOrEmpty(error.code);
+            const message = toStringOrEmpty(error.message);
+            const details = error.details !== undefined
+                ? safeJsonClone(error.details, error.details)
+                : undefined;
+            if (code || message || details !== undefined) {
+                return {
+                    error: code || fallbackCode,
+                    message: message || fallbackMessage,
+                    ...(details !== undefined ? { details } : {}),
+                };
+            }
+        }
+
+        return {
+            error: fallbackCode,
+            message: String(error?.message || error || fallbackMessage),
+        };
+    }
+
     function buildPeriodicDebugLog(arg = {}) {
         const chat = arg.chat && typeof arg.chat === 'object' ? arg.chat : {};
         const plan = arg.plan && typeof arg.plan === 'object' ? arg.plan : {};
@@ -556,10 +578,11 @@ function createGenerateHelpers(arg = {}) {
                             promptMessages: plan.promptMessages,
                             status: 500,
                             ok: false,
-                            error: {
-                                error: 'MEMORY_SUMMARY_EXECUTION_FAILED',
-                                message: String(summaryError?.message || summaryError || 'Periodic summary generation failed'),
-                            },
+                            error: buildStructuredExecutionError(
+                                summaryError,
+                                'MEMORY_SUMMARY_EXECUTION_FAILED',
+                                'Periodic summary generation failed'
+                            ),
                         },
                     };
                 }

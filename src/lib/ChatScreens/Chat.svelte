@@ -15,6 +15,8 @@
     import { alertClear, alertConfirm, alertError, alertInput, alertNormal, alertRequestData, alertWait } from "../../ts/alert"
     import { ParseMarkdown, type CbsConditions, type simpleCharacterArgument } from "../../ts/parser.svelte"
     import { onDestroy } from "svelte";
+    import { rebaseEvolutionCoverageAfterMessageDeletion } from "src/ts/characterEvolution";
+    import { rebasePendingProposalAfterMessageDeletion } from "src/ts/character-evolution/pendingProposal";
     import {
         resolveSelectedChatState,
         setChatByCharacterAndChatId,
@@ -24,7 +26,7 @@
     import AutoresizeArea from "../UI/GUI/TextAreaResizable.svelte"
     import PopupButton from "../UI/PopupButton.svelte";
     import ChatBody from './ChatBody.svelte'
-    import { deleteMessagesMediaAssets, openCharacterMediaViewer } from "src/ts/chatMedia";
+    import { buildMessageMediaDeletionPlan, deleteMessageMediaPaths, openCharacterMediaViewer } from "src/ts/chatMedia";
     const chatLog = (..._args: unknown[]) => {};
 
     let translating = $state(false)
@@ -117,17 +119,50 @@
         if (!context) {
             return
         }
-        const commitRemoval = async (nextMessages: typeof context.chat.message, removedMessages: typeof context.chat.message) => {
-            try {
-                await deleteMessagesMediaAssets(removedMessages)
-            } catch (error) {
-                alertError(`Failed to delete message media: ${error instanceof Error ? error.message : "Unknown error"}`)
-                return
-            }
+        const commitRemoval = async (
+            nextMessages: typeof context.chat.message,
+            removedMessages: typeof context.chat.message,
+            removedStartIndex: number,
+        ) => {
+            const deletionPlan = buildMessageMediaDeletionPlan({
+                characters: DBState.db.characters,
+                selectedCharacterIndex: context.selectedCharacterIndex,
+                chatIndex: context.chatIndex,
+                nextMessages,
+                removedMessages,
+            })
             context.chat.message = nextMessages
+            if (
+                context.character?.type !== "group"
+                && removedMessages.length > 0
+                && typeof context.chat.id === "string"
+                && context.chat.id.trim()
+            ) {
+                const rebasedCoverage = rebaseEvolutionCoverageAfterMessageDeletion(
+                    context.character.characterEvolution,
+                    context.chat.id,
+                    removedStartIndex,
+                    removedStartIndex + removedMessages.length - 1,
+                )
+                context.character.characterEvolution = {
+                    ...context.character.characterEvolution,
+                    ...rebasedCoverage,
+                    pendingProposal: rebasePendingProposalAfterMessageDeletion(
+                        context.character.characterEvolution.pendingProposal,
+                        context.chat.id,
+                        removedStartIndex,
+                        removedStartIndex + removedMessages.length - 1,
+                    ),
+                }
+            }
+            try {
+                await deleteMessageMediaPaths(deletionPlan)
+            } catch (error) {
+                alertError(`Message removed, but media cleanup failed: ${error instanceof Error ? error.message : "Unknown error"}`)
+            }
         }
         if(e.shiftKey){
-            await commitRemoval(context.messages.slice(0, idx), context.messages.slice(idx))
+            await commitRemoval(context.messages.slice(0, idx), context.messages.slice(idx), idx)
             return
         }
 
@@ -145,13 +180,13 @@
                     removedMessages = context.messages[idx] ? [context.messages[idx]] : []
                     msg.splice(idx, 1)
                 }
-                await commitRemoval(msg, removedMessages)
+                await commitRemoval(msg, removedMessages, idx)
             }
             else{
                 const msg = [...context.chat.message]
                 const removedMessages = context.messages[idx] ? [context.messages[idx]] : []
                 msg.splice(idx, 1)
-                await commitRemoval(msg, removedMessages)
+                await commitRemoval(msg, removedMessages, idx)
             }
         }
     }
