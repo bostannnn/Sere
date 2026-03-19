@@ -1,5 +1,11 @@
 function createGenerateHelpers(arg = {}) {
     const { getMemoryData, setMemoryData } = require('../memory/storage.cjs');
+    const { createGenerateDataHelpers } = require('./generate_data_helpers.cjs');
+    const { createGeneratePeriodicMemoryHelpers } = require('./generate_periodic_memory_helpers.cjs');
+    const {
+        normalizeMaxContextTokens,
+        trimPromptMessagesToContext,
+    } = require('./prompt_budget_helpers.cjs');
     const toStringOrEmpty = typeof arg.toStringOrEmpty === 'function'
         ? arg.toStringOrEmpty
         : ((value) => (typeof value === 'string' ? value.trim() : ''));
@@ -69,585 +75,43 @@ function createGenerateHelpers(arg = {}) {
         ? arg.generateSupportedProviders
         : new Set(['openrouter', 'openai', 'deepseek', 'anthropic', 'google', 'ollama', 'kobold', 'novelai']);
 
-    function extractExecutionResultText(result) {
-        if (typeof result === 'string') {
-            return result;
-        }
-        if (result && typeof result === 'object' && typeof result.result === 'string') {
-            return result.result;
-        }
-        return '';
-    }
+    const {
+        readJsonFileWithRetry,
+        isEquivalentTailUserMessage,
+        buildStoredUserMessage,
+        isJsonEquivalent,
+        appendUserMessageWithRetry,
+        persistMemoryDataWithRetry,
+    } = createGenerateDataHelpers({
+        toStringOrEmpty,
+        path,
+        fs,
+        existsSync,
+        dataDirs,
+        LLMHttpError,
+        applyStateCommands,
+        readStateLastEventId,
+        setMemoryData,
+        safeJsonClone,
+    });
 
-    function toPromptMessageRows(promptMessages) {
-        if (!Array.isArray(promptMessages)) return [];
-        return promptMessages
-            .map((entry) => {
-                if (!entry || typeof entry !== 'object') return null;
-                const role = toStringOrEmpty(entry.role) || 'user';
-                const content = toStringOrEmpty(entry.content);
-                if (!content) return null;
-                return { role, content };
-            })
-            .filter(Boolean);
-    }
-
-    function resolvePromptTextFromRows(rows) {
-        if (!Array.isArray(rows) || rows.length === 0) return '';
-        const system = rows.find((row) => row.role === 'system' && toStringOrEmpty(row.content));
-        if (system) return toStringOrEmpty(system.content);
-        if (rows.length === 1) return toStringOrEmpty(rows[0].content);
-        return '';
-    }
-
-    function buildStructuredExecutionError(error, fallbackCode, fallbackMessage) {
-        if (error && typeof error === 'object') {
-            const code = toStringOrEmpty(error.code);
-            const message = toStringOrEmpty(error.message);
-            const details = error.details !== undefined
-                ? safeJsonClone(error.details, error.details)
-                : undefined;
-            if (code || message || details !== undefined) {
-                return {
-                    error: code || fallbackCode,
-                    message: message || fallbackMessage,
-                    ...(details !== undefined ? { details } : {}),
-                };
-            }
-        }
-
-        return {
-            error: fallbackCode,
-            message: String(error?.message || error || fallbackMessage),
-        };
-    }
-
-    function buildPeriodicDebugLog(arg = {}) {
-        const chat = arg.chat && typeof arg.chat === 'object' ? arg.chat : {};
-        const plan = arg.plan && typeof arg.plan === 'object' ? arg.plan : {};
-        const providerModel = toStringOrEmpty(arg.model) || '-';
-        const summaryText = typeof arg.summaryText === 'string' ? arg.summaryText : '';
-        const promptRows = toPromptMessageRows(plan.promptMessages);
-        const inputText = Array.isArray(plan.summarizable)
-            ? plan.summarizable
-                .map((msg) => {
-                    if (!msg || typeof msg !== 'object') return '';
-                    const role = toStringOrEmpty(msg.role) || 'user';
-                    const content = toStringOrEmpty(msg.content);
-                    if (!content) return '';
-                    return `${role}: ${content}`;
-                })
-                .filter(Boolean)
-                .join('\n')
-            : '';
-        const totalChats = Array.isArray(chat?.message) ? chat.message.length : 0;
-        const previousLastIndex = Number.isFinite(Number(plan?.memoryData?.lastSummarizedMessageIndex))
-            ? Number(plan.memoryData.lastSummarizedMessageIndex)
-            : 0;
-        const chunkEndIndex = Number.isFinite(Number(plan?.chunkEndIndex))
-            ? Number(plan.chunkEndIndex)
-            : previousLastIndex;
-        const interval = Math.max(1, chunkEndIndex - previousLastIndex);
-        const newMessages = Math.max(0, totalChats - previousLastIndex);
-
-        return {
-            timestamp: Date.now(),
-            model: providerModel,
-            prompt: resolvePromptTextFromRows(promptRows),
-            input: inputText,
-            formatted: promptRows,
-            rawResponse: summaryText || undefined,
-            characterId: toStringOrEmpty(arg.characterId),
-            chatId: toStringOrEmpty(arg.chatId),
-            start: Math.max(1, previousLastIndex + 1),
-            end: Math.max(previousLastIndex + 1, chunkEndIndex),
-            source: 'periodic',
-            promptSource: 'preset_or_default',
-            periodic: {
-                totalChats,
-                lastIndex: previousLastIndex,
-                newMessages,
-                interval,
-                toSummarizeCount: Array.isArray(plan.summarizable) ? plan.summarizable.length : 0,
-                chatName: toStringOrEmpty(chat?.name),
-            },
-        };
-    }
-
-    function normalizeMaxContextTokens(rawBody, settings) {
-        const candidates = [
-            rawBody?.maxContext,
-            rawBody?.request?.maxContext,
-            settings?.maxContext,
-        ];
-        for (const candidate of candidates) {
-            const value = Number(candidate);
-            if (Number.isFinite(value) && value > 0) {
-                return Math.max(256, Math.floor(value));
-            }
-        }
-        return 0;
-    }
-
-    function getOldestChatMessageIndex(promptBlocks, messagesLength) {
-        if (!Array.isArray(promptBlocks)) {
-            return null;
-        }
-        let best = null;
-        for (const block of promptBlocks) {
-            if (!block || typeof block !== 'object') continue;
-            if (block.source !== 'chat') continue;
-            const index = Number(block.index);
-            if (!Number.isInteger(index) || index < 0 || index >= messagesLength) continue;
-            if (best === null || index < best) {
-                best = index;
-            }
-        }
-        return best;
-    }
-
-    function removePromptMessageAtIndex(messages, promptBlocks, targetIndex) {
-        if (!Array.isArray(messages)) {
-            return;
-        }
-        messages.splice(targetIndex, 1);
-        if (!Array.isArray(promptBlocks)) {
-            return;
-        }
-        for (let i = promptBlocks.length - 1; i >= 0; i -= 1) {
-            const block = promptBlocks[i];
-            if (!block || typeof block !== 'object') continue;
-            const index = Number(block.index);
-            if (!Number.isInteger(index)) continue;
-            if (index === targetIndex) {
-                promptBlocks.splice(i, 1);
-                continue;
-            }
-            if (index > targetIndex) {
-                block.index = index - 1;
-            }
-        }
-    }
-
-    async function trimPromptMessagesToContext(messages, promptBlocks, maxInputTokens, options = {}) {
-        if (!Array.isArray(messages) || messages.length === 0 || !Number.isFinite(Number(maxInputTokens))) {
-            return 0;
-        }
-        let inputTokens = Number(await Promise.resolve(estimatePromptTokens(messages))) || 0;
-        while (inputTokens > maxInputTokens) {
-            const trimIndex = getOldestChatMessageIndex(promptBlocks, messages.length);
-            if (!Number.isInteger(trimIndex)) {
-                const reservedOutputTokens = Number(options.reservedOutputTokens);
-                const maxContextTokens = Number(options.maxContextTokens);
-                const reserveSuffix = Number.isFinite(reservedOutputTokens) && reservedOutputTokens > 0
-                    ? ` after reserving ${reservedOutputTokens} output tokens`
-                    : '';
-                const contextSuffix = Number.isFinite(maxContextTokens) && maxContextTokens > 0
-                    ? ` within max context size (${maxContextTokens})`
-                    : '';
-                throw new LLMHttpError(
-                    400,
-                    'MAX_CONTEXT_EXCEEDED',
-                    `Input token count (${inputTokens}) exceeds allowed prompt budget (${maxInputTokens})${contextSuffix}${reserveSuffix}, but no removable chat history remains.`
-                );
-            }
-            removePromptMessageAtIndex(messages, promptBlocks, trimIndex);
-            inputTokens = Number(await Promise.resolve(estimatePromptTokens(messages))) || 0;
-        }
-        return inputTokens;
-    }
-
-    async function readJsonFileWithRetry(filePath, retries = 3) {
-        let lastError = null;
-        for (let attempt = 0; attempt <= retries; attempt += 1) {
-            try {
-                const raw = await fs.readFile(filePath, 'utf-8');
-                return JSON.parse(raw);
-            } catch (error) {
-                lastError = error;
-                const message = String(error?.message || '');
-                const likelyTransientParseError =
-                    error instanceof SyntaxError
-                    && (
-                        message.includes('Unexpected end of JSON input')
-                        || message.includes('Unexpected token')
-                    );
-                if (!likelyTransientParseError || attempt >= retries) {
-                    throw error;
-                }
-                await new Promise((resolve) => setTimeout(resolve, 20 * (attempt + 1)));
-            }
-        }
-        throw lastError;
-    }
-
-    function isStaleBaseConflict(error) {
-        const conflicts = Array.isArray(error?.result?.conflicts) ? error.result.conflicts : [];
-        return conflicts.some((entry) => entry && typeof entry === 'object' && entry.code === 'STALE_BASE_EVENT');
-    }
-
-    function toStoredChatObject(chatRaw) {
-        return chatRaw?.chat || chatRaw?.data || chatRaw || {};
-    }
-
-    function getMessageText(message) {
-        if (!message || typeof message !== 'object') return '';
-        return toStringOrEmpty(message.data) || toStringOrEmpty(message.content);
-    }
-
-    function isEquivalentTailUserMessage(chat, userMessage) {
-        const normalizedUserMessage = toStringOrEmpty(userMessage);
-        if (!normalizedUserMessage) return false;
-        const messages = Array.isArray(chat?.message) ? chat.message : [];
-        if (messages.length === 0) return false;
-        const tail = messages[messages.length - 1];
-        const role = toStringOrEmpty(tail?.role).toLowerCase();
-        if (role !== 'user' && role !== 'human') return false;
-        return getMessageText(tail) === normalizedUserMessage;
-    }
-
-    function buildStoredUserMessage(userMessage) {
-        return {
-            role: 'user',
-            data: toStringOrEmpty(userMessage),
-            time: Date.now(),
-        };
-    }
-
-    function isJsonEquivalent(left, right) {
-        try {
-            return JSON.stringify(left ?? null) === JSON.stringify(right ?? null);
-        } catch {
-            return false;
-        }
-    }
-
-    async function appendUserMessageWithRetry({
-        characterId,
-        chatId,
-        chatPath,
-        userMessage,
-        source,
-    }) {
-        const resolvedChatPath = toStringOrEmpty(chatPath) || path.join(dataDirs.characters, characterId, 'chats', `${chatId}.json`);
-        if (!existsSync(resolvedChatPath)) {
-            throw new LLMHttpError(
-                404,
-                'CHAT_NOT_FOUND',
-                `Chat not found: ${chatId}`
-            );
-        }
-        const normalizedUserMessage = toStringOrEmpty(userMessage);
-        if (!normalizedUserMessage) {
-            return {
-                appended: false,
-                chat: null,
-            };
-        }
-        if (typeof applyStateCommands !== 'function') {
-            throw new LLMHttpError(
-                500,
-                'STATE_COMMANDS_UNAVAILABLE',
-                'Internal state command service is unavailable for server-side user message persistence.'
-            );
-        }
-        const messagePayload = buildStoredUserMessage(normalizedUserMessage);
-        for (let attempt = 0; attempt < 2; attempt += 1) {
-            const baseEventId = await readStateLastEventId();
-            try {
-                await applyStateCommands([
-                    {
-                        type: 'chat.message.append',
-                        charId: characterId,
-                        chatId,
-                        message: messagePayload,
-                    },
-                ], source, { baseEventId });
-                const latestRaw = await readJsonFileWithRetry(resolvedChatPath);
-                return {
-                    appended: true,
-                    chat: toStoredChatObject(latestRaw),
-                };
-            } catch (error) {
-                if (!isStaleBaseConflict(error) || attempt >= 1) {
-                    throw error;
-                }
-                const latestRaw = await readJsonFileWithRetry(resolvedChatPath);
-                const latestChat = toStoredChatObject(latestRaw);
-                if (isEquivalentTailUserMessage(latestChat, normalizedUserMessage)) {
-                    return {
-                        appended: false,
-                        chat: latestChat,
-                    };
-                }
-            }
-        }
-        return {
-            appended: false,
-            chat: null,
-        };
-    }
-
-    async function persistMemoryDataWithRetry({
-        characterId,
-        chatId,
-        chatPath,
-        memoryData,
-        source,
-    }) {
-        if (!existsSync(chatPath) || typeof applyStateCommands !== 'function') {
-            return;
-        }
-        for (let attempt = 0; attempt < 2; attempt += 1) {
-            const baseEventId = await readStateLastEventId();
-            const latestRaw = await readJsonFileWithRetry(chatPath);
-            const latestChat = toStoredChatObject(latestRaw);
-            const nextChat = (latestChat && typeof latestChat === 'object') ? { ...latestChat } : {};
-            nextChat.id = toStringOrEmpty(nextChat.id) || chatId;
-            setMemoryData(nextChat, safeJsonClone(memoryData, memoryData));
-            try {
-                await applyStateCommands([
-                    {
-                        type: 'chat.replace',
-                        charId: characterId,
-                        chatId,
-                        chat: nextChat,
-                    },
-                ], source, { baseEventId });
-                return;
-            } catch (error) {
-                if (!isStaleBaseConflict(error) || attempt >= 1) {
-                    throw error;
-                }
-            }
-        }
-    }
-
-    async function executeInternalLLMTextCompletion(payload = {}) {
-        const provider = toStringOrEmpty(payload.provider);
-        const model = toStringOrEmpty(payload.model);
-        const mode = toStringOrEmpty(payload.mode) || 'memory';
-        const characterId = toStringOrEmpty(payload.characterId);
-        const chatId = toStringOrEmpty(payload.chatId);
-        const maxTokens = Number.isFinite(Number(payload.maxTokens)) ? Number(payload.maxTokens) : 512;
-        const messages = Array.isArray(payload.messages) ? payload.messages : [];
-        if (!provider || !model || messages.length === 0) {
-            return '';
-        }
-
-        const requestBody = {
-            model,
-            messages,
-            max_tokens: maxTokens,
-            stream: false,
-        };
-
-        const internalBody = {
-            mode,
-            provider,
-            characterId,
-            chatId,
-            streaming: false,
-            request: {
-                model,
-                maxTokens,
-                requestBody,
-                internalNoAssembly: true,
-                internalTask: 'memory_periodic_summary',
-            },
-        };
-
-        const parsed = parseLLMExecutionInput(internalBody, { endpoint: 'execute' });
-        const executionResult = await executeLLM(parsed, { dataRoot });
-        return extractExecutionResultText(executionResult).trim();
-    }
-
-    async function maybeRunServerPeriodicMemorySummarization(payload = {}) {
-        const character = payload.character || {};
-        const chat = payload.chat || {};
-        const settings = payload.settings || {};
-        const characterId = toStringOrEmpty(payload.characterId);
-        const chatId = toStringOrEmpty(payload.chatId);
-
-        const initialPlan = planPeriodicMemorySummarization({
-            character,
-            chat,
-            settings,
-        });
-
-        if (!initialPlan || initialPlan.shouldRun !== true) {
-            if (initialPlan && initialPlan.shouldAdvanceIndex === true) {
-                const advanceResult = applyPeriodicMemorySummary({
-                    chat,
-                    plan: initialPlan,
-                    summaryText: '',
-                    settings,
-                    character,
-                });
-                return {
-                    updated: advanceResult.updated === true,
-                    reason: initialPlan.reason || advanceResult.reason || 'index_advanced',
-                    trace: null,
-                };
-            }
-            return {
-                updated: false,
-                reason: initialPlan?.reason || 'not_planned',
-                trace: null,
-            };
-        }
-
-        const dueWindowEndIndex = Number.isFinite(Number(initialPlan.windowEndIndex))
-            ? Number(initialPlan.windowEndIndex)
-            : Number(initialPlan.chunkEndIndex || 0);
-
-        let plan = initialPlan;
-        let updatedAny = false;
-        let lastReason = initialPlan.reason || 'ready';
-        let lastTrace = null;
-        let iterations = 0;
-
-        while (plan && iterations < 16) {
-            iterations += 1;
-
-            if (plan.shouldRun !== true) {
-                if (plan.shouldAdvanceIndex === true) {
-                    const advanceResult = applyPeriodicMemorySummary({
-                        chat,
-                        plan,
-                        summaryText: '',
-                        settings,
-                        character,
-                    });
-                    updatedAny = updatedAny || advanceResult.updated === true;
-                    lastReason = plan.reason || advanceResult.reason || 'index_advanced';
-                } else {
-                    break;
-                }
-            } else {
-                const selectedModel = toStringOrEmpty(plan.selectedModel) || 'subModel';
-                let provider = '';
-                let model = '';
-                if (selectedModel === 'subModel') {
-                    const selected = resolveGenerateModelSelection({ mode: 'memory' }, settings);
-                    provider = toStringOrEmpty(selected.provider);
-                    model = toStringOrEmpty(selected.model);
-                } else {
-                    provider = normalizeProvider('', selectedModel);
-                    model = selectedModel;
-                }
-
-                if (!provider || provider === 'unknown' || !model) {
-                    return {
-                        updated: updatedAny,
-                        reason: 'unsupported_summary_provider_or_model',
-                        trace: {
-                            endpoint: 'memory_periodic_summarize',
-                            provider: provider || null,
-                            model: model || null,
-                            promptMessages: plan.promptMessages,
-                            status: 400,
-                            ok: false,
-                            error: {
-                                error: 'MEMORY_MODEL_UNAVAILABLE',
-                                message: 'Unable to resolve summarization model/provider for periodic summary.',
-                            },
-                        },
-                    };
-                }
-
-                let summaryText = '';
-                try {
-                    summaryText = await executeInternalLLMTextCompletion({
-                        provider,
-                        model,
-                        mode: 'memory',
-                        characterId,
-                        chatId,
-                        maxTokens: 1024,
-                        messages: plan.promptMessages,
-                    });
-                } catch (summaryError) {
-                    return {
-                        updated: updatedAny,
-                        reason: 'periodic_summary_execution_failed',
-                        trace: {
-                            endpoint: 'memory_periodic_summarize',
-                            provider,
-                            model,
-                            promptMessages: plan.promptMessages,
-                            status: 500,
-                            ok: false,
-                            error: buildStructuredExecutionError(
-                                summaryError,
-                                'MEMORY_SUMMARY_EXECUTION_FAILED',
-                                'Periodic summary generation failed'
-                            ),
-                        },
-                    };
-                }
-
-                let summaryEmbedding = null;
-                try {
-                    summaryEmbedding = await generateSummaryEmbedding(summaryText, settings);
-                } catch (embeddingError) {
-                    console.error('[Memory] Summary embedding generation failed:', embeddingError);
-                    summaryEmbedding = null;
-                }
-
-                const applyResult = applyPeriodicMemorySummary({
-                    chat,
-                    plan,
-                    summaryText,
-                    summaryEmbedding,
-                    settings,
-                    character,
-                });
-
-                const applyResultMemoryData = applyResult?.memoryData || null;
-                if (applyResultMemoryData && typeof applyResultMemoryData === 'object') {
-                    applyResultMemoryData.lastPeriodicDebug = buildPeriodicDebugLog({
-                        chat,
-                        plan,
-                        model,
-                        summaryText,
-                        characterId,
-                        chatId,
-                    });
-                    setMemoryData(chat, applyResultMemoryData);
-                }
-
-                updatedAny = updatedAny || applyResult.updated === true;
-                lastReason = applyResult.reason || 'summary_applied';
-                lastTrace = {
-                    endpoint: 'memory_periodic_summarize',
-                    provider,
-                    model,
-                    promptMessages: plan.promptMessages,
-                    status: 200,
-                    ok: true,
-                };
-            }
-
-            const currentIndex = Number(getMemoryData(chat)?.lastSummarizedMessageIndex || 0);
-            if (!Number.isFinite(dueWindowEndIndex) || currentIndex >= dueWindowEndIndex) {
-                break;
-            }
-
-            plan = planPeriodicMemorySummarization({
-                character,
-                chat,
-                settings,
-                forceWindowEndIndex: dueWindowEndIndex,
-            });
-        }
-
-        return {
-            updated: updatedAny,
-            reason: lastReason,
-            trace: lastTrace,
-        };
-    }
+    const {
+        executeInternalLLMTextCompletion,
+        maybeRunServerPeriodicMemorySummarization,
+    } = createGeneratePeriodicMemoryHelpers({
+        toStringOrEmpty,
+        safeJsonClone,
+        parseLLMExecutionInput,
+        executeLLM,
+        dataRoot,
+        resolveGenerateModelSelection,
+        normalizeProvider,
+        planPeriodicMemorySummarization,
+        applyPeriodicMemorySummary,
+        generateSummaryEmbedding,
+        getMemoryData,
+        setMemoryData,
+    });
 
     async function buildGenerateExecutionPayload(rawBody, options = {}) {
         if (!rawBody || typeof rawBody !== 'object' || Array.isArray(rawBody)) {
@@ -841,6 +305,8 @@ function createGenerateHelpers(arg = {}) {
                 promptBlocks,
                 Math.max(0, maxContextTokens - reservedOutputTokens),
                 {
+                    estimatePromptTokens,
+                    LLMHttpError,
                     maxContextTokens,
                     reservedOutputTokens,
                 }
