@@ -207,6 +207,8 @@ describe("buildServerExecutionPayloadPlan", () => {
       chatId: "chat-1",
       continue: true,
       streaming: true,
+      generationId: "",
+      continueGenerationOnDisconnect: false,
       allowReasoningOnlyForDeepSeekV32Speciale: false,
       userMessage: "hello",
       model: "gpt-4o-mini",
@@ -232,6 +234,22 @@ describe("buildServerExecutionPayloadPlan", () => {
         model: "rag-model",
       },
     });
+  });
+
+  it("threads generation disconnect-continuation fields through the shared payload", () => {
+    const plan = buildOpenAIPlan({
+      argOverrides: {
+        generationId: "gen-123",
+        continueGenerationOnDisconnect: true,
+      },
+    });
+
+    expect(plan.payload).toEqual(
+      expect.objectContaining({
+        generationId: "gen-123",
+        continueGenerationOnDisconnect: true,
+      }),
+    );
   });
 
   it.each([
@@ -283,6 +301,8 @@ describe("buildServerExecutionPayloadPlan", () => {
       chatId: "chat-1",
       continue: false,
       streaming: false,
+      generationId: "",
+      continueGenerationOnDisconnect: false,
       userMessage: "hello",
       model: "gemini-2.0-flash",
       maxTokens: 64,

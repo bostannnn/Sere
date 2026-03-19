@@ -1847,6 +1847,8 @@ export async function sendChat(chatProcessIndex = -1,arg:{
         imageResponse: DBState.db.outputImageModal,
         previewBody: arg.previewPrompt,
         escape: nowChatroom.type === 'character' && nowChatroom.escapeOutput,
+        generationId,
+        continueGenerationOnDisconnect: isNodeServer,
     }, 'model', abortSignal)
 
     processLog(req)

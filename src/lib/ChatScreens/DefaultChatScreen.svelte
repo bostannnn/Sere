@@ -13,6 +13,8 @@
         resolveChatStateByCharacterAndChatId,
         resolveSelectedChat,
         resolveSelectedChatState,
+        setChatByCharacterAndChatId,
+        type Chat as ChatEntry,
         type Message,
     } from "../../ts/storage/database.svelte";
     import { DBState } from 'src/ts/stores.svelte';
@@ -65,6 +67,7 @@
         hasAcceptedEvolutionForChat,
     } from 'src/ts/characterEvolution';
     import { findSingleCharacterById, replaceCharacterById } from 'src/ts/storage/characterList';
+    import { fetchServerStateSnapshot } from 'src/ts/storage/serverStateClient';
     import {
         flushUserMessageBeforeGeneration,
         getUserMessagePersistFailureMessage,
@@ -217,6 +220,35 @@
             return
         }
         replaceCharacterById(DBState.db.characters, nextCharacter)
+    }
+
+    async function refreshChatStateFromServerAfterFailure(target: { characterId: string; chatId: string } | null) {
+        if (!isNodeServer || !target) {
+            return
+        }
+        try {
+            const snapshot = await fetchServerStateSnapshot()
+            const chatsByCharacter = snapshot?.chatsByCharacter
+            if (!chatsByCharacter || typeof chatsByCharacter !== 'object') {
+                return
+            }
+            const serverChats = Array.isArray(chatsByCharacter[target.characterId])
+                ? chatsByCharacter[target.characterId]
+                : []
+            const serverChat = serverChats.find((entry) => entry && typeof entry === 'object' && (entry as { id?: unknown }).id === target.chatId)
+            if (!serverChat) {
+                return
+            }
+            const nextChat = JSON.parse(JSON.stringify(serverChat)) as ChatEntry
+            setChatByCharacterAndChatId(
+                DBState.db.characters,
+                target.characterId,
+                target.chatId,
+                nextChat,
+            )
+        } catch (refreshError) {
+            defaultChatScreenLog('[Sync] Failed to refresh server state after generation failure.', refreshError)
+        }
     }
 
     const evolutionHandoffBlockedForCurrentChat = $derived.by(() => {
@@ -689,11 +721,17 @@
         let generationSucceeded = false
         let chatExtended = false
         try {
-            await sendChat(-1, {
+            const sendResult = await sendChat(-1, {
                 signal:abortController.signal,
                 continue:continued,
                 target: stableTarget,
             })
+            if(!sendResult){
+                await refreshChatStateFromServerAfterFailure(stableTarget)
+                lastRerollTargetKey = getStableChatTargetKey(stableTarget)
+                $isDoingChat = false
+                return
+            }
             const activeState = resolveChatStateByCharacterAndChatId(
                 DBState.db.characters,
                 stableTarget.characterId,
@@ -718,6 +756,7 @@
             generationSucceeded = true
         } catch (error) {
             defaultChatScreenLog(error)
+            await refreshChatStateFromServerAfterFailure(stableTarget)
             alertError(error)
         }
         lastRerollTargetKey = getStableChatTargetKey(stableTarget)

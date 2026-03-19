@@ -42,6 +42,8 @@ interface requestDataArgument{
     openrouterModelOverride?: string
     escape?:boolean
     tools?: MCPTool[]
+    generationId?: string
+    continueGenerationOnDisconnect?: boolean
 }
 
 export interface RequestDataArgumentExtended extends requestDataArgument{

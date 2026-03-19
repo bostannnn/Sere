@@ -108,6 +108,8 @@ export function buildServerExecutionPayloadPlan<TBody extends Record<string, any
         chatId: options.arg.chatId ?? '',
         continue: !!options.arg.continue,
         streaming: !!options.arg.useStreaming,
+        generationId: typeof options.arg.generationId === 'string' ? options.arg.generationId : '',
+        continueGenerationOnDisconnect: options.arg.continueGenerationOnDisconnect === true,
         ragSettings: buildCharacterRagPayload(options.arg.currentChar?.ragSettings),
         globalRagSettings: buildGlobalRagPayload(database.globalRagSettings),
         ...sharedPayloadFields,

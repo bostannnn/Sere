@@ -253,6 +253,7 @@ describe("execute_route_handler streaming safety", () => {
         expect(traceAudit).toBeUndefined();
         expect(harness.appendGenerateTraceAudit).toHaveBeenCalledWith(expect.objectContaining({
             auditMetadata: {
+                completedAfterClientDisconnect: false,
                 malformedOutputRetryAttempted: true,
                 retryReason: "malformed_repetition_prefix",
                 effectiveRetryDecodingParams: {
@@ -263,6 +264,7 @@ describe("execute_route_handler streaming safety", () => {
                     presence_penalty: 0.2,
                     stream: false,
                 },
+                serverPersistedAssistantMessage: false,
             },
         }));
         expect(harness.sendJson).toHaveBeenCalledWith(
@@ -382,6 +384,283 @@ describe("execute_route_handler streaming safety", () => {
         const lastAudit = harness.appendLLMAudit.mock.calls.at(-1)?.[0];
         expect(lastAudit?.status).toBe(499);
         expect(lastAudit?.error?.error).toBe("CLIENT_DISCONNECTED");
+    });
+
+    it("continues /generate streaming on the server after client disconnect and persists the assistant reply", async () => {
+        const encoder = new TextEncoder();
+        const req = new MockReq();
+        req.originalUrl = "/data/llm/generate";
+        let disconnected = false;
+        const res = new MockRes((chunk) => {
+            if (!disconnected && chunk.includes('"type":"chunk"')) {
+                disconnected = true;
+                queueMicrotask(() => {
+                    req.emit("aborted");
+                    req.emit("close");
+                });
+            }
+            return true;
+        });
+        let readCalls = 0;
+        const { stream, reader } = createStreamFromRead(async () => {
+            readCalls += 1;
+            if (readCalls === 1) {
+                return {
+                    done: false,
+                    value: encoder.encode('data: {"choices":[{"delta":{"content":"hello"}}]}\n\n'),
+                };
+            }
+            if (readCalls === 2) {
+                return {
+                    done: false,
+                    value: encoder.encode('data: [DONE]\n\n'),
+                };
+            }
+            return { done: true };
+        });
+        const applyStateCommands = vi.fn(async () => ({ ok: true, lastEventId: 1, applied: [], conflicts: [] }));
+        const harness = createHarness({
+            normalized: {
+                endpoint: "generate",
+                mode: "model",
+                provider: "openai",
+                characterId: "char-1",
+                chatId: "chat-1",
+                requestedStreaming: true,
+                streaming: true,
+                request: {
+                    continueGenerationOnDisconnect: true,
+                    generationId: "gen-1",
+                },
+            },
+            executeLLM: async () => stream,
+            existsSync: (filePath) => filePath.endsWith("character.json") || filePath.endsWith("chat-1.json"),
+            readJsonWithEtag: async (filePath) => {
+                if (filePath.endsWith("chat-1.json")) {
+                    return {
+                        json: {
+                            id: "chat-1",
+                            message: [
+                                { role: "user", data: "hello there" },
+                            ],
+                        },
+                        etag: "chat-etag-1",
+                    };
+                }
+                return {
+                    json: {
+                        character: {},
+                    },
+                    etag: "char-etag-1",
+                };
+            },
+            applyStateCommands,
+        });
+
+        await harness.handleLLMExecutePost(req, res, {}, "generate");
+
+        expect(reader.cancel).toHaveBeenCalledTimes(1);
+        expect(applyStateCommands).toHaveBeenCalledWith(
+            [
+                expect.objectContaining({
+                    type: "chat.message.append",
+                    charId: "char-1",
+                    chatId: "chat-1",
+                    message: expect.objectContaining({
+                        role: "char",
+                        data: "hello",
+                        saying: "char-1",
+                        chatId: "gen-1",
+                        generationInfo: expect.objectContaining({
+                            generationId: "gen-1",
+                        }),
+                    }),
+                }),
+            ],
+            "llm.execute.assistant-message",
+            expect.objectContaining({ baseEventId: 0 }),
+        );
+
+        const audit = harness.appendLLMAudit.mock.calls.at(-1)?.[0];
+        expect(audit?.status).toBe(200);
+        expect(audit?.ok).toBe(true);
+        expect(audit?.completedAfterClientDisconnect).toBe(true);
+        expect(audit?.serverPersistedAssistantMessage).toBe(true);
+
+        const traceAudit = harness.appendGenerateTraceAudit.mock.calls.at(-1)?.[0];
+        expect(traceAudit?.auditMetadata).toMatchObject({
+            completedAfterClientDisconnect: true,
+            serverPersistedAssistantMessage: true,
+        });
+    });
+
+    it("persists opted /generate streaming replies on the server even when the client stays connected", async () => {
+        const encoder = new TextEncoder();
+        const req = new MockReq();
+        req.originalUrl = "/data/llm/generate";
+        const res = new MockRes();
+        let readCalls = 0;
+        const { stream } = createStreamFromRead(async () => {
+            readCalls += 1;
+            if (readCalls === 1) {
+                return {
+                    done: false,
+                    value: encoder.encode('data: {"choices":[{"delta":{"content":"hello"}}]}\n\n'),
+                };
+            }
+            if (readCalls === 2) {
+                return {
+                    done: false,
+                    value: encoder.encode('data: [DONE]\n\n'),
+                };
+            }
+            return { done: true };
+        });
+        const applyStateCommands = vi.fn(async () => ({ ok: true, lastEventId: 1, applied: [], conflicts: [] }));
+        const harness = createHarness({
+            normalized: {
+                endpoint: "generate",
+                mode: "model",
+                provider: "openai",
+                characterId: "char-1",
+                chatId: "chat-1",
+                requestedStreaming: true,
+                streaming: true,
+                request: {
+                    continueGenerationOnDisconnect: true,
+                    generationId: "gen-2",
+                },
+            },
+            executeLLM: async () => stream,
+            existsSync: (filePath) => filePath.endsWith("character.json") || filePath.endsWith("chat-1.json"),
+            readJsonWithEtag: async (filePath) => {
+                if (filePath.endsWith("chat-1.json")) {
+                    return {
+                        json: {
+                            id: "chat-1",
+                            message: [
+                                { role: "user", data: "hello there" },
+                            ],
+                        },
+                        etag: "chat-etag-1",
+                    };
+                }
+                return {
+                    json: {
+                        character: {},
+                    },
+                    etag: "char-etag-1",
+                };
+            },
+            applyStateCommands,
+        });
+
+        await harness.handleLLMExecutePost(req, res, {}, "generate");
+
+        const frames = toSSEDataFrames(res.text())
+            .filter((entry) => entry !== "[DONE]")
+            .map((entry) => JSON.parse(entry));
+        expect(frames.some((payload: Record<string, unknown>) => payload.type === "done")).toBe(true);
+        expect(frames.some((payload: Record<string, unknown>) => payload.type === "fail")).toBe(false);
+
+        expect(applyStateCommands).toHaveBeenCalledWith(
+            [
+                expect.objectContaining({
+                    type: "chat.message.append",
+                    charId: "char-1",
+                    chatId: "chat-1",
+                    message: expect.objectContaining({
+                        role: "char",
+                        data: "hello",
+                        chatId: "gen-2",
+                    }),
+                }),
+            ],
+            "llm.execute.assistant-message",
+            expect.objectContaining({ baseEventId: 0 }),
+        );
+
+        const audit = harness.appendLLMAudit.mock.calls.at(-1)?.[0];
+        expect(audit?.status).toBe(200);
+        expect(audit?.completedAfterClientDisconnect).toBe(false);
+        expect(audit?.serverPersistedAssistantMessage).toBe(true);
+    });
+
+    it("keeps connected opted /generate streams successful when assistant persistence fails after visible output", async () => {
+        const encoder = new TextEncoder();
+        const req = new MockReq();
+        req.originalUrl = "/data/llm/generate";
+        const res = new MockRes();
+        let readCalls = 0;
+        const { stream } = createStreamFromRead(async () => {
+            readCalls += 1;
+            if (readCalls === 1) {
+                return {
+                    done: false,
+                    value: encoder.encode('data: {"choices":[{"delta":{"content":"hello"}}]}\n\n'),
+                };
+            }
+            if (readCalls === 2) {
+                return {
+                    done: false,
+                    value: encoder.encode('data: [DONE]\n\n'),
+                };
+            }
+            return { done: true };
+        });
+        const harness = createHarness({
+            normalized: {
+                endpoint: "generate",
+                mode: "model",
+                provider: "openai",
+                characterId: "char-1",
+                chatId: "chat-1",
+                requestedStreaming: true,
+                streaming: true,
+                request: {
+                    continueGenerationOnDisconnect: true,
+                    generationId: "gen-3",
+                },
+            },
+            executeLLM: async () => stream,
+            existsSync: (filePath) => filePath.endsWith("character.json") || filePath.endsWith("chat-1.json"),
+            readJsonWithEtag: async (filePath) => {
+                if (filePath.endsWith("chat-1.json")) {
+                    return {
+                        json: {
+                            id: "chat-1",
+                            message: [
+                                { role: "user", data: "hello there" },
+                            ],
+                        },
+                        etag: "chat-etag-1",
+                    };
+                }
+                return {
+                    json: {
+                        character: {},
+                    },
+                    etag: "char-etag-1",
+                };
+            },
+            applyStateCommands: vi.fn(async () => {
+                throw new Error("persist failed");
+            }),
+        });
+
+        await harness.handleLLMExecutePost(req, res, {}, "generate");
+
+        const frames = toSSEDataFrames(res.text())
+            .filter((entry) => entry !== "[DONE]")
+            .map((entry) => JSON.parse(entry));
+        expect(frames.some((payload: Record<string, unknown>) => payload.type === "chunk" && payload.text === "hello")).toBe(true);
+        expect(frames.some((payload: Record<string, unknown>) => payload.type === "done")).toBe(true);
+        expect(frames.some((payload: Record<string, unknown>) => payload.type === "fail")).toBe(false);
+
+        const audit = harness.appendLLMAudit.mock.calls.at(-1)?.[0];
+        expect(audit?.status).toBe(200);
+        expect(audit?.ok).toBe(true);
+        expect(audit?.serverPersistedAssistantMessage).toBe(false);
     });
 
     it("waits for drain when SSE writes backpressure", async () => {

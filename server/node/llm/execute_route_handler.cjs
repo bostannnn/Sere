@@ -386,6 +386,177 @@ function createExecuteRouteHandler(arg = {}) {
         return conflicts.some((entry) => entry && typeof entry === 'object' && entry.code === 'STALE_BASE_EVENT');
     }
 
+    function toStoredChatObject(chatRaw) {
+        return chatRaw?.chat || chatRaw?.data || chatRaw || {};
+    }
+
+    function getMessageText(message) {
+        if (!message || typeof message !== 'object') return '';
+        if (typeof message.data === 'string') return message.data;
+        if (typeof message.content === 'string') return message.content;
+        return '';
+    }
+
+    function isAssistantLikeRole(role) {
+        const normalized = typeof role === 'string' ? role.trim().toLowerCase() : '';
+        return normalized === 'char' || normalized === 'assistant' || normalized === 'model';
+    }
+
+    function findMessageIndexByGenerationId(messages, generationId) {
+        if (!Array.isArray(messages) || !generationId) return -1;
+        return messages.findIndex((entry) => entry?.chatId === generationId || entry?.id === generationId);
+    }
+
+    function findLatestAssistantMessageIndex(messages) {
+        if (!Array.isArray(messages)) return -1;
+        for (let index = messages.length - 1; index >= 0; index -= 1) {
+            if (isAssistantLikeRole(messages[index]?.role)) {
+                return index;
+            }
+        }
+        return -1;
+    }
+
+    function clonePlainMessage(message) {
+        if (!message || typeof message !== 'object') {
+            return {};
+        }
+        try {
+            return JSON.parse(JSON.stringify(message));
+        } catch {
+            return { ...message };
+        }
+    }
+
+    function buildStoredAssistantMessage({ characterId, text, generationId, baseMessage }) {
+        const nextMessage = clonePlainMessage(baseMessage);
+        nextMessage.role = 'char';
+        nextMessage.data = typeof text === 'string' ? text : '';
+        nextMessage.saying = characterId;
+        nextMessage.time = Date.now();
+        if (generationId) {
+            nextMessage.chatId = generationId;
+            const currentGenerationInfo = (nextMessage.generationInfo && typeof nextMessage.generationInfo === 'object')
+                ? { ...nextMessage.generationInfo }
+                : {};
+            currentGenerationInfo.generationId = generationId;
+            nextMessage.generationInfo = currentGenerationInfo;
+        }
+        return nextMessage;
+    }
+
+    function resolveDisconnectContinuationOptions(normalized) {
+        const request = (normalized?.request && typeof normalized.request === 'object' && !Array.isArray(normalized.request))
+            ? normalized.request
+            : {};
+        const generationId = typeof request.generationId === 'string' ? request.generationId.trim() : '';
+        const enabled =
+            normalized?.endpoint === 'generate'
+            && normalized?.mode === 'model'
+            && normalized?.requestedStreaming === true
+            && request.continueGenerationOnDisconnect === true
+            && typeof applyStateCommands === 'function'
+            && !!normalized?.characterId
+            && !!normalized?.chatId
+            && !!generationId
+            && isSafePathSegment(normalized.characterId)
+            && isSafePathSegment(normalized.chatId)
+            && isSafePathSegment(generationId);
+        return {
+            enabled,
+            generationId,
+        };
+    }
+
+    async function persistAssistantMessageWithRetry({
+        characterId,
+        chatId,
+        generationId,
+        text,
+        continueMode,
+    }) {
+        if (!characterId || !chatId || !generationId || typeof applyStateCommands !== 'function') {
+            return false;
+        }
+
+        const chatPath = path.join(dataDirs.characters, characterId, 'chats', `${chatId}.json`);
+        if (!existsSync(chatPath)) {
+            throw new LLMHttpError(
+                404,
+                'CHAT_NOT_FOUND',
+                `Chat not found: ${chatId}`
+            );
+        }
+
+        for (let attempt = 0; attempt < 2; attempt += 1) {
+            const baseEventId = await readStateLastEventId();
+            const { json: chatRaw } = await readJsonWithEtag(chatPath);
+            const storedChat = toStoredChatObject(chatRaw);
+            const messages = Array.isArray(storedChat?.message) ? storedChat.message : [];
+
+            let targetIndex = findMessageIndexByGenerationId(messages, generationId);
+            if (targetIndex < 0 && continueMode) {
+                targetIndex = findLatestAssistantMessageIndex(messages);
+            }
+
+            const baseMessage = targetIndex >= 0 ? messages[targetIndex] : null;
+            const baseMessageMatchesGeneration = targetIndex >= 0
+                && (baseMessage?.chatId === generationId || baseMessage?.id === generationId);
+            const persistedText = continueMode
+                ? (
+                    baseMessageMatchesGeneration
+                        ? getMessageText(baseMessage)
+                        : `${getMessageText(baseMessage)}${typeof text === 'string' ? text : ''}`
+                )
+                : (typeof text === 'string' ? text : '');
+
+            if (!persistedText) {
+                return false;
+            }
+
+            if (targetIndex >= 0) {
+                const existing = messages[targetIndex];
+                if ((existing?.chatId === generationId || existing?.id === generationId) && getMessageText(existing) === persistedText) {
+                    return true;
+                }
+            }
+
+            const message = buildStoredAssistantMessage({
+                characterId,
+                text: persistedText,
+                generationId,
+                baseMessage,
+            });
+
+            const command = targetIndex >= 0
+                ? {
+                    type: 'chat.message.replace',
+                    charId: characterId,
+                    chatId,
+                    messageId: generationId,
+                    index: targetIndex,
+                    message,
+                }
+                : {
+                    type: 'chat.message.append',
+                    charId: characterId,
+                    chatId,
+                    message,
+                };
+
+            try {
+                await applyStateCommands([command], 'llm.execute.assistant-message', { baseEventId });
+                return true;
+            } catch (error) {
+                if (!isStaleBaseConflict(error) || attempt >= 1) {
+                    throw error;
+                }
+            }
+        }
+
+        return false;
+    }
+
     async function applyCharacterGameStateWithRetry(charId, gameStatePatch) {
         if (typeof applyStateCommands !== 'function') {
             throw new Error('STATE_COMMANDS_UNAVAILABLE');
@@ -517,11 +688,16 @@ function createExecuteRouteHandler(arg = {}) {
             retryReason: null,
             effectiveRetryDecodingParams: null,
         };
+        let disconnectContinuationAuditMetadata = {
+            completedAfterClientDisconnect: false,
+            serverPersistedAssistantMessage: false,
+        };
         try {
             normalized = parseLLMExecutionInput(requestBody, { endpoint: endpointName });
             wantsStream = !!normalized.requestedStreaming;
             const allowReasoningOnlyOutput = shouldAllowReasoningOnlyOutput(normalized);
             const treatOpenRouterReasoningAsContent = allowReasoningOnlyOutput && isDeepSeekV32SpecialeModel(normalized.model);
+            const disconnectContinuation = resolveDisconnectContinuationOptions(normalized);
             const auditEndpointForRequest = endpointName === 'generate' ? 'generate' : normalized.endpoint;
             const traceAuditEndpoint = normalized.endpoint === 'generate'
                 ? 'generate_trace'
@@ -546,6 +722,7 @@ function createExecuteRouteHandler(arg = {}) {
                         durationMs,
                         ragMeta: normalized._ragMeta || null,
                         ...retryAuditMetadata,
+                        ...disconnectContinuationAuditMetadata,
                         request: buildExecutionAuditRequest(auditEndpointForRequest, requestBody),
                         response,
                     });
@@ -562,7 +739,10 @@ function createExecuteRouteHandler(arg = {}) {
                         durationMs,
                         status: 200,
                         ok: true,
-                        auditMetadata: retryAuditMetadata,
+                        auditMetadata: {
+                            ...retryAuditMetadata,
+                            ...disconnectContinuationAuditMetadata,
+                        },
                     });
                 } catch (traceError) {
                     console.error('[LLMAPI] Failed to persist success trace audit:', traceError);
@@ -626,6 +806,7 @@ function createExecuteRouteHandler(arg = {}) {
                 let sawExplicitStreamCompletion = false;
                 let clientDisconnected = false;
                 let terminalStateCommitted = false;
+                const continueAfterDisconnect = disconnectContinuation.enabled === true;
 
                 const markClientDisconnected = () => {
                     clientDisconnected = true;
@@ -642,11 +823,14 @@ function createExecuteRouteHandler(arg = {}) {
 
                 const writeSSEEvent = async (payload) => {
                     if (clientDisconnected || res.writableEnded || res.destroyed) {
+                        if (continueAfterDisconnect) {
+                            return false;
+                        }
                         throw toDisconnectError();
                     }
                     const frame = `data: ${JSON.stringify(payload)}\n\n`;
                     if (res.write(frame)) {
-                        return;
+                        return true;
                     }
                     await new Promise((resolve, reject) => {
                         const onDrain = () => {
@@ -655,6 +839,11 @@ function createExecuteRouteHandler(arg = {}) {
                         };
                         const onClose = () => {
                             cleanup();
+                            if (continueAfterDisconnect) {
+                                clientDisconnected = true;
+                                resolve();
+                                return;
+                            }
                             reject(toDisconnectError());
                         };
                         const onError = (error) => {
@@ -670,6 +859,7 @@ function createExecuteRouteHandler(arg = {}) {
                         res.on('close', onClose);
                         res.on('error', onError);
                     });
+                    return !clientDisconnected;
                 };
 
                 const hasExplicitStreamCompletion = (data) => {
@@ -854,7 +1044,7 @@ function createExecuteRouteHandler(arg = {}) {
 
                 try {
                     while (true) {
-                        if (clientDisconnected) {
+                        if (clientDisconnected && !continueAfterDisconnect) {
                             throw toDisconnectError();
                         }
                         const { done, value } = await reader.read();
@@ -867,12 +1057,16 @@ function createExecuteRouteHandler(arg = {}) {
 
                     if (anthropicThinkingOpen) {
                         fullText += '</Thoughts>\n\n';
-                        await writeSSEEvent({ type: 'chunk', text: '</Thoughts>\n\n' });
+                        if (!clientDisconnected || !continueAfterDisconnect) {
+                            await writeSSEEvent({ type: 'chunk', text: '</Thoughts>\n\n' });
+                        }
                         anthropicThinkingOpen = false;
                     }
                     if (openrouterReasoningOpen && !treatOpenRouterReasoningAsContent) {
                         fullText += '</Thoughts>\n\n';
-                        await writeSSEEvent({ type: 'chunk', text: '</Thoughts>\n\n' });
+                        if (!clientDisconnected || !continueAfterDisconnect) {
+                            await writeSSEEvent({ type: 'chunk', text: '</Thoughts>\n\n' });
+                        }
                         openrouterReasoningOpen = false;
                     }
 
@@ -896,10 +1090,36 @@ function createExecuteRouteHandler(arg = {}) {
                         ...(typeof newCharEtag === 'string' && newCharEtag ? { newCharEtag } : {}),
                     };
 
-                    await writeSSEEvent({
-                        type: 'done',
-                        ...(typeof newCharEtag === 'string' && newCharEtag ? { newCharEtag } : {}),
-                    });
+                    if (continueAfterDisconnect) {
+                        try {
+                            disconnectContinuationAuditMetadata.serverPersistedAssistantMessage = await persistAssistantMessageWithRetry({
+                                characterId: normalized.characterId,
+                                chatId: normalized.chatId,
+                                generationId: disconnectContinuation.generationId,
+                                text: fullText,
+                                continueMode: normalized.continue === true,
+                            });
+                        } catch (persistError) {
+                            disconnectContinuationAuditMetadata.serverPersistedAssistantMessage = false;
+                            if (clientDisconnected) {
+                                throw persistError;
+                            }
+                            console.warn('[LLMAPI] Failed to persist streamed assistant message after visible output:', persistError);
+                        }
+                        if (clientDisconnected) {
+                            disconnectContinuationAuditMetadata.completedAfterClientDisconnect = true;
+                        } else {
+                            await writeSSEEvent({
+                                type: 'done',
+                                ...(typeof newCharEtag === 'string' && newCharEtag ? { newCharEtag } : {}),
+                            });
+                        }
+                    } else {
+                        await writeSSEEvent({
+                            type: 'done',
+                            ...(typeof newCharEtag === 'string' && newCharEtag ? { newCharEtag } : {}),
+                        });
+                    }
                     terminalStateCommitted = true;
                     const durationMs = Date.now() - startedAt;
                     await persistSuccessOutcome({
@@ -913,8 +1133,9 @@ function createExecuteRouteHandler(arg = {}) {
                         return;
                     }
                     const disconnected = clientDisconnected || err?.code === 'CLIENT_DISCONNECTED';
+                    const fatalDisconnect = disconnected && !continueAfterDisconnect;
                     const durationMs = Date.now() - startedAt;
-                    const errorResponse = disconnected
+                    const errorResponse = fatalDisconnect
                         ? {
                             status: 499,
                             code: 'CLIENT_DISCONNECTED',
@@ -935,7 +1156,7 @@ function createExecuteRouteHandler(arg = {}) {
                     const errorCode = typeof errorResponse?.code === 'string' && errorResponse.code
                         ? errorResponse.code
                         : 'STREAM_ERROR';
-                    if (!disconnected) {
+                    if (!fatalDisconnect) {
                         console.error('[LLMAPI] Stream error:', err);
                     }
                     logLLMExecutionEnd({
@@ -964,6 +1185,7 @@ function createExecuteRouteHandler(arg = {}) {
                         durationMs,
                         ragMeta: normalized._ragMeta || null,
                         ...retryAuditMetadata,
+                        ...disconnectContinuationAuditMetadata,
                         request: buildExecutionAuditRequest(auditEndpointForRequest, requestBody),
                         error: errorResponse.payload,
                     });
@@ -977,9 +1199,12 @@ function createExecuteRouteHandler(arg = {}) {
                         status,
                         ok: false,
                         error: errorResponse.payload,
-                        auditMetadata: retryAuditMetadata,
+                        auditMetadata: {
+                            ...retryAuditMetadata,
+                            ...disconnectContinuationAuditMetadata,
+                        },
                     });
-                    if (!disconnected && !res.writableEnded && !res.destroyed) {
+                    if (!fatalDisconnect && !res.writableEnded && !res.destroyed) {
                         try {
                             await writeSSEEvent({
                                 type: 'fail',
@@ -1040,6 +1265,7 @@ function createExecuteRouteHandler(arg = {}) {
                 applySSEHeaders(res);
                 let clientDisconnected = false;
                 let terminalStateCommitted = false;
+                const continueAfterDisconnect = disconnectContinuation.enabled === true;
                 const markClientDisconnected = () => {
                     clientDisconnected = true;
                 };
@@ -1054,10 +1280,13 @@ function createExecuteRouteHandler(arg = {}) {
 
                 const writeRawFrame = async (frame) => {
                     if (clientDisconnected || res.writableEnded || res.destroyed) {
+                        if (continueAfterDisconnect) {
+                            return false;
+                        }
                         throw toDisconnectError();
                     }
                     if (res.write(frame)) {
-                        return;
+                        return true;
                     }
                     await new Promise((resolve, reject) => {
                         const onDrain = () => {
@@ -1066,6 +1295,11 @@ function createExecuteRouteHandler(arg = {}) {
                         };
                         const onClose = () => {
                             cleanup();
+                            if (continueAfterDisconnect) {
+                                clientDisconnected = true;
+                                resolve();
+                                return;
+                            }
                             reject(toDisconnectError());
                         };
                         const onError = (error) => {
@@ -1081,17 +1315,45 @@ function createExecuteRouteHandler(arg = {}) {
                         res.on('close', onClose);
                         res.on('error', onError);
                     });
+                    return !clientDisconnected;
                 };
 
                 try {
-                    if (sanitizedResponseText) {
+                    if (sanitizedResponseText && (!clientDisconnected || !continueAfterDisconnect)) {
                         await writeRawFrame(`data: ${JSON.stringify({ type: 'chunk', text: sanitizedResponseText })}\n\n`);
                     }
-                    await writeRawFrame(`data: ${JSON.stringify({
-                        type: 'done',
-                        ...(typeof newCharEtag === 'string' && newCharEtag ? { newCharEtag } : {}),
-                    })}\n\n`);
-                    await writeRawFrame('data: [DONE]\n\n');
+                    if (continueAfterDisconnect) {
+                        try {
+                            disconnectContinuationAuditMetadata.serverPersistedAssistantMessage = await persistAssistantMessageWithRetry({
+                                characterId: normalized.characterId,
+                                chatId: normalized.chatId,
+                                generationId: disconnectContinuation.generationId,
+                                text: sanitizedResponseText,
+                                continueMode: normalized.continue === true,
+                            });
+                        } catch (persistError) {
+                            disconnectContinuationAuditMetadata.serverPersistedAssistantMessage = false;
+                            if (clientDisconnected) {
+                                throw persistError;
+                            }
+                            console.warn('[LLMAPI] Failed to persist fallback streamed assistant message after visible output:', persistError);
+                        }
+                        if (clientDisconnected) {
+                            disconnectContinuationAuditMetadata.completedAfterClientDisconnect = true;
+                        } else {
+                            await writeRawFrame(`data: ${JSON.stringify({
+                                type: 'done',
+                                ...(typeof newCharEtag === 'string' && newCharEtag ? { newCharEtag } : {}),
+                            })}\n\n`);
+                            await writeRawFrame('data: [DONE]\n\n');
+                        }
+                    } else {
+                        await writeRawFrame(`data: ${JSON.stringify({
+                            type: 'done',
+                            ...(typeof newCharEtag === 'string' && newCharEtag ? { newCharEtag } : {}),
+                        })}\n\n`);
+                        await writeRawFrame('data: [DONE]\n\n');
+                    }
                     terminalStateCommitted = true;
                     const durationMs = Date.now() - startedAt;
                     await persistSuccessOutcome({
@@ -1104,8 +1366,9 @@ function createExecuteRouteHandler(arg = {}) {
                         console.error('[LLMAPI] Post-stream success bookkeeping failed:', streamWriteError);
                     } else {
                         const disconnected = clientDisconnected || streamWriteError?.code === 'CLIENT_DISCONNECTED';
+                        const fatalDisconnect = disconnected && !continueAfterDisconnect;
                         const durationMs = Date.now() - startedAt;
-                        const errorResponse = disconnected
+                        const errorResponse = fatalDisconnect
                             ? {
                                 status: 499,
                                 code: 'CLIENT_DISCONNECTED',
@@ -1126,7 +1389,7 @@ function createExecuteRouteHandler(arg = {}) {
                         const errorCode = typeof errorResponse?.code === 'string' && errorResponse.code
                             ? errorResponse.code
                             : 'STREAM_ERROR';
-                        if (!disconnected) {
+                        if (!fatalDisconnect) {
                             console.error('[LLMAPI] Fallback SSE write error:', streamWriteError);
                         }
                         logLLMExecutionEnd({
@@ -1155,6 +1418,7 @@ function createExecuteRouteHandler(arg = {}) {
                             durationMs,
                             ragMeta: normalized._ragMeta || null,
                             ...retryAuditMetadata,
+                            ...disconnectContinuationAuditMetadata,
                             request: buildExecutionAuditRequest(auditEndpointForRequest, requestBody),
                             error: errorResponse.payload,
                         });
@@ -1168,7 +1432,10 @@ function createExecuteRouteHandler(arg = {}) {
                             status,
                             ok: false,
                             error: errorResponse.payload,
-                            auditMetadata: retryAuditMetadata,
+                            auditMetadata: {
+                                ...retryAuditMetadata,
+                                ...disconnectContinuationAuditMetadata,
+                            },
                         });
                     }
                 } finally {
