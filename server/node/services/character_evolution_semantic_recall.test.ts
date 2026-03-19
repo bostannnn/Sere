@@ -236,9 +236,9 @@ describe("character evolution semantic recall service", () => {
       },
     });
 
-    expect(block.content).toContain("user reads Proust");
-    expect(block.content).not.toContain("user lives in Berlin");
-    expect(block.content).not.toContain("user lives in Moscow");
+    expect(block.contentByBlock?.semanticRecallUserState).toContain("user reads Proust");
+    expect(block.contentByBlock?.semanticRecallUserState).not.toContain("user lives in Berlin");
+    expect(block.contentByBlock?.semanticRecallUserState).not.toContain("user lives in Moscow");
 
     const outcomes = (block.metadata?.suppressedCandidates as Array<{ outcome: string }>).map((entry) => entry.outcome).sort();
     expect(outcomes).toContain("active_match");
@@ -620,6 +620,8 @@ describe("character evolution semantic recall service", () => {
     const recalledItems = block.metadata?.recalledItems as Array<{ sectionKey: string }> | undefined;
     expect(recalledItems?.filter((item) => item.sectionKey === "userFacts")).toHaveLength(1);
     expect(recalledItems?.filter((item) => item.sectionKey === "userLikes")).toHaveLength(2);
+    expect(block.contentByBlock?.semanticRecallUserState).toContain("User likes coffee");
+    expect(block.contentByBlock?.semanticRecallUserState).toContain("User likes tea");
     expect(block.metadata?.suppressedCandidates).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ outcome: "section_limit", sectionKey: "userFacts" }),

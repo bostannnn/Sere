@@ -101,7 +101,7 @@ describe("server prompt template slots", () => {
     });
   });
 
-  it("renders characterState blocks from current evolution state when enabled", async () => {
+  it("renders relationshipState blocks from current evolution state when enabled", async () => {
     const assembled = await buildMessagesFromPromptTemplate(
       {
         name: "Chronicle Bot",
@@ -148,7 +148,7 @@ describe("server prompt template slots", () => {
         },
         promptTemplate: [
           { type: "plain", type2: "main", role: "system", text: "Main prompt." },
-          { type: "characterState", innerFormat: "{{slot}}" },
+          { type: "relationshipState", innerFormat: "{{slot}}" },
           { type: "chat", rangeStart: 0, rangeEnd: "end" },
         ],
       },
@@ -158,10 +158,10 @@ describe("server prompt template slots", () => {
     );
 
     expect(assembled?.messages?.some((entry: Record<string, unknown>) => String(entry.content || "").includes("Trust level: high"))).toBe(true);
-    expect(assembled?.promptBlocks?.some((entry: Record<string, unknown>) => entry.title === "Character State")).toBe(true);
+    expect(assembled?.promptBlocks?.some((entry: Record<string, unknown>) => entry.title === "Relationship State")).toBe(true);
   });
 
-  it("renders semanticRecall blocks with trace metadata when the server callback provides recalled items", async () => {
+  it("renders split semantic recall blocks with trace metadata when the server callback provides recalled items", async () => {
     const assembled = await buildMessagesFromPromptTemplate(
       {
         name: "Chronicle Bot",
@@ -172,12 +172,14 @@ describe("server prompt template slots", () => {
       },
       {
         promptTemplate: [
-          { type: "semanticRecall", innerFormat: "{{slot}}" },
+          { type: "semanticRecallUserState", innerFormat: "{{slot}}" },
         ],
       },
       {
         buildCharacterEvolutionSemanticRecall: async () => ({
-          content: "<SemanticRecall>\n<SemanticUserFacts>\n- user moved to Moscow [confirmed]\n</SemanticUserFacts>\n</SemanticRecall>",
+          contentByBlock: {
+            semanticRecallUserState: "<UserRecall>\n<SemanticUserFacts>\n- user moved to Moscow [confirmed]\n</SemanticUserFacts>\n</UserRecall>",
+          },
           metadata: {
             recalledItems: [
               {
@@ -196,7 +198,7 @@ describe("server prompt template slots", () => {
 
     expect(String(assembled?.messages?.[0]?.content || "")).toContain("user moved to Moscow");
     expect(assembled?.promptBlocks?.[0]).toMatchObject({
-      title: "Semantic Recall",
+      title: "User Recall",
       metadata: expect.objectContaining({
         recalledItems: [
           expect.objectContaining({
@@ -214,7 +216,7 @@ describe("server prompt template slots", () => {
     });
 
     expect(traced[0]).toMatchObject({
-      title: "Semantic Recall",
+      title: "User Recall",
       metadata: expect.objectContaining({
         recalledItems: [
           expect.objectContaining({
@@ -225,7 +227,7 @@ describe("server prompt template slots", () => {
     });
   });
 
-  it("skips semanticRecall blocks safely when the server callback throws", async () => {
+  it("skips split semantic recall blocks safely when the server callback throws", async () => {
     const assembled = await buildMessagesFromPromptTemplate(
       {
         name: "Chronicle Bot",
@@ -236,7 +238,7 @@ describe("server prompt template slots", () => {
       },
       {
         promptTemplate: [
-          { type: "semanticRecall", innerFormat: "{{slot}}" },
+          { type: "semanticRecallRelationshipState", innerFormat: "{{slot}}" },
         ],
       },
       {
@@ -248,7 +250,7 @@ describe("server prompt template slots", () => {
 
     expect(assembled?.messages ?? []).toHaveLength(0);
     expect(assembled?.promptBlocks?.[0]).toMatchObject({
-      title: "Semantic Recall",
+      title: "Relationship Recall",
       skipped: true,
       reason: "semantic_recall_failed",
       metadata: expect.objectContaining({
@@ -264,7 +266,7 @@ describe("server prompt template slots", () => {
     });
 
     expect(traced[0]).toMatchObject({
-      title: "Semantic Recall",
+      title: "Relationship Recall",
       skipped: true,
       reason: "semantic_recall_failed",
       metadata: expect.objectContaining({
@@ -273,7 +275,7 @@ describe("server prompt template slots", () => {
     });
   });
 
-  it("uses global prompt projection policy for characterState rendering", async () => {
+  it("uses global prompt projection policy for userState rendering", async () => {
     const assembled = await buildMessagesFromPromptTemplate(
       {
         name: "Chronicle Bot",
@@ -356,7 +358,7 @@ describe("server prompt template slots", () => {
           },
         },
         promptTemplate: [
-          { type: "characterState", innerFormat: "{{slot}}" },
+          { type: "userState", innerFormat: "{{slot}}" },
         ],
       },
       {
@@ -369,7 +371,7 @@ describe("server prompt template slots", () => {
     expect(contents.some((content) => content.includes("Older confirmed fact"))).toBe(false);
   });
 
-  it("renders description and characterState through the template-only path", async () => {
+  it("renders description and split evolution state through the template-only path", async () => {
     const assembled = await buildGeneratePromptMessages({
       character: {
         name: "Chronicle Bot",
@@ -379,6 +381,20 @@ describe("server prompt template slots", () => {
           enabled: true,
           extractionMaxTokens: 2400,
           currentState: {
+            characterLikes: [
+              {
+                value: "Quiet libraries",
+                confidence: "likely",
+                status: "active",
+              },
+            ],
+            userFacts: [
+              {
+                value: "User collects railway maps",
+                confidence: "likely",
+                status: "active",
+              },
+            ],
             relationship: {
               trustLevel: "high",
               dynamic: "warm and teasing",
@@ -420,6 +436,8 @@ describe("server prompt template slots", () => {
           { type: "plain", type2: "main", role: "system", text: "Main prompt." },
           { type: "description" },
           { type: "characterState", innerFormat: "{{slot}}" },
+          { type: "userState", innerFormat: "{{slot}}" },
+          { type: "relationshipState", innerFormat: "{{slot}}" },
           { type: "chat", rangeStart: 0, rangeEnd: "end" },
           { type: "plain", type2: "globalNote", role: "system", text: "Global note." },
         ],
@@ -430,7 +448,11 @@ describe("server prompt template slots", () => {
     const promptBlocks = assembled?.promptBlocks ?? [];
     expect(promptBlocks.some((entry: Record<string, unknown>) => entry.title === "Description")).toBe(true);
     expect(promptBlocks.some((entry: Record<string, unknown>) => entry.title === "Character State")).toBe(true);
+    expect(promptBlocks.some((entry: Record<string, unknown>) => entry.title === "User State")).toBe(true);
+    expect(promptBlocks.some((entry: Record<string, unknown>) => entry.title === "Relationship State")).toBe(true);
     expect(assembled?.messages?.some((entry: Record<string, unknown>) => String(entry.content || "").includes("A careful archivist."))).toBe(true);
+    expect(assembled?.messages?.some((entry: Record<string, unknown>) => String(entry.content || "").includes("Quiet libraries"))).toBe(true);
+    expect(assembled?.messages?.some((entry: Record<string, unknown>) => String(entry.content || "").includes("User collects railway maps"))).toBe(true);
     expect(assembled?.messages?.some((entry: Record<string, unknown>) => String(entry.content || "").includes("Trust level: high"))).toBe(true);
   });
   it("keeps slot-only templates message-free", async () => {

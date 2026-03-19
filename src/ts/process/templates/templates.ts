@@ -155,11 +155,27 @@ export const prebuiltPresets = {
       },
       {
         "type": "characterState",
-        "innerFormat": "The following state was extracted from previous chats.\nTreat it as persistent background memory about the relationship, {{user}}, and recurring dynamics.\nUse it as context unless the current chat clearly contradicts it.\nYou can quote it directly.\n\n{{slot}}\n"
+        "innerFormat": "[{{char}} Persistent State]\nFacts, preferences, and habits that belong to {{char}} only.\nNever apply this block to {{user}}.\n\n{{slot}}\n"
       },
       {
-        "type": "semanticRecall",
-        "innerFormat": "The following archived facts were semantically recalled from this chat's older accepted memory history.\nTreat them as temporary background context only.\nDo not assume they are more current than the live character state.\n\n{{slot}}\n"
+        "type": "userState",
+        "innerFormat": "[{{user}} Persistent State]\nFacts, preferences, and observed reads about {{user}} only.\nUse for continuity, but never speak or decide for {{user}}.\n\n{{slot}}\n"
+      },
+      {
+        "type": "relationshipState",
+        "innerFormat": "[Relationship State]\nShared dynamics, unresolved threads, and immediate carry-over context between {{char}} and {{user}}.\nUse this for continuity, not as permission to control {{user}}.\n\n{{slot}}\n"
+      },
+      {
+        "type": "semanticRecallCharacterState",
+        "innerFormat": "[Archived {{char}} Recall]\nOlder archived facts about {{char}} only.\nTreat them as temporary background context, never as newer than live state.\n\n{{slot}}\n"
+      },
+      {
+        "type": "semanticRecallUserState",
+        "innerFormat": "[Archived {{user}} Recall]\nOlder archived facts about {{user}} only.\nTreat them as temporary background context and never use them to speak for {{user}}.\n\n{{slot}}\n"
+      },
+      {
+        "type": "semanticRecallRelationshipState",
+        "innerFormat": "[Archived Relationship Recall]\nOlder archived relationship context only.\nTreat it as temporary background context, never as newer than live state.\n\n{{slot}}\n"
       },
       {
         "type": "plain",

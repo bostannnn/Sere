@@ -357,7 +357,11 @@
             item.type === 'rulebookRag' ||
             item.type === 'gameState' ||
             item.type === 'characterState' ||
-            item.type === 'semanticRecall'
+            item.type === 'userState' ||
+            item.type === 'relationshipState' ||
+            item.type === 'semanticRecallCharacterState' ||
+            item.type === 'semanticRecallUserState' ||
+            item.type === 'semanticRecallRelationshipState'
 
         const isPromptItemMemory = (item: PromptItem): item is PromptItemMemory =>
             item.type === 'memory'

@@ -19,7 +19,11 @@ export function getPromptTemplateFallbackTitle(cardType, cardType2 = "") {
   if (cardType === "rulebookRag") return "Rulebook RAG";
   if (cardType === "gameState") return "Game State";
   if (cardType === "characterState") return "Character State";
-  if (cardType === "semanticRecall") return "Semantic Recall";
+  if (cardType === "userState") return "User State";
+  if (cardType === "relationshipState") return "Relationship State";
+  if (cardType === "semanticRecallCharacterState") return "Character Recall";
+  if (cardType === "semanticRecallUserState") return "User Recall";
+  if (cardType === "semanticRecallRelationshipState") return "Relationship Recall";
   return "Prompt Block";
 }
 

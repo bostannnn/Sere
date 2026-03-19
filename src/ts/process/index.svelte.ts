@@ -38,7 +38,7 @@ import { fetchServerStateSnapshot } from "../storage/serverStateClient";
 import {
     getEffectiveCharacterEvolutionSettings,
     getCharacterEvolutionPromptProjectionPolicy,
-    renderCharacterEvolutionStateForPrompt,
+    renderCharacterEvolutionPromptBlockForPrompt,
 } from "../characterEvolution";
 import { resolveServerAuthToken } from "../storage/serverAuth";
 import { runInlayScreen } from "./inlayScreen";
@@ -550,7 +550,11 @@ export async function sendChat(chatProcessIndex = -1,arg:{
         'rulebookRag':([] as OpenAIChat[]),
         'gameState':([] as OpenAIChat[]),
         'characterState':([] as OpenAIChat[]),
-        'semanticRecall':([] as OpenAIChat[]),
+        'userState':([] as OpenAIChat[]),
+        'relationshipState':([] as OpenAIChat[]),
+        'semanticRecallCharacterState':([] as OpenAIChat[]),
+        'semanticRecallUserState':([] as OpenAIChat[]),
+        'semanticRecallRelationshipState':([] as OpenAIChat[]),
         'globalNote':([] as OpenAIChat[]),
         'authorNote':([] as OpenAIChat[]),
         'lastChat':([] as OpenAIChat[]),
@@ -703,19 +707,40 @@ export async function sendChat(chatProcessIndex = -1,arg:{
 
     const evolutionSettings = getEffectiveCharacterEvolutionSettings(DBState.db, currentChar)
     const promptProjection = getCharacterEvolutionPromptProjectionPolicy(DBState.db, currentChar)
-    const characterStatePrompt = evolutionSettings.enabled
-        ? renderCharacterEvolutionStateForPrompt(
-            evolutionSettings.currentState,
-            evolutionSettings.sectionConfigs,
-            evolutionSettings.privacy,
-            promptProjection,
-        )
-        : ''
-    if(characterStatePrompt){
-        unformated.characterState.push({
-            role: 'system',
-            content: characterStatePrompt,
-        })
+    if(evolutionSettings.enabled){
+        const evolutionPromptBlocks = [
+            ["characterState", renderCharacterEvolutionPromptBlockForPrompt(
+                "characterState",
+                evolutionSettings.currentState,
+                evolutionSettings.sectionConfigs,
+                evolutionSettings.privacy,
+                promptProjection,
+            )],
+            ["userState", renderCharacterEvolutionPromptBlockForPrompt(
+                "userState",
+                evolutionSettings.currentState,
+                evolutionSettings.sectionConfigs,
+                evolutionSettings.privacy,
+                promptProjection,
+            )],
+            ["relationshipState", renderCharacterEvolutionPromptBlockForPrompt(
+                "relationshipState",
+                evolutionSettings.currentState,
+                evolutionSettings.sectionConfigs,
+                evolutionSettings.privacy,
+                promptProjection,
+            )],
+        ] as const
+
+        for(const [blockType, content] of evolutionPromptBlocks){
+            if(!content){
+                continue
+            }
+            unformated[blockType].push({
+                role: 'system',
+                content,
+            })
+        }
     }
     
     if(currentChar.inlayViewScreen){
@@ -931,8 +956,21 @@ export async function sendChat(chatProcessIndex = -1,arg:{
                     await tokenizeChatArray(pmt)
                     break
                 }
-                case 'semanticRecall':{
-                    const pmt = safeStructuredClone(unformated.semanticRecall)
+                case 'userState':
+                case 'relationshipState':{
+                    const pmt = safeStructuredClone(unformated[card.type])
+                    if(card.innerFormat && pmt.length > 0){
+                        for(let i=0;i<pmt.length;i++){
+                            pmt[i].content = risuChatParser(positionParser(card.innerFormat, card.type), {chara: currentChar}).replace('{{slot}}', pmt[i].content)
+                        }
+                    }
+                    await tokenizeChatArray(pmt)
+                    break
+                }
+                case 'semanticRecallCharacterState':
+                case 'semanticRecallUserState':
+                case 'semanticRecallRelationshipState':{
+                    const pmt = safeStructuredClone(unformated[card.type])
                     if(card.innerFormat && pmt.length > 0){
                         for(let i=0;i<pmt.length;i++){
                             pmt[i].content = risuChatParser(positionParser(card.innerFormat, card.type), {chara: currentChar}).replace('{{slot}}', pmt[i].content)
@@ -1664,9 +1702,24 @@ export async function sendChat(chatProcessIndex = -1,arg:{
                     pushPrompts(pmt)
                     break
                 }
-                case 'semanticRecall':{
+                case 'userState':
+                case 'relationshipState':{
                     const pmt = applyPromptInnerFormat(
-                        safeStructuredClone(unformated.semanticRecall),
+                        safeStructuredClone(unformated[card.type]),
+                        card.innerFormat,
+                        (innerFormat, slotContent) => risuChatParser(innerFormat, {chara: currentChar}).replace('{{slot}}', slotContent),
+                    )
+                    for(const item of pmt){
+                        addPromptBlock(resolvePromptTemplateBlockTitle(card), item.role, item.content)
+                    }
+                    pushPrompts(pmt)
+                    break
+                }
+                case 'semanticRecallCharacterState':
+                case 'semanticRecallUserState':
+                case 'semanticRecallRelationshipState':{
+                    const pmt = applyPromptInnerFormat(
+                        safeStructuredClone(unformated[card.type]),
                         card.innerFormat,
                         (innerFormat, slotContent) => risuChatParser(innerFormat, {chara: currentChar}).replace('{{slot}}', slotContent),
                     )

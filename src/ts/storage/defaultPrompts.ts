@@ -5,6 +5,7 @@ export const defaultPromptTemplate = prebuiltPresets.OAI2.promptTemplate
 export function cloneDefaultPromptTemplate(): PromptItem[] {
     return JSON.parse(JSON.stringify(defaultPromptTemplate))
 }
+
 export function normalizePromptTemplate(promptTemplate?: PromptItem[] | null): PromptItem[] {
     if (Array.isArray(promptTemplate) && promptTemplate.length > 0) {
         return JSON.parse(JSON.stringify(promptTemplate))

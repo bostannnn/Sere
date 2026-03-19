@@ -42,7 +42,11 @@ export {
     hasCharacterStateTemplateBlock,
 } from "./character-evolution/selectors"
 
-export { renderCharacterEvolutionStateForPrompt } from "./character-evolution/render"
+export {
+    CHARACTER_EVOLUTION_PROMPT_BLOCK_SECTION_KEYS,
+    renderCharacterEvolutionPromptBlockForPrompt,
+    renderCharacterEvolutionStateForPrompt,
+} from "./character-evolution/render"
 export { projectCharacterEvolutionStateForPrompt } from "./character-evolution/projection"
 export {
     CHARACTER_EVOLUTION_PROJECTION_BUCKET_BY_SECTION,

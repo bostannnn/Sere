@@ -21,7 +21,11 @@ export function getEffectiveCharacterEvolutionSettings(db: Database, char: chara
 }
 
 export function hasCharacterStateTemplateBlock(db: Database): boolean {
-    return Array.isArray(db.promptTemplate) && db.promptTemplate.some((item) => item?.type === "characterState")
+    return Array.isArray(db.promptTemplate) && db.promptTemplate.some((item) => (
+        item?.type === "characterState"
+        || item?.type === "userState"
+        || item?.type === "relationshipState"
+    ))
 }
 
 export function getCharacterEvolutionPromptProjectionPolicy(db: Database, _char?: character | groupChat): NonNullable<ReturnType<typeof normalizeCharacterEvolutionDefaults>["promptProjection"]> {

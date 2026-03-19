@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest"
 
-import { renderCharacterEvolutionStateForPrompt } from "../characterEvolution"
+import {
+    renderCharacterEvolutionPromptBlockForPrompt,
+    renderCharacterEvolutionStateForPrompt,
+} from "../characterEvolution"
 import { createDefaultCharacterEvolutionSectionConfigs, createDefaultCharacterEvolutionState } from "./schema"
 
 function createPromptBuilderArgs(state: ReturnType<typeof createDefaultCharacterEvolutionState>) {
@@ -77,6 +80,43 @@ describe("character evolution render", () => {
         expect(rendered).not.toContain("Coffee")
         expect(rendered).not.toContain("Juice")
         expect(renderedCjs).toBe(rendered)
+    })
+
+    it("renders split prompt blocks with scoped sections only", () => {
+        const state = createDefaultCharacterEvolutionState()
+        state.characterLikes = [
+            { value: "Tea", status: "active", confidence: "confirmed" },
+        ]
+        state.userFacts = [
+            { value: "User collects stamps", status: "active", confidence: "likely" },
+        ]
+        state.relationship = {
+            trustLevel: "high",
+            dynamic: "warm and teasing",
+        }
+        const sectionConfigs = createDefaultCharacterEvolutionSectionConfigs()
+
+        const characterState = renderCharacterEvolutionPromptBlockForPrompt("characterState", state, sectionConfigs)
+        const userState = renderCharacterEvolutionPromptBlockForPrompt("userState", state, sectionConfigs)
+        const relationshipState = renderCharacterEvolutionPromptBlockForPrompt("relationshipState", state, sectionConfigs)
+        const { renderCharacterEvolutionPromptBlockForPrompt: renderCharacterEvolutionPromptBlockForPromptCjs } = require("../../../server/node/llm/character_evolution/render.cjs")
+
+        expect(characterState).toContain("<CharacterState>")
+        expect(characterState).toContain("Tea")
+        expect(characterState).not.toContain("User collects stamps")
+        expect(characterState).not.toContain("Trust level")
+
+        expect(userState).toContain("<UserState>")
+        expect(userState).toContain("User collects stamps")
+        expect(userState).not.toContain("Tea")
+        expect(userState).not.toContain("Trust level")
+
+        expect(relationshipState).toContain("<RelationshipState>")
+        expect(relationshipState).toContain("Trust level: high")
+        expect(relationshipState).not.toContain("Tea")
+        expect(relationshipState).not.toContain("User collects stamps")
+
+        expect(renderCharacterEvolutionPromptBlockForPromptCjs("relationshipState", state, sectionConfigs)).toBe(relationshipState)
     })
 
     it("keeps archived and corrected items out of extractor prompt state JSON", () => {

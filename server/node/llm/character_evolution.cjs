@@ -15,7 +15,10 @@ const {
 const {
     getCharacterEvolutionPromptProjectionPolicy,
 } = require('./character_evolution/projection_policy.cjs');
-const { renderCharacterEvolutionStateForPrompt } = require('./character_evolution/render.cjs');
+const {
+    renderCharacterEvolutionPromptBlockForPrompt,
+    renderCharacterEvolutionStateForPrompt,
+} = require('./character_evolution/render.cjs');
 const { buildCharacterEvolutionPromptMessages } = require('./character_evolution/prompt_builder.cjs');
 const {
     normalizeCharacterEvolutionProposal,
@@ -46,6 +49,7 @@ module.exports = {
     normalizeCharacterEvolutionSectionConfigs,
     normalizeCharacterEvolutionSettings,
     normalizeCharacterEvolutionState,
+    renderCharacterEvolutionPromptBlockForPrompt,
     renderCharacterEvolutionStateForPrompt,
     safeParseEvolutionJson,
     sanitizeStateForEvolution,

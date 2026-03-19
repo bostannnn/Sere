@@ -115,7 +115,7 @@
                     <div class="ds-settings-section">
                         <span class="ds-settings-label">Extraction Runtime</span>
                         <span class="ds-settings-label-muted-sm">
-                            These defaults drive the extraction/update model only. Live prompt injection still uses the `characterState` prompt block.
+                            These defaults drive the extraction/update model only. Live prompt injection uses the evolution prompt blocks in the active template, such as `characterState`, `userState`, and `relationshipState`.
                         </span>
 
                         <span class="ds-settings-label">Extraction Provider</span>
@@ -225,7 +225,7 @@
                 <div class="ds-settings-section">
                     <span class="ds-settings-label">Semantic Recall Sections</span>
                     <span class="ds-settings-label-muted-sm">
-                        These categories are eligible for archived semantic recall. Active canon still comes from the normal `characterState` block. Optional per-section limits let you cap how many recalled items each category may contribute.
+                        These categories are eligible for archived semantic recall. Active canon still comes from the live evolution prompt blocks. Optional per-section limits let you cap how many recalled items each category may contribute.
                     </span>
                     <div class="evolution-defaults-toggle-list">
                         {#each semanticRecallSections as section (section.key)}

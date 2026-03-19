@@ -47,6 +47,10 @@ describe("promptTemplateShared", () => {
   it("exposes canonical prompt-template block titles", () => {
     expect(getPromptTemplateFallbackTitle("plain", "main")).toBe("Main Prompt");
     expect(getPromptTemplateFallbackTitle("memory")).toBe("Memory");
+    expect(getPromptTemplateFallbackTitle("userState")).toBe("User State");
+    expect(getPromptTemplateFallbackTitle("relationshipState")).toBe("Relationship State");
+    expect(getPromptTemplateFallbackTitle("semanticRecallUserState")).toBe("User Recall");
+    expect(getPromptTemplateFallbackTitle("semanticRecallRelationshipState")).toBe("Relationship Recall");
     expect(resolvePromptTemplateBlockTitle({ type: "description" })).toBe("Description");
     expect(resolvePromptTemplateBlockTitle({ type: "memory", name: "Selected Memory" })).toBe("Selected Memory");
   });

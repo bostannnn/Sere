@@ -13,7 +13,7 @@ const { extractTextFromMessageContent, estimateMessagesTokens } = require('./tok
 const {
     getEffectiveCharacterEvolutionSettings,
     getCharacterEvolutionPromptProjectionPolicy,
-    renderCharacterEvolutionStateForPrompt,
+    renderCharacterEvolutionPromptBlockForPrompt,
 } = require('./character_evolution.cjs');
 const {
     getPromptTemplateFallbackTitle,
@@ -29,6 +29,11 @@ const {
 
 const TRACE_AUDIT_MAX_MESSAGE_COUNT = 64;
 const TRACE_AUDIT_MAX_CONTENT_CHARS = 32000;
+const SEMANTIC_RECALL_BLOCK_TYPES = [
+    'semanticRecallCharacterState',
+    'semanticRecallUserState',
+    'semanticRecallRelationshipState',
+];
 
 function safeJsonClone(value, fallback = null) {
     try {
@@ -221,7 +226,7 @@ function convertStoredChatToOpenAIMessages(storedMessages, arg = {}) {
 async function buildMessagesFromPromptTemplate(character, chat, settings, arg = {}) {
     const template = Array.isArray(settings?.promptTemplate) ? settings.promptTemplate : [];
     if (template.length === 0) return null;
-    const hasSemanticRecallBlock = template.some((card) => toStringOrEmpty(card?.type) === 'semanticRecall');
+    const hasSemanticRecallBlock = template.some((card) => SEMANTIC_RECALL_BLOCK_TYPES.includes(toStringOrEmpty(card?.type)));
 
     const chats = convertStoredChatToOpenAIMessages(chat?.message, {
         limit: arg.historyLimit,
@@ -247,7 +252,26 @@ async function buildMessagesFromPromptTemplate(character, chat, settings, arg = 
     const evolutionSettings = getEffectiveCharacterEvolutionSettings(settings, character);
     const promptProjection = getCharacterEvolutionPromptProjectionPolicy(settings, character);
     const characterState = evolutionSettings.enabled
-        ? renderCharacterEvolutionStateForPrompt(
+        ? renderCharacterEvolutionPromptBlockForPrompt(
+            'characterState',
+            evolutionSettings.currentState,
+            evolutionSettings.sectionConfigs,
+            evolutionSettings.privacy,
+            promptProjection
+        )
+        : '';
+    const userState = evolutionSettings.enabled
+        ? renderCharacterEvolutionPromptBlockForPrompt(
+            'userState',
+            evolutionSettings.currentState,
+            evolutionSettings.sectionConfigs,
+            evolutionSettings.privacy,
+            promptProjection
+        )
+        : '';
+    const relationshipState = evolutionSettings.enabled
+        ? renderCharacterEvolutionPromptBlockForPrompt(
+            'relationshipState',
             evolutionSettings.currentState,
             evolutionSettings.sectionConfigs,
             evolutionSettings.privacy,
@@ -290,7 +314,17 @@ async function buildMessagesFromPromptTemplate(character, chat, settings, arg = 
         lorebook,
         memory,
         characterState: characterState ? [{ role: 'system', content: characterState }] : [],
-        semanticRecall: semanticRecall?.content ? [{ role: 'system', content: semanticRecall.content }] : [],
+        userState: userState ? [{ role: 'system', content: userState }] : [],
+        relationshipState: relationshipState ? [{ role: 'system', content: relationshipState }] : [],
+        semanticRecallCharacterState: semanticRecall?.contentByBlock?.semanticRecallCharacterState
+            ? [{ role: 'system', content: semanticRecall.contentByBlock.semanticRecallCharacterState }]
+            : [],
+        semanticRecallUserState: semanticRecall?.contentByBlock?.semanticRecallUserState
+            ? [{ role: 'system', content: semanticRecall.contentByBlock.semanticRecallUserState }]
+            : [],
+        semanticRecallRelationshipState: semanticRecall?.contentByBlock?.semanticRecallRelationshipState
+            ? [{ role: 'system', content: semanticRecall.contentByBlock.semanticRecallRelationshipState }]
+            : [],
         postEverything: [],
         authorNote: authorNote ? [{ role: 'system', content: authorNote }] : [],
     };
@@ -454,9 +488,34 @@ async function buildMessagesFromPromptTemplate(character, chat, settings, arg = 
                 }
                 break;
             }
-            case 'semanticRecall': {
-                const source = unformatted.semanticRecall.length > 0
-                    ? unformatted.semanticRecall
+            case 'userState':
+            case 'relationshipState': {
+                const source = unformatted[cardType] && unformatted[cardType].length > 0
+                    ? unformatted[cardType]
+                    : [];
+                if (source.length === 0) {
+                    promptBlocks.push({
+                        role: 'system',
+                        title: blockTitle,
+                        source: 'template',
+                        skipped: true,
+                        reason: 'no_character_evolution_state',
+                    });
+                    break;
+                }
+                for (const item of source) {
+                    if (!item || typeof item !== 'object') continue;
+                    const rendered = renderTemplateSlot(card.innerFormat, toStringOrEmpty(item.content), character, settings);
+                    const parsed = parsePromptAsMessages(rendered, character, settings, normalizeTemplateRole(item.role));
+                    pushPromptMessagesWithTitle(messages, promptBlocks, parsed, blockTitle, 'template');
+                }
+                break;
+            }
+            case 'semanticRecallCharacterState':
+            case 'semanticRecallUserState':
+            case 'semanticRecallRelationshipState': {
+                const source = unformatted[cardType] && unformatted[cardType].length > 0
+                    ? unformatted[cardType]
                     : [];
                 if (source.length === 0) {
                     promptBlocks.push({

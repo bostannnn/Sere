@@ -187,7 +187,7 @@
     <div class="ds-settings-section">
         {#if characterEntry.characterEvolution.enabled && !hasTemplateSlot}
             <span class="ds-settings-note-danger">
-                Evolution is enabled, but the active prompt template does not include a `characterState` block.
+                Evolution is enabled, but the active prompt template does not include an evolution state block such as `characterState`, `userState`, or `relationshipState`.
             </span>
         {/if}
 

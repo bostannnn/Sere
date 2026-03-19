@@ -92,6 +92,8 @@ describe("database chatReadingMode normalization", () => {
 
     expect(Array.isArray(db.promptTemplate)).toBe(true);
     expect((db.promptTemplate as Array<{ type?: string }>).some((item) => item.type === "characterState")).toBe(true);
+    expect((db.promptTemplate as Array<{ type?: string }>).some((item) => item.type === "userState")).toBe(true);
+    expect((db.promptTemplate as Array<{ type?: string }>).some((item) => item.type === "relationshipState")).toBe(true);
   });
 
   it("normalizes empty prompt templates into the default template", () => {
@@ -100,6 +102,8 @@ describe("database chatReadingMode normalization", () => {
     expect(Array.isArray(db.promptTemplate)).toBe(true);
     expect((db.promptTemplate as Array<{ type?: string }>).length).toBeGreaterThan(0);
     expect((db.promptTemplate as Array<{ type?: string }>).some((item) => item.type === "characterState")).toBe(true);
+    expect((db.promptTemplate as Array<{ type?: string }>).some((item) => item.type === "userState")).toBe(true);
+    expect((db.promptTemplate as Array<{ type?: string }>).some((item) => item.type === "relationshipState")).toBe(true);
   });
 
   it("clones the default preset when seeding missing bot presets", () => {
@@ -126,6 +130,8 @@ describe("database chatReadingMode normalization", () => {
     expect(Array.isArray(storedPreset.promptTemplate)).toBe(true);
     expect(storedPreset.promptTemplate?.length).toBeGreaterThan(0);
     expect(storedPreset.promptTemplate?.some((item) => item.type === "characterState")).toBe(true);
+    expect(storedPreset.promptTemplate?.some((item) => item.type === "userState")).toBe(true);
+    expect(storedPreset.promptTemplate?.some((item) => item.type === "relationshipState")).toBe(true);
   });
 
   it("strips removed provider fields from loaded database and presets", () => {
@@ -804,6 +810,8 @@ describe("preset helper unit coverage", () => {
     expect(Array.isArray(db.promptTemplate)).toBe(true);
     expect((db.promptTemplate as Array<{ type?: string }>).length).toBeGreaterThan(0);
     expect((db.promptTemplate as Array<{ type?: string }>).some((item) => item.type === "characterState")).toBe(true);
+    expect((db.promptTemplate as Array<{ type?: string }>).some((item) => item.type === "userState")).toBe(true);
+    expect((db.promptTemplate as Array<{ type?: string }>).some((item) => item.type === "relationshipState")).toBe(true);
   });
 
   it("converts ST-style imports into internal prompt template preset", () => {

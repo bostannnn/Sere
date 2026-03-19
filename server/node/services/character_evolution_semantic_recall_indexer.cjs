@@ -9,6 +9,9 @@ const {
     BUILTIN_SECTION_DEFS,
 } = require('../llm/character_evolution/schema.cjs');
 const {
+    CHARACTER_EVOLUTION_PROMPT_BLOCK_SECTION_KEYS,
+} = require('../llm/character_evolution/render.cjs');
+const {
     doCharacterEvolutionItemsMatch,
     doCharacterEvolutionItemsReinforceSameIdea,
     getCharacterEvolutionItemNormalizedMatchKey,
@@ -38,6 +41,16 @@ const CONFIDENCE_BONUS = {
 };
 
 const DEFAULT_PER_SECTION_SOFT_CAP = 2;
+const SEMANTIC_RECALL_BLOCK_TO_SECTION_KEYS = {
+    semanticRecallCharacterState: CHARACTER_EVOLUTION_PROMPT_BLOCK_SECTION_KEYS.characterState,
+    semanticRecallUserState: CHARACTER_EVOLUTION_PROMPT_BLOCK_SECTION_KEYS.userState,
+    semanticRecallRelationshipState: CHARACTER_EVOLUTION_PROMPT_BLOCK_SECTION_KEYS.relationshipState,
+};
+const SEMANTIC_RECALL_BLOCK_ROOT_TAG = {
+    semanticRecallCharacterState: 'CharacterRecall',
+    semanticRecallUserState: 'UserRecall',
+    semanticRecallRelationshipState: 'RelationshipRecall',
+};
 
 function createCharacterEvolutionSemanticRecallService(arg = {}) {
     const fs = arg.fs;
@@ -449,12 +462,12 @@ function createCharacterEvolutionSemanticRecallService(arg = {}) {
         return surviving ? '' : 'active_conflict';
     }
 
-    function renderSemanticRecallBlock(groupedItems) {
+    function renderSemanticRecallBlock(groupedItems, rootTag = 'SemanticRecall') {
         const sectionKeys = Object.keys(groupedItems);
         if (sectionKeys.length === 0) {
             return '';
         }
-        const lines = ['<SemanticRecall>'];
+        const lines = [`<${rootTag}>`];
         for (const sectionKey of sectionKeys) {
             const tagName = `Semantic${sectionKey.charAt(0).toUpperCase()}${sectionKey.slice(1)}`;
             lines.push(`<${tagName}>`);
@@ -467,7 +480,7 @@ function createCharacterEvolutionSemanticRecallService(arg = {}) {
         if (lines[lines.length - 1] === '') {
             lines.pop();
         }
-        lines.push('</SemanticRecall>');
+        lines.push(`</${rootTag}>`);
         return lines.join('\n');
     }
 
@@ -679,8 +692,22 @@ function createCharacterEvolutionSemanticRecallService(arg = {}) {
             grouped[item.sectionKey].push(item);
         }
 
+        const contentByBlock = {};
+        for (const [blockType, allowedSectionKeys] of Object.entries(SEMANTIC_RECALL_BLOCK_TO_SECTION_KEYS)) {
+            const groupedForBlock = {};
+            for (const sectionKey of allowedSectionKeys) {
+                if (Array.isArray(grouped[sectionKey]) && grouped[sectionKey].length > 0) {
+                    groupedForBlock[sectionKey] = grouped[sectionKey];
+                }
+            }
+            const rendered = renderSemanticRecallBlock(groupedForBlock, SEMANTIC_RECALL_BLOCK_ROOT_TAG[blockType]);
+            if (rendered) {
+                contentByBlock[blockType] = rendered;
+            }
+        }
+
         return {
-            content: renderSemanticRecallBlock(grouped),
+            contentByBlock,
             metadata: {
                 queryText,
                 rebuildReason,

@@ -154,8 +154,20 @@
                 if (promptItem.type === 'characterState'){
                     return "Character State"
                 }
-                if (promptItem.type === 'semanticRecall'){
-                    return "Semantic Recall"
+                if (promptItem.type === 'userState'){
+                    return "User State"
+                }
+                if (promptItem.type === 'relationshipState'){
+                    return "Relationship State"
+                }
+                if (promptItem.type === 'semanticRecallCharacterState'){
+                    return "Character Recall"
+                }
+                if (promptItem.type === 'semanticRecallUserState'){
+                    return "User Recall"
+                }
+                if (promptItem.type === 'semanticRecallRelationshipState'){
+                    return "Relationship Recall"
                 }
                 if (promptItem.type === 'memory'){
                     return language.formating.memory
@@ -319,7 +331,11 @@
             <OptionInput value="rulebookRag">Rulebook RAG</OptionInput>
             <OptionInput value="gameState">Game State</OptionInput>
             <OptionInput value="characterState">Character State</OptionInput>
-            <OptionInput value="semanticRecall">Semantic Recall</OptionInput>
+            <OptionInput value="userState">User State</OptionInput>
+            <OptionInput value="relationshipState">Relationship State</OptionInput>
+            <OptionInput value="semanticRecallCharacterState">Character Recall</OptionInput>
+            <OptionInput value="semanticRecallUserState">User Recall</OptionInput>
+            <OptionInput value="semanticRecallRelationshipState">Relationship Recall</OptionInput>
             <OptionInput value="memory">{language.formating.memory}</OptionInput>
             <OptionInput value="postEverything">{language.formating.postEverything}</OptionInput>
             <OptionInput value="chatML">chatML</OptionInput>
@@ -361,9 +377,25 @@
                 <OptionInput value="system">{language.systemPrompt}</OptionInput>
             </SelectInput>
         {/if}
-        {#if promptItem.type === 'characterState' || promptItem.type === 'semanticRecall'}
+        {#if promptItem.type === 'characterState' || promptItem.type === 'userState' || promptItem.type === 'relationshipState' || promptItem.type === 'semanticRecallCharacterState' || promptItem.type === 'semanticRecallUserState' || promptItem.type === 'semanticRecallRelationshipState'}
             <span>{language.format}</span>
-            <TextAreaInput highlight bind:value={promptItem.innerFormat} placeholder={promptItem.type === 'semanticRecall' ? "Wrap semantic recall with {{slot}} if needed." : "Wrap current character evolution state with {{slot}} if needed."} />
+            <TextAreaInput
+                highlight
+                bind:value={promptItem.innerFormat}
+                placeholder={
+                    promptItem.type === 'semanticRecallCharacterState'
+                        ? "Wrap character recall with {{slot}} if needed."
+                        : promptItem.type === 'semanticRecallUserState'
+                            ? "Wrap user recall with {{slot}} if needed."
+                            : promptItem.type === 'semanticRecallRelationshipState'
+                                ? "Wrap relationship recall with {{slot}} if needed."
+                        : promptItem.type === 'userState'
+                            ? "Wrap current user state with {{slot}} if needed."
+                            : promptItem.type === 'relationshipState'
+                                ? "Wrap current relationship state with {{slot}} if needed."
+                                : "Wrap current character state with {{slot}} if needed."
+                }
+            />
         {/if}
         {#if promptItem.type === 'chat' || promptItem.type === 'memory'}
             {@const showRangeInputs = promptItem.type === 'memory' || hasExplicitRange(promptItem)}
