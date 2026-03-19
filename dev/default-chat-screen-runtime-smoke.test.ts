@@ -1349,6 +1349,198 @@ describe("default chat screen runtime smoke", () => {
     expect((document.querySelector(".ds-chat-evolution-background-note") as HTMLElement | null)?.textContent).toContain("Background handoff exploded");
   });
 
+  it("does not show a background auto-handoff failure note on a different selected chat", async () => {
+    DBState.db.characters[0].chats[0].message = [
+      {
+        role: "user",
+        data: "msg 1",
+      },
+      {
+        role: "char",
+        data: "msg 2",
+      },
+    ];
+    DBState.db.characters[0].characterEvolution.autoHandoffEnabled = true;
+    DBState.db.characters[0].characterEvolution.autoHandoffBatchSize = 2;
+    DBState.db.characters[0].characterEvolution.autoHandoffAutoAccept = false;
+    DBState.db.characters[0].characterEvolution.lastProcessedMessageIndexByChat = {
+      "chat-1": 1,
+    };
+    DBState.db.characters[0].characterEvolution.processedRanges = [];
+
+    let rejectProposal: ((error: Error) => void) | null = null;
+    mocks.createEvolutionProposal.mockImplementationOnce(async () => {
+      await new Promise<never>((_resolve, reject) => {
+        rejectProposal = reject;
+      });
+    });
+    mocks.sendChat.mockImplementationOnce(async (_index: number, arg: { target?: { characterId: string; chatId: string } }) => {
+      const targetChat = DBState.db.characters
+        .find((entry) => entry.chaId === arg.target?.characterId)
+        ?.chats.find((chat) => chat.id === arg.target?.chatId);
+      targetChat?.message.push({
+        role: "char",
+        data: "assistant reply",
+      });
+    });
+
+    const target = document.createElement("div");
+    document.body.appendChild(target);
+    app = mount(DefaultChatScreen, { target });
+    await flushUi();
+
+    const composerInput = document.querySelector(
+      ".ds-chat-composer-input.control-field",
+    ) as HTMLTextAreaElement | null;
+    expect(composerInput).not.toBeNull();
+
+    composerInput!.value = "new message";
+    composerInput!.dispatchEvent(new Event("input", { bubbles: true }));
+    composerInput!.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    await flushUi();
+    await flushUi();
+
+    selectedCharID.set(1);
+    await flushUi();
+
+    rejectProposal?.(new Error("Background handoff exploded"));
+    await flushUi();
+    await flushUi();
+
+    expect(mocks.createEvolutionProposal).toHaveBeenCalledTimes(1);
+    expect(document.querySelector(".ds-chat-evolution-background-note")).toBeNull();
+  });
+
+  it("keeps an earlier chat paused after a different chat also fails auto-handoff", async () => {
+    DBState.db.characters[0].chats[0].message = [
+      {
+        role: "user",
+        data: "char1 msg 1",
+      },
+      {
+        role: "char",
+        data: "char1 msg 2",
+      },
+    ];
+    DBState.db.characters[0].characterEvolution.autoHandoffEnabled = true;
+    DBState.db.characters[0].characterEvolution.autoHandoffBatchSize = 2;
+    DBState.db.characters[0].characterEvolution.autoHandoffAutoAccept = false;
+    DBState.db.characters[0].characterEvolution.lastProcessedMessageIndexByChat = {
+      "chat-1": 1,
+    };
+    DBState.db.characters[0].characterEvolution.processedRanges = [];
+
+    DBState.db.characters[1].chats[0].message = [
+      {
+        role: "user",
+        data: "char2 msg 1",
+      },
+      {
+        role: "char",
+        data: "char2 msg 2",
+      },
+    ];
+    DBState.db.characters[1].characterEvolution.autoHandoffEnabled = true;
+    DBState.db.characters[1].characterEvolution.autoHandoffBatchSize = 2;
+    DBState.db.characters[1].characterEvolution.autoHandoffAutoAccept = false;
+    DBState.db.characters[1].characterEvolution.lastProcessedMessageIndexByChat = {
+      "chat-2": 1,
+    };
+    DBState.db.characters[1].characterEvolution.processedRanges = [];
+
+    mocks.createEvolutionProposal
+      .mockImplementationOnce(async () => {
+        throw new Error("Character One background handoff exploded");
+      })
+      .mockImplementationOnce(async () => {
+        throw new Error("Character Two background handoff exploded");
+      });
+    mocks.sendChat
+      .mockImplementationOnce(async (_index: number, arg: { target?: { characterId: string; chatId: string } }) => {
+        const targetChat = DBState.db.characters
+          .find((entry) => entry.chaId === arg.target?.characterId)
+          ?.chats.find((chat) => chat.id === arg.target?.chatId);
+        targetChat?.message.push({
+          role: "char",
+          data: "char1 assistant reply",
+        });
+      })
+      .mockImplementationOnce(async (_index: number, arg: { target?: { characterId: string; chatId: string } }) => {
+        const targetChat = DBState.db.characters
+          .find((entry) => entry.chaId === arg.target?.characterId)
+          ?.chats.find((chat) => chat.id === arg.target?.chatId);
+        targetChat?.message.push({
+          role: "char",
+          data: "char2 assistant reply",
+        });
+      })
+      .mockImplementationOnce(async (_index: number, arg: { target?: { characterId: string; chatId: string } }) => {
+        const targetChat = DBState.db.characters
+          .find((entry) => entry.chaId === arg.target?.characterId)
+          ?.chats.find((chat) => chat.id === arg.target?.chatId);
+        targetChat?.message.push({
+          role: "char",
+          data: "char1 assistant reply again",
+        });
+      });
+
+    const target = document.createElement("div");
+    document.body.appendChild(target);
+    app = mount(DefaultChatScreen, { target });
+    await flushUi();
+
+    const composerInput = document.querySelector(
+      ".ds-chat-composer-input.control-field",
+    ) as HTMLTextAreaElement | null;
+    expect(composerInput).not.toBeNull();
+
+    composerInput!.value = "char1 new message";
+    composerInput!.dispatchEvent(new Event("input", { bubbles: true }));
+    composerInput!.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    await flushUi();
+    await flushUi();
+
+    expect((document.querySelector(".ds-chat-evolution-background-note") as HTMLElement | null)?.textContent)
+      .toContain("Character One background handoff exploded");
+
+    selectedCharID.set(1);
+    await flushUi();
+
+    const secondComposerInput = document.querySelector(
+      ".ds-chat-composer-input.control-field",
+    ) as HTMLTextAreaElement | null;
+    expect(secondComposerInput).not.toBeNull();
+
+    secondComposerInput!.value = "char2 new message";
+    secondComposerInput!.dispatchEvent(new Event("input", { bubbles: true }));
+    secondComposerInput!.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    await flushUi();
+    await flushUi();
+
+    expect((document.querySelector(".ds-chat-evolution-background-note") as HTMLElement | null)?.textContent)
+      .toContain("Character Two background handoff exploded");
+
+    selectedCharID.set(0);
+    await flushUi();
+
+    const thirdComposerInput = document.querySelector(
+      ".ds-chat-composer-input.control-field",
+    ) as HTMLTextAreaElement | null;
+    expect(thirdComposerInput).not.toBeNull();
+    expect((document.querySelector(".ds-chat-evolution-background-note") as HTMLElement | null)?.textContent)
+      .toContain("Character One background handoff exploded");
+
+    thirdComposerInput!.value = "char1 retry message";
+    thirdComposerInput!.dispatchEvent(new Event("input", { bubbles: true }));
+    thirdComposerInput!.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    await flushUi();
+    await flushUi();
+
+    expect(mocks.createEvolutionProposal).toHaveBeenCalledTimes(2);
+    expect((document.querySelector(".ds-chat-evolution-background-note") as HTMLElement | null)?.textContent)
+      .toContain("Character One background handoff exploded");
+  });
+
   it("clears the quiet auto-handoff failure note when manual handoff starts", async () => {
     DBState.db.characters[0].chats[0].message = [
       {
