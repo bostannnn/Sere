@@ -115,6 +115,10 @@ function createEvolutionRouteHelpers(arg = {}) {
         }
 
         const requestedSourceRange = normalizeRequestedSourceRange(chatId, sourceRangeRaw);
+        const nextStart = getLastProcessedMessageIndexForChat(evolution, chatId) + 1;
+        const implicitBatchSize = Number.isFinite(Number(evolution?.autoHandoffBatchSize)) && Number(evolution.autoHandoffBatchSize) >= 1
+            ? Math.max(1, Math.floor(Number(evolution.autoHandoffBatchSize)))
+            : 10;
         const sourceRange = requestedSourceRange || (forceReplay
             ? {
                 chatId,
@@ -123,8 +127,8 @@ function createEvolutionRouteHelpers(arg = {}) {
             }
             : {
                 chatId,
-                startMessageIndex: getLastProcessedMessageIndexForChat(evolution, chatId) + 1,
-                endMessageIndex: latestMessageIndex,
+                startMessageIndex: nextStart,
+                endMessageIndex: Math.min(latestMessageIndex, nextStart + implicitBatchSize - 1),
             });
 
         assertHandoffRangeAllowed(evolution, sourceRange, latestMessageIndex, forceReplay);

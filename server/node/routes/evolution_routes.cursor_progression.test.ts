@@ -106,6 +106,57 @@ describe("evolution routes cursor progression", () => {
     }));
   });
 
+  it("caps implicit handoff range to the configured auto-handoff batch size", async () => {
+    const dataDirs = getDataDirs();
+    writeJson(path.join(dataDirs.characters, characterId, "character.json"), {
+      character: {
+        chaId: characterId,
+        type: "character",
+        name: "Eva",
+        desc: "desc",
+        personality: "personality",
+        characterEvolution: {
+          enabled: true,
+          autoHandoffBatchSize: 2,
+          currentStateVersion: 0,
+          currentState: {},
+          stateVersions: [],
+        },
+      },
+    });
+
+    writeJson(path.join(dataDirs.characters, characterId, "chats", `${chatId}.json`), {
+      chat: {
+        id: chatId,
+        message: [
+          { role: "user", data: "m0" },
+          { role: "char", data: "m1" },
+          { role: "user", data: "m2" },
+          { role: "char", data: "m3" },
+          { role: "user", data: "m4" },
+        ],
+      },
+    });
+
+    const { postHandlers } = buildHandlers();
+    const handoff = postHandlers.get("/data/character-evolution/handoff");
+    expect(handoff).toBeTruthy();
+
+    const res = createRes();
+    await handoff!(createReq({ characterId, chatId }), res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.payload).toEqual(expect.objectContaining({
+      proposal: expect.objectContaining({
+        sourceRange: {
+          chatId,
+          startMessageIndex: 0,
+          endMessageIndex: 1,
+        },
+      }),
+    }));
+  });
+
   it("preserves explicit per-chat cursor fallback for valid no-snapshot imports", async () => {
     const dataDirs = getDataDirs();
     writeJson(path.join(dataDirs.characters, characterId, "character.json"), {

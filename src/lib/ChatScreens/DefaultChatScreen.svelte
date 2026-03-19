@@ -308,6 +308,16 @@
             return
         }
         const characterId = currentCharacter.chaId
+        const sourceRange = (!forceReplay && currentChatEntry?.id && currentChat.length > 0)
+            ? {
+                chatId: currentChatEntry.id,
+                startMessageIndex: getNextUnprocessedMessageIndexForChat(
+                    getEffectiveCharacterEvolutionSettings(DBState.db, currentCharacter),
+                    currentChatEntry.id,
+                ),
+                endMessageIndex: currentChat.length - 1,
+            }
+            : undefined
         clearAutoHandoffFailureState(currentEvolutionTargetKey)
         evolutionBusy = true
         evolutionAction = 'handoff'
@@ -318,6 +328,7 @@
                 chatId: currentChatEntry?.id ?? null,
                 chatMessageCount: currentChat.length,
                 forceReplay,
+                ...(sourceRange ? { sourceRange } : {}),
                 resolveCharacterById: findCharacterById,
                 confirmReplay: () => {
                     return typeof window === 'undefined'
