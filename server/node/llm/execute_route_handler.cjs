@@ -114,6 +114,208 @@ function createExecuteRouteHandler(arg = {}) {
         return incoming;
     }
 
+    function isObjectRecord(value) {
+        return !!value && typeof value === 'object' && !Array.isArray(value);
+    }
+
+    function extractExecutionResultText(result) {
+        const executionResult = (result && typeof result === 'object') ? result : null;
+        return typeof executionResult?.result === 'string'
+            ? executionResult.result
+            : (typeof result === 'string' ? result : '');
+    }
+
+    function cloneExecutionRequestChain(value) {
+        if (Array.isArray(value)) {
+            return value.map((entry) => cloneExecutionRequestChain(entry));
+        }
+        if (!isObjectRecord(value)) {
+            return value;
+        }
+
+        const clone = {};
+        Object.defineProperties(clone, Object.getOwnPropertyDescriptors(value));
+
+        if (Object.prototype.hasOwnProperty.call(value, 'request') && isObjectRecord(value.request)) {
+            clone.request = cloneExecutionRequestChain(value.request);
+        }
+        if (Object.prototype.hasOwnProperty.call(value, 'requestBody') && isObjectRecord(value.requestBody)) {
+            clone.requestBody = cloneExecutionRequestChain(value.requestBody);
+        }
+        if (Array.isArray(value.messages)) {
+            clone.messages = value.messages.map((entry) => cloneExecutionRequestChain(entry));
+        }
+        if (Array.isArray(value.contents)) {
+            clone.contents = value.contents.map((entry) => cloneExecutionRequestChain(entry));
+        }
+
+        return clone;
+    }
+
+    function findInnermostRequestBodyOwner(request) {
+        let current = isObjectRecord(request) ? request : null;
+        let owner = current && isObjectRecord(current.requestBody) ? current : null;
+        let depth = 0;
+        while (current && isObjectRecord(current.request) && depth < 6) {
+            current = current.request;
+            if (isObjectRecord(current.requestBody)) {
+                owner = current;
+            }
+            depth += 1;
+        }
+        return owner;
+    }
+
+    function clampRetryNumber(currentValue, fallback, comparator) {
+        const parsed = Number(currentValue);
+        if (!Number.isFinite(parsed)) {
+            return fallback;
+        }
+        return comparator(parsed, fallback);
+    }
+
+    function applyMalformedOutputRetryOverrides(request) {
+        if (!isObjectRecord(request)) {
+            return {
+                request,
+                effectiveRetryDecodingParams: null,
+            };
+        }
+        const clonedRequest = cloneExecutionRequestChain(request);
+        const owner = findInnermostRequestBodyOwner(clonedRequest);
+        const targetBody = isObjectRecord(owner?.requestBody)
+            ? owner.requestBody
+            : (isObjectRecord(clonedRequest.requestBody) ? clonedRequest.requestBody : null);
+
+        if (!isObjectRecord(targetBody)) {
+            return {
+                request: clonedRequest,
+                effectiveRetryDecodingParams: null,
+            };
+        }
+
+        targetBody.temperature = clampRetryNumber(targetBody.temperature, 0.7, Math.min);
+        targetBody.top_p = clampRetryNumber(targetBody.top_p, 0.9, Math.min);
+        targetBody.repetition_penalty = clampRetryNumber(targetBody.repetition_penalty, 1.2, Math.max);
+        targetBody.frequency_penalty = clampRetryNumber(targetBody.frequency_penalty, 0.5, Math.max);
+        targetBody.presence_penalty = clampRetryNumber(targetBody.presence_penalty, 0.2, Math.max);
+        targetBody.stream = false;
+        const effectiveRetryDecodingParams = {
+            temperature: targetBody.temperature,
+            top_p: targetBody.top_p,
+            repetition_penalty: targetBody.repetition_penalty,
+            frequency_penalty: targetBody.frequency_penalty,
+            presence_penalty: targetBody.presence_penalty,
+            stream: targetBody.stream,
+        };
+
+        if (isObjectRecord(targetBody.generation_config)) {
+            targetBody.generation_config.temperature = clampRetryNumber(targetBody.generation_config.temperature, 0.7, Math.min);
+            targetBody.generation_config.topP = clampRetryNumber(targetBody.generation_config.topP, 0.9, Math.min);
+            effectiveRetryDecodingParams.generation_config = {
+                temperature: targetBody.generation_config.temperature,
+                topP: targetBody.generation_config.topP,
+            };
+        }
+
+        return {
+            request: clonedRequest,
+            effectiveRetryDecodingParams,
+        };
+    }
+
+    function looksLikeMalformedRepetition(text) {
+        const raw = typeof text === 'string' ? text.trim() : '';
+        const compact = raw.replace(/\s+/g, '');
+        if (/^([A-Za-z]{2,24})(?:\1){4,}/.test(compact)) {
+            return true;
+        }
+        if (raw.length < 24) {
+            return false;
+        }
+
+        const words = (raw.match(/[A-Za-z][A-Za-z'-]*/g) || [])
+            .slice(0, 20)
+            .map((word) => word.toLowerCase());
+        if (words.length < 6) {
+            return false;
+        }
+
+        const firstWord = words[0];
+        let wordRun = 1;
+        while (wordRun < words.length && words[wordRun] === firstWord) {
+            wordRun += 1;
+        }
+        if (wordRun >= 5) {
+            return true;
+        }
+
+        if (words.length >= 8) {
+            const firstBigram = `${words[0]} ${words[1]}`;
+            let bigramRun = 1;
+            for (let index = 2; index + 1 < words.length; index += 2) {
+                if (`${words[index]} ${words[index + 1]}` !== firstBigram) {
+                    break;
+                }
+                bigramRun += 1;
+            }
+            if (bigramRun >= 4) {
+                return true;
+            }
+        }
+
+        return new Set(words).size <= Math.max(2, Math.floor(words.length * 0.25));
+    }
+
+    async function executeWithMalformedOutputRetry(normalized) {
+        const firstResult = await executeLLM(normalized, { dataRoot: arg.dataRoot });
+        if (normalized.mode !== 'model' || normalized.streaming) {
+            return {
+                result: firstResult,
+                retryAuditMetadata: {
+                    malformedOutputRetryAttempted: false,
+                    retryReason: null,
+                    effectiveRetryDecodingParams: null,
+                },
+            };
+        }
+
+        const firstText = sanitizeOutputByMode(normalized.mode, extractExecutionResultText(firstResult));
+        if (!looksLikeMalformedRepetition(firstText)) {
+            return {
+                result: firstResult,
+                retryAuditMetadata: {
+                    malformedOutputRetryAttempted: false,
+                    retryReason: null,
+                    effectiveRetryDecodingParams: null,
+                },
+            };
+        }
+
+        const retryReason = 'malformed_repetition_prefix';
+        const { request: retryRequest, effectiveRetryDecodingParams } = applyMalformedOutputRetryOverrides(normalized.request);
+        const retryAuditMetadata = {
+            malformedOutputRetryAttempted: true,
+            retryReason,
+            effectiveRetryDecodingParams,
+        };
+        const retryNormalized = {
+            ...normalized,
+            request: retryRequest,
+        };
+        try {
+            return {
+                result: await executeLLM(retryNormalized, { dataRoot: arg.dataRoot }),
+                retryAuditMetadata,
+            };
+        } catch (error) {
+            if (error && typeof error === 'object') {
+                error.retryAuditMetadata = retryAuditMetadata;
+            }
+            throw error;
+        }
+    }
+
     function extractOpenRouterReasoningDelta(delta) {
         if (!delta || typeof delta !== 'object') {
             return '';
@@ -310,6 +512,11 @@ function createExecuteRouteHandler(arg = {}) {
         const reqId = getReqIdFromResponse(res);
         let normalized = null;
         let wantsStream = !!requestBody?.streaming;
+        let retryAuditMetadata = {
+            malformedOutputRetryAttempted: false,
+            retryReason: null,
+            effectiveRetryDecodingParams: null,
+        };
         try {
             normalized = parseLLMExecutionInput(requestBody, { endpoint: endpointName });
             wantsStream = !!normalized.requestedStreaming;
@@ -338,6 +545,7 @@ function createExecuteRouteHandler(arg = {}) {
                         ok: true,
                         durationMs,
                         ragMeta: normalized._ragMeta || null,
+                        ...retryAuditMetadata,
                         request: buildExecutionAuditRequest(auditEndpointForRequest, requestBody),
                         response,
                     });
@@ -354,6 +562,7 @@ function createExecuteRouteHandler(arg = {}) {
                         durationMs,
                         status: 200,
                         ok: true,
+                        auditMetadata: retryAuditMetadata,
                     });
                 } catch (traceError) {
                     console.error('[LLMAPI] Failed to persist success trace audit:', traceError);
@@ -398,7 +607,11 @@ function createExecuteRouteHandler(arg = {}) {
                 );
             }
 
-            const result = await executeLLM(normalized, { dataRoot: arg.dataRoot });
+            const execution = await executeWithMalformedOutputRetry(normalized);
+            retryAuditMetadata = execution?.retryAuditMetadata && typeof execution.retryAuditMetadata === 'object'
+                ? execution.retryAuditMetadata
+                : retryAuditMetadata;
+            const result = execution?.result;
 
             if (normalized.streaming && result && typeof result.getReader === 'function') {
                 applySSEHeaders(res);
@@ -750,6 +963,7 @@ function createExecuteRouteHandler(arg = {}) {
                         ok: false,
                         durationMs,
                         ragMeta: normalized._ragMeta || null,
+                        ...retryAuditMetadata,
                         request: buildExecutionAuditRequest(auditEndpointForRequest, requestBody),
                         error: errorResponse.payload,
                     });
@@ -763,6 +977,7 @@ function createExecuteRouteHandler(arg = {}) {
                         status,
                         ok: false,
                         error: errorResponse.payload,
+                        auditMetadata: retryAuditMetadata,
                     });
                     if (!disconnected && !res.writableEnded && !res.destroyed) {
                         try {
@@ -939,6 +1154,7 @@ function createExecuteRouteHandler(arg = {}) {
                             ok: false,
                             durationMs,
                             ragMeta: normalized._ragMeta || null,
+                            ...retryAuditMetadata,
                             request: buildExecutionAuditRequest(auditEndpointForRequest, requestBody),
                             error: errorResponse.payload,
                         });
@@ -952,6 +1168,7 @@ function createExecuteRouteHandler(arg = {}) {
                             status,
                             ok: false,
                             error: errorResponse.payload,
+                            auditMetadata: retryAuditMetadata,
                         });
                     }
                 } finally {
@@ -975,6 +1192,9 @@ function createExecuteRouteHandler(arg = {}) {
             });
             sendJson(res, 200, successPayload);
         } catch (error) {
+            if (error?.retryAuditMetadata && typeof error.retryAuditMetadata === 'object') {
+                retryAuditMetadata = error.retryAuditMetadata;
+            }
             const durationMs = Date.now() - startedAt;
             const endpoint = normalized?.endpoint || endpointName;
             const auditEndpointForRequest = endpointName === 'generate' ? 'generate' : endpoint;
@@ -1013,6 +1233,7 @@ function createExecuteRouteHandler(arg = {}) {
                 status: response.status,
                 ok: false,
                 durationMs,
+                ...retryAuditMetadata,
                 request: buildExecutionAuditRequest(auditEndpointForRequest, requestBody),
                 error: response.payload,
             });
@@ -1026,6 +1247,7 @@ function createExecuteRouteHandler(arg = {}) {
                 status: response.status,
                 ok: false,
                 error: response.payload,
+                auditMetadata: retryAuditMetadata,
             });
             if (wantsStream) {
                 sendSSE(res, {

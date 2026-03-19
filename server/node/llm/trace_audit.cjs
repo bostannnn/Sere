@@ -23,6 +23,7 @@ function createTraceAuditors(arg = {}) {
         status = 200,
         ok = true,
         error = null,
+        auditMetadata = null,
     }) {
         try {
             const normalizedAudit = normalized && typeof normalized === 'object'
@@ -46,6 +47,7 @@ function createTraceAuditors(arg = {}) {
                 status,
                 ok,
                 durationMs,
+                ...(auditMetadata && typeof auditMetadata === 'object' ? auditMetadata : {}),
                 request: {
                     mode: normalizedAudit.mode || null,
                     provider: normalizedAudit.provider || null,

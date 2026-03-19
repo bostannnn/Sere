@@ -184,6 +184,174 @@ function createHarness(arg: {
 }
 
 describe("execute_route_handler streaming safety", () => {
+    it("retries malformed repetitive non-stream output once with safer decoding", async () => {
+        const req = new MockReq();
+        const res = new MockRes();
+        const executeLLM = vi.fn<
+            (input: NormalizedInput) => Promise<{ type: string; result: string }>
+        >(async (input) => {
+            if (executeLLM.mock.calls.length === 1) {
+                return {
+                    type: "success",
+                    result: "SheSheSheSheSheShe",
+                };
+            }
+            expect(input.request.requestBody).toMatchObject({
+                temperature: 0.7,
+                top_p: 0.9,
+                repetition_penalty: 1.2,
+                frequency_penalty: 0.5,
+                presence_penalty: 0.2,
+                stream: false,
+            });
+            return {
+                type: "success",
+                result: "Recovered response.",
+            };
+        });
+        const harness = createHarness({
+            normalized: {
+                endpoint: "execute",
+                mode: "model",
+                provider: "openrouter",
+                model: "deepseek/deepseek-v3.2",
+                characterId: "",
+                chatId: "",
+                requestedStreaming: false,
+                streaming: false,
+                request: {
+                    requestBody: {
+                        temperature: 1,
+                        top_p: 1,
+                        repetition_penalty: 1.15,
+                        frequency_penalty: 0.2,
+                        presence_penalty: 0,
+                        stream: false,
+                    },
+                },
+            },
+            executeLLM,
+        });
+
+        await harness.handleLLMExecutePost(req, res, {}, "execute");
+
+        expect(executeLLM).toHaveBeenCalledTimes(2);
+        const successAudit = harness.appendLLMAudit.mock.calls.find((call) => call?.[0]?.endpoint === "execute")?.[0];
+        const traceAudit = harness.appendLLMAudit.mock.calls.find((call) => call?.[0]?.endpoint === "execute_trace")?.[0];
+        expect(successAudit).toMatchObject({
+            malformedOutputRetryAttempted: true,
+            retryReason: "malformed_repetition_prefix",
+            effectiveRetryDecodingParams: {
+                temperature: 0.7,
+                top_p: 0.9,
+                repetition_penalty: 1.2,
+                frequency_penalty: 0.5,
+                presence_penalty: 0.2,
+                stream: false,
+            },
+        });
+        expect(traceAudit).toBeUndefined();
+        expect(harness.appendGenerateTraceAudit).toHaveBeenCalledWith(expect.objectContaining({
+            auditMetadata: {
+                malformedOutputRetryAttempted: true,
+                retryReason: "malformed_repetition_prefix",
+                effectiveRetryDecodingParams: {
+                    temperature: 0.7,
+                    top_p: 0.9,
+                    repetition_penalty: 1.2,
+                    frequency_penalty: 0.5,
+                    presence_penalty: 0.2,
+                    stream: false,
+                },
+            },
+        }));
+        expect(harness.sendJson).toHaveBeenCalledWith(
+            res,
+            200,
+            expect.objectContaining({
+                result: "Recovered response.",
+            }),
+        );
+    });
+
+    it("preserves retry audit metadata when the retry attempt fails", async () => {
+        const req = new MockReq();
+        const res = new MockRes();
+        const executeLLM = vi.fn<
+            (input: NormalizedInput) => Promise<{ type: string; result: string }>
+        >(async () => {
+            if (executeLLM.mock.calls.length === 1) {
+                return {
+                    type: "success",
+                    result: "SheSheSheSheSheShe",
+                };
+            }
+            throw new Error("retry failed");
+        });
+        const harness = createHarness({
+            normalized: {
+                endpoint: "execute",
+                mode: "model",
+                provider: "openrouter",
+                model: "deepseek/deepseek-v3.2",
+                characterId: "",
+                chatId: "",
+                requestedStreaming: false,
+                streaming: false,
+                request: {
+                    requestBody: {
+                        temperature: 1,
+                        top_p: 1,
+                        repetition_penalty: 1.15,
+                        frequency_penalty: 0.2,
+                        presence_penalty: 0,
+                        stream: false,
+                    },
+                },
+            },
+            executeLLM,
+        });
+
+        await harness.handleLLMExecutePost(req, res, {}, "execute");
+
+        expect(executeLLM).toHaveBeenCalledTimes(2);
+        const failureAudit = harness.appendLLMAudit.mock.calls.find((call) => call?.[0]?.endpoint === "execute")?.[0];
+        expect(failureAudit).toMatchObject({
+            malformedOutputRetryAttempted: true,
+            retryReason: "malformed_repetition_prefix",
+            effectiveRetryDecodingParams: {
+                temperature: 0.7,
+                top_p: 0.9,
+                repetition_penalty: 1.2,
+                frequency_penalty: 0.5,
+                presence_penalty: 0.2,
+                stream: false,
+            },
+        });
+        expect(harness.appendGenerateTraceAudit).toHaveBeenCalledWith(expect.objectContaining({
+            auditMetadata: {
+                malformedOutputRetryAttempted: true,
+                retryReason: "malformed_repetition_prefix",
+                effectiveRetryDecodingParams: {
+                    temperature: 0.7,
+                    top_p: 0.9,
+                    repetition_penalty: 1.2,
+                    frequency_penalty: 0.5,
+                    presence_penalty: 0.2,
+                    stream: false,
+                },
+            },
+        }));
+        expect(harness.sendJson).toHaveBeenCalledWith(
+            res,
+            500,
+            expect.objectContaining({
+                error: "INTERNAL_ERROR",
+                message: "retry failed",
+            }),
+        );
+    });
+
     it("cancels upstream reader and audits CLIENT_DISCONNECTED when client aborts mid-stream", async () => {
         const encoder = new TextEncoder();
         const req = new MockReq();
