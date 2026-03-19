@@ -9,11 +9,38 @@ export type ServerExecutionEnvelope = {
         body?: {
             error?: {
                 message?: string
+                metadata?: {
+                    raw?: string
+                    provider_name?: string
+                    is_byok?: boolean
+                }
             }
             message?: string
         }
     }
     status?: number
+}
+
+function parseOpenRouterProviderErrorMessage(upstreamBody: ServerExecutionEnvelope["details"] extends { body?: infer T } ? T : never): string {
+    const providerMessage = upstreamBody?.error?.message
+    const providerMetadata = upstreamBody?.error?.metadata
+    const rawProviderMessage = typeof providerMetadata?.raw === 'string'
+        ? providerMetadata.raw
+        : ''
+    const providerName = typeof providerMetadata?.provider_name === 'string'
+        ? providerMetadata.provider_name.trim()
+        : ''
+
+    if (
+        providerMessage === 'Provider returned error' &&
+        /this service is not available in your region\./i.test(rawProviderMessage)
+    ) {
+        return providerName
+            ? `${providerName} service is not available in this server region.`
+            : 'The selected provider is not available in this server region.'
+    }
+
+    return ''
 }
 
 export function normalizeServerEnvelope(raw: unknown): ServerExecutionEnvelope {
@@ -91,7 +118,9 @@ export function parseServerErrorPayload(parsed: unknown, statusFallback: number)
     const errorPayload = normalizeServerEnvelope(parsed)
     const status = Number(errorPayload?.details?.status ?? errorPayload?.status ?? statusFallback)
     const upstreamBody = errorPayload?.details?.body
+    const openRouterProviderMessage = parseOpenRouterProviderErrorMessage(upstreamBody)
     const upstreamMessage =
+        openRouterProviderMessage ||
         upstreamBody?.error?.message ||
         upstreamBody?.message ||
         errorPayload?.message ||

@@ -249,6 +249,41 @@ describe("openai server execution helpers", () => {
     });
   });
 
+  it("returns a no-retry failure for OpenRouter region blocks", async () => {
+    shared.requestServerJsonMock.mockResolvedValue({
+      ok: false,
+      status: 403,
+      data: {
+        error: "UPSTREAM_OPENROUTER_ERROR",
+      },
+    });
+    shared.parseServerErrorPayloadMock.mockReturnValue({
+      code: "UPSTREAM_OPENROUTER_ERROR",
+      status: 403,
+      message: "xAI service is not available in this server region.",
+    });
+
+    const result = await requestOpenRouterServerExecution(
+      {
+        mode: "model",
+        bias: {},
+        formated: [{ role: "user", content: "hello" }],
+        modelInfo: { format: "OpenAICompatible" } as never,
+      },
+      {
+        model: "x-ai/grok-4.1-fast",
+        messages: [{ role: "user", content: "hello" }],
+      },
+    );
+
+    expect(result).toEqual({
+      type: "fail",
+      noRetry: true,
+      result:
+        "HTTP xAI service is not available in this server region. Choose a different model/provider or run the server from a supported region. [mode=model, model=x-ai/grok-4.1-fast]",
+    });
+  });
+
   it("preserves streaming through the shared stream adapter", async () => {
     const pipeTo = vi.fn();
     const wrappedStream = new ReadableStream();

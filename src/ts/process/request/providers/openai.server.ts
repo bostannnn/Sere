@@ -163,6 +163,17 @@ async function requestServerExecution(
                     result: `${language.errors.httpError}${opts.providerLabel} rate limit (429): ${err.message} [${requestContext}]`,
                 };
             }
+            if (
+                opts.provider === 'openrouter'
+                && err.status === 403
+                && /not available in (this server )?region/i.test(err.message)
+            ) {
+                return {
+                    type: 'fail',
+                    noRetry: true,
+                    result: `${language.errors.httpError}${err.message} Choose a different model/provider or run the server from a supported region. [${requestContext}]`,
+                };
+            }
             return {
                 type: 'fail',
                 failByServerError: err.status >= 500,

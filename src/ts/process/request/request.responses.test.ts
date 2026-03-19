@@ -78,6 +78,33 @@ describe("request response helpers", () => {
     });
   });
 
+  it("surfaces provider region blocks from OpenRouter upstream metadata", () => {
+    expect(
+      parseServerErrorPayload(
+        {
+          error: "UPSTREAM_OPENROUTER_ERROR",
+          details: {
+            status: 403,
+            body: {
+              error: {
+                message: "Provider returned error",
+                metadata: {
+                  raw: "<html><body><p>This service is not available in your region.</p></body></html>",
+                  provider_name: "xAI",
+                },
+              },
+            },
+          },
+        },
+        500,
+      ),
+    ).toEqual({
+      status: 403,
+      code: "UPSTREAM_OPENROUTER_ERROR",
+      message: "xAI service is not available in this server region.",
+    });
+  });
+
   it("stringifies unknown payloads consistently", () => {
     expect(stringifyUnknownResponse("text")).toBe("text");
     expect(stringifyUnknownResponse({ ok: true })).toBe(JSON.stringify({ ok: true }));
