@@ -1,6 +1,26 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { RequestDataArgumentExtended } from "../request";
 
+type OpenAIRequestBody = {
+  model?: string;
+  max_tokens?: number;
+  max_completion_tokens?: number;
+  messages?: Array<{ role: string; content?: unknown }>;
+  prompt?: string;
+  tools?: unknown[];
+  stream?: boolean;
+};
+
+type GoogleRequestBody = {
+  contents?: unknown[];
+  generation_config?: {
+    maxOutputTokens?: number;
+  };
+  tools?: {
+    functionDeclarations?: unknown[];
+  };
+};
+
 const shared = vi.hoisted(() => ({
   getDatabaseMock: vi.fn(() => ({
     globalRagSettings: { topK: 8, model: "rag-model" },
@@ -16,8 +36,11 @@ const shared = vi.hoisted(() => ({
   getLatestUserMessageMock: vi.fn((formated: Array<{ role?: string; content?: unknown }> = []) =>
     [...formated]
       .reverse()
-      .find((message) => message?.role === "user" && typeof message?.content === "string" && message.content.trim().length > 0)
-      ?.content?.trim() || "",
+      .find(
+        (message): message is { role: "user"; content: string } =>
+          message?.role === "user" && typeof message?.content === "string" && message.content.trim().length > 0,
+      )
+      ?.content.trim() || "",
   ),
   hasMultimodalMessagesMock: vi.fn((formated: Array<{ multimodals?: unknown[] }> = []) =>
     formated.some((message) => Array.isArray(message?.multimodals) && message.multimodals.length > 0),
@@ -53,8 +76,8 @@ function buildOpenAIPlan({
   argOverrides = {},
   bodyOverrides = {},
 }: {
-  argOverrides?: Record<string, unknown>;
-  bodyOverrides?: Record<string, unknown>;
+  argOverrides?: Partial<RequestDataArgumentExtended>;
+  bodyOverrides?: Partial<OpenAIRequestBody>;
 } = {}) {
   const arg: RequestDataArgumentExtended = {
     mode: "model",
@@ -65,11 +88,11 @@ function buildOpenAIPlan({
     currentChar: {
       chaId: "char-1",
       ragSettings: { enabled: true, enabledRulebooks: ["rb-1", 9] },
-    },
+    } as unknown as RequestDataArgumentExtended["currentChar"],
     chatId: "chat-1",
     ...argOverrides,
   };
-  const body: Record<string, unknown> = {
+  const body: OpenAIRequestBody = {
     model: "gpt-4o-mini",
     max_tokens: 123,
     messages: [{ role: "user", content: "hello" }],
@@ -121,8 +144,8 @@ function buildGooglePlan({
   argOverrides = {},
   bodyOverrides = {},
 }: {
-  argOverrides?: Record<string, unknown>;
-  bodyOverrides?: Record<string, unknown>;
+  argOverrides?: Partial<RequestDataArgumentExtended>;
+  bodyOverrides?: Partial<GoogleRequestBody>;
 } = {}) {
   const arg: RequestDataArgumentExtended = {
     mode: "model",
@@ -131,12 +154,12 @@ function buildGooglePlan({
     currentChar: {
       chaId: "char-1",
       ragSettings: { enabled: false, enabledRulebooks: ["rb-1"] },
-    },
+    } as RequestDataArgumentExtended["currentChar"],
     chatId: "chat-1",
-    modelInfo: { internalID: "gemini-2.0-flash" },
+    modelInfo: { internalID: "gemini-2.0-flash" } as RequestDataArgumentExtended["modelInfo"],
     ...argOverrides,
   };
-  const body: Record<string, unknown> = {
+  const body: GoogleRequestBody = {
     contents: [{ role: "user", parts: [{ text: "hello" }] }],
     generation_config: { maxOutputTokens: 64 },
     tools: {
@@ -306,12 +329,17 @@ describe("buildServerExecutionPayloadPlan", () => {
     {
       name: "multimodal messages",
       argOverrides: {
-        formated: [{ role: "user", content: "hello", multimodals: [{ type: "image" }] }],
+        formated: [{ role: "user", content: "hello", multimodals: [{ type: "image", base64: "data:image/png;base64,test" }] }],
       },
       expectedEndpoint: "/data/llm/generate",
       expectedUseClientAssembledRequest: true,
     },
-  ])(
+  ] satisfies Array<{
+    name: string;
+    argOverrides: Partial<RequestDataArgumentExtended>;
+    expectedEndpoint: string;
+    expectedUseClientAssembledRequest: boolean;
+  }>)(
     "uses the wrapped fallback path for Google $name",
     ({ argOverrides, expectedEndpoint, expectedUseClientAssembledRequest }) => {
       const plan = buildGooglePlan({ argOverrides });

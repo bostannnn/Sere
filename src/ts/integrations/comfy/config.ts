@@ -1,15 +1,15 @@
-import type {
-    ComfyCommanderConfig,
-    ComfyCommanderImagePromptConfig,
-    ComfyCommanderReferenceStoreConfig,
-    ComfyCommanderRunpodConfig,
-    ComfyCommanderRunpodSchemaPreset,
-    ComfyCommanderTemplate,
-    ComfyCommanderWorkflow,
+import {
+    normalizeComfyBaseUrl,
+    type ComfyCommanderConfig,
+    type ComfyCommanderImagePromptConfig,
+    type ComfyCommanderReferenceStoreConfig,
+    type ComfyCommanderRunpodConfig,
+    type ComfyCommanderRunpodSchemaPreset,
+    type ComfyCommanderTemplate,
+    type ComfyCommanderWorkflow,
 } from "./types";
 import type { ComfyCommanderState } from "src/ts/storage/database.types";
 import { resolveRunpodModelDefinition, type RunpodModelDefinition } from "./runpodModels";
-import { normalizeComfyBaseUrl } from "./types";
 
 export const COMFY_COMMANDER_DEFAULT_BASE_URL = "http://127.0.0.1:8188";
 export const COMFY_COMMANDER_OPENROUTER_MODEL_PREFIX = "openrouter:";

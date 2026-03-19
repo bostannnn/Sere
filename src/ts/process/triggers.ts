@@ -3014,7 +3014,7 @@ const triggerV2RuntimeHandlers: {
     },
     v2SplitString: (effect, context) => {
         const source = resolveTriggerInput(context, effect.source, effect.sourceType)
-        let delimiter = effect.delimiterType === 'regex'
+        const delimiter = effect.delimiterType === 'regex'
             ? parseTriggerValue(context, effect.delimiter)
             : resolveTriggerInput(context, effect.delimiter, effect.delimiterType)
 
@@ -3504,10 +3504,10 @@ const triggerV2RuntimeHandlers: {
         }
 
         const currentLore = context.char.globalLore[index]
-        let name = resolveTriggerInput(context, effect.name, effect.nameType).replace(/{{slot}}/g, currentLore.comment || '')
-        let key = resolveTriggerInput(context, effect.key, effect.keyType).replace(/{{slot}}/g, currentLore.key || '')
-        let content = resolveTriggerInput(context, effect.content, effect.contentType).replace(/{{slot}}/g, currentLore.content || '')
-        let insertOrder = resolveTriggerInput(context, effect.insertOrder, effect.insertOrderType)
+        const name = resolveTriggerInput(context, effect.name, effect.nameType).replace(/{{slot}}/g, currentLore.comment || '')
+        const key = resolveTriggerInput(context, effect.key, effect.keyType).replace(/{{slot}}/g, currentLore.key || '')
+        const content = resolveTriggerInput(context, effect.content, effect.contentType).replace(/{{slot}}/g, currentLore.content || '')
+        const insertOrder = resolveTriggerInput(context, effect.insertOrder, effect.insertOrderType)
             .replace(/{{slot}}/g, (currentLore.insertorder || 100).toString())
 
         context.char.globalLore[index].comment = name

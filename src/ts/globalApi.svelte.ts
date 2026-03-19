@@ -580,8 +580,19 @@ export async function saveDb() {
             return
         }
         lastServerAutosaveAlertAt = now
+        const details = getServerSaveFailureLogDetails(error)
+        addFetchLog({
+            body: {
+                source: 'server-autosave',
+                message: 'Live save failed',
+            },
+            response: details,
+            success: false,
+            url: '/data/state/commands#autosave',
+            resType: 'json',
+            status: details.status ?? undefined,
+        })
         const message = formatServerSaveFailureMessage(error)
-        console.error('[ServerAutosave] Live save failed', getServerSaveFailureLogDetails(error))
         alertError(message)
     }
 
@@ -985,6 +996,9 @@ export function addFetchLog(arg: {
         chatId: arg.chatId,
         status: arg.status
     });
+    if (fetchLog.length > 20) {
+        fetchLog.pop()
+    }
     return 0;
 }
 

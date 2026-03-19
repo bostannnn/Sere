@@ -28,6 +28,7 @@
         isTriggerV2SpecialType,
         requestAllowList,
         type triggerEffect,
+        type TriggerV2EffectType,
         type triggerEffectV2,
         triggerV2Categories,
         type triggerscript
@@ -104,8 +105,9 @@
         return getTriggerV2EditorFieldOrder(editTrigger.type as never)
     }
 
-    const isEndIndentEffect = (type: triggerEffect['type']) => type === 'v2EndIndent'
     const isElseEffect = (type: triggerEffect['type']) => type === 'v2Else'
+    const isEndIndentEffect = (type: triggerEffect['type']) => type === 'v2EndIndent'
+    const isEndIndentEffectObject = (effect: triggerEffect): effect is Extract<triggerEffectV2, { type: 'v2EndIndent' }> => effect.type === 'v2EndIndent'
     const isStructuralEffect = (type: triggerEffect['type']) => isEndIndentEffect(type) || isElseEffect(type)
     const isPrimaryBlockStart = (type: triggerEffect['type']) => isTriggerV2PrimaryBlockStartType(type as never)
     const isBlockEffect = (type: triggerEffect['type']) => isTriggerV2BlockEffectType(type as never)
@@ -665,20 +667,21 @@
         if(!isTriggerV2EffectType(e as triggerEffect['type'])){
             return false
         }
+        const effectType = e as TriggerV2EffectType
         if(value[selectedIndex].type === 'display'){
-            return displayAllowList.includes(e)
+            return displayAllowList.includes(effectType)
         }
         if(value[selectedIndex].type === 'request'){
-            return requestAllowList.includes(e)
+            return requestAllowList.includes(effectType)
         }
-        if(isTriggerV2SpecialType(e)){
+        if(isTriggerV2SpecialType(effectType)){
             return false
         }
 
         if(lowLevelAble){
             return true
         }
-        return !isTriggerV2LowLevelType(e)
+        return !isTriggerV2LowLevelType(effectType)
     }
     const makeDefaultEditType = (type:string) => {
         editTrigger = createTriggerV2Default(type as never)
@@ -951,8 +954,8 @@
             return { start: startIndex, end: startIndex };
         }
         
-        const effects = value[selectedIndex].effect;
-        const startEffect = effects[startIndex] as triggerEffectV2;
+        const effects = value[selectedIndex].effect as triggerEffectV2[];
+        const startEffect = effects[startIndex];
         
         if (!startEffect || !isPrimaryBlockStart(startEffect.type)) {
             return { start: startIndex, end: startIndex };
@@ -1878,7 +1881,7 @@
                                     }}
                                     oncontextmenu={(e) => handleContextMenu(e, 1, i, effect)}
                                 >
-                                    {#if isEndIndentEffect(effect.type)}
+                                    {#if isEndIndentEffectObject(effect)}
                                         <div class="text-textcolor" style:margin-left={effect.indent + 'rem'}>...</div>
                                     {:else}
                                         <!-- eslint-disable-next-line svelte/no-at-html-tags -->

@@ -75,7 +75,6 @@
         version: 1,
         config: {
             baseUrl: DBState.db.comfyUiUrl || "http://127.0.0.1:8188",
-            debug: false,
             timeoutSec: 120,
             pollIntervalMs: 1000,
             activeProvider: "comfyui",

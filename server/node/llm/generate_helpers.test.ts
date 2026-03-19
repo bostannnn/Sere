@@ -338,7 +338,7 @@ describe("generate_helpers", () => {
     const { dataRoot, characterId, chatId } = await createDataRoot();
     cleanup.push(dataRoot);
 
-    const helpers = createHelpersHarness({
+    createHelpersHarness({
       dataRoot,
       parseLLMExecutionInput: (payload) => payload,
       executeLLM: vi.fn(async () => {

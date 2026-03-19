@@ -15,8 +15,11 @@
     const imageCache = makeImageSrcCache((path) => getFileSrc(path))
 
     $effect(() => {
-        character?.chaId
+        const characterId = character?.chaId
         imageCache.clear()
+        if (!characterId) {
+            return () => imageCache.clear()
+        }
         return () => imageCache.clear()
     })
 
@@ -174,6 +177,7 @@
         font-size: 0.82rem;
         line-height: 1.35;
         color: var(--ds-text);
+        line-clamp: 2;
         display: -webkit-box;
         -webkit-line-clamp: 2;
         -webkit-box-orient: vertical;

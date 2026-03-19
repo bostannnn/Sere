@@ -16,7 +16,6 @@
     import SelectInput from "src/lib/UI/GUI/SelectInput.svelte";
     import TextAreaInput from "src/lib/UI/GUI/TextAreaInput.svelte";
     import TextInput from "src/lib/UI/GUI/TextInput.svelte";
-    import Help from "src/lib/Others/Help.svelte";
     import Accordion from "src/lib/UI/Accordion.svelte";
     import ComfyCommanderTemplateEditor from "./ComfyCommanderTemplateEditor.svelte";
 
