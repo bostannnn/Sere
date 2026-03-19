@@ -1,6 +1,6 @@
 # ------------------------------------------------------------------------------------------
 
-FROM node:20-slim AS base
+FROM node:24.5-slim AS base
 WORKDIR /app
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
@@ -41,6 +41,7 @@ COPY --from=builder /app/src/ts/process/promptTemplateShared.cjs ./src/ts/proces
 COPY --from=builder /app/src/ts/process/promptTemplateShared.ts ./src/ts/process/promptTemplateShared.ts
 
 ENV NODE_ENV=production
+ENV NODE_USE_ENV_PROXY=1
 ENV SERE_DATA_ROOT=/app/data
 EXPOSE 6001
 
